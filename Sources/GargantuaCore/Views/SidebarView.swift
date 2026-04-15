@@ -116,15 +116,10 @@ public struct SidebarView: View {
         }
         .background {
             // Hidden buttons for Cmd+1 through Cmd+5 keyboard shortcuts
-            ForEach(Array(allItems.prefix(5).enumerated()), id: \.element.id) { index, item in
+            let digits: [KeyEquivalent] = ["1", "2", "3", "4", "5"]
+            ForEach(Array(allItems.prefix(digits.count).enumerated()), id: \.element.id) { index, item in
                 Button("") { selection = item.id }
-                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
-                    .hidden()
-            }
-            // Cmd+, for Settings (macOS convention)
-            if let settingsItem = allItems.first(where: { $0.id == "settings" }) {
-                Button("") { selection = settingsItem.id }
-                    .keyboardShortcut(",", modifiers: .command)
+                    .keyboardShortcut(digits[index], modifiers: .command)
                     .hidden()
             }
         }
