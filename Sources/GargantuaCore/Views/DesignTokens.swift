@@ -54,10 +54,16 @@ public enum GargantuaColors {
     // MARK: Safety Classification
     /// Safe — desaturated terminal green. hsl(148, 45%, 42%)
     public static let safe = hsl(148, 45, 42)
+    /// Safe background tint. hsla(148, 45%, 42%, 0.12)
+    public static let safeDim = safe.opacity(0.12)
     /// Review — accretion disc amber. hsl(38, 85%, 52%)
     public static let review = hsl(38, 85, 52)
+    /// Review background tint. hsla(38, 85%, 52%, 0.12)
+    public static let reviewDim = review.opacity(0.12)
     /// Protected — deep red ember. hsl(0, 62%, 48%)
     public static let protected_ = hsl(0, 62, 48)
+    /// Protected background tint. hsla(0, 62%, 48%, 0.12)
+    public static let protectedDim = protected_.opacity(0.12)
 
     // MARK: Interactive
     /// Hawking radiation blue — buttons, links, focus. hsl(213, 90%, 55%)

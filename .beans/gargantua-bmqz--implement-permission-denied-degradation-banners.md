@@ -1,7 +1,7 @@
 ---
 # gargantua-bmqz
 title: Implement permission-denied degradation banners
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-15T00:47:32Z
-updated_at: 2026-04-15T00:47:32Z
+updated_at: 2026-04-15T22:36:38Z
 parent: gargantua-38l5
 ---
 

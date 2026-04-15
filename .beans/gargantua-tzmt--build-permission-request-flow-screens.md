@@ -1,7 +1,7 @@
 ---
 # gargantua-tzmt
 title: Build permission request flow screens
-status: in-progress
+status: completed
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:32Z
-updated_at: 2026-04-15T22:28:06Z
+updated_at: 2026-04-15T22:32:26Z
 parent: gargantua-38l5
 ---
 
@@ -24,3 +24,6 @@ One screen per permission (Full Disk Access, Automation). Each explains what it 
 
 ---
 **Size:** M
+
+---
+Completed in c224887
