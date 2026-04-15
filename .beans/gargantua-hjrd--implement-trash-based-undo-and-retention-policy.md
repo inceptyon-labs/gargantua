@@ -9,17 +9,17 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:49Z
-updated_at: 2026-04-15T12:38:15Z
+updated_at: 2026-04-15T12:40:44Z
 parent: gargantua-dshb
 ---
 
 Undo button linking to Trash for recent operations. 90-day log retention, configurable.
 
 ## Acceptance Criteria
-- [ ] Cleaned files moved to Trash via NSWorkspace or Finder automation
-- [ ] Undo button in post-clean summary reveals items in Trash
-- [ ] Audit log entries older than retention period auto-purged on app launch
-- [ ] Retention period configurable in Settings (default 90 days)
+- [x] Cleaned files moved to Trash via NSWorkspace or Finder automation
+- [x] Undo button in post-clean summary reveals items in Trash
+- [x] Audit log entries older than retention period auto-purged on app launch
+- [x] Retention period configurable in Settings (default 90 days)
 
 ---
 **Size:** M
