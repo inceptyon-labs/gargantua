@@ -234,7 +234,9 @@ public struct DevArtifactScanView: View {
         VStack(spacing: 0) {
             // Back to categories header
             HStack {
-                Button(action: { scanResults = nil }) {
+                Button {
+                    scanResults = nil
+                } label: {
                     HStack(spacing: GargantuaSpacing.space1) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 11, weight: .semibold))

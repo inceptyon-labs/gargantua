@@ -9,18 +9,18 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:49:09Z
-updated_at: 2026-04-15T19:55:28Z
+updated_at: 2026-04-15T19:58:40Z
 parent: gargantua-4nxf
 ---
 
 Category-based view showing node_modules, Xcode derived data, Docker cache, Homebrew, build artifacts. Reuses three-bucket scan results pattern.
 
 ## Acceptance Criteria
-- [ ] Category list: node_modules, Xcode, Docker, Homebrew, Python, Rust, Go
-- [ ] Each category shows estimated size from last scan
-- [ ] Scan button triggers mo purge for selected categories
-- [ ] Results displayed using same three-bucket component as Deep Clean
-- [ ] Profile-aware overrides visible (e.g., "Auto-classified as safe: >30 days old")
+- [x] Category list: node_modules, Xcode, Docker, Homebrew, Python, Rust, Go
+- [x] Each category shows estimated size from last scan
+- [x] Scan button triggers mo purge for selected categories
+- [x] Results displayed using same three-bucket component as Deep Clean
+- [x] Profile-aware overrides visible (e.g., "Auto-classified as safe: >30 days old")
 
 ---
 **Size:** M
