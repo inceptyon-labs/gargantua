@@ -85,8 +85,9 @@ public struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
                 if index > 0 {
-                    Divider()
-                        .background(GargantuaColors.border)
+                    Rectangle()
+                        .fill(GargantuaColors.border)
+                        .frame(height: 1)
                         .padding(.horizontal, GargantuaSpacing.space3)
                         .padding(.vertical, GargantuaSpacing.space2)
                 }
@@ -122,7 +123,7 @@ private struct SidebarSectionView: View {
             Text(section.label)
                 .font(GargantuaFonts.sectionLabel)
                 .foregroundStyle(GargantuaColors.ink4)
-                .tracking(0.8) // 0.08em at 10px
+                .tracking(0.8) // 0.08em × 10px = 0.8pt
                 .padding(.horizontal, GargantuaSpacing.space4)
                 .padding(.bottom, GargantuaSpacing.space1)
 
