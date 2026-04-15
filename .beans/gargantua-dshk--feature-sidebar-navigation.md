@@ -1,14 +1,14 @@
 ---
 # gargantua-dshk
 title: 'Feature: Sidebar Navigation'
-status: todo
+status: in-progress
 type: feature
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:45:12Z
-updated_at: 2026-04-15T00:45:12Z
+updated_at: 2026-04-15T12:58:36Z
 parent: gargantua-0jj3
 ---
 

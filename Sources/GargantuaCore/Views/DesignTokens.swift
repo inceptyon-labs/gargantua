@@ -80,6 +80,8 @@ public enum GargantuaFonts {
     public static let monoData = Font.system(size: 12, design: .monospaced).monospacedDigit()
     /// File paths. 11px mono.
     public static let monoPath = Font.system(size: 11, design: .monospaced)
+    /// Sidebar section labels. 10px, 600 weight, uppercase, 0.08em tracking.
+    public static let sectionLabel = Font.system(size: 10, weight: .semibold)
 }
 
 // MARK: - Spacing Tokens

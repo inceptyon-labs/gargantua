@@ -1,7 +1,7 @@
 ---
 # gargantua-dweg
 title: Build grouped sidebar with section labels
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:06Z
-updated_at: 2026-04-15T00:47:06Z
+updated_at: 2026-04-15T12:58:35Z
 parent: gargantua-dshk
 ---
 
