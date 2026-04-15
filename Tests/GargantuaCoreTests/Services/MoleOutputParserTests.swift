@@ -155,6 +155,26 @@ struct MoleOutputParserTests {
         }
     }
 
+    @Test("Skips items missing required JSON fields without failing entire parse")
+    func skipsMissingRequiredFields() throws {
+        let json = """
+        {
+            "items": [
+                { "id": "good", "path": "/tmp/good.txt", "category": "temp_files" },
+                { "name": "no id or path" },
+                { "id": "also_good", "path": "/tmp/ok.txt" },
+                42,
+                { "id": "still_good", "path": "/tmp/fine.txt" }
+            ]
+        }
+        """
+        let results = try MoleOutputParser.parse(json)
+        #expect(results.count == 3)
+        #expect(results[0].id == "good")
+        #expect(results[1].id == "also_good")
+        #expect(results[2].id == "still_good")
+    }
+
     @Test("Parses empty items array")
     func parsesEmptyItemsArray() throws {
         let json = """

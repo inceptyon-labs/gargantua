@@ -39,6 +39,10 @@ public enum MoleOutputParser {
             throw MoleParseError.invalidJSON(detail: error.localizedDescription)
         }
 
+        if output.skippedCount > 0 {
+            logger.warning("Skipped \(output.skippedCount) malformed items during JSON decoding")
+        }
+
         var results: [ScanResult] = []
         for (index, item) in output.items.enumerated() {
             do {
@@ -49,7 +53,8 @@ public enum MoleOutputParser {
             }
         }
 
-        logger.info("Parsed \(results.count)/\(output.items.count) items from Mole output")
+        let totalItems = output.items.count + output.skippedCount
+        logger.info("Parsed \(results.count)/\(totalItems) items from Mole output")
         return results
     }
 
@@ -121,10 +126,49 @@ public enum MoleOutputParser {
 // MARK: - Mole JSON Schema (internal Codable types)
 
 /// Top-level Mole scan output.
+///
+/// Uses lenient decoding for items: if a single item in the JSON array is malformed,
+/// it's skipped rather than failing the entire parse.
 struct MoleOutput: Codable {
     let items: [MoleOutputItem]
     let scanDuration: Double?
     let totalSize: Int64?
+    /// Number of items that failed to decode from the JSON array.
+    let skippedCount: Int
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        scanDuration = try container.decodeIfPresent(Double.self, forKey: .scanDuration)
+        totalSize = try container.decodeIfPresent(Int64.self, forKey: .totalSize)
+
+        // Decode items leniently — skip any that fail
+        var itemsContainer = try container.nestedUnkeyedContainer(forKey: .items)
+        var decoded: [MoleOutputItem] = []
+        var skipped = 0
+        while !itemsContainer.isAtEnd {
+            if let item = try? itemsContainer.decode(MoleOutputItem.self) {
+                decoded.append(item)
+            } else {
+                // Advance past the failed element
+                _ = try? itemsContainer.decode(LenientSkip.self)
+                skipped += 1
+            }
+        }
+        items = decoded
+        skippedCount = skipped
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case items, scanDuration, totalSize
+    }
+}
+
+/// Dummy type that decodes any single JSON value, used to skip malformed array elements.
+private struct LenientSkip: Codable {
+    init(from decoder: Decoder) throws {
+        // Accept any single value to advance the unkeyed container
+        _ = try? decoder.singleValueContainer().decode(String.self)
+    }
 }
 
 /// A single item from Mole scan output. All fields except `id` and `path` are optional
