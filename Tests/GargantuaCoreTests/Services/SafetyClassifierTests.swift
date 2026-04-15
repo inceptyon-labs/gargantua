@@ -84,7 +84,7 @@ struct SafetyClassifierTests {
                     confidence: 95,
                     explanationSuffix: "No project activity in 30+ days.",
                     profiles: ["developer"]
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -107,7 +107,7 @@ struct SafetyClassifierTests {
                     safety: .safe,
                     confidence: 95,
                     profiles: ["developer"]
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -127,7 +127,7 @@ struct SafetyClassifierTests {
                     condition: "age > 30d",
                     safety: .safe,
                     profiles: ["developer"]
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-5 * 86400))
@@ -153,7 +153,7 @@ struct SafetyClassifierTests {
                     confidence: 90,
                     explanationSuffix: "Inactive for over a week.",
                     profiles: ["deep"]
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-8 * 86400))
@@ -179,7 +179,7 @@ struct SafetyClassifierTests {
                     safety: .safe,
                     explanationSuffix: "Restore with package manager.",
                     profiles: []
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -199,7 +199,7 @@ struct SafetyClassifierTests {
                     condition: "age > 30d",
                     safety: .safe,
                     profiles: []
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -221,7 +221,7 @@ struct SafetyClassifierTests {
                     safety: .safe,
                     confidence: 95,
                     profiles: []
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -240,7 +240,7 @@ struct SafetyClassifierTests {
                     condition: "age > 30d",
                     safety: .safe,
                     profiles: []
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -284,7 +284,7 @@ struct SafetyClassifierTests {
                     confidence: 95,
                     explanationSuffix: "30d override",
                     profiles: []
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -309,7 +309,7 @@ struct SafetyClassifierTests {
                     confidence: 99,
                     explanationSuffix: "Rule override",
                     profiles: ["developer"]
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -332,7 +332,7 @@ struct SafetyClassifierTests {
                     condition: "age > 30d",
                     safety: .safe,
                     profiles: []  // applies to all
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
@@ -374,7 +374,7 @@ struct SafetyClassifierTests {
                     condition: "age > 30d",
                     safety: .safe,
                     profiles: []
-                )
+                ),
             ]
         )
         let result = makeResult(lastAccessed: nil)
