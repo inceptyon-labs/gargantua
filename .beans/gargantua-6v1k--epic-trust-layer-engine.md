@@ -1,14 +1,14 @@
 ---
 # gargantua-6v1k
 title: 'Epic: Trust Layer Engine'
-status: todo
+status: in-progress
 type: epic
 priority: critical
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:44:21Z
-updated_at: 2026-04-15T00:44:21Z
+updated_at: 2026-04-15T11:11:05Z
 ---
 
 The safety classification system, YAML rule parser, and audit trail. This is the foundational architecture — the PRD calls it "not a feature, an architectural decision that permeates every scan result."

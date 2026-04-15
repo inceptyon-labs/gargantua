@@ -1,0 +1,24 @@
+rules:
+  - id: user_trash
+    name: Trash
+    paths:
+      - "~/.Trash"
+    safety: safe
+    confidence: 95
+    explanation: "Files already in Trash. User has previously decided to discard these."
+    source:
+      name: macOS
+    regenerates: false
+    category: trash
+    tags:
+      - system
+      - trash
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "In Trash for 30+ days — very unlikely to be needed."
+        profiles:
+          - developer
+          - light
+          - deep

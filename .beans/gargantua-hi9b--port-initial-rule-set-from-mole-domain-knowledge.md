@@ -1,7 +1,7 @@
 ---
 # gargantua-hi9b
 title: Port initial rule set from Mole domain knowledge
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:L
 created_at: 2026-04-15T00:47:32Z
-updated_at: 2026-04-15T00:47:32Z
+updated_at: 2026-04-15T11:11:04Z
 parent: gargantua-5la2
 ---
 

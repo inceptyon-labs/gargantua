@@ -1,0 +1,94 @@
+rules:
+  - id: node_modules
+    name: Node Modules
+    paths:
+      - "**/node_modules"
+    exclude:
+      - "*/node_modules/*/node_modules"
+    safety: review
+    confidence: 85
+    explanation: "npm/yarn/pnpm dependencies. Restored with 'npm install' but may take time."
+    source:
+      name: Node.js
+    regenerates: true
+    regenerate_command: "npm install"
+    category: dev_artifacts
+    tags:
+      - developer
+      - dependencies
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 95
+        explanation_suffix: "No project activity in 30+ days. Restore with package manager."
+        profiles:
+          - developer
+      - condition: "age > 7d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Inactive for over a week."
+        profiles:
+          - deep
+
+  - id: npm_cache
+    name: npm Cache
+    paths:
+      - "~/.npm/_cacache"
+    safety: safe
+    confidence: 98
+    explanation: "npm download cache. Packages re-download from registry as needed."
+    source:
+      name: npm
+    regenerates: true
+    regenerate_command: "npm cache clean --force"
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache
+
+  - id: yarn_cache
+    name: Yarn Cache
+    paths:
+      - "~/Library/Caches/Yarn"
+    safety: safe
+    confidence: 98
+    explanation: "Yarn package cache. Re-downloaded from registry on next install."
+    source:
+      name: Yarn
+    regenerates: true
+    regenerate_command: "yarn cache clean"
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache
+
+  - id: pnpm_store
+    name: pnpm Store
+    paths:
+      - "~/Library/pnpm/store"
+    safety: safe
+    confidence: 95
+    explanation: "pnpm content-addressable store. Packages re-download on next install."
+    source:
+      name: pnpm
+    regenerates: true
+    regenerate_command: "pnpm store prune"
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache
+
+  - id: bun_cache
+    name: Bun Install Cache
+    paths:
+      - "~/.bun/install/cache"
+    safety: safe
+    confidence: 97
+    explanation: "Bun package cache. Re-downloaded as needed."
+    source:
+      name: Bun
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache

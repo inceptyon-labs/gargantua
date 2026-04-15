@@ -1,0 +1,75 @@
+rules:
+  - id: safari_cache
+    name: Safari Browser Cache
+    paths:
+      - "~/Library/Caches/com.apple.Safari"
+    safety: safe
+    confidence: 98
+    explanation: "Safari browser cache. Regenerated automatically on next page visit."
+    source:
+      name: Safari
+      bundle_id: com.apple.Safari
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+
+  - id: safari_service_worker
+    name: Safari Service Workers
+    paths:
+      - "~/Library/Caches/com.apple.Safari/ServiceWorkers"
+    safety: safe
+    confidence: 95
+    explanation: "Service worker cache. Sites re-register workers on next visit."
+    source:
+      name: Safari
+      bundle_id: com.apple.Safari
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+
+  - id: safari_local_storage
+    name: Safari Local Storage
+    paths:
+      - "~/Library/Safari/LocalStorage"
+    safety: review
+    confidence: 70
+    explanation: "Website local storage may contain login sessions and app state. Review first."
+    source:
+      name: Safari
+      bundle_id: com.apple.Safari
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No activity in 90+ days — likely stale site data."
+        profiles:
+          - deep
+
+  - id: safari_webpage_previews
+    name: Safari Webpage Previews
+    paths:
+      - "~/Library/Caches/com.apple.Safari/Webpage Previews"
+    safety: safe
+    confidence: 98
+    explanation: "Thumbnail previews of visited pages. Regenerated on demand."
+    source:
+      name: Safari
+      bundle_id: com.apple.Safari
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache

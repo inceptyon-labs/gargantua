@@ -1,0 +1,62 @@
+rules:
+  - id: user_caches
+    name: User Library Caches
+    paths:
+      - "~/Library/Caches"
+    exclude:
+      - "*/Google"
+      - "*/Firefox"
+      - "*/com.apple.Safari"
+      - "*/company.thebrowser.Browser"
+      - "*/Homebrew"
+      - "*/CocoaPods"
+      - "*/Yarn"
+      - "*/org.swift.swiftpm"
+      - "*/com.apple.dt.Xcode"
+    safety: safe
+    confidence: 90
+    explanation: "Application caches in ~/Library/Caches. Apps rebuild these as needed."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - cache
+
+  - id: system_caches
+    name: System Caches
+    paths:
+      - "/Library/Caches"
+    safety: review
+    confidence: 70
+    explanation: "System-level caches. Some may require admin privileges to remove."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "Cache stale for 30+ days."
+        profiles:
+          - deep
+
+  - id: font_caches
+    name: Font Caches
+    paths:
+      - "~/Library/Caches/com.apple.FontRegistry"
+    safety: safe
+    confidence: 95
+    explanation: "Font registry cache. Rebuilt automatically on next use."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - cache

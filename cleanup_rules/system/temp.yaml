@@ -1,0 +1,120 @@
+rules:
+  - id: tmp_files
+    name: Temporary Files
+    paths:
+      - "/tmp"
+    exclude:
+      - "/tmp/homebrew-*"
+    safety: safe
+    confidence: 90
+    explanation: "System temporary directory. Contents are transient by design."
+    source:
+      name: macOS
+    regenerates: true
+    category: temp_files
+    tags:
+      - system
+      - temp
+    safety_overrides:
+      - condition: "age > 7d"
+        safety: safe
+        confidence: 98
+        explanation_suffix: "Temp files older than 7 days are certainly abandoned."
+        profiles:
+          - developer
+          - deep
+
+  - id: var_folders
+    name: Per-User Temp Folders
+    paths:
+      - "/var/folders/*/*/C"
+      - "/var/folders/*/*/T"
+    safety: safe
+    confidence: 85
+    explanation: "Per-user temporary and cache directories managed by macOS."
+    source:
+      name: macOS
+    regenerates: true
+    category: temp_files
+    tags:
+      - system
+      - temp
+    safety_overrides:
+      - condition: "age > 7d"
+        safety: safe
+        confidence: 95
+        explanation_suffix: "Temp data older than a week. Safe to reclaim."
+        profiles:
+          - developer
+          - deep
+
+  - id: downloads_installers
+    name: Installer Packages
+    paths:
+      - "~/Downloads"
+    pattern: "*.dmg"
+    safety: review
+    confidence: 80
+    explanation: "Downloaded disk images. May still be needed if software not yet installed."
+    source:
+      name: macOS
+    regenerates: false
+    category: installers
+    tags:
+      - system
+      - installers
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Installer untouched for 30+ days — likely already installed."
+        profiles:
+          - developer
+          - deep
+
+  - id: downloads_pkg
+    name: Package Installers
+    paths:
+      - "~/Downloads"
+    pattern: "*.pkg"
+    safety: review
+    confidence: 80
+    explanation: "Downloaded package installers. Usually not needed after installation."
+    source:
+      name: macOS
+    regenerates: false
+    category: installers
+    tags:
+      - system
+      - installers
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Package installer older than 30 days."
+        profiles:
+          - developer
+          - deep
+
+  - id: downloads_zip
+    name: Downloaded Archives
+    paths:
+      - "~/Downloads"
+    pattern: "*.zip"
+    safety: review
+    confidence: 75
+    explanation: "Downloaded ZIP archives. Contents may have been extracted already."
+    source:
+      name: macOS
+    regenerates: false
+    category: installers
+    tags:
+      - system
+      - installers
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "Archive untouched for 30+ days."
+        profiles:
+          - deep

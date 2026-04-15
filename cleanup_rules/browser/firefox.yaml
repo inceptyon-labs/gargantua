@@ -1,0 +1,83 @@
+rules:
+  - id: firefox_cache
+    name: Firefox Browser Cache
+    paths:
+      - "~/Library/Caches/Firefox/Profiles/*/cache2"
+    safety: safe
+    confidence: 98
+    explanation: "Firefox disk cache. Rebuilt automatically on browsing."
+    source:
+      name: Mozilla Firefox
+      bundle_id: org.mozilla.firefox
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "Cache untouched for 30+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: firefox_startup_cache
+    name: Firefox Startup Cache
+    paths:
+      - "~/Library/Caches/Firefox/Profiles/*/startupCache"
+    safety: safe
+    confidence: 97
+    explanation: "Startup acceleration cache. Rebuilt on next Firefox launch."
+    source:
+      name: Mozilla Firefox
+      bundle_id: org.mozilla.firefox
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+
+  - id: firefox_local_storage
+    name: Firefox Local Storage
+    paths:
+      - "~/Library/Application Support/Firefox/Profiles/*/storage/default"
+    safety: review
+    confidence: 70
+    explanation: "Site-specific storage including IndexedDB and localStorage. May contain app data."
+    source:
+      name: Mozilla Firefox
+      bundle_id: org.mozilla.firefox
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No activity in 90+ days."
+        profiles:
+          - deep
+
+  - id: firefox_crash_reports
+    name: Firefox Crash Reports
+    paths:
+      - "~/Library/Application Support/Firefox/Crash Reports"
+    safety: safe
+    confidence: 95
+    explanation: "Old crash reports with no ongoing diagnostic value."
+    source:
+      name: Mozilla Firefox
+      bundle_id: org.mozilla.firefox
+      verify_signature: true
+    regenerates: false
+    category: browser_cache
+    tags:
+      - browser
+      - logs

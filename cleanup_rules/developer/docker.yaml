@@ -1,0 +1,62 @@
+rules:
+  - id: docker_cache
+    name: Docker Build Cache
+    paths:
+      - "~/Library/Containers/com.docker.docker/Data/vms"
+    safety: review
+    confidence: 80
+    explanation: "Docker VM disk images containing layers and build cache. Can be large."
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+      verify_signature: true
+    regenerates: true
+    regenerate_command: "docker system prune"
+    category: docker
+    tags:
+      - developer
+      - containers
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Docker unused for 30+ days. Images can be re-pulled."
+        profiles:
+          - developer
+          - deep
+
+  - id: docker_data
+    name: Docker Application Data
+    paths:
+      - "~/Library/Containers/com.docker.docker/Data"
+    exclude:
+      - "*/vms"
+    safety: review
+    confidence: 75
+    explanation: "Docker configuration and state data. Volumes may contain important data."
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+      verify_signature: true
+    regenerates: false
+    category: docker
+    tags:
+      - developer
+      - containers
+
+  - id: docker_log
+    name: Docker Logs
+    paths:
+      - "~/Library/Containers/com.docker.docker/Data/log"
+    safety: safe
+    confidence: 95
+    explanation: "Docker daemon logs. No operational impact from removal."
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+      verify_signature: true
+    regenerates: true
+    category: docker
+    tags:
+      - developer
+      - logs

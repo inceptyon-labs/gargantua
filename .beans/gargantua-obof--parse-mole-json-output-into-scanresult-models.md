@@ -1,7 +1,7 @@
 ---
 # gargantua-obof
 title: Parse Mole JSON output into ScanResult models
-status: in-progress
+status: completed
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:07Z
-updated_at: 2026-04-15T11:06:30Z
+updated_at: 2026-04-15T11:06:51Z
 parent: gargantua-rsnu
 ---
 

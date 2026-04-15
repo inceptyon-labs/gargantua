@@ -1,0 +1,77 @@
+rules:
+  - id: homebrew_cache
+    name: Homebrew Download Cache
+    paths:
+      - "~/Library/Caches/Homebrew"
+    safety: safe
+    confidence: 97
+    explanation: "Downloaded bottles and source tarballs. Re-downloaded on next install/upgrade."
+    source:
+      name: Homebrew
+    regenerates: true
+    regenerate_command: "brew cleanup"
+    category: homebrew
+    tags:
+      - developer
+      - cache
+
+  - id: homebrew_logs
+    name: Homebrew Logs
+    paths:
+      - "~/Library/Logs/Homebrew"
+    safety: safe
+    confidence: 98
+    explanation: "Build and install logs. No impact on installed packages."
+    source:
+      name: Homebrew
+    regenerates: true
+    category: homebrew
+    tags:
+      - developer
+      - logs
+
+  - id: homebrew_temp
+    name: Homebrew Temp Files
+    paths:
+      - "/tmp/homebrew-*"
+    safety: safe
+    confidence: 99
+    explanation: "Temporary build files from Homebrew installations."
+    source:
+      name: Homebrew
+    regenerates: true
+    category: homebrew
+    tags:
+      - developer
+      - temp
+
+  - id: cocoapods_cache
+    name: CocoaPods Cache
+    paths:
+      - "~/Library/Caches/CocoaPods"
+    safety: safe
+    confidence: 97
+    explanation: "CocoaPods spec and download cache. Re-downloaded on next pod install."
+    source:
+      name: CocoaPods
+    regenerates: true
+    regenerate_command: "pod cache clean --all"
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache
+
+  - id: spm_cache
+    name: Swift Package Manager Cache
+    paths:
+      - "~/Library/Caches/org.swift.swiftpm"
+    safety: safe
+    confidence: 97
+    explanation: "SPM repository and artifact cache. Re-downloaded on next resolve."
+    source:
+      name: Swift Package Manager
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache
