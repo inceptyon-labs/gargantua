@@ -1,7 +1,7 @@
 ---
 # gargantua-p87w
 title: Implement system metric collection
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:26Z
-updated_at: 2026-04-15T00:48:26Z
+updated_at: 2026-04-15T18:29:30Z
 parent: gargantua-ggkx
 ---
 
