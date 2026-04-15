@@ -1,14 +1,14 @@
 ---
 # gargantua-4nxf
 title: 'Feature: Dev Artifact Purge View'
-status: todo
+status: completed
 type: feature
 priority: normal
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:46:20Z
-updated_at: 2026-04-15T00:46:20Z
+updated_at: 2026-04-15T20:02:22Z
 parent: gargantua-aek3
 ---
 
