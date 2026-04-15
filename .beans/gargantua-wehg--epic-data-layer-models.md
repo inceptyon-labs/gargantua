@@ -1,14 +1,14 @@
 ---
 # gargantua-wehg
 title: 'Epic: Data Layer & Models'
-status: todo
+status: in-progress
 type: epic
 priority: high
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:44:55Z
-updated_at: 2026-04-15T00:44:55Z
+updated_at: 2026-04-15T12:50:48Z
 ---
 
 SwiftData models, persistence, and the core data types that all features depend on. ScanResult, CleanupProfile, AuditEntry, Settings — the data backbone.

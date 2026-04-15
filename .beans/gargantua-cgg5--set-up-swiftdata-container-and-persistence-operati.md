@@ -1,7 +1,7 @@
 ---
 # gargantua-cgg5
 title: Set up SwiftData container and persistence operations
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:49:48Z
-updated_at: 2026-04-15T00:49:48Z
+updated_at: 2026-04-15T12:50:48Z
 parent: gargantua-1ila
 ---
 
