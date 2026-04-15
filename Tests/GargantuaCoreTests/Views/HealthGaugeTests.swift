@@ -35,6 +35,12 @@ struct HealthScoreRangeTests {
         #expect(HealthScoreRange(score: 80) == .healthy)
     }
 
+    @Test("Out-of-range scores are clamped: -5 is poor, 101 is healthy")
+    func outOfRangeClamped() {
+        #expect(HealthScoreRange(score: -5) == .poor)
+        #expect(HealthScoreRange(score: 101) == .healthy)
+    }
+
     @Test("Healthy maps to safe color")
     func healthyColor() {
         #expect(HealthScoreRange.healthy.color == GargantuaColors.safe)

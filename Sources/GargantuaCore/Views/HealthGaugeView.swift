@@ -9,7 +9,8 @@ public enum HealthScoreRange: Equatable {
     case poor     // 0-49
 
     public init(score: Int) {
-        switch score {
+        let clamped = min(max(score, 0), 100)
+        switch clamped {
         case 80...100: self = .healthy
         case 50...79:  self = .moderate
         default:       self = .poor
@@ -54,7 +55,6 @@ public struct HealthGaugeView: View {
     /// Arc spans 270° (¾ of a circle), gap at the bottom.
     private static let arcSpan: Double = 270
     private static let startAngle = Angle.degrees(135)
-    private static let endAngle = Angle.degrees(135 + arcSpan)
 
     public var body: some View {
         ZStack {
