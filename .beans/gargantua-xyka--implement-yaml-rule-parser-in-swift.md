@@ -1,7 +1,7 @@
 ---
 # gargantua-xyka
 title: Implement YAML rule parser in Swift
-status: todo
+status: completed
 type: task
 priority: critical
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:L
 created_at: 2026-04-15T00:47:32Z
-updated_at: 2026-04-15T01:28:52Z
+updated_at: 2026-04-15T01:29:35Z
 parent: gargantua-5la2
 ---
 

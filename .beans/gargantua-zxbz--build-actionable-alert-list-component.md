@@ -1,7 +1,7 @@
 ---
 # gargantua-zxbz
 title: Build actionable alert list component
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:26Z
-updated_at: 2026-04-15T00:48:26Z
+updated_at: 2026-04-15T01:32:39Z
 parent: gargantua-t1zs
 ---
 
