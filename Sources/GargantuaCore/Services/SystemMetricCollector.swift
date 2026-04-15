@@ -86,15 +86,17 @@ public struct SystemMetricCollector: Sendable {
         var totalUser: Double = 0
         var totalSystem: Double = 0
         var totalIdle: Double = 0
+        var totalNice: Double = 0
 
         for i in 0..<Int(numCPUs) {
             let offset = Int(CPU_STATE_MAX) * i
             totalUser += Double(info[offset + Int(CPU_STATE_USER)])
             totalSystem += Double(info[offset + Int(CPU_STATE_SYSTEM)])
             totalIdle += Double(info[offset + Int(CPU_STATE_IDLE)])
+            totalNice += Double(info[offset + Int(CPU_STATE_NICE)])
         }
 
-        let totalTicks = totalUser + totalSystem + totalIdle
+        let totalTicks = totalUser + totalSystem + totalIdle + totalNice
         guard totalTicks > 0 else { return 0 }
 
         let usage = (totalUser + totalSystem) / totalTicks
@@ -162,8 +164,8 @@ public struct SystemMetricCollector: Sendable {
     private func collectDisk() async throws -> DiskInfo {
         do {
             let attrs = try FileManager.default.attributesOfFileSystem(forPath: "/")
-            let total = (attrs[.systemSize] as? UInt64) ?? 0
-            let free = (attrs[.systemFreeSize] as? UInt64) ?? 0
+            let total = (attrs[.systemSize] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
+            let free = (attrs[.systemFreeSize] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
             let used = total > free ? total - free : 0
             let usage = total > 0 ? Double(used) / Double(total) : 0
 
@@ -199,16 +201,16 @@ public struct SystemMetricCollector: Sendable {
 
     private func memoryFromMoStatus() async throws -> MemoryInfo {
         let json = try await runMoStatus()
-        let total = (json["memory_total"] as? UInt64) ?? 0
-        let used = (json["memory_used"] as? UInt64) ?? 0
+        let total = (json["memory_total"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
+        let used = (json["memory_used"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
         let pressure = total > 0 ? Double(used) / Double(total) : 0
         return MemoryInfo(pressure: pressure, total: total, used: used)
     }
 
     private func diskFromMoStatus() async throws -> DiskInfo {
         let json = try await runMoStatus()
-        let total = (json["disk_total"] as? UInt64) ?? 0
-        let free = (json["disk_free"] as? UInt64) ?? 0
+        let total = (json["disk_total"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
+        let free = (json["disk_free"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
         let used = total > free ? total - free : 0
         let usage = total > 0 ? Double(used) / Double(total) : 0
         return DiskInfo(usage: usage, total: total, used: used, free: free)

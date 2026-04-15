@@ -15,7 +15,7 @@ public enum ThermalLevel: String, Codable, Sendable, Comparable {
         case .fair:     self = .fair
         case .serious:  self = .serious
         case .critical: self = .critical
-        @unknown default: self = .nominal
+        @unknown default: self = .serious
         }
     }
 
