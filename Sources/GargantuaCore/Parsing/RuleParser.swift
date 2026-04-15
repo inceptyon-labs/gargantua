@@ -207,6 +207,7 @@ public struct RuleParser: Sendable {
         guard let node = mapping[key], let sequence = node.sequence else { return [] }
         return sequence.compactMap { $0.string }
     }
+
 }
 
 // MARK: - Node Key Access
