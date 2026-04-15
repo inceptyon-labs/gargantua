@@ -54,7 +54,9 @@ private struct FullDiskAccessScreen: View {
             icon: "externaldrive.fill.badge.checkmark",
             title: "Full Disk Access",
             explanation: "Scan system caches, Library, Mail attachments",
-            detail: "Gargantua needs Full Disk Access to find hidden caches and large files buried in protected directories. Without it, scans are limited to your home folder.",
+            detail: "Gargantua needs Full Disk Access to find hidden caches and "
+                + "large files buried in protected directories. Without it, scans "
+                + "are limited to your home folder.",
             settingsURL: fullDiskAccessURL,
             onContinue: onContinue,
             onSkip: onSkip
@@ -77,7 +79,9 @@ private struct AutomationScreen: View {
             icon: "arrow.3.trianglepath",
             title: "Automation",
             explanation: "Move files to Trash via Finder",
-            detail: "Gargantua uses Finder automation to safely move files to Trash instead of permanently deleting them. You can always restore from Trash if needed.",
+            detail: "Gargantua uses Finder automation to safely move files to Trash "
+                + "instead of permanently deleting them. You can always restore from "
+                + "Trash if needed.",
             settingsURL: automationURL,
             onContinue: onContinue,
             onSkip: onSkip
