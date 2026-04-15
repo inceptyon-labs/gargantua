@@ -25,7 +25,7 @@ Package.resolved
 *.dSYM
 
 # AI Models (large, downloaded post-install)
-models/
+/models/
 
 # Environment
 .env
