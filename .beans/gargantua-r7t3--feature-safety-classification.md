@@ -1,14 +1,14 @@
 ---
 # gargantua-r7t3
 title: 'Feature: Safety Classification'
-status: todo
+status: in-progress
 type: feature
 priority: critical
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:45:35Z
-updated_at: 2026-04-15T00:45:35Z
+updated_at: 2026-04-15T12:32:59Z
 parent: gargantua-6v1k
 ---
 
