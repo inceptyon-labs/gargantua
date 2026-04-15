@@ -81,6 +81,11 @@ public struct SidebarView: View {
         self.sections = sections
     }
 
+    /// All items flattened in section order, for keyboard shortcut indexing.
+    private var allItems: [SidebarItem] {
+        sections.flatMap(\.items)
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
@@ -108,6 +113,20 @@ public struct SidebarView: View {
             Rectangle()
                 .fill(GargantuaColors.border)
                 .frame(width: 1)
+        }
+        .background {
+            // Hidden buttons for Cmd+1 through Cmd+5 keyboard shortcuts
+            ForEach(Array(allItems.prefix(5).enumerated()), id: \.element.id) { index, item in
+                Button("") { selection = item.id }
+                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                    .hidden()
+            }
+            // Cmd+, for Settings (macOS convention)
+            if let settingsItem = allItems.first(where: { $0.id == "settings" }) {
+                Button("") { selection = settingsItem.id }
+                    .keyboardShortcut(",", modifiers: .command)
+                    .hidden()
+            }
         }
     }
 }
@@ -147,6 +166,8 @@ private struct SidebarItemRow: View {
 
     @State private var isHovered = false
 
+    private static let transitionDuration: Double = 0.12
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: GargantuaSpacing.space2) {
@@ -170,8 +191,11 @@ private struct SidebarItemRow: View {
                     Rectangle()
                         .fill(GargantuaColors.accent)
                         .frame(width: 2)
+                        .transition(.opacity)
                 }
             }
+            .animation(.easeOut(duration: Self.transitionDuration), value: isSelected)
+            .animation(.easeOut(duration: Self.transitionDuration), value: isHovered)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

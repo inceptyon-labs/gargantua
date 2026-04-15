@@ -1,7 +1,7 @@
 ---
 # gargantua-lwae
 title: Implement sidebar active state and keyboard navigation
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:06Z
-updated_at: 2026-04-15T00:47:06Z
+updated_at: 2026-04-15T17:56:49Z
 parent: gargantua-dshk
 ---
 
