@@ -1,7 +1,7 @@
 ---
 # gargantua-k2og
 title: Define YAML scan rule schema
-status: todo
+status: completed
 type: task
 priority: critical
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:32Z
-updated_at: 2026-04-15T01:13:17Z
+updated_at: 2026-04-15T01:15:07Z
 parent: gargantua-5la2
 ---
 
@@ -23,3 +23,8 @@ Define the declarative rule format: id, name, paths, pattern, exclude, safety, c
 
 ---
 **Size:** M
+
+
+
+---
+Completed in commit 5e71f45

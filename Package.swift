@@ -10,9 +10,13 @@ let package = Package(
     products: [
         .library(name: "GargantuaCore", targets: ["GargantuaCore"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
+    ],
     targets: [
         .target(
             name: "GargantuaCore",
+            dependencies: ["Yams"],
             path: "Sources/GargantuaCore"
         ),
         .testTarget(
