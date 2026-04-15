@@ -1,0 +1,113 @@
+rules:
+  - id: xcode_derived_data
+    name: Xcode Derived Data
+    paths:
+      - "~/Library/Developer/Xcode/DerivedData"
+    safety: safe
+    confidence: 98
+    explanation: "Build intermediates and indexes. Rebuilt automatically on next build."
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+      verify_signature: true
+    regenerates: true
+    regenerate_command: "xcodebuild"
+    category: dev_artifacts
+    tags:
+      - developer
+      - build_cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "No build activity in 30+ days. Project likely inactive."
+        profiles:
+          - developer
+          - deep
+
+  - id: xcode_archives
+    name: Xcode Archives
+    paths:
+      - "~/Library/Developer/Xcode/Archives"
+    safety: review
+    confidence: 70
+    explanation: "App archives used for distribution. May be needed for crash symbolication."
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+      verify_signature: true
+    regenerates: true
+    regenerate_command: "xcodebuild archive"
+    category: dev_artifacts
+    tags:
+      - developer
+      - archives
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "Archive older than 90 days — unlikely needed for symbolication."
+        profiles:
+          - developer
+          - deep
+
+  - id: xcode_simulators
+    name: iOS Simulator Data
+    paths:
+      - "~/Library/Developer/CoreSimulator/Devices"
+    exclude:
+      - "*/device.plist"
+    safety: review
+    confidence: 75
+    explanation: "Simulator device data including installed apps. Can be recreated but takes time."
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+      verify_signature: true
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - simulators
+    safety_overrides:
+      - condition: "age > 60d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Simulator unused for 60+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: xcode_caches
+    name: Xcode Caches
+    paths:
+      - "~/Library/Caches/com.apple.dt.Xcode"
+    safety: safe
+    confidence: 97
+    explanation: "Xcode internal caches. Rebuilt automatically."
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+      verify_signature: true
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache
+
+  - id: xcode_previews
+    name: SwiftUI Previews Cache
+    paths:
+      - "~/Library/Developer/Xcode/UserData/Previews"
+    safety: safe
+    confidence: 97
+    explanation: "SwiftUI preview build artifacts. Regenerated when previews are used."
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+      verify_signature: true
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cache

@@ -1,0 +1,83 @@
+rules:
+  - id: arc_cache
+    name: Arc Browser Cache
+    paths:
+      - "~/Library/Caches/company.thebrowser.Browser"
+    safety: safe
+    confidence: 97
+    explanation: "Arc browser cache. Regenerated automatically on browsing."
+    source:
+      name: Arc
+      bundle_id: company.thebrowser.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "Cache untouched for 30+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: arc_code_cache
+    name: Arc Code Cache
+    paths:
+      - "~/Library/Caches/company.thebrowser.Browser/Default/Code Cache"
+    safety: safe
+    confidence: 97
+    explanation: "Compiled script cache. Rebuilt transparently on revisit."
+    source:
+      name: Arc
+      bundle_id: company.thebrowser.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+
+  - id: arc_local_storage
+    name: Arc Local Storage
+    paths:
+      - "~/Library/Application Support/Arc/User Data/Default/Local Storage"
+    safety: review
+    confidence: 75
+    explanation: "Website local storage may contain login tokens. Review before removing."
+    source:
+      name: Arc
+      bundle_id: company.thebrowser.Browser
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No activity in 90+ days — likely abandoned."
+        profiles:
+          - deep
+
+  - id: arc_service_worker
+    name: Arc Service Worker Cache
+    paths:
+      - "~/Library/Caches/company.thebrowser.Browser/Default/Service Worker"
+    safety: safe
+    confidence: 95
+    explanation: "Service worker data. Sites re-register on next visit."
+    source:
+      name: Arc
+      bundle_id: company.thebrowser.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache

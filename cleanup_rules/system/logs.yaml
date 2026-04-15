@@ -1,0 +1,56 @@
+rules:
+  - id: system_logs
+    name: System Log Files
+    paths:
+      - "~/Library/Logs"
+    exclude:
+      - "*/Homebrew"
+      - "*/Gargantua"
+    safety: safe
+    confidence: 90
+    explanation: "Application log files. Useful for debugging but safe to remove when not needed."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs
+    safety_overrides:
+      - condition: "age > 7d"
+        safety: safe
+        confidence: 95
+        explanation_suffix: "Logs older than 7 days rarely needed for debugging."
+        profiles:
+          - developer
+          - deep
+
+  - id: diagnostic_reports
+    name: Diagnostic Reports
+    paths:
+      - "~/Library/Logs/DiagnosticReports"
+    safety: safe
+    confidence: 95
+    explanation: "Crash reports and hang logs. Useful for debugging but safe to remove."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - crash_reports
+
+  - id: asl_logs
+    name: Apple System Logs
+    paths:
+      - "/var/log/asl"
+    safety: safe
+    confidence: 90
+    explanation: "Archived Apple System Log files. System creates new ones as needed."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs

@@ -1,14 +1,14 @@
 ---
 # gargantua-5la2
 title: 'Feature: YAML Rule System'
-status: todo
+status: in-progress
 type: feature
 priority: critical
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:45:35Z
-updated_at: 2026-04-15T00:45:35Z
+updated_at: 2026-04-15T11:11:05Z
 parent: gargantua-6v1k
 ---
 
