@@ -1,7 +1,7 @@
 ---
 # gargantua-2xke
 title: Build profile list and editor
-status: in-progress
+status: completed
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:49:31Z
-updated_at: 2026-04-15T22:54:48Z
+updated_at: 2026-04-15T22:57:41Z
 parent: gargantua-gae9
 ---
 
@@ -24,3 +24,5 @@ List of profiles (Developer, Light, Deep, Custom) with edit capability. Active p
 
 ---
 **Size:** M
+
+Completed in da6369e

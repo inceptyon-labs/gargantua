@@ -32,6 +32,8 @@ struct MainContentView: View {
                                 ProgressView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
+                        case "diskExplorer":
+                            DiskExplorerView()
                         default:
                             placeholderView
                         }

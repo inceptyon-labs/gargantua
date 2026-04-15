@@ -1,7 +1,7 @@
 ---
 # gargantua-dt1b
 title: Build sorted expandable disk usage list
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:L
 created_at: 2026-04-15T00:49:09Z
-updated_at: 2026-04-15T00:49:09Z
+updated_at: 2026-04-15T23:15:17Z
 parent: gargantua-9xm6
 ---
 
