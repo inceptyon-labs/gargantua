@@ -1,7 +1,7 @@
 ---
 # gargantua-3ct9
 title: Build three-bucket layout with headers
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:46Z
-updated_at: 2026-04-15T00:48:46Z
+updated_at: 2026-04-15T15:24:38Z
 parent: gargantua-rbpd
 ---
 
