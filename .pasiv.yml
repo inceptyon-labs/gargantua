@@ -1,0 +1,6 @@
+# PASIV Configuration
+task_backend: beans
+
+beans:
+  path: .beans
+  prefix: beans-

@@ -1,0 +1,32 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.idea/
+*.xcworkspace/xcuserdata/
+
+# App artifacts
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# AI Models (large, downloaded post-install)
+models/
+
+# Environment
+.env
+.env.local
