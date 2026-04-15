@@ -1,14 +1,14 @@
 ---
 # gargantua-38l5
 title: 'Feature: First Launch Onboarding'
-status: todo
+status: completed
 type: feature
 priority: normal
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:45:18Z
-updated_at: 2026-04-15T00:45:18Z
+updated_at: 2026-04-15T22:41:05Z
 parent: gargantua-0jj3
 ---
 

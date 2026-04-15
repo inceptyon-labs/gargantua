@@ -1,7 +1,7 @@
 ---
 # gargantua-2xke
 title: Build profile list and editor
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:49:31Z
-updated_at: 2026-04-15T00:49:31Z
+updated_at: 2026-04-15T22:49:03Z
 parent: gargantua-gae9
 ---
 

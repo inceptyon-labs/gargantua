@@ -58,7 +58,8 @@ extension SidebarSection {
             id: "configure",
             label: "CONFIGURE",
             items: [
-                SidebarItem(id: "settings", label: "Settings", icon: "gearshape")
+                SidebarItem(id: "profiles", label: "Profiles", icon: "person.2"),
+                SidebarItem(id: "settings", label: "Settings", icon: "gearshape"),
             ]
         ),
     ]
