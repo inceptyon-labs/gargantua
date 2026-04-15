@@ -1,14 +1,14 @@
 ---
 # gargantua-3t5d
 title: 'Feature: SwiftData Persistence'
-status: todo
+status: completed
 type: feature
 priority: high
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:46:41Z
-updated_at: 2026-04-15T00:46:41Z
+updated_at: 2026-04-15T19:52:57Z
 parent: gargantua-wehg
 ---
 
