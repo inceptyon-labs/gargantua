@@ -38,6 +38,12 @@ struct SidebarSectionTests {
         #expect(allIDs.contains("settings"))
     }
 
+    @Test("All item IDs are unique across sections")
+    func itemIDsUnique() {
+        let allIDs = SidebarSection.defaultSections.flatMap { $0.items.map(\.id) }
+        #expect(Set(allIDs).count == allIDs.count, "Item IDs must be unique across all sections")
+    }
+
     @Test("Every item has an SF Symbol icon name")
     func itemsHaveIcons() {
         for section in SidebarSection.defaultSections {

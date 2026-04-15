@@ -158,6 +158,7 @@ private struct SidebarItemRow: View {
                 Text(item.label)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
+                    .lineLimit(1)
 
                 Spacer()
             }
