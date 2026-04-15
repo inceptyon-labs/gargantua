@@ -27,8 +27,9 @@ public struct AlertListView: View {
                         onNavigate(alert.destination)
                     }
                     if alert.id != alerts.last?.id {
-                        Divider()
-                            .background(GargantuaColors.borderSoft)
+                        Rectangle()
+                            .fill(GargantuaColors.borderSoft)
+                            .frame(height: 1)
                     }
                 }
             }
