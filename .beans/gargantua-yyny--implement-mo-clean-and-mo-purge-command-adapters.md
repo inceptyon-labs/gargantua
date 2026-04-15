@@ -1,7 +1,7 @@
 ---
 # gargantua-yyny
 title: Implement mo clean and mo purge command adapters
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:07Z
-updated_at: 2026-04-15T00:48:07Z
+updated_at: 2026-04-15T17:31:53Z
 parent: gargantua-jj6r
 ---
 
