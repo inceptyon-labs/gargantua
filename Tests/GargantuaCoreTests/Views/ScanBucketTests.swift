@@ -45,15 +45,15 @@ struct ScanBucketTests {
         let buckets = ScanBucket.group(results)
         #expect(buckets.count == 3)
         #expect(buckets[0].count == 1)
-        #expect(buckets[1].count == 0)
-        #expect(buckets[2].count == 0)
+        #expect(buckets[1].items.isEmpty)
+        #expect(buckets[2].items.isEmpty)
     }
 
     @Test("Group with empty input returns three empty buckets")
     func emptyInput() {
         let buckets = ScanBucket.group([])
         #expect(buckets.count == 3)
-        #expect(buckets.allSatisfy { $0.count == 0 })
+        #expect(buckets.allSatisfy { $0.items.isEmpty })
     }
 
     @Test("Count matches number of items")
