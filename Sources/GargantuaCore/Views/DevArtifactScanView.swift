@@ -48,6 +48,7 @@ public struct DevArtifactScanView: View {
     @State private var scanResults: [ScanResult]?
     @State private var scanDuration: TimeInterval = 0
     @State private var selectedResultIDs: Set<String> = []
+    @State private var isScanRequested = false
 
     public init(adapter: MoPurgeAdapter, profile: CleanupProfile = .developer) {
         self.adapter = adapter
@@ -196,7 +197,7 @@ public struct DevArtifactScanView: View {
 
     private var scanFooter: some View {
         HStack {
-            if scanProgress.isScanning {
+            if scanProgress.isScanning || isScanRequested {
                 ProgressView()
                     .controlSize(.small)
                     .padding(.trailing, GargantuaSpacing.space2)
@@ -297,6 +298,7 @@ public struct DevArtifactScanView: View {
     }
 
     private func startScan() {
+        isScanRequested = true
         Task {
             let start = Date()
             do {
@@ -320,8 +322,10 @@ public struct DevArtifactScanView: View {
                     filtered.filter { $0.safety == .safe }.map(\.id)
                 )
                 scanResults = filtered
+                isScanRequested = false
             } catch {
                 // Errors are already recorded in ScanProgress by the adapter
+                isScanRequested = false
             }
         }
     }
