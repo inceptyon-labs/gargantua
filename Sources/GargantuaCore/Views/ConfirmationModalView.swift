@@ -116,6 +116,7 @@ struct ModalChrome<Content: View>: View {
                 .frame(maxWidth: 480)
                 .padding(GargantuaSpacing.space6)
         }
+        .onExitCommand(perform: onCancel)
     }
 }
 
@@ -451,9 +452,9 @@ struct ConfirmationItemRow: View {
 
     private var safetyDimColor: Color {
         switch item.safety {
-        case .safe: GargantuaColors.safe.opacity(0.06)
-        case .review: GargantuaColors.review.opacity(0.06)
-        case .protected_: GargantuaColors.protected_.opacity(0.06)
+        case .safe: GargantuaColors.safe.opacity(0.12)
+        case .review: GargantuaColors.review.opacity(0.12)
+        case .protected_: GargantuaColors.protected_.opacity(0.12)
         }
     }
 }
@@ -519,6 +520,6 @@ struct AcknowledgeableItemRow: View {
             .padding(.vertical, GargantuaSpacing.space2)
             .padding(.horizontal, GargantuaSpacing.space3)
         }
-        .background(GargantuaColors.protected_.opacity(0.06))
+        .background(GargantuaColors.protected_.opacity(0.12))
     }
 }
