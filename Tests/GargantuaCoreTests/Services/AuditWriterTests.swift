@@ -136,6 +136,45 @@ struct AuditWriterTests {
         #expect(writer.logDirectory == expected)
         #expect(writer.logFile == expected.appendingPathComponent("audit.json"))
     }
+
+    @Test("Concurrent writes produce correct number of lines")
+    func concurrentWrites() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let writer = AuditWriter(logDirectory: dir)
+        let count = 50
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for i in 0..<count {
+                group.addTask {
+                    let entry = AuditEntry(
+                        tool: "native",
+                        command: "clean",
+                        files: [AuditFile(path: "/tmp/file\(i).txt", size: Int64(i * 10))],
+                        safetyLevel: .safe,
+                        confirmationMethod: .singleButton,
+                        bytesFreed: Int64(i * 10)
+                    )
+                    try writer.write(entry)
+                }
+            }
+            try await group.waitForAll()
+        }
+
+        let content = try String(contentsOf: writer.logFile, encoding: .utf8)
+        let lines = content.split(separator: "\n").filter { !$0.isEmpty }
+        #expect(lines.count == count, "Expected \(count) lines, got \(lines.count)")
+
+        // Each line must be valid JSON
+        for (index, line) in lines.enumerated() {
+            let data = Data(line.utf8)
+            #expect(throws: Never.self) {
+                _ = try JSONDecoder.auditDecoder.decode(AuditEntry.self, from: data)
+            }
+            _ = index  // suppress unused warning
+        }
+    }
 }
 
 // MARK: - JSONDecoder helper for tests

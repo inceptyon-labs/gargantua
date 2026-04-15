@@ -1,7 +1,7 @@
 ---
 # gargantua-0av8
 title: Implement audit log writer
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:49Z
-updated_at: 2026-04-15T00:47:49Z
+updated_at: 2026-04-15T12:36:19Z
 parent: gargantua-dshb
 ---
 

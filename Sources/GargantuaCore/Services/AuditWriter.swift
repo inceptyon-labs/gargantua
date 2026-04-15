@@ -1,14 +1,19 @@
 import Foundation
+import os
 
 /// Appends audit entries to a JSONL log file.
 ///
 /// Each entry is written as a single JSON line to
-/// `~/Library/Logs/Gargantua/audit.json`.
+/// `~/Library/Logs/Gargantua/audit.json`. Writes are serialized
+/// via `OSAllocatedUnfairLock` to ensure thread safety.
 public final class AuditWriter: Sendable {
     /// Directory containing the audit log.
     public let logDirectory: URL
     /// Full path to the audit log file.
     public let logFile: URL
+
+    /// Serializes file writes to prevent interleaved output from concurrent callers.
+    private let lock = OSAllocatedUnfairLock()
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -31,26 +36,30 @@ public final class AuditWriter: Sendable {
     /// Write an audit entry for a completed cleanup operation.
     ///
     /// Creates the log directory if it doesn't exist. Appends the entry
-    /// as a single JSON line (JSONL format).
+    /// as a single JSON line (JSONL format). Thread-safe — concurrent
+    /// calls are serialized.
     public func write(_ entry: AuditEntry) throws {
-        try FileManager.default.createDirectory(
-            at: logDirectory,
-            withIntermediateDirectories: true
-        )
-
         let data = try Self.encoder.encode(entry)
         guard var line = String(data: data, encoding: .utf8) else {
             throw AuditWriteError.encodingFailed
         }
         line.append("\n")
+        let lineData = Data(line.utf8)
 
-        if FileManager.default.fileExists(atPath: logFile.path) {
-            let handle = try FileHandle(forWritingTo: logFile)
-            defer { try? handle.close() }
-            handle.seekToEndOfFile()
-            handle.write(Data(line.utf8))
-        } else {
-            try Data(line.utf8).write(to: logFile, options: .atomic)
+        try lock.withLock {
+            try FileManager.default.createDirectory(
+                at: logDirectory,
+                withIntermediateDirectories: true
+            )
+
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                let handle = try FileHandle(forWritingTo: logFile)
+                defer { try? handle.close() }
+                handle.seekToEndOfFile()
+                handle.write(lineData)
+            } else {
+                try lineData.write(to: logFile, options: .atomic)
+            }
         }
     }
 
