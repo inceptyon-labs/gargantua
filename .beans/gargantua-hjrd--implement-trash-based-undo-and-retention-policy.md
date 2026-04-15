@@ -1,7 +1,7 @@
 ---
 # gargantua-hjrd
 title: Implement Trash-based undo and retention policy
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:49Z
-updated_at: 2026-04-15T00:47:49Z
+updated_at: 2026-04-15T12:38:15Z
 parent: gargantua-dshb
 ---
 

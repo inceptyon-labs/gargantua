@@ -89,6 +89,70 @@ public final class AuditWriter: Sendable {
 
         try write(entry)
     }
+
+    // MARK: - Reading
+
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+
+    /// Read all audit entries from the log file.
+    ///
+    /// Returns an empty array if the log file doesn't exist.
+    /// Skips malformed lines rather than failing entirely.
+    public func readEntries() throws -> [AuditEntry] {
+        guard FileManager.default.fileExists(atPath: logFile.path) else { return [] }
+
+        let content = try String(contentsOf: logFile, encoding: .utf8)
+        return content.split(separator: "\n").compactMap { line in
+            try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8))
+        }
+    }
+
+    // MARK: - Retention
+
+    /// Remove audit entries older than the given retention period.
+    ///
+    /// Rewrites the log file containing only entries within the retention window.
+    /// Thread-safe — serialized with writes.
+    ///
+    /// - Parameter retentionDays: Number of days to retain (default: 90).
+    /// - Returns: The number of entries purged.
+    @discardableResult
+    public func purgeEntries(olderThanDays retentionDays: Int = 90, now: Date = Date()) throws -> Int {
+        try lock.withLock {
+            guard FileManager.default.fileExists(atPath: logFile.path) else { return 0 }
+
+            let content = try String(contentsOf: logFile, encoding: .utf8)
+            let lines = content.split(separator: "\n")
+            let cutoff = now.addingTimeInterval(-Double(retentionDays) * 86400)
+
+            var keptLines: [String] = []
+            var purgedCount = 0
+
+            for line in lines {
+                if let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) {
+                    if entry.timestamp >= cutoff {
+                        keptLines.append(String(line))
+                    } else {
+                        purgedCount += 1
+                    }
+                } else {
+                    // Keep malformed lines to avoid silent data loss
+                    keptLines.append(String(line))
+                }
+            }
+
+            if purgedCount > 0 {
+                let newContent = keptLines.joined(separator: "\n") + (keptLines.isEmpty ? "" : "\n")
+                try Data(newContent.utf8).write(to: logFile, options: .atomic)
+            }
+
+            return purgedCount
+        }
+    }
 }
 
 /// Errors that can occur during audit writing.
