@@ -8,12 +8,18 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "GargantuaCore", targets: ["GargantuaCore"])
+        .library(name: "GargantuaCore", targets: ["GargantuaCore"]),
+        .executable(name: "Gargantua", targets: ["Gargantua"])
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
     ],
     targets: [
+        .executableTarget(
+            name: "Gargantua",
+            dependencies: ["GargantuaCore"],
+            path: "Sources/Gargantua"
+        ),
         .target(
             name: "GargantuaCore",
             dependencies: ["Yams"],

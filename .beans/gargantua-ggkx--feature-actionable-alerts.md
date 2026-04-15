@@ -1,14 +1,14 @@
 ---
 # gargantua-ggkx
 title: 'Feature: Actionable Alerts'
-status: todo
+status: completed
 type: feature
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:45:58Z
-updated_at: 2026-04-15T00:45:58Z
+updated_at: 2026-04-15T18:43:43Z
 parent: gargantua-qne2
 ---
 

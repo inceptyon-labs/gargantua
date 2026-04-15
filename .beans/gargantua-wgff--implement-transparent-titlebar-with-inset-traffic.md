@@ -1,7 +1,7 @@
 ---
 # gargantua-wgff
 title: Implement transparent titlebar with inset traffic lights
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:06Z
-updated_at: 2026-04-15T00:47:06Z
+updated_at: 2026-04-15T19:23:26Z
 parent: gargantua-vxjo
 ---
 
