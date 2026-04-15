@@ -1,14 +1,14 @@
 ---
 # gargantua-1ila
 title: 'Feature: Core Data Models'
-status: todo
+status: in-progress
 type: feature
 priority: critical
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:46:41Z
-updated_at: 2026-04-15T00:46:41Z
+updated_at: 2026-04-15T12:50:48Z
 parent: gargantua-wehg
 ---
 
