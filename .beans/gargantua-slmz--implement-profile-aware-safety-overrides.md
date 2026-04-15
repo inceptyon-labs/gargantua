@@ -1,7 +1,7 @@
 ---
 # gargantua-slmz
 title: Implement profile-aware safety overrides
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:47:49Z
-updated_at: 2026-04-15T00:47:49Z
+updated_at: 2026-04-15T12:32:59Z
 parent: gargantua-r7t3
 ---
 
