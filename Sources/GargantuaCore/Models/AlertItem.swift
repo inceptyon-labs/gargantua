@@ -69,19 +69,19 @@ private struct CategoryMeta {
     let destination: AlertDestination
 
     static let lookup: [String: CategoryMeta] = [
-        "browser_cache":   CategoryMeta(label: "browser cache",       destination: .deepClean),
-        "browser_data":    CategoryMeta(label: "browser data",        destination: .deepClean),
-        "system_cache":    CategoryMeta(label: "system cache",        destination: .deepClean),
-        "system_logs":     CategoryMeta(label: "system logs",         destination: .deepClean),
-        "temp_files":      CategoryMeta(label: "temporary files",     destination: .deepClean),
-        "trash":           CategoryMeta(label: "Trash items",         destination: .deepClean),
-        "dev_artifacts":   CategoryMeta(label: "dev artifacts",       destination: .devPurge),
-        "docker":          CategoryMeta(label: "Docker data",         destination: .devPurge),
-        "homebrew":        CategoryMeta(label: "Homebrew cache",      destination: .devPurge),
-        "installers":      CategoryMeta(label: "old installers",      destination: .deepClean),
-        "similar_images":  CategoryMeta(label: "similar images",      destination: .deepClean),
-        "empty_files":     CategoryMeta(label: "empty files",         destination: .deepClean),
-        "broken_symlinks": CategoryMeta(label: "broken symlinks",     destination: .deepClean),
+        "browser_cache": CategoryMeta(label: "browser cache", destination: .deepClean),
+        "browser_data": CategoryMeta(label: "browser data", destination: .deepClean),
+        "system_cache": CategoryMeta(label: "system cache", destination: .deepClean),
+        "system_logs": CategoryMeta(label: "system logs", destination: .deepClean),
+        "temp_files": CategoryMeta(label: "temporary files", destination: .deepClean),
+        "trash": CategoryMeta(label: "Trash items", destination: .deepClean),
+        "dev_artifacts": CategoryMeta(label: "dev artifacts", destination: .devPurge),
+        "docker": CategoryMeta(label: "Docker data", destination: .devPurge),
+        "homebrew": CategoryMeta(label: "Homebrew cache", destination: .devPurge),
+        "installers": CategoryMeta(label: "old installers", destination: .deepClean),
+        "similar_images": CategoryMeta(label: "similar images", destination: .deepClean),
+        "empty_files": CategoryMeta(label: "empty files", destination: .deepClean),
+        "broken_symlinks": CategoryMeta(label: "broken symlinks", destination: .deepClean),
     ]
 }
 

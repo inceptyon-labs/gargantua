@@ -78,7 +78,7 @@ struct AuditEntryTests {
             command: "clean",
             files: [
                 AuditFile(path: "~/Library/Caches/Chrome", size: 10_000_000),
-                AuditFile(path: "~/Library/Caches/Safari", size: 5_000_000)
+                AuditFile(path: "~/Library/Caches/Safari", size: 5_000_000),
             ],
             safetyLevel: .safe,
             confirmationMethod: .singleButton,

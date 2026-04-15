@@ -1,7 +1,7 @@
 ---
 # gargantua-yzi8
 title: 'Feature: Clean Execution Flow'
-status: todo
+status: in-progress
 type: feature
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:46:20Z
-updated_at: 2026-04-15T00:46:20Z
+updated_at: 2026-04-15T01:50:20Z
 parent: gargantua-aek3
 ---
 

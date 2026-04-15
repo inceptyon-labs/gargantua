@@ -1,0 +1,43 @@
+# SwiftLint Configuration — Gargantua
+
+excluded:
+  - .build
+  - Package.swift
+
+# Trailing commas are preferred — they make diffs cleaner
+trailing_comma:
+  mandatory_comma: true
+
+# Allow longer lines for readability (150 soft, 200 hard)
+line_length:
+  warning: 150
+  error: 200
+
+# Function body length (accommodate test helpers)
+function_body_length:
+  warning: 80
+  error: 120
+
+# Identifier naming — allow short math vars and trailing underscores
+# for Swift keyword escapes (protected_, void_)
+identifier_name:
+  min_length:
+    warning: 1
+  allowed_symbols:
+    - _
+  excluded:
+    - id
+
+# Opt-in rules worth enabling
+opt_in_rules:
+  - closure_spacing
+  - empty_count
+  - fatal_error_message
+  - first_where
+  - implicitly_unwrapped_optional
+  - overridden_super_call
+  - private_outlet
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - unowned_variable_capture
+  - vertical_whitespace_closing_braces

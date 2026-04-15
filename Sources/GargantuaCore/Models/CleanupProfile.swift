@@ -78,7 +78,7 @@ extension CleanupProfile {
         description: "All caches + dev artifacts + Docker + Homebrew + installers",
         categories: [
             "browser_cache", "system_cache", "system_logs", "temp_files", "trash",
-            "dev_artifacts", "docker", "homebrew", "installers"
+            "dev_artifacts", "docker", "homebrew", "installers",
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -87,7 +87,7 @@ extension CleanupProfile {
                 confidence: 95,
                 explanationSuffix: "No project activity in 30+ days. Restore with package manager.",
                 profiles: ["developer"]
-            )
+            ),
         ]
     )
 
@@ -109,7 +109,7 @@ extension CleanupProfile {
         categories: [
             "browser_cache", "browser_data", "system_cache", "system_logs",
             "temp_files", "trash", "dev_artifacts", "docker", "homebrew",
-            "installers", "similar_images", "empty_files", "broken_symlinks"
+            "installers", "similar_images", "empty_files", "broken_symlinks",
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -118,7 +118,7 @@ extension CleanupProfile {
                 confidence: 90,
                 explanationSuffix: "Inactive for over a week.",
                 profiles: ["deep"]
-            )
+            ),
         ]
     )
 

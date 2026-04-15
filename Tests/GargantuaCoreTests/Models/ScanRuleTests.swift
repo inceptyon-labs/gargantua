@@ -91,7 +91,7 @@ struct ScanRuleTests {
                     safety: .safe,
                     confidence: 90,
                     profiles: ["deep"]
-                )
+                ),
             ]
         )
         #expect(rule.safetyOverrides.count == 2)
@@ -166,7 +166,7 @@ struct ScanRuleTests {
                     confidence: 95,
                     explanationSuffix: "Inactive project.",
                     profiles: ["developer", "deep"]
-                )
+                ),
             ]
         )
 
@@ -201,7 +201,7 @@ struct RuleFileTests {
                 explanation: "Safari browser cache",
                 source: SourceAttribution(name: "Safari", bundleID: "com.apple.Safari"),
                 category: "browser_cache"
-            )
+            ),
         ])
         #expect(file.rules.count == 2)
         #expect(file.rules[0].id == "chrome_cache")

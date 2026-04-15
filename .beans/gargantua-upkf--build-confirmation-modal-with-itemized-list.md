@@ -1,7 +1,7 @@
 ---
 # gargantua-upkf
 title: Build confirmation modal with itemized list
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:49:09Z
-updated_at: 2026-04-15T00:49:09Z
+updated_at: 2026-04-15T01:50:20Z
 parent: gargantua-yzi8
 ---
 
