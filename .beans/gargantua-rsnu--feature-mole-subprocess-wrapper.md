@@ -1,14 +1,14 @@
 ---
 # gargantua-rsnu
 title: 'Feature: Mole Subprocess Wrapper'
-status: todo
+status: in-progress
 type: feature
 priority: high
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:45:44Z
-updated_at: 2026-04-15T00:45:44Z
+updated_at: 2026-04-15T10:51:30Z
 parent: gargantua-q0og
 ---
 

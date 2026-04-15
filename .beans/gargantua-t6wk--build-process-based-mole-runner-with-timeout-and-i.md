@@ -1,7 +1,7 @@
 ---
 # gargantua-t6wk
 title: Build Process-based Mole runner with timeout and isolation
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:07Z
-updated_at: 2026-04-15T00:48:07Z
+updated_at: 2026-04-15T10:51:30Z
 parent: gargantua-rsnu
 ---
 
