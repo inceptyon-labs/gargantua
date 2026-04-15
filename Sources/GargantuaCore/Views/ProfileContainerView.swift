@@ -22,6 +22,7 @@ public struct ProfileContainerView: View {
                     onSave: { updated in
                         try? persistence.saveProfile(updated)
                         editingProfile = nil
+                        isCreatingCustom = false
                         loadProfiles()
                     },
                     onCancel: {
