@@ -1,7 +1,7 @@
 ---
 # gargantua-lv3r
 title: Build dense scan item row component
-status: todo
+status: completed
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:L
 created_at: 2026-04-15T00:48:46Z
-updated_at: 2026-04-15T00:48:46Z
+updated_at: 2026-04-15T02:10:05Z
 parent: gargantua-rbpd
 ---
 
