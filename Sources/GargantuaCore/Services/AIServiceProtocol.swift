@@ -9,7 +9,7 @@ public enum ExplanationSource: Sendable, Equatable {
 }
 
 /// An explanation of a scan result, with metadata about how it was generated.
-public struct AIExplanation: Sendable {
+public struct AIExplanation: Sendable, Equatable {
     /// The explanation text.
     public let text: String
 
