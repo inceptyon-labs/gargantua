@@ -148,3 +148,21 @@ public final class PersistedScanHistory {
         self.profileID = profileID
     }
 }
+
+// MARK: - Persisted Whitelist Entry
+
+/// SwiftData model for persisting path whitelist entries.
+///
+/// Whitelisted paths are excluded from cleanup scans.
+@Model
+public final class PersistedWhitelistEntry {
+    @Attribute(.unique) public var pattern: String
+    public var note: String
+    public var createdAt: Date
+
+    public init(pattern: String, note: String = "", createdAt: Date = Date()) {
+        self.pattern = pattern
+        self.note = note
+        self.createdAt = createdAt
+    }
+}

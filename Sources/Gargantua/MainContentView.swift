@@ -34,6 +34,13 @@ struct MainContentView: View {
                             }
                         case "diskExplorer":
                             DiskExplorerView()
+                        case "rules":
+                            if let persistence {
+                                RuleViewerView(persistence: persistence)
+                            } else {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
                         default:
                             placeholderView
                         }

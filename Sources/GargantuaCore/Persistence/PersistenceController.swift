@@ -17,6 +17,7 @@ public final class PersistenceController {
         PersistedAuditEntry.self,
         PersistedSettings.self,
         PersistedScanHistory.self,
+        PersistedWhitelistEntry.self,
     ]
 
     /// Create a persistence controller with an on-disk store.
@@ -188,5 +189,38 @@ public final class PersistenceController {
         var descriptor = FetchDescriptor<PersistedScanHistory>(sortBy: [SortDescriptor(\.scanDate, order: .reverse)])
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first?.scanDate
+    }
+
+    // MARK: - Whitelist
+
+    /// Fetch all whitelist entries, sorted by creation date.
+    public func fetchWhitelistEntries() throws -> [PersistedWhitelistEntry] {
+        let descriptor = FetchDescriptor<PersistedWhitelistEntry>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        return try context.fetch(descriptor)
+    }
+
+    /// Add a whitelist entry. No-op if the pattern already exists.
+    @discardableResult
+    public func addWhitelistEntry(pattern: String, note: String = "") throws -> PersistedWhitelistEntry? {
+        let predicate = #Predicate<PersistedWhitelistEntry> { $0.pattern == pattern }
+        let descriptor = FetchDescriptor(predicate: predicate)
+        guard try context.fetch(descriptor).isEmpty else { return nil }
+
+        let entry = PersistedWhitelistEntry(pattern: pattern, note: note)
+        context.insert(entry)
+        try context.save()
+        return entry
+    }
+
+    /// Remove a whitelist entry by pattern.
+    public func removeWhitelistEntry(pattern: String) throws {
+        let predicate = #Predicate<PersistedWhitelistEntry> { $0.pattern == pattern }
+        let descriptor = FetchDescriptor(predicate: predicate)
+        if let existing = try context.fetch(descriptor).first {
+            context.delete(existing)
+            try context.save()
+        }
     }
 }
