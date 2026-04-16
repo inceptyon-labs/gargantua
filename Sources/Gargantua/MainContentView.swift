@@ -41,6 +41,13 @@ struct MainContentView: View {
                                 ProgressView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
+                        case "settings":
+                            if let persistence {
+                                SettingsView(persistence: persistence)
+                            } else {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
                         default:
                             placeholderView
                         }

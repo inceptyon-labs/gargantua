@@ -49,7 +49,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     public let modelInfo: ModelInfo
 
     /// Directory where models are stored.
-    public static let modelsDirectory: URL = {
+    public nonisolated static let modelsDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return appSupport.appendingPathComponent("Gargantua/models", isDirectory: true)
     }()
@@ -63,7 +63,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     /// Default model configuration.
     ///
     /// Uses a placeholder URL — replace with actual model hosting when available.
-    public static let defaultModel = ModelInfo(
+    public nonisolated static let defaultModel = ModelInfo(
         name: "Gargantua Q4 (MLX)",
         url: URL(string: "https://models.gargantua.dev/gargantua-q4.mlx")!,
         fileName: "gargantua-q4.mlx",
@@ -80,12 +80,11 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
     /// Start downloading the model. No-op if already downloading or downloaded.
     public func startDownload() {
-        guard case .notDownloaded = state else {
-            if case .failed = state {
-                // Allow retry from failed state
-            } else {
-                return
-            }
+        switch state {
+        case .notDownloaded, .failed:
+            break // proceed
+        case .downloading, .downloaded:
+            return
         }
 
         createModelsDirectoryIfNeeded()
