@@ -1,7 +1,7 @@
 ---
 # gargantua-cldy
 title: Implement AI model download manager
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:49:31Z
-updated_at: 2026-04-15T00:49:31Z
+updated_at: 2026-04-16T00:18:07Z
 parent: gargantua-swvt
 ---
 
