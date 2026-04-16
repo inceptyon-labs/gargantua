@@ -23,7 +23,14 @@ struct MainContentView: View {
                     SidebarView(selection: $sidebarSelection)
 
                     // Content area
-                    Group {
+                    VStack(spacing: 0) {
+                        if !PermissionChecker.hasFullDiskAccess {
+                            PermissionBannerView.fullDiskAccess
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.top, GargantuaSpacing.space3)
+                        }
+
+                        Group {
                         switch sidebarSelection {
                         case "dashboard":
                             DashboardView(sidebarSelection: $sidebarSelection)
@@ -63,6 +70,7 @@ struct MainContentView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
                 .onAppear {
                     if persistence == nil {
