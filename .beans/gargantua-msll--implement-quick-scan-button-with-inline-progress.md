@@ -1,7 +1,7 @@
 ---
 # gargantua-msll
 title: Implement Quick Scan button with inline progress
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-15T00:48:26Z
-updated_at: 2026-04-15T00:48:26Z
+updated_at: 2026-04-16T01:33:37Z
 parent: gargantua-t1zs
 ---
 
