@@ -303,8 +303,7 @@ struct SystemInfoBar: View {
                 diskTotalGB = Int(totalBytes / (1024 * 1024 * 1024))
             }
             if let freeBytes = attrs[.systemFreeSize] as? UInt64,
-               let totalBytes = attrs[.systemSize] as? UInt64
-            {
+               let totalBytes = attrs[.systemSize] as? UInt64 {
                 diskUsedGB = Int((totalBytes - freeBytes) / (1024 * 1024 * 1024))
             }
         }
