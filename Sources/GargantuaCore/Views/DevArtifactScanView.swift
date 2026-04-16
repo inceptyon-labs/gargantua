@@ -50,6 +50,7 @@ public struct DevArtifactScanView: View {
     @State private var selectedResultIDs: Set<String> = []
     @State private var isScanRequested = false
     @State private var showConfirmation = false
+    @State private var isCleaning = false
     @State private var cleanupResult: CleanupResult?
 
     public init(adapter: MoPurgeAdapter, profile: CleanupProfile = .developer) {
@@ -60,11 +61,18 @@ public struct DevArtifactScanView: View {
     public var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                if let results = scanResults {
+                if let result = cleanupResult {
+                    CleanupSummaryView(result: result, onDismiss: dismissSummary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let results = scanResults {
                     resultsView(results)
                 } else {
                     categorySelectionView
                 }
+            }
+
+            if isCleaning {
+                cleaningOverlay
             }
 
             if showConfirmation, let results = scanResults {
@@ -79,6 +87,25 @@ public struct DevArtifactScanView: View {
         }
         .background(GargantuaColors.void_)
         .animation(.easeOut(duration: 0.15), value: showConfirmation)
+    }
+
+    private var cleaningOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+
+            VStack(spacing: GargantuaSpacing.space3) {
+                ProgressView()
+                    .controlSize(.regular)
+
+                Text("Moving items to Trash…")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+            }
+            .padding(GargantuaSpacing.space6)
+            .background(GargantuaColors.surface3)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
     }
 
     // MARK: - Category Selection
@@ -310,10 +337,19 @@ public struct DevArtifactScanView: View {
 
     private func confirmCleanup(_ items: [ScanResult]) {
         showConfirmation = false
+        isCleaning = true
         Task {
             let engine = CleanupEngine()
-            cleanupResult = await engine.clean(items)
+            let result = await engine.clean(items)
+            try? AuditWriter().record(result: result)
+            isCleaning = false
+            cleanupResult = result
         }
+    }
+
+    private func dismissSummary() {
+        cleanupResult = nil
+        scanResults = nil
     }
 
     private func toggleCategory(_ id: String) {
