@@ -30,3 +30,4 @@ Package.resolved
 # Environment
 .env
 .env.local
+test_output.log
