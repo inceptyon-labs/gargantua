@@ -1,7 +1,7 @@
 ---
 # gargantua-w47s
 title: Add system badge to sidebar bottom
-status: todo
+status: in-progress
 type: task
 priority: low
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-15T00:47:06Z
-updated_at: 2026-04-15T00:47:06Z
+updated_at: 2026-04-16T01:57:18Z
 parent: gargantua-dshk
 ---
 

@@ -106,6 +106,8 @@ public struct SidebarView: View {
             }
 
             Spacer()
+
+            SystemInfoBadge()
         }
         .padding(.top, GargantuaSpacing.space4)
         .frame(width: 200)
@@ -208,5 +210,47 @@ private struct SidebarItemRow: View {
             return GargantuaColors.surface1
         }
         return .clear
+    }
+}
+
+// MARK: - System Info Badge
+
+/// Compact badge at the sidebar bottom showing macOS version and disk free space.
+struct SystemInfoBadge: View {
+    @State private var diskFreeGB: Int?
+
+    var body: some View {
+        Rectangle()
+            .fill(GargantuaColors.border)
+            .frame(height: 1)
+            .padding(.horizontal, GargantuaSpacing.space3)
+
+        Text(badgeText)
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(GargantuaColors.ink3)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, GargantuaSpacing.space2)
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .onAppear { refreshDiskFree() }
+    }
+
+    private var badgeText: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        let versionStr = "macOS \(version.majorVersion).\(version.minorVersion)"
+        if let gb = diskFreeGB {
+            return "\(versionStr) · \(gb) GB free"
+        }
+        return versionStr
+    }
+
+    func refreshDiskFree() {
+        if let attrs = try? FileManager.default.attributesOfFileSystem(
+            forPath: NSHomeDirectory()
+        ),
+            let freeBytes = attrs[.systemFreeSize] as? UInt64
+        {
+            diskFreeGB = Int(freeBytes / (1024 * 1024 * 1024))
+        }
     }
 }

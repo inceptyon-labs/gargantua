@@ -1,7 +1,7 @@
 ---
 # gargantua-ic03
 title: Add right-click context menu for scan items
-status: in-progress
+status: completed
 type: task
 priority: low
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-15T00:48:46Z
-updated_at: 2026-04-16T01:54:41Z
+updated_at: 2026-04-16T01:55:07Z
 parent: gargantua-rbpd
 ---
 
