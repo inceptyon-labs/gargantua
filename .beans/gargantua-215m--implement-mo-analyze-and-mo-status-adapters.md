@@ -1,7 +1,7 @@
 ---
 # gargantua-215m
 title: Implement mo analyze and mo status adapters
-status: in-progress
+status: completed
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:07Z
-updated_at: 2026-04-16T01:05:52Z
+updated_at: 2026-04-16T01:06:22Z
 parent: gargantua-jj6r
 ---
 

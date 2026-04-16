@@ -1,7 +1,7 @@
 ---
 # gargantua-gszj
 title: Implement keyboard interaction for scan results
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:46Z
-updated_at: 2026-04-15T00:48:46Z
+updated_at: 2026-04-16T01:14:50Z
 parent: gargantua-rbpd
 ---
 

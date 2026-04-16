@@ -143,34 +143,56 @@ struct ScanBucketHeader: View {
 
 // MARK: - Scan Bucket List View
 
-/// Three-bucket scan results layout with collapsible sections.
+/// Three-bucket scan results layout with collapsible sections and keyboard navigation.
 ///
 /// Safe items are expanded and pre-selected, Review items are expanded
 /// but unchecked, Protected items are visible but locked (no checkboxes).
+///
+/// Keyboard shortcuts:
+/// - Up/Down arrows: navigate between items
+/// - Space: toggle selection of focused item
+/// - Cmd+A: select all safe items
+/// - Enter: trigger clean flow
+/// - Tab: jump to next bucket
+/// - Escape: clear focus or cancel
 public struct ScanBucketListView: View {
     public let results: [ScanResult]
     public let scanDuration: TimeInterval
     @Binding public var selectedIDs: Set<String>
     public let onExplain: ((ScanResult) -> Void)?
+    public let onClean: (() -> Void)?
+    public let onCancel: (() -> Void)?
 
     @State private var expandedBuckets: Set<SafetyLevel> = [.safe, .review, .protected_]
+    @State private var focusedItemID: String?
 
     public init(
         results: [ScanResult],
         scanDuration: TimeInterval,
         selectedIDs: Binding<Set<String>>,
-        onExplain: ((ScanResult) -> Void)? = nil
+        onExplain: ((ScanResult) -> Void)? = nil,
+        onClean: (() -> Void)? = nil,
+        onCancel: (() -> Void)? = nil
     ) {
         self.results = results
         self.scanDuration = scanDuration
         self._selectedIDs = selectedIDs
         self.onExplain = onExplain
+        self.onClean = onClean
+        self.onCancel = onCancel
     }
 
     private var buckets: [ScanBucket] { ScanBucket.group(results) }
 
     private var reclaimableBytes: Int64 {
         results.filter { selectedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
+    }
+
+    /// Flat list of all visible item IDs, respecting expanded/collapsed buckets.
+    private var navigableItemIDs: [String] {
+        buckets.flatMap { bucket in
+            expandedBuckets.contains(bucket.id) ? bucket.items.map(\.id) : []
+        }
     }
 
     public var body: some View {
@@ -187,13 +209,34 @@ public struct ScanBucketListView: View {
                 .frame(height: 1)
 
             // Buckets
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(buckets) { bucket in
-                        bucketSection(bucket)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(buckets) { bucket in
+                            bucketSection(bucket)
+                        }
+                    }
+                }
+                .onChange(of: focusedItemID) { _, newID in
+                    if let newID {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            proxy.scrollTo(newID, anchor: .center)
+                        }
                     }
                 }
             }
+        }
+        .focusable()
+        .onKeyPress(.upArrow) { moveFocus(direction: -1); return .handled }
+        .onKeyPress(.downArrow) { moveFocus(direction: 1); return .handled }
+        .onKeyPress(.space) { toggleFocusedSelection(); return .handled }
+        .onKeyPress(.return) { triggerClean(); return .handled }
+        .onKeyPress(.escape) { handleEscape(); return .handled }
+        .onKeyPress(.tab) { jumpToNextBucket(); return .handled }
+        .onKeyPress(characters: .init(charactersIn: "a")) { keyPress in
+            guard keyPress.modifiers == .command else { return .ignored }
+            selectAllSafe()
+            return .handled
         }
     }
 
@@ -220,9 +263,11 @@ public struct ScanBucketListView: View {
                     DenseScanItemRow(
                         item: item,
                         isSelected: selectedIDs.contains(item.id),
+                        isFocused: focusedItemID == item.id,
                         onToggleSelection: { toggleSelection(item.id) },
                         onExplain: onExplain.map { handler in { handler(item) } }
                     )
+                    .id(item.id)
                 }
 
                 Rectangle()
@@ -275,6 +320,79 @@ public struct ScanBucketListView: View {
         .padding(.vertical, GargantuaSpacing.space2)
         .padding(.horizontal, GargantuaSpacing.space3)
         .background(GargantuaColors.protected_.opacity(0.06))
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.borderFocus, lineWidth: 2)
+                .padding(1)
+                .opacity(focusedItemID == item.id ? 1 : 0)
+        )
+        .id(item.id)
+    }
+
+    // MARK: - Keyboard Actions
+
+    private func moveFocus(direction: Int) {
+        let items = navigableItemIDs
+        guard !items.isEmpty else { return }
+
+        guard let current = focusedItemID, let index = items.firstIndex(of: current) else {
+            // No focus yet — focus first (down) or last (up) item
+            focusedItemID = direction > 0 ? items.first : items.last
+            return
+        }
+
+        let newIndex = index + direction
+        guard items.indices.contains(newIndex) else { return }
+        focusedItemID = items[newIndex]
+    }
+
+    private func toggleFocusedSelection() {
+        guard let id = focusedItemID else { return }
+        // Only toggle if the item is not protected
+        let item = results.first { $0.id == id }
+        guard item?.safety != .protected_ else { return }
+        toggleSelection(id)
+    }
+
+    private func selectAllSafe() {
+        let safeIDs = results.filter { $0.safety == .safe }.map(\.id)
+        selectedIDs = Set(safeIDs)
+    }
+
+    private func triggerClean() {
+        guard !selectedIDs.isEmpty else { return }
+        onClean?()
+    }
+
+    private func handleEscape() {
+        if focusedItemID != nil {
+            focusedItemID = nil
+        } else {
+            onCancel?()
+        }
+    }
+
+    private func jumpToNextBucket() {
+        let expandedBucketList = buckets.filter { expandedBuckets.contains($0.id) && !$0.items.isEmpty }
+        guard !expandedBucketList.isEmpty else { return }
+
+        if let currentID = focusedItemID {
+            // Find which bucket the current item is in
+            let currentBucketIndex = expandedBucketList.firstIndex { bucket in
+                bucket.items.contains { $0.id == currentID }
+            }
+
+            if let idx = currentBucketIndex {
+                // Jump to first item of next bucket (wrap around)
+                let nextIdx = (idx + 1) % expandedBucketList.count
+                focusedItemID = expandedBucketList[nextIdx].items.first?.id
+            } else {
+                focusedItemID = expandedBucketList.first?.items.first?.id
+            }
+        } else {
+            // No focus — jump to first item of first expanded bucket
+            focusedItemID = expandedBucketList.first?.items.first?.id
+        }
     }
 
     private func toggleBucket(_ level: SafetyLevel) {

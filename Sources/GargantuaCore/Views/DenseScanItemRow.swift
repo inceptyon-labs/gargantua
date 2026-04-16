@@ -57,6 +57,7 @@ struct ConfidenceOrbit: View {
 public struct DenseScanItemRow: View {
     let item: ScanResult
     let isSelected: Bool
+    let isFocused: Bool
     let onToggleSelection: () -> Void
     let onExplain: (() -> Void)?
 
@@ -143,6 +144,12 @@ public struct DenseScanItemRow: View {
         .padding(.horizontal, GargantuaSpacing.space3)
         .background(safetyDimColor)
         .contentShape(Rectangle())
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.borderFocus, lineWidth: 2)
+                .padding(1)
+                .opacity(isFocused ? 1 : 0)
+        )
         .onTapGesture(perform: onToggleSelection)
         .onHover { hovering in
             isHovered = hovering
@@ -184,6 +191,7 @@ public struct DenseScanItemRow: View {
                 category: "browser_cache"
             ),
             isSelected: false,
+            isFocused: false,
             onToggleSelection: {},
             onExplain: {}
         )
@@ -205,6 +213,7 @@ public struct DenseScanItemRow: View {
                 category: "dev_artifacts"
             ),
             isSelected: true,
+            isFocused: true,
             onToggleSelection: {},
             onExplain: {}
         )
@@ -226,6 +235,7 @@ public struct DenseScanItemRow: View {
                 category: "dev_cache"
             ),
             isSelected: false,
+            isFocused: false,
             onToggleSelection: {},
             onExplain: {}
         )

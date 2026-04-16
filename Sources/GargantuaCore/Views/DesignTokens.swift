@@ -68,6 +68,8 @@ public enum GargantuaColors {
     // MARK: Interactive
     /// Hawking radiation blue — buttons, links, focus. hsl(213, 90%, 55%)
     public static let accent = hsl(213, 90, 55)
+    /// Focus ring border — 2px accent stroke with 2px offset.
+    public static let borderFocus = accent
 }
 
 // MARK: - Typography Tokens

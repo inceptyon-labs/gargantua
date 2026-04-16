@@ -284,7 +284,9 @@ public struct DevArtifactScanView: View {
             ScanBucketListView(
                 results: results,
                 scanDuration: scanDuration,
-                selectedIDs: $selectedResultIDs
+                selectedIDs: $selectedResultIDs,
+                onClean: { /* TODO: trigger confirmation modal */ },
+                onCancel: { scanResults = nil }
             )
         }
     }
