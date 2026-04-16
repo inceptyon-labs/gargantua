@@ -49,6 +49,8 @@ public struct DevArtifactScanView: View {
     @State private var scanDuration: TimeInterval = 0
     @State private var selectedResultIDs: Set<String> = []
     @State private var isScanRequested = false
+    @State private var showConfirmation = false
+    @State private var cleanupResult: CleanupResult?
 
     public init(adapter: MoPurgeAdapter, profile: CleanupProfile = .developer) {
         self.adapter = adapter
@@ -56,14 +58,27 @@ public struct DevArtifactScanView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            if let results = scanResults {
-                resultsView(results)
-            } else {
-                categorySelectionView
+        ZStack {
+            VStack(spacing: 0) {
+                if let results = scanResults {
+                    resultsView(results)
+                } else {
+                    categorySelectionView
+                }
+            }
+
+            if showConfirmation, let results = scanResults {
+                let selected = results.filter { selectedResultIDs.contains($0.id) }
+                ConfirmationModalView(
+                    items: selected,
+                    onConfirm: { confirmCleanup(selected) },
+                    onCancel: { showConfirmation = false }
+                )
+                .transition(.opacity)
             }
         }
         .background(GargantuaColors.void_)
+        .animation(.easeOut(duration: 0.15), value: showConfirmation)
     }
 
     // MARK: - Category Selection
@@ -285,13 +300,21 @@ public struct DevArtifactScanView: View {
                 results: results,
                 scanDuration: scanDuration,
                 selectedIDs: $selectedResultIDs,
-                onClean: { /* TODO: trigger confirmation modal */ },
+                onClean: { showConfirmation = true },
                 onCancel: { scanResults = nil }
             )
         }
     }
 
     // MARK: - Actions
+
+    private func confirmCleanup(_ items: [ScanResult]) {
+        showConfirmation = false
+        Task {
+            let engine = CleanupEngine()
+            cleanupResult = await engine.clean(items)
+        }
+    }
 
     private func toggleCategory(_ id: String) {
         if selectedCategoryIDs.contains(id) {

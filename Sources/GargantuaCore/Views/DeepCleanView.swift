@@ -14,20 +14,35 @@ public struct DeepCleanView: View {
     @State private var scanDuration: TimeInterval = 0
     @State private var selectedResultIDs: Set<String> = []
     @State private var isScanning = false
+    @State private var showConfirmation = false
+    @State private var cleanupResult: CleanupResult?
 
     public init(adapter: MoCleanAdapter) {
         self.adapter = adapter
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            if let results = scanResults {
-                resultsView(results)
-            } else {
-                startView
+        ZStack {
+            VStack(spacing: 0) {
+                if let results = scanResults {
+                    resultsView(results)
+                } else {
+                    startView
+                }
+            }
+
+            if showConfirmation, let results = scanResults {
+                let selected = results.filter { selectedResultIDs.contains($0.id) }
+                ConfirmationModalView(
+                    items: selected,
+                    onConfirm: { confirmCleanup(selected) },
+                    onCancel: { showConfirmation = false }
+                )
+                .transition(.opacity)
             }
         }
         .background(GargantuaColors.void_)
+        .animation(.easeOut(duration: 0.15), value: showConfirmation)
     }
 
     // MARK: - Start View
@@ -168,13 +183,21 @@ public struct DeepCleanView: View {
                 results: results,
                 scanDuration: scanDuration,
                 selectedIDs: $selectedResultIDs,
-                onClean: { /* TODO: trigger confirmation modal */ },
+                onClean: { showConfirmation = true },
                 onCancel: { scanResults = nil }
             )
         }
     }
 
     // MARK: - Actions
+
+    private func confirmCleanup(_ items: [ScanResult]) {
+        showConfirmation = false
+        Task {
+            let engine = CleanupEngine()
+            cleanupResult = await engine.clean(items)
+        }
+    }
 
     private func startScan() {
         isScanning = true

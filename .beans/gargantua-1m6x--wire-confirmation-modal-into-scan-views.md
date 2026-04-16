@@ -1,7 +1,7 @@
 ---
 # gargantua-1m6x
 title: Wire confirmation modal into scan views
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-16T11:06:51Z
-updated_at: 2026-04-16T11:06:51Z
+updated_at: 2026-04-16T15:07:27Z
 parent: gargantua-omp3
 blocked_by:
     - gargantua-0zll

@@ -1,14 +1,14 @@
 ---
 # gargantua-omp3
 title: 'Feature: Cleanup Execution UX'
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-16T11:06:44Z
-updated_at: 2026-04-16T11:06:44Z
+updated_at: 2026-04-16T15:07:23Z
 ---
 
 Wire the cleanup execution flow end-to-end: confirmation modals before cleanup, CleanupEngine execution, post-cleanup summary, and trash reveal. All components exist but are orphaned.
