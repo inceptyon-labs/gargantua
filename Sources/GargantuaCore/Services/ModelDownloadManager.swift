@@ -1,5 +1,4 @@
 import Foundation
-import Combine
 
 /// Configuration for an AI model that can be downloaded.
 public struct ModelInfo: Sendable {
