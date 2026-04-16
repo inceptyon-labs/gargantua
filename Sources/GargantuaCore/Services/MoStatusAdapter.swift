@@ -100,5 +100,4 @@ public struct MoStatusAdapter: Sendable {
             thermalLevel: thermal
         )
     }
-
 }
