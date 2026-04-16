@@ -1,7 +1,7 @@
 ---
 # gargantua-geny
 title: Set default window size and resize constraints
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-15T00:47:06Z
-updated_at: 2026-04-15T00:47:06Z
+updated_at: 2026-04-16T01:45:10Z
 parent: gargantua-vxjo
 ---
 

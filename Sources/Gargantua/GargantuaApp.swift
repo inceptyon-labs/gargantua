@@ -9,7 +9,7 @@ struct GargantuaApp: App {
     var body: some Scene {
         WindowGroup {
             MainContentView()
-                .frame(minWidth: 700, minHeight: 450)
+                .frame(minWidth: 700, minHeight: 500)
         }
         .defaultSize(width: 900, height: 600)
     }
@@ -24,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureMainWindow() {
         guard let window = NSApplication.shared.windows.first else { return }
+
+        // Persist window position and size across launches
+        window.setFrameAutosaveName("GargantuaMainWindow")
 
         // Transparent titlebar with full-size content underneath
         window.titlebarAppearsTransparent = true
