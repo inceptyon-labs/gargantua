@@ -1,14 +1,14 @@
 ---
 # gargantua-jj6r
 title: 'Feature: Mole Command Adapters'
-status: todo
+status: in-progress
 type: feature
 priority: high
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:45:44Z
-updated_at: 2026-04-15T00:45:44Z
+updated_at: 2026-04-16T01:00:54Z
 parent: gargantua-q0og
 ---
 
