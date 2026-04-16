@@ -31,7 +31,7 @@ public struct SidebarSection: Identifiable, Equatable {
 // MARK: - Default Sections
 
 extension SidebarSection {
-    /// The four sidebar sections defined in the design brief.
+    /// The sidebar sections: overview, clean, analyze, tools, configure.
     public static let defaultSections: [SidebarSection] = [
         SidebarSection(
             id: "overview",
