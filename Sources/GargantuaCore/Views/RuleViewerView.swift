@@ -495,7 +495,7 @@ private struct CategoryRow: View {
             .padding(.vertical, GargantuaSpacing.space2)
             .background(
                 isSelected ? GargantuaColors.surface3 :
-                isHovered ? GargantuaColors.surface2 : GargantuaColors.surface2
+                isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
             )
             .contentShape(Rectangle())
         }
@@ -542,7 +542,7 @@ private struct RuleRow: View {
             .padding(.vertical, GargantuaSpacing.space2)
             .background(
                 isSelected ? GargantuaColors.surface3 :
-                isHovered ? GargantuaColors.surface2 : GargantuaColors.surface2
+                isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
             )
             .contentShape(Rectangle())
         }
