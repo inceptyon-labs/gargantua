@@ -1,7 +1,7 @@
 ---
 # gargantua-5my5
 title: Build DeepCleanView and wire to sidebar
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-16T11:06:36Z
-updated_at: 2026-04-16T11:06:36Z
+updated_at: 2026-04-16T12:41:08Z
 parent: gargantua-0zll
 blocked_by:
     - gargantua-b24l

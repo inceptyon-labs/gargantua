@@ -32,6 +32,10 @@ struct MainContentView: View {
                                 ProgressView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
+                        case "deepClean":
+                            DeepCleanView(
+                                adapter: MoCleanAdapter(runner: MoleRunner())
+                            )
                         case "diskExplorer":
                             DiskExplorerView()
                         case "rules":
