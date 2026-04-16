@@ -1,14 +1,14 @@
 ---
 # gargantua-5hch
 title: 'Feature: Cleanup Profiles'
-status: todo
+status: completed
 type: feature
 priority: normal
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:46:33Z
-updated_at: 2026-04-15T00:46:33Z
+updated_at: 2026-04-16T10:55:34Z
 parent: gargantua-w7pe
 ---
 
@@ -22,3 +22,5 @@ Profile manager: Developer, Light, Deep, Custom. Each profile defines which cate
 ## Scope
 **In Scope:** Profile list, profile editor, category selection, active profile indicator, SwiftData persistence
 **Out of Scope:** Profile import/export, profile sharing
+
+## Summary of Changes\n\nChild task completed: gargantua-fuml (YAML rule viewer and whitelist editor)

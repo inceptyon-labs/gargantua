@@ -41,6 +41,10 @@ struct MainContentView: View {
                                 ProgressView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
+                        case "devPurge":
+                            DevArtifactScanView(
+                                adapter: MoPurgeAdapter(runner: MoleRunner())
+                            )
                         case "settings":
                             if let persistence {
                                 SettingsView(persistence: persistence)

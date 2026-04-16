@@ -1,14 +1,14 @@
 ---
 # gargantua-qne2
 title: 'Epic: Dashboard'
-status: in-progress
+status: completed
 type: epic
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:44:34Z
-updated_at: 2026-04-16T02:20:08Z
+updated_at: 2026-04-16T02:25:01Z
 ---
 
 The landing screen — first impression determines whether users trust the app. Health score gauge as the anchor, reclaimable space and actionable alerts orbiting around it.
@@ -27,3 +27,5 @@ The dashboard answers "how is my Mac doing?" immediately. Health score is the an
 - [ ] Alerts show specific reclaimable amounts with click-through
 - [ ] Quick Scan triggers active profile and shows progress
 - [ ] Healthy state (95-100) feels like success, not emptiness
+
+## Summary of Changes\n\nAll child features completed:\n- Health Score Gauge (gargantua-t1zs)\n- Actionable Alerts (gargantua-ggkx)\n- System Info Bar (gargantua-nswc)

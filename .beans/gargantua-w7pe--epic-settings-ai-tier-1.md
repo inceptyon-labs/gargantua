@@ -1,7 +1,7 @@
 ---
 # gargantua-w7pe
 title: 'Epic: Settings & AI Tier 1'
-status: todo
+status: completed
 type: epic
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:44:50Z
-updated_at: 2026-04-15T00:44:50Z
+updated_at: 2026-04-16T10:55:44Z
 ---
 
 Settings screens and on-device AI integration. Cleanup profiles, scan rule viewer, tool configuration, and MLX-based AI explanations.
@@ -30,3 +30,5 @@ Settings are a developer tool, not a consumer preferences screen. Profile editin
 - [ ] Whitelist add/remove works and persists
 - [ ] AI model downloads to correct location and lazy-loads
 - [ ] Explain button generates useful output or falls back to YAML string
+
+## Summary of Changes\n\nAll child features completed:\n- AI Tier 1 MLX Integration (gargantua-swvt): Model download, lazy load/unload, explain endpoint\n- Cleanup Profiles (gargantua-5hch): YAML rule viewer and whitelist editor\n- Scan Rules & Whitelist (gargantua-gae9): Profile list and editor with category selection

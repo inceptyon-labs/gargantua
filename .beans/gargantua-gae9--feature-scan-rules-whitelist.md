@@ -1,14 +1,14 @@
 ---
 # gargantua-gae9
 title: 'Feature: Scan Rules & Whitelist'
-status: todo
+status: completed
 type: feature
 priority: normal
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:46:33Z
-updated_at: 2026-04-15T00:46:33Z
+updated_at: 2026-04-16T10:55:35Z
 parent: gargantua-w7pe
 ---
 
@@ -22,3 +22,5 @@ YAML rule viewer and whitelist editor. Transparency — users can see exactly wh
 ## Scope
 **In Scope:** Read-only rule viewer, whitelist add/remove, whitelist persistence
 **Out of Scope:** Rule editing in-app, community rule updates
+
+## Summary of Changes\n\nChild task completed: gargantua-2xke (profile list and editor)
