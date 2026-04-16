@@ -34,6 +34,13 @@ extension SidebarSection {
     /// The four sidebar sections defined in the design brief.
     public static let defaultSections: [SidebarSection] = [
         SidebarSection(
+            id: "overview",
+            label: "OVERVIEW",
+            items: [
+                SidebarItem(id: "dashboard", label: "Dashboard", icon: "gauge.with.dots.needle.33percent")
+            ]
+        ),
+        SidebarSection(
             id: "clean",
             label: "CLEAN",
             items: [

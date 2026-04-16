@@ -1,7 +1,7 @@
 ---
 # gargantua-sieg
 title: Build dashboard layout and wire to sidebar
-status: todo
+status: in-progress
 type: task
 priority: high
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-16T11:06:11Z
-updated_at: 2026-04-16T11:06:11Z
+updated_at: 2026-04-16T13:57:34Z
 parent: gargantua-nkoz
 ---
 

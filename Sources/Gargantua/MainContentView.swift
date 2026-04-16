@@ -8,7 +8,7 @@ import SwiftUI
 /// Shows the permission request flow on first launch, then sidebar + content.
 struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var sidebarSelection: String? = "profiles"
+    @State private var sidebarSelection: String? = "dashboard"
     @State private var persistence: PersistenceController?
 
     var body: some View {
@@ -25,6 +25,8 @@ struct MainContentView: View {
                     // Content area
                     Group {
                         switch sidebarSelection {
+                        case "dashboard":
+                            DashboardView(sidebarSelection: $sidebarSelection)
                         case "profiles":
                             if let persistence {
                                 ProfileContainerView(persistence: persistence)

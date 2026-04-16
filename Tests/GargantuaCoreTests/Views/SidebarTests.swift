@@ -5,21 +5,21 @@ import Testing
 
 @Suite("SidebarSection")
 struct SidebarSectionTests {
-    @Test("Default sections has four groups")
+    @Test("Default sections has five groups")
     func defaultSectionCount() {
-        #expect(SidebarSection.defaultSections.count == 4)
+        #expect(SidebarSection.defaultSections.count == 5)
     }
 
     @Test("Default section IDs match expected groups")
     func defaultSectionIDs() {
         let ids = SidebarSection.defaultSections.map(\.id)
-        #expect(ids == ["clean", "analyze", "tools", "configure"])
+        #expect(ids == ["overview", "clean", "analyze", "tools", "configure"])
     }
 
     @Test("Default section labels are uppercase")
     func defaultSectionLabels() {
         let labels = SidebarSection.defaultSections.map(\.label)
-        #expect(labels == ["CLEAN", "ANALYZE", "TOOLS", "CONFIGURE"])
+        #expect(labels == ["OVERVIEW", "CLEAN", "ANALYZE", "TOOLS", "CONFIGURE"])
     }
 
     @Test("Each default section has at least one item")
@@ -32,6 +32,7 @@ struct SidebarSectionTests {
     @Test("Default items have expected IDs")
     func defaultItemIDs() {
         let allIDs = SidebarSection.defaultSections.flatMap { $0.items.map(\.id) }
+        #expect(allIDs.contains("dashboard"))
         #expect(allIDs.contains("deepClean"))
         #expect(allIDs.contains("diskExplorer"))
         #expect(allIDs.contains("devPurge"))
