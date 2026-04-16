@@ -1,7 +1,7 @@
 ---
 # gargantua-8s5j
 title: Implement lazy model loading and explain endpoint
-status: todo
+status: in-progress
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:L
 created_at: 2026-04-15T00:49:31Z
-updated_at: 2026-04-15T00:49:31Z
+updated_at: 2026-04-16T00:50:52Z
 parent: gargantua-swvt
 ---
 

@@ -1,14 +1,14 @@
 ---
 # gargantua-swvt
 title: 'Feature: AI Tier 1 MLX Integration'
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:46:33Z
-updated_at: 2026-04-15T00:46:33Z
+updated_at: 2026-04-16T00:50:52Z
 parent: gargantua-w7pe
 ---
 
