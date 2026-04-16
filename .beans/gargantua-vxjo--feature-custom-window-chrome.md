@@ -1,22 +1,22 @@
 ---
 # gargantua-vxjo
 title: 'Feature: Custom Window Chrome'
-status: todo
+status: completed
 type: feature
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:45:06Z
-updated_at: 2026-04-15T00:45:06Z
+updated_at: 2026-04-16T01:49:31Z
 parent: gargantua-0jj3
 ---
 
 Custom dark window with transparent system titlebar and inset traffic lights. Default 900x600, resizable.
 
 ## Goals
-- Own the visual identity end-to-end — no system chrome beyond traffic lights
-- App title and global actions in the custom title bar region
+- [x] Own the visual identity end-to-end — no system chrome beyond traffic lights
+- [x] App title and global actions in the custom title bar region
 
 ## Scope
 **In Scope:** Transparent titlebar, traffic light positioning, dark window background, resize behavior, min size constraints

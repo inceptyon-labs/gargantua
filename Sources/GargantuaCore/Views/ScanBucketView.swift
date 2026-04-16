@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Scan Bucket
@@ -162,6 +163,8 @@ public struct ScanBucketListView: View {
     public let onExplain: ((ScanResult) -> Void)?
     public let onClean: (() -> Void)?
     public let onCancel: (() -> Void)?
+    public let onAddToWhitelist: ((ScanResult) -> Void)?
+    public let onViewRule: ((ScanResult) -> Void)?
 
     @State private var expandedBuckets: Set<SafetyLevel> = [.safe, .review, .protected_]
     @State private var focusedItemID: String?
@@ -172,7 +175,9 @@ public struct ScanBucketListView: View {
         selectedIDs: Binding<Set<String>>,
         onExplain: ((ScanResult) -> Void)? = nil,
         onClean: (() -> Void)? = nil,
-        onCancel: (() -> Void)? = nil
+        onCancel: (() -> Void)? = nil,
+        onAddToWhitelist: ((ScanResult) -> Void)? = nil,
+        onViewRule: ((ScanResult) -> Void)? = nil
     ) {
         self.results = results
         self.scanDuration = scanDuration
@@ -180,6 +185,8 @@ public struct ScanBucketListView: View {
         self.onExplain = onExplain
         self.onClean = onClean
         self.onCancel = onCancel
+        self.onAddToWhitelist = onAddToWhitelist
+        self.onViewRule = onViewRule
     }
 
     private var buckets: [ScanBucket] { ScanBucket.group(results) }
@@ -259,6 +266,7 @@ public struct ScanBucketListView: View {
                 if bucket.id == .protected_ {
                     // Protected: visible but locked, no interaction
                     protectedRow(item)
+                        .contextMenu { scanItemContextMenu(item) }
                 } else {
                     DenseScanItemRow(
                         item: item,
@@ -268,6 +276,7 @@ public struct ScanBucketListView: View {
                         onExplain: onExplain.map { handler in { handler(item) } }
                     )
                     .id(item.id)
+                    .contextMenu { scanItemContextMenu(item) }
                 }
 
                 Rectangle()
@@ -327,6 +336,38 @@ public struct ScanBucketListView: View {
                 .opacity(focusedItemID == item.id ? 1 : 0)
         )
         .id(item.id)
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func scanItemContextMenu(_ item: ScanResult) -> some View {
+        Button {
+            NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(item.path, forType: .string)
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.doc")
+        }
+
+        Divider()
+
+        Button {
+            onAddToWhitelist?(item)
+        } label: {
+            Label("Add to Whitelist", systemImage: "shield.slash")
+        }
+
+        Button {
+            onViewRule?(item)
+        } label: {
+            Label("View Rule", systemImage: "doc.text.magnifyingglass")
+        }
     }
 
     // MARK: - Keyboard Actions
