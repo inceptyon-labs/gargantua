@@ -31,45 +31,45 @@ struct MainContentView: View {
                         }
 
                         Group {
-                        switch sidebarSelection {
-                        case "dashboard":
-                            DashboardView(sidebarSelection: $sidebarSelection)
-                        case "profiles":
-                            if let persistence {
-                                ProfileContainerView(persistence: persistence)
-                            } else {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            switch sidebarSelection {
+                            case "dashboard":
+                                DashboardView(sidebarSelection: $sidebarSelection)
+                            case "profiles":
+                                if let persistence {
+                                    ProfileContainerView(persistence: persistence)
+                                } else {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
+                            case "deepClean":
+                                DeepCleanView(
+                                    adapter: MoCleanAdapter(runner: MoleRunner())
+                                )
+                            case "diskExplorer":
+                                DiskExplorerView()
+                            case "rules":
+                                if let persistence {
+                                    RuleViewerView(persistence: persistence)
+                                } else {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
+                            case "devPurge":
+                                DevArtifactScanView(
+                                    adapter: MoPurgeAdapter(runner: MoleRunner())
+                                )
+                            case "settings":
+                                if let persistence {
+                                    SettingsView(persistence: persistence)
+                                } else {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
+                            default:
+                                placeholderView
                             }
-                        case "deepClean":
-                            DeepCleanView(
-                                adapter: MoCleanAdapter(runner: MoleRunner())
-                            )
-                        case "diskExplorer":
-                            DiskExplorerView()
-                        case "rules":
-                            if let persistence {
-                                RuleViewerView(persistence: persistence)
-                            } else {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            }
-                        case "devPurge":
-                            DevArtifactScanView(
-                                adapter: MoPurgeAdapter(runner: MoleRunner())
-                            )
-                        case "settings":
-                            if let persistence {
-                                SettingsView(persistence: persistence)
-                            } else {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            }
-                        default:
-                            placeholderView
                         }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 .onAppear {

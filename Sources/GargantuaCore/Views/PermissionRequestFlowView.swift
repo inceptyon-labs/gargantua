@@ -72,7 +72,9 @@ private struct FullDiskAccessScreen: View {
             hasAccess = PermissionChecker.hasFullDiskAccess
         }
         .onAppear {
-            if hasAccess { onContinue() }
+            if hasAccess {
+                DispatchQueue.main.async { onContinue() }
+            }
         }
         .onChange(of: hasAccess) {
             if hasAccess { onContinue() }
