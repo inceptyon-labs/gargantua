@@ -9,18 +9,18 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-15T00:48:46Z
-updated_at: 2026-04-16T01:14:50Z
+updated_at: 2026-04-16T01:22:33Z
 parent: gargantua-rbpd
 ---
 
 Arrow keys navigate, Space toggles selection, Cmd+A selects all safe items, Enter triggers clean, Escape cancels.
 
 ## Acceptance Criteria
-- [ ] Up/Down arrows navigate between items with visible focus ring (--border-focus)
-- [ ] Space toggles selection of focused item
-- [ ] Cmd+A selects all safe items (ignores review and protected)
-- [ ] Enter triggers clean flow for selected items
-- [ ] Tab moves between buckets
+- [x] Up/Down arrows navigate between items with visible focus ring (--border-focus)
+- [x] Space toggles selection of focused item
+- [x] Cmd+A selects all safe items (ignores review and protected)
+- [x] Enter triggers clean flow for selected items
+- [x] Tab moves between buckets
 
 ---
 **Size:** M

@@ -47,7 +47,10 @@ public struct MoStatusAdapter: Sendable {
             throw error
         }
 
-        logger.info("mo status: health=\(metrics.healthScore) cpu=\(String(format: "%.0f", metrics.cpuUsage * 100))% mem=\(String(format: "%.0f", metrics.memoryPressure * 100))% disk=\(String(format: "%.0f", metrics.diskUsage * 100))%")
+        let cpuStr = String(format: "%.0f", metrics.cpuUsage * 100)
+        let memStr = String(format: "%.0f", metrics.memoryPressure * 100)
+        let diskStr = String(format: "%.0f", metrics.diskUsage * 100)
+        logger.info("mo status: health=\(metrics.healthScore) cpu=\(cpuStr)% mem=\(memStr)% disk=\(diskStr)%")
         return metrics
     }
 

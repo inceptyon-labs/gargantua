@@ -263,61 +263,12 @@ public struct RuleViewerView: View {
     // MARK: - Whitelist Section
 
     private var whitelistSection: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
-
-            Text("Whitelist")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text("Whitelisted paths are excluded from cleanup scans.")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-
-            // Add entry
-            HStack(spacing: GargantuaSpacing.space2) {
-                TextField("Path or pattern (e.g. ~/Library/Caches/MyApp)", text: $newWhitelistPattern)
-                    .textFieldStyle(.plain)
-                    .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(GargantuaSpacing.space2)
-                    .background(GargantuaColors.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                    .onSubmit { addWhitelistEntry() }
-
-                Button(action: addWhitelistEntry) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(
-                            newWhitelistPattern.trimmingCharacters(in: .whitespaces).isEmpty
-                                ? GargantuaColors.ink4
-                                : GargantuaColors.accent
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(newWhitelistPattern.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-
-            // Existing entries
-            if whitelistEntries.isEmpty {
-                Text("No whitelist entries yet.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-            } else {
-                VStack(spacing: 1) {
-                    ForEach(whitelistEntries, id: \.pattern) { entry in
-                        WhitelistEntryRow(
-                            entry: entry,
-                            onRemove: { removeWhitelistEntry(entry.pattern) }
-                        )
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
-            }
-        }
+        WhitelistManagementView(
+            whitelistEntries: whitelistEntries,
+            newWhitelistPattern: $newWhitelistPattern,
+            onAddEntry: addWhitelistEntry,
+            onRemoveEntry: removeWhitelistEntry
+        )
     }
 
     // MARK: - Data Loading
@@ -439,6 +390,73 @@ public struct RuleViewerView: View {
         case .safe: GargantuaColors.safe
         case .review: GargantuaColors.review
         case .protected_: GargantuaColors.protected_
+        }
+    }
+}
+
+// MARK: - Whitelist Management
+
+private struct WhitelistManagementView: View {
+    let whitelistEntries: [PersistedWhitelistEntry]
+    @Binding var newWhitelistPattern: String
+    let onAddEntry: () -> Void
+    let onRemoveEntry: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
+
+            Text("Whitelist")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text("Whitelisted paths are excluded from cleanup scans.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+
+            // Add entry
+            HStack(spacing: GargantuaSpacing.space2) {
+                TextField("Path or pattern (e.g. ~/Library/Caches/MyApp)", text: $newWhitelistPattern)
+                    .textFieldStyle(.plain)
+                    .font(GargantuaFonts.monoPath)
+                    .foregroundStyle(GargantuaColors.ink)
+                    .padding(GargantuaSpacing.space2)
+                    .background(GargantuaColors.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    .onSubmit { onAddEntry() }
+
+                Button(action: onAddEntry) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(
+                            newWhitelistPattern.trimmingCharacters(in: .whitespaces).isEmpty
+                                ? GargantuaColors.ink4
+                                : GargantuaColors.accent
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(newWhitelistPattern.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            // Existing entries
+            if whitelistEntries.isEmpty {
+                Text("No whitelist entries yet.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink4)
+                    .padding(.vertical, GargantuaSpacing.space2)
+            } else {
+                VStack(spacing: 1) {
+                    ForEach(whitelistEntries, id: \.pattern) { entry in
+                        WhitelistEntryRow(
+                            entry: entry,
+                            onRemove: { onRemoveEntry(entry.pattern) }
+                        )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            }
         }
     }
 }
