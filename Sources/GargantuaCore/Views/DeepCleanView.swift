@@ -1,4 +1,7 @@
+import OSLog
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.gargantua.core", category: "DeepCleanView")
 
 // MARK: - Deep Clean View
 
@@ -224,7 +227,11 @@ public struct DeepCleanView: View {
         Task {
             let engine = CleanupEngine()
             let result = await engine.clean(items)
-            try? AuditWriter().record(result: result)
+            do {
+                try AuditWriter().record(result: result)
+            } catch {
+                logger.warning("Failed to write audit entry: \(error.localizedDescription)")
+            }
             isCleaning = false
             cleanupResult = result
         }

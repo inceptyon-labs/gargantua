@@ -183,9 +183,7 @@ public struct CleanupSummaryView: View {
     // MARK: - Actions
 
     private func revealTrash() {
-        let trashURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".Trash")
-        NSWorkspace.shared.open(trashURL)
+        TrashRevealer().revealCleanupResult(result)
     }
 
     private func openAuditTrail() {

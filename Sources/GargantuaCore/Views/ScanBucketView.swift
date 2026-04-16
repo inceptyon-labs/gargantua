@@ -232,6 +232,43 @@ public struct ScanBucketListView: View {
                     }
                 }
             }
+
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
+
+            // Action bar
+            HStack {
+                Text("\(selectedIDs.count) selected")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                if !selectedIDs.isEmpty {
+                    Text("(\(AlertItem.formatBytes(reclaimableBytes)))")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+
+                Spacer()
+
+                Button(action: triggerClean) {
+                    Text("Clean Selected")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(
+                            selectedIDs.isEmpty
+                                ? GargantuaColors.protected_.opacity(0.4)
+                                : GargantuaColors.protected_
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
+                .disabled(selectedIDs.isEmpty)
+            }
+            .padding(.horizontal, GargantuaSpacing.space4)
+            .padding(.vertical, GargantuaSpacing.space3)
         }
         .focusable()
         .onKeyPress(.upArrow) { moveFocus(direction: -1); return .handled }
