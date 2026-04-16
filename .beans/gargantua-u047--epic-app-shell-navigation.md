@@ -1,14 +1,14 @@
 ---
 # gargantua-u047
 title: 'Epic: App Shell & Navigation'
-status: todo
+status: scrapped
 type: epic
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:44:03Z
-updated_at: 2026-04-15T00:44:03Z
+updated_at: 2026-04-16T02:19:43Z
 ---
 
 The foundational app frame — custom dark window chrome, sidebar navigation, and first-launch onboarding. This epic establishes Gargantua's visual identity and the navigation structure for all Phase 1 screens.
@@ -27,3 +27,5 @@ A custom dark UI that feels Mac-native in behavior but owns its visual identity.
 - [ ] Sidebar navigates between all Phase 1 screens with keyboard shortcuts
 - [ ] First-launch flow requests FDA and Automation permissions with clear explanations
 - [ ] App degrades gracefully when permissions are denied
+
+## Reasons for Scrapping\n\nDuplicate of gargantua-0jj3. No children created under this bean.

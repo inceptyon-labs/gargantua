@@ -1,14 +1,14 @@
 ---
 # gargantua-wehg
 title: 'Epic: Data Layer & Models'
-status: in-progress
+status: completed
 type: epic
 priority: high
 tags:
     - area:backend
     - pasiv
 created_at: 2026-04-15T00:44:55Z
-updated_at: 2026-04-15T12:50:48Z
+updated_at: 2026-04-16T02:19:20Z
 ---
 
 SwiftData models, persistence, and the core data types that all features depend on. ScanResult, CleanupProfile, AuditEntry, Settings — the data backbone.
@@ -27,3 +27,5 @@ Clean, typed Swift models that carry Trust Layer metadata end-to-end. SwiftData 
 - [ ] Profiles persist across app launches
 - [ ] Audit entries queryable by date range
 - [ ] ScanProgress observable drives UI updates from any engine
+
+## Summary of Changes\n\nAll child features completed:\n- Core Data Models (gargantua-1ila): ScanResult, SafetyLevel, CleanupProfile, AuditEntry models\n- SwiftData Persistence (gargantua-3t5d): Persistence layer for scan history, profiles, settings

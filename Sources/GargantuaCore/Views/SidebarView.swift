@@ -107,7 +107,7 @@ public struct SidebarView: View {
 
             Spacer()
 
-            SystemInfoBadge()
+            SystemInfoBar()
         }
         .padding(.top, GargantuaSpacing.space4)
         .frame(width: 200)
@@ -213,11 +213,14 @@ private struct SidebarItemRow: View {
     }
 }
 
-// MARK: - System Info Badge
+// MARK: - System Info Bar
 
-/// Compact badge at the sidebar bottom showing macOS version and disk free space.
-struct SystemInfoBadge: View {
-    @State private var diskFreeGB: Int?
+/// Compact footer showing hardware model, macOS version, disk usage, engine status, and MCP indicator.
+struct SystemInfoBar: View {
+    @State private var hardwareModel: String?
+    @State private var diskTotalGB: Int?
+    @State private var diskUsedGB: Int?
+    @State private var moleAvailable: Bool = false
 
     var body: some View {
         Rectangle()
@@ -225,32 +228,115 @@ struct SystemInfoBadge: View {
             .frame(height: 1)
             .padding(.horizontal, GargantuaSpacing.space3)
 
-        Text(badgeText)
-            .font(GargantuaFonts.caption)
-            .foregroundStyle(GargantuaColors.ink3)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .onAppear { refreshDiskFree() }
-    }
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            // Line 1: Hardware model · macOS version
+            Text(hardwareLine)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .lineLimit(1)
 
-    private var badgeText: String {
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        let versionStr = "macOS \(version.majorVersion).\(version.minorVersion)"
-        if let gb = diskFreeGB {
-            return "\(versionStr) · \(gb) GB free"
+            // Line 2: Disk usage
+            Text(diskLine)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink4)
+                .lineLimit(1)
+
+            // Line 3: Engine + MCP status
+            HStack(spacing: GargantuaSpacing.space2) {
+                statusDot(active: moleAvailable)
+                Text("Mole")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                Spacer().frame(width: GargantuaSpacing.space1)
+
+                statusDot(active: false)
+                Text("MCP")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink4)
+            }
         }
-        return versionStr
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .onAppear { refresh() }
     }
 
-    func refreshDiskFree() {
+    // MARK: - Display Strings
+
+    private var hardwareLine: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        let macOS = "macOS \(version.majorVersion).\(version.minorVersion)"
+        if let model = hardwareModel {
+            return "\(model) · \(macOS)"
+        }
+        return macOS
+    }
+
+    private var diskLine: String {
+        if let used = diskUsedGB, let total = diskTotalGB {
+            return "\(used) / \(total) GB used"
+        }
+        return "Disk info unavailable"
+    }
+
+    @ViewBuilder
+    private func statusDot(active: Bool) -> some View {
+        Circle()
+            .fill(active ? GargantuaColors.safe : GargantuaColors.ink4)
+            .frame(width: 6, height: 6)
+    }
+
+    // MARK: - Data Collection
+
+    func refresh() {
+        hardwareModel = Self.queryHardwareModel()
+        refreshDisk()
+        moleAvailable = Self.checkMoleAvailable()
+    }
+
+    private func refreshDisk() {
         if let attrs = try? FileManager.default.attributesOfFileSystem(
             forPath: NSHomeDirectory()
-        ),
-            let freeBytes = attrs[.systemFreeSize] as? UInt64
-        {
-            diskFreeGB = Int(freeBytes / (1024 * 1024 * 1024))
+        ) {
+            if let totalBytes = attrs[.systemSize] as? UInt64 {
+                diskTotalGB = Int(totalBytes / (1024 * 1024 * 1024))
+            }
+            if let freeBytes = attrs[.systemFreeSize] as? UInt64,
+               let totalBytes = attrs[.systemSize] as? UInt64
+            {
+                diskUsedGB = Int((totalBytes - freeBytes) / (1024 * 1024 * 1024))
+            }
         }
+    }
+
+    private static func queryHardwareModel() -> String? {
+        var size: Int = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        guard size > 0 else { return nil }
+        var model = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.model", &model, &size, nil, 0)
+        let raw = String(cString: model)
+        return Self.friendlyModelName(raw)
+    }
+
+    private static func friendlyModelName(_ raw: String) -> String {
+        if raw.contains("MacBookPro") { return "MacBook Pro" }
+        if raw.contains("MacBookAir") { return "MacBook Air" }
+        if raw.contains("Macmini") { return "Mac mini" }
+        if raw.contains("MacPro") { return "Mac Pro" }
+        if raw.contains("iMac") { return "iMac" }
+        if raw.contains("Mac") { return "Mac" }
+        return raw
+    }
+
+    private static func checkMoleAvailable() -> Bool {
+        // Check if mo binary exists in the app bundle or PATH
+        if let bundlePath = Bundle.main.path(forResource: "mo", ofType: nil) {
+            return FileManager.default.isExecutableFile(atPath: bundlePath)
+        }
+        // Fallback: check common install locations
+        let paths = ["/usr/local/bin/mo", "/opt/homebrew/bin/mo"]
+        return paths.contains { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }

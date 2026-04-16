@@ -1,14 +1,14 @@
 ---
 # gargantua-qne2
 title: 'Epic: Dashboard'
-status: todo
+status: in-progress
 type: epic
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:44:34Z
-updated_at: 2026-04-15T00:44:34Z
+updated_at: 2026-04-16T02:20:08Z
 ---
 
 The landing screen — first impression determines whether users trust the app. Health score gauge as the anchor, reclaimable space and actionable alerts orbiting around it.

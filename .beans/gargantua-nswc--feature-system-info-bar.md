@@ -1,14 +1,14 @@
 ---
 # gargantua-nswc
 title: 'Feature: System Info Bar'
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:45:58Z
-updated_at: 2026-04-15T00:45:58Z
+updated_at: 2026-04-16T02:20:07Z
 parent: gargantua-qne2
 ---
 

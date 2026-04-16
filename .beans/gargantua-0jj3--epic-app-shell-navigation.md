@@ -1,14 +1,14 @@
 ---
 # gargantua-0jj3
 title: 'Epic: App Shell & Navigation'
-status: todo
+status: completed
 type: epic
 priority: high
 tags:
     - area:frontend
     - pasiv
 created_at: 2026-04-15T00:44:08Z
-updated_at: 2026-04-15T00:44:08Z
+updated_at: 2026-04-16T02:19:42Z
 ---
 
 The foundational app frame — custom dark window chrome, sidebar navigation, and first-launch onboarding.
@@ -27,3 +27,5 @@ Custom dark UI that feels Mac-native in behavior but owns its visual identity. R
 - [ ] Sidebar navigates between all Phase 1 screens with keyboard shortcuts
 - [ ] First-launch flow requests FDA and Automation permissions
 - [ ] App degrades gracefully when permissions are denied
+
+## Summary of Changes\n\nAll child features completed: Custom Window Chrome, Sidebar Navigation, First Launch Onboarding.
