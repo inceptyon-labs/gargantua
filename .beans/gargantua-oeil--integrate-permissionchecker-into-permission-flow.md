@@ -1,7 +1,7 @@
 ---
 # gargantua-oeil
 title: Integrate PermissionChecker into permission flow
-status: todo
+status: in-progress
 type: task
 priority: low
 tags:
@@ -9,7 +9,7 @@ tags:
     - pasiv
     - size:S
 created_at: 2026-04-16T11:07:05Z
-updated_at: 2026-04-16T11:07:05Z
+updated_at: 2026-04-16T14:09:44Z
 ---
 
 PermissionChecker service exists but isn't used in PermissionRequestFlowView. The onboarding flow should use it to check actual FDA/Automation permission status instead of just marking onboarding complete.

@@ -49,6 +49,12 @@ private struct FullDiskAccessScreen: View {
     var onContinue: () -> Void
     var onSkip: () -> Void
 
+    @State private var hasAccess = PermissionChecker.hasFullDiskAccess
+
+    /// Polls permission status so the UI updates after the user grants access
+    /// in System Settings without requiring a manual refresh.
+    private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
     var body: some View {
         PermissionScreen(
             icon: "externaldrive.fill.badge.checkmark",
@@ -58,9 +64,19 @@ private struct FullDiskAccessScreen: View {
                 + "large files buried in protected directories. Without it, scans "
                 + "are limited to your home folder.",
             settingsURL: fullDiskAccessURL,
+            permissionGranted: hasAccess,
             onContinue: onContinue,
             onSkip: onSkip
         )
+        .onReceive(timer) { _ in
+            hasAccess = PermissionChecker.hasFullDiskAccess
+        }
+        .onAppear {
+            if hasAccess { onContinue() }
+        }
+        .onChange(of: hasAccess) {
+            if hasAccess { onContinue() }
+        }
     }
 
     private var fullDiskAccessURL: URL {
@@ -83,6 +99,7 @@ private struct AutomationScreen: View {
                 + "instead of permanently deleting them. You can always restore from "
                 + "Trash if needed.",
             settingsURL: automationURL,
+            permissionGranted: nil,
             onContinue: onContinue,
             onSkip: onSkip
         )
@@ -101,6 +118,7 @@ private struct PermissionScreen: View {
     let explanation: String
     let detail: String
     let settingsURL: URL
+    var permissionGranted: Bool?
     let onContinue: () -> Void
     let onSkip: () -> Void
 
@@ -132,6 +150,18 @@ private struct PermissionScreen: View {
                 .foregroundStyle(GargantuaColors.ink3)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 400)
+
+            // Permission status indicator
+            if let granted = permissionGranted {
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.system(size: 14))
+                    Text(granted ? "Granted" : "Not Granted")
+                        .font(GargantuaFonts.label)
+                }
+                .foregroundStyle(granted ? GargantuaColors.safe : GargantuaColors.review)
+                .animation(.easeOut(duration: 0.2), value: granted)
+            }
 
             // Actions
             VStack(spacing: GargantuaSpacing.space3) {
