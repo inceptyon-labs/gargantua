@@ -115,8 +115,8 @@ public enum MCPJSONValue: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
-        if let b = try? c.decode(Bool.self)   { self = .bool(b); return }
-        if let i = try? c.decode(Int.self)    { self = .integer(i); return }
+        if let b = try? c.decode(Bool.self) { self = .bool(b); return }
+        if let i = try? c.decode(Int.self) { self = .integer(i); return }
         if let d = try? c.decode(Double.self) { self = .number(d); return }
         if let s = try? c.decode(String.self) { self = .string(s); return }
         throw DecodingError.dataCorruptedError(
@@ -148,7 +148,7 @@ public enum MCPPhase2Tools {
         analyze,
         explain,
         listProfiles,
-        status
+        status,
     ]
 
     // MARK: scan
@@ -176,7 +176,7 @@ public enum MCPPhase2Tools {
                     type: .boolean,
                     description: "Always true when called via MCP.",
                     const: .bool(true)
-                )
+                ),
             ],
             required: ["dry_run"]
         )
@@ -211,7 +211,7 @@ public enum MCPPhase2Tools {
                 "item_id": MCPJSONSchema(
                     type: .string,
                     description: "Item id from a prior scan result. Mutually exclusive with path."
-                )
+                ),
             ],
             required: []
         )

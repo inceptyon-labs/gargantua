@@ -47,7 +47,7 @@ struct MCPToolSchemasTests {
 
     @Test("scan input decodes when dry_run is absent (defaults to true)")
     func scanInputDefaultsDryRunTrue() throws {
-        let json = #"{"profile":"developer"}"#.data(using: .utf8)!
+        let json = Data(#"{"profile":"developer"}"#.utf8)
         let input = try JSONDecoder().decode(MCPScanInput.self, from: json)
         #expect(input.dryRun == true)
         #expect(input.profile == "developer")
@@ -55,14 +55,14 @@ struct MCPToolSchemasTests {
 
     @Test("scan input decodes when dry_run is explicitly true")
     func scanInputAcceptsDryRunTrue() throws {
-        let json = #"{"dry_run":true}"#.data(using: .utf8)!
+        let json = Data(#"{"dry_run":true}"#.utf8)
         let input = try JSONDecoder().decode(MCPScanInput.self, from: json)
         #expect(input.dryRun == true)
     }
 
     @Test("scan input rejects dry_run=false — MCP cannot disable dry-run")
     func scanInputRejectsDryRunFalse() {
-        let json = #"{"dry_run":false}"#.data(using: .utf8)!
+        let json = Data(#"{"dry_run":false}"#.utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(MCPScanInput.self, from: json)
         }
@@ -80,7 +80,7 @@ struct MCPToolSchemasTests {
 
     @Test("explain input accepts a bare path")
     func explainAcceptsPath() throws {
-        let json = #"{"path":"~/Library/Caches/com.apple.dt.Xcode"}"#.data(using: .utf8)!
+        let json = Data(#"{"path":"~/Library/Caches/com.apple.dt.Xcode"}"#.utf8)
         let input = try JSONDecoder().decode(MCPExplainInput.self, from: json)
         #expect(input.path == "~/Library/Caches/com.apple.dt.Xcode")
         #expect(input.itemId == nil)
@@ -88,14 +88,14 @@ struct MCPToolSchemasTests {
 
     @Test("explain input accepts an item_id and exposes snake_case key")
     func explainAcceptsItemID() throws {
-        let json = #"{"item_id":"chrome_cache_001"}"#.data(using: .utf8)!
+        let json = Data(#"{"item_id":"chrome_cache_001"}"#.utf8)
         let input = try JSONDecoder().decode(MCPExplainInput.self, from: json)
         #expect(input.itemId == "chrome_cache_001")
     }
 
     @Test("explain input rejects empty payload")
     func explainRejectsEmpty() {
-        let json = "{}".data(using: .utf8)!
+        let json = Data("{}".utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(MCPExplainInput.self, from: json)
         }
@@ -103,7 +103,7 @@ struct MCPToolSchemasTests {
 
     @Test("explain input rejects both path and item_id")
     func explainRejectsBoth() {
-        let json = #"{"path":"/tmp","item_id":"x"}"#.data(using: .utf8)!
+        let json = Data(#"{"path":"/tmp","item_id":"x"}"#.utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(MCPExplainInput.self, from: json)
         }
@@ -127,7 +127,7 @@ struct MCPToolSchemasTests {
                     source: "Google Chrome",
                     lastAccessed: Date(timeIntervalSince1970: 1_700_000_000),
                     category: "browser_cache"
-                )
+                ),
             ],
             summary: MCPScanSummary(
                 safeCount: 45, safeSize: "18.2 GB",
@@ -186,7 +186,7 @@ struct MCPToolSchemasTests {
         let output = MCPListProfilesOutput(
             profiles: [
                 MCPProfileSummary(name: "developer", categories: ["dev_artifacts"], description: "…"),
-                MCPProfileSummary(name: "light", categories: ["browser_cache"], description: "…")
+                MCPProfileSummary(name: "light", categories: ["browser_cache"], description: "…"),
             ],
             active: "developer"
         )

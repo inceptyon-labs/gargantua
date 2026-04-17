@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-04-17T18:07:39Z
-updated_at: 2026-04-17T21:57:21Z
+updated_at: 2026-04-17T21:58:57Z
 parent: gargantua-2h06
 ---
 
@@ -22,4 +22,4 @@ Scope: define executable target + Codable tool schemas (Phase 2, stdio). No disp
 - [x] Create Sources/GargantuaCore/Models/MCP/MCPToolDescriptor.swift (tool registry + JSON Schema descriptor)
 - [x] Create Sources/GargantuaCore/Models/MCP/MCPToolSchemas.swift (Codable input/output for scan, analyze, explain, list_profiles, status; scan.dry_run always true)
 - [x] Tests: encoding round-trip + enforce scan dry-run invariant
-- [ ] Verification gate (tests, build, lint)
+- [x] Verification gate (tests, build, lint)
