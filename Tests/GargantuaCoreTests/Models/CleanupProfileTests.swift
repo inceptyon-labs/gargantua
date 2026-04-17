@@ -85,7 +85,7 @@ struct AuditEntryTests {
     @Test("Codable round-trip preserves audit entry")
     func codableRoundTrip() throws {
         let entry = AuditEntry(
-            tool: "mole",
+            tool: "native",
             command: "clean",
             files: [
                 AuditFile(path: "~/Library/Caches/Chrome", size: 10_000_000),
@@ -104,7 +104,7 @@ struct AuditEntryTests {
         let data = try encoder.encode(entry)
         let decoded = try decoder.decode(AuditEntry.self, from: data)
 
-        #expect(decoded.tool == "mole")
+        #expect(decoded.tool == "native")
         #expect(decoded.command == "clean")
         #expect(decoded.files.count == 2)
         #expect(decoded.safetyLevel == .safe)

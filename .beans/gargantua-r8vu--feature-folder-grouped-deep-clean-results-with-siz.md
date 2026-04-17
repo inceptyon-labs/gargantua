@@ -1,11 +1,11 @@
 ---
 # gargantua-r8vu
 title: 'Feature: Folder-grouped Deep Clean results with size sort and drill-down'
-status: todo
+status: in-progress
 type: feature
 priority: normal
 created_at: 2026-04-17T12:16:16Z
-updated_at: 2026-04-17T12:16:16Z
+updated_at: 2026-04-17T12:33:43Z
 ---
 
 ## Problem
@@ -20,15 +20,15 @@ Add an alternate grouping mode: group by common parent folder, sort groups by to
 
 ## Tasks
 
-- [ ] Add `ScanGroupingMode` enum: `safety` (default), `folder`, `category`
-- [ ] Add grouping toggle to `ScanBucketListView` header (segmented control or menu)
-- [ ] Implement folder grouping: group `ScanResult` by `URL(fileURLWithPath: result.path).deletingLastPathComponent().path`; roll up very small/single-item folders into a parent group to avoid singleton noise (or just cap depth — TBD)
-- [ ] Implement category grouping: group by `result.category`
-- [ ] Sort groups by total size desc in both modes
-- [ ] Per-group header shows: folder name (or category), item count, total size
-- [ ] Expand/collapse per group with disclosure chevron (reuse `ScanBucketHeader` pattern)
-- [ ] Keyboard nav (up/down, tab between groups) works in new modes
-- [ ] Selection state survives mode toggles (selectedIDs keyed by item id)
+- [x] Add `ScanGroupingMode` enum: `safety` (default), `folder`, `category`
+- [x] Add grouping toggle to `ScanBucketListView` header (segmented control or menu)
+- [x] Implement folder grouping: one level by parent dir, no roll-up (deferred)
+- [x] Implement category grouping: group by `result.category`
+- [x] Sort groups by total size desc in both modes
+- [x] Per-group header shows: folder name (or category), item count, total size
+- [x] Expand/collapse per group with disclosure chevron (new `ScanGroupHeader`)
+- [x] Keyboard nav (up/down, tab between groups) works in new modes
+- [x] Selection state survives mode toggles (selectedIDs keyed by item id)
 - [ ] Smoke test: toggle modes on a real scan result, confirm drill-down works and sort is by size
 
 ## Non-goals

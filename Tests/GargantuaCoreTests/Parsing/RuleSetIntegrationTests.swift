@@ -7,11 +7,14 @@ import Testing
 struct RuleSetIntegrationTests {
     let loader = RuleLoader()
 
-    /// Resolves the cleanup_rules/ directory relative to the package root.
+    /// Resolves the cleanup_rules/ directory via the same resolver production uses.
+    /// Rules ship as an SPM resource on GargantuaCore, so `Bundle.module` finds
+    /// them in tests, `swift run`, and a shipped `.app` alike.
     private var rulesDirectory: URL {
-        // SPM test working directory is the package root
-        URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("cleanup_rules")
+        guard let url = RuleDirectoryResolver.resolve() else {
+            fatalError("cleanup_rules not resolvable via RuleDirectoryResolver — SPM resource wiring broken")
+        }
+        return url
     }
 
     // MARK: - Loading

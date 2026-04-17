@@ -227,7 +227,6 @@ struct SystemInfoBar: View {
     @State private var hardwareModel: String?
     @State private var diskTotalGB: Int?
     @State private var diskUsedGB: Int?
-    @State private var moleAvailable: Bool = false
 
     var body: some View {
         Rectangle()
@@ -250,8 +249,8 @@ struct SystemInfoBar: View {
 
             // Line 3: Engine + MCP status
             HStack(spacing: GargantuaSpacing.space2) {
-                statusDot(active: moleAvailable)
-                Text("Mole")
+                statusDot(active: true)
+                Text("Native")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
 
@@ -299,7 +298,6 @@ struct SystemInfoBar: View {
     func refresh() {
         hardwareModel = Self.queryHardwareModel()
         refreshDisk()
-        moleAvailable = Self.checkMoleAvailable()
     }
 
     private func refreshDisk() {
@@ -334,15 +332,5 @@ struct SystemInfoBar: View {
         if raw.contains("iMac") { return "iMac" }
         if raw.contains("Mac") { return "Mac" }
         return raw
-    }
-
-    private static func checkMoleAvailable() -> Bool {
-        // Check if mo binary exists in the app bundle or PATH
-        if let bundlePath = Bundle.main.path(forResource: "mo", ofType: nil) {
-            return FileManager.default.isExecutableFile(atPath: bundlePath)
-        }
-        // Fallback: check common install locations
-        let paths = ["/usr/local/bin/mo", "/opt/homebrew/bin/mo"]
-        return paths.contains { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }

@@ -9,7 +9,7 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
     /// When the operation occurred.
     public let timestamp: Date
 
-    /// Which engine/tool performed the operation (e.g., "mole", "native").
+    /// Which engine/tool performed the operation (e.g., "native").
     public let tool: String
 
     /// The command or action taken (e.g., "clean", "purge").
