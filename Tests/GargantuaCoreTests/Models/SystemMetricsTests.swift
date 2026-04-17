@@ -144,4 +144,3 @@ struct SystemMetricsTests {
         #expect(HealthScoreRange(score: poor.healthScore) == .poor)
     }
 }
-
