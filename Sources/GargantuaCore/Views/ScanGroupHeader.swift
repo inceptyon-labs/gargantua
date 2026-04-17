@@ -76,42 +76,42 @@ struct ScanGroupHeader: View {
             Image(systemName: "lock.fill")
                 .font(.system(size: 10))
                 .foregroundStyle(GargantuaColors.ink4)
-                .frame(width: 16, height: 16)
+                .frame(width: 24, height: 24)
         case .none, .partial, .all:
-            Button(action: onToggleSelection) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(
-                            selectionState == .none
-                                ? GargantuaColors.borderEm
-                                : GargantuaColors.accent,
-                            lineWidth: 1.5
-                        )
-                        .frame(width: 16, height: 16)
-                        .background(
-                            selectionState == .none
-                                ? Color.clear
-                                : GargantuaColors.accent
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+            ZStack {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(
+                        selectionState == .none
+                            ? Color.clear
+                            : GargantuaColors.accent
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(
+                                selectionState == .none
+                                    ? GargantuaColors.borderEm
+                                    : GargantuaColors.accent,
+                                lineWidth: 1.5
+                            )
+                    )
+                    .frame(width: 16, height: 16)
 
-                    switch selectionState {
-                    case .all:
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                    case .partial:
-                        Image(systemName: "minus")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                    case .none, .allProtected:
-                        EmptyView()
-                    }
+                switch selectionState {
+                case .all:
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                case .partial:
+                    Image(systemName: "minus")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                case .none, .allProtected:
+                    EmptyView()
                 }
-                .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onToggleSelection)
         }
     }
 
