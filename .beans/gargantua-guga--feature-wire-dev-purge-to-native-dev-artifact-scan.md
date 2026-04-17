@@ -1,11 +1,11 @@
 ---
 # gargantua-guga
 title: 'Feature: Wire Dev Purge to native dev-artifact scanner'
-status: in-progress
+status: completed
 type: feature
 priority: critical
 created_at: 2026-04-17T01:06:45Z
-updated_at: 2026-04-17T01:59:47Z
+updated_at: 2026-04-17T02:01:02Z
 parent: gargantua-l9dk
 ---
 
@@ -35,3 +35,7 @@ Replace MoPurgeAdapter in the Dev Artifact Purge view with a native scanner path
 Replaced `MoPurgeAdapter(runner: MoleRunner())` in `DevArtifactScanView` with `NativeScanAdapter.loadDefaults(profile:scanRoots:)`, mirroring the lupo Deep Clean pattern. Added a new `CleanupProfile.devPurge` (scoped to `dev_artifacts`, `docker`, `homebrew` only — the `.developer` profile would have pulled in browser/system/temp rules). Added `PersistedSettings.scanRoots: [String]` so project roots can be persisted; defaults come from `PathExpander.defaultScanRoots()`, and stored entries are validated (empty/`/`/`~` dropped) before reaching the adapter. Walker-cap warnings now render in the results view instead of being silently dropped. Codex SC review caught four regressions (wrong profile scope, stale category rows with no backing rules, unsafe `defaultScanRoots` home fallback, missing scan-root validation) — all fixed before merge.
 
 MoPurgeAdapter and its tests remain; gargantua-2xrw covers final removal.
+
+
+## Merged
+Completed in 719a812 (merged to main).
