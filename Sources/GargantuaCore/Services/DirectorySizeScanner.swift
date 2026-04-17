@@ -10,7 +10,7 @@ public enum DirectorySizeScanner: Sendable {
     ///
     /// Capped to avoid saturating the filesystem with parallel recursive walks while
     /// still letting SSD random-I/O parallelism help sizing proceed visibly faster.
-    static let sizingConcurrency = 4
+    private static let sizingConcurrency = 4
 
     /// Scan the immediate children of `directoryPath`, returning each child directory
     /// with its recursively computed total size, sorted largest first.
