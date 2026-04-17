@@ -19,6 +19,11 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: GargantuaSpacing.space6) {
                 headerView
                 modelSection
+                ScanRootsSettingsSection(
+                    settings: settings,
+                    persistence: persistence,
+                    onSettingsChanged: { settings = $0 }
+                )
                 generalSection
             }
             .padding(GargantuaSpacing.space6)

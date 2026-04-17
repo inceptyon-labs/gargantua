@@ -93,12 +93,7 @@ struct MainContentView: View {
               let stored = try? persistence.fetchSettings().scanRoots
         else { return nil }
 
-        let urls = stored.compactMap { raw -> URL? in
-            let trimmed = raw.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty, trimmed != "/", trimmed != "~" else { return nil }
-            let expanded = (trimmed as NSString).expandingTildeInPath
-            return URL(fileURLWithPath: expanded, isDirectory: true)
-        }
+        let urls = ScanRootSettings.resolvedURLs(from: stored)
         return urls.isEmpty ? nil : urls
     }
 
