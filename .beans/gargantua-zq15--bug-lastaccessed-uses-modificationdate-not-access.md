@@ -1,11 +1,11 @@
 ---
 # gargantua-zq15
 title: 'Bug: lastAccessed uses modificationDate, not access time'
-status: todo
+status: in-progress
 type: bug
 priority: normal
 created_at: 2026-04-17T02:00:07Z
-updated_at: 2026-04-17T02:00:24Z
+updated_at: 2026-04-17T16:30:33Z
 parent: gargantua-l9dk
 ---
 
