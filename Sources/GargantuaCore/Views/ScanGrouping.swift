@@ -61,12 +61,6 @@ public extension ScanGroup {
         let ids = selectableIDs
         guard !ids.isEmpty else { return .allProtected }
         let hits = ids.filter { selectedIDs.contains($0) }.count
-        #if DEBUG
-        // Temporary diagnostic — remove once the partial-state display bug is fixed.
-        if ids.count > 0 {
-            print("🟨 [\(id)] items=\(items.count) selectable=\(ids.count) hits=\(hits) firstID=\(ids.first ?? "-") firstInSel=\(ids.first.map { selectedIDs.contains($0) } ?? false) selCount=\(selectedIDs.count)")
-        }
-        #endif
         if hits == 0 { return .none }
         if hits == ids.count { return .all }
         return .partial
