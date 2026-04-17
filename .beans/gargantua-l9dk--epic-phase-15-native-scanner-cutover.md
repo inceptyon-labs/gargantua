@@ -5,7 +5,7 @@ status: in-progress
 type: epic
 priority: critical
 created_at: 2026-04-17T01:05:59Z
-updated_at: 2026-04-17T01:08:08Z
+updated_at: 2026-04-17T01:42:35Z
 ---
 
 Replace Mole subprocess scanners with the native YAML-rule-driven scanner. Per PRD §3.3 and §10 Phase 1.5. Prompted by the discovery that mo clean and mo purge do not support --json output, leaving Deep Clean and Dev Purge non-functional despite their beans being marked completed.
@@ -21,7 +21,7 @@ This epic was triggered by the 2026-04-16 discovery (gargantua-9hhj) that `mo cl
 - [x] NativeScanAdapter + RuleDirectoryResolver (gargantua-lm94)
 - [ ] Deep Clean view rewired (gargantua-lupo)
 - [ ] Dev Purge view rewired (gargantua-guga)
-- [ ] Bounded glob walker for `**` patterns (gargantua-avik)
+- [x] Bounded glob walker for `**` patterns (gargantua-avik)
 - [ ] Bundle cleanup_rules + decide mo strategy for shipped .app (gargantua-gf5w)
 - [ ] Dead-code cleanup / adapter protocol (gargantua-2xrw)
 
@@ -35,3 +35,23 @@ This epic was triggered by the 2026-04-16 discovery (gargantua-9hhj) that `mo cl
 - MCP server (Phase 2 per PRD §10)
 - AI tier integration (Phase 2-3)
 - fclones / czkawka adapters (Phase 2)
+
+
+## Completed Child: gargantua-avik (Bounded glob walker)
+
+**Files:**
+- Sources/GargantuaCore/Services/PathExpander.swift (new, bounded filesystem walker)
+- Sources/GargantuaCore/Services/NativeScanAdapter.swift (modified — glob support, pattern field support, cross-rule de-dup, display-name disambiguation)
+- Tests/GargantuaCoreTests/Services/PathExpanderTests.swift (new, 10 tests)
+
+**Key decisions:**
+- `ScanAdapter` protocol introduced so future engines (fclones, native uninstaller) slot in without touching views
+- `PathExpander` uses a WalkState class (not struct) to sidestep Swift exclusivity violations on overlapping recursive inout accesses
+- `RuleDirectoryResolver` stays in NativeScanAdapter.swift — it's the adapter's concern
+- `rule.pattern` YAML field is honored — installer rules (Downloads + *.dmg) now enumerate matching files instead of offering the whole directory
+
+**Notes for sibling tasks:**
+- `NativeScanAdapter.loadDefaults(profile:)` is the one-line factory to use from view code — takes care of rule loading and resolver logic
+- `PathExpander.defaultScanRoots()` returns sensible defaults for dev-artifact patterns; callers can override via `NativeScanAdapter.init(..., scanRoots:)`
+- Deduplication is by path in `scan()`, so overlapping rules are safe
+- `gargantua-guga` (Dev Purge wiring) can proceed — the walker handles `**/node_modules`-style rules now
