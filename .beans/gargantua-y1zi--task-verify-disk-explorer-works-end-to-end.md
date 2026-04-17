@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-04-17T01:07:47Z
-updated_at: 2026-04-17T02:12:41Z
+updated_at: 2026-04-17T02:27:38Z
 ---
 
 User reports Disk Explorer 'doesn't work'. mo analyze --json is real (unlike mo clean/purge) so this is probably a different failure — binary path, permission, or UI wiring. Diagnose and fix so Disk Explorer actually opens a directory treemap-style view per PRD §5.
@@ -42,12 +42,12 @@ Make the UI visibly progress from the first second by streaming per-child sizing
 - Streaming child enumeration of million-entry dirs — follow-up
 
 ## Acceptance Criteria
-- [ ] `DirectorySizeScanner.streamChildren(of:)` returns `AsyncStream<DirectoryItem>`; emits a row per directory as soon as its size is known; emits `(Files)` aggregate once
-- [ ] `DirectoryItem.isSizing: Bool` added; defaults to `false`
-- [ ] `DiskExplorerView` keeps rows live-sorted and renders a spinner in the size column while `isSizing == true`
-- [ ] Bounded concurrency: no more than 4 child `directorySize` calls in flight at once
-- [ ] Stream cancels promptly when `.task(id: currentPath)` restarts (verified via `Task.isCancelled` inside the stream)
-- [ ] Permission-denied children still render with the lock icon and "Requires Full Disk Access" caption
-- [ ] Tests: streaming emits expected children for a tmp dir with known layout; cancellation stops mid-stream; `(Files)` aggregate present
-- [ ] `swift build` clean, `swift test` all passing, SwiftLint clean
+- [x] `DirectorySizeScanner.streamChildren(of:)` returns `AsyncStream<DirectoryItem>`; emits a row per directory as soon as its size is known; emits `(Files)` aggregate once
+- [x] `DirectoryItem.isSizing: Bool` added; defaults to `false`
+- [x] `DiskExplorerView` keeps rows live-sorted and renders a spinner in the size column while `isSizing == true`
+- [x] Bounded concurrency: no more than 4 child `directorySize` calls in flight at once
+- [x] Stream cancels promptly when `.task(id: currentPath)` restarts (verified via `Task.isCancelled` inside the stream)
+- [x] Permission-denied children still render with the lock icon and "Requires Full Disk Access" caption
+- [x] Tests: streaming emits expected children for a tmp dir with known layout; cancellation stops mid-stream; `(Files)` aggregate present (+ real `(files)` dir collision coverage)
+- [x] `swift build` clean, `swift test` all passing (285/285), SwiftLint clean on changed files
 - [ ] Live smoke: launching app → Disk Explorer at `~` shows first row within 1s, all rows resolved within 60s on this machine
