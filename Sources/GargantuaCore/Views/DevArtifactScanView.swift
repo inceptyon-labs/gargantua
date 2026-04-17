@@ -39,11 +39,13 @@ extension DevArtifactCategory {
 /// Category-based view for scanning and cleaning developer artifacts.
 ///
 /// Presents a category list (node_modules, Xcode, Docker, etc.) with toggles
-/// and estimated sizes. Triggers `MoPurgeAdapter` for selected categories and
-/// displays results using `ScanBucketListView`.
+/// and estimated sizes. Runs a `NativeScanAdapter` scoped to the Developer
+/// profile (`dev_artifacts`, `docker`, `homebrew` categories) and displays
+/// results using `ScanBucketListView`.
 public struct DevArtifactScanView: View {
-    private let adapter: MoPurgeAdapter
     private let profile: CleanupProfile
+    private let adapterOverride: (any ScanAdapter)?
+    private let scanRoots: [URL]?
 
     @State private var categories: [DevArtifactCategory] = DevArtifactCategory.defaults
     @State private var selectedCategoryIDs: Set<String> = Set(DevArtifactCategory.defaults.map(\.id))
@@ -56,9 +58,14 @@ public struct DevArtifactScanView: View {
     @State private var isCleaning = false
     @State private var cleanupResult: CleanupResult?
 
-    public init(adapter: MoPurgeAdapter, profile: CleanupProfile = .developer) {
-        self.adapter = adapter
+    public init(
+        profile: CleanupProfile = .developer,
+        scanRoots: [URL]? = nil,
+        adapter: (any ScanAdapter)? = nil
+    ) {
         self.profile = profile
+        self.scanRoots = scanRoots
+        self.adapterOverride = adapter
     }
 
     public var body: some View {
@@ -253,6 +260,17 @@ public struct DevArtifactScanView: View {
 
                 Spacer()
             } else {
+                if let firstError = scanProgress.errors.first {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(GargantuaColors.review)
+
+                    Text(firstError)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.review)
+                        .lineLimit(1)
+                }
+
                 Spacer()
 
                 Button(action: startScan) {
@@ -369,9 +387,12 @@ public struct DevArtifactScanView: View {
 
     private func startScan() {
         isScanRequested = true
+        scanProgress = ScanProgress()
         Task {
             let start = Date()
             do {
+                let adapter: any ScanAdapter = try adapterOverride
+                    ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
                 let results = try await adapter.scan(progress: scanProgress)
 
                 // Filter results to selected categories by matching against
@@ -394,7 +415,7 @@ public struct DevArtifactScanView: View {
                 scanResults = filtered
                 isScanRequested = false
             } catch {
-                // Errors are already recorded in ScanProgress by the adapter
+                scanProgress.recordError(error.localizedDescription)
                 isScanRequested = false
             }
         }

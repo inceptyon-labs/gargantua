@@ -54,7 +54,8 @@ struct MainContentView: View {
                                 }
                             case "devPurge":
                                 DevArtifactScanView(
-                                    adapter: MoPurgeAdapter(runner: MoleRunner())
+                                    profile: .developer,
+                                    scanRoots: resolvedScanRoots
                                 )
                             case "settings":
                                 if let persistence {
@@ -78,6 +79,17 @@ struct MainContentView: View {
                 }
             }
         }
+    }
+
+    /// Resolve the scan roots for Dev Purge from persisted settings, falling back
+    /// to auto-detected defaults when no override is stored or persistence isn't
+    /// ready yet.
+    private var resolvedScanRoots: [URL]? {
+        guard let persistence,
+              let stored = try? persistence.fetchSettings().scanRoots,
+              !stored.isEmpty
+        else { return nil }
+        return stored.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
     }
 
     private var placeholderView: some View {

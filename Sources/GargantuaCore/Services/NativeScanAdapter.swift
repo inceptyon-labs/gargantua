@@ -39,7 +39,15 @@ public struct NativeScanAdapter: ScanAdapter {
     /// every YAML file under it with `RuleLoader`, and returns a configured adapter.
     /// Rule-file parse errors are reported via the returned load result but do not
     /// abort — successfully-parsed rules are still used.
-    public static func loadDefaults(profile: CleanupProfile) throws -> NativeScanAdapter {
+    ///
+    /// - Parameters:
+    ///   - profile: The cleanup profile whose `categories` gate which rules run.
+    ///   - scanRoots: Optional override for the roots that glob patterns expand against.
+    ///     `nil` uses `PathExpander.defaultScanRoots()`.
+    public static func loadDefaults(
+        profile: CleanupProfile,
+        scanRoots: [URL]? = nil
+    ) throws -> NativeScanAdapter {
         guard let dir = RuleDirectoryResolver.resolve() else {
             throw ScanAdapterError.rulesDirectoryNotFound
         }
@@ -47,7 +55,11 @@ public struct NativeScanAdapter: ScanAdapter {
         for err in load.errors {
             logger.warning("Rule parse error: \(err.localizedDescription, privacy: .public)")
         }
-        return NativeScanAdapter(rules: load.rules, profile: profile)
+        return NativeScanAdapter(
+            rules: load.rules,
+            profile: profile,
+            scanRoots: scanRoots ?? PathExpander.defaultScanRoots()
+        )
     }
 
     /// Run the scan against the configured rules and profile.

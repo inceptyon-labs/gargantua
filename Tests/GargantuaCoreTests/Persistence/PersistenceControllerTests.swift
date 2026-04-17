@@ -133,6 +133,7 @@ struct PersistenceControllerTests {
         #expect(settings.activeProfileID == "developer")
         #expect(settings.retentionDays == 90)
         #expect(settings.autoScanEnabled == false)
+        #expect(settings.scanRoots.isEmpty)
     }
 
     @Test("Update settings persists changes")
@@ -144,12 +145,14 @@ struct PersistenceControllerTests {
             settings.activeProfileID = "deep"
             settings.retentionDays = 30
             settings.autoScanEnabled = true
+            settings.scanRoots = ["~/Projects", "~/work"]
         }
 
         let settings = try ctrl.fetchSettings()
         #expect(settings.activeProfileID == "deep")
         #expect(settings.retentionDays == 30)
         #expect(settings.autoScanEnabled == true)
+        #expect(settings.scanRoots == ["~/Projects", "~/work"])
     }
 
     // MARK: - Audit Entries

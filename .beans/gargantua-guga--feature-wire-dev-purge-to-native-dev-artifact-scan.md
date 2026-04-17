@@ -1,14 +1,12 @@
 ---
 # gargantua-guga
 title: 'Feature: Wire Dev Purge to native dev-artifact scanner'
-status: todo
+status: in-progress
 type: feature
 priority: critical
 created_at: 2026-04-17T01:06:45Z
-updated_at: 2026-04-17T01:07:07Z
+updated_at: 2026-04-17T01:46:30Z
 parent: gargantua-l9dk
-blocked_by:
-    - gargantua-9hhj
 ---
 
 Replace MoPurgeAdapter in the Dev Artifact Purge view with a native scanner path that walks configured project roots for glob rules like node_modules, .gradle, target, DerivedData, etc.
