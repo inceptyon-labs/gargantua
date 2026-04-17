@@ -107,7 +107,8 @@ public enum DirectorySizeScanner: Sendable {
                     continuation.yield(DirectoryItem(
                         name: "(Files)",
                         path: directoryPath + "/(files)",
-                        size: topLevelFilesSize
+                        size: topLevelFilesSize,
+                        isFilesAggregate: true
                     ))
                 }
 
@@ -176,7 +177,8 @@ public enum DirectorySizeScanner: Sendable {
             items.append(DirectoryItem(
                 name: "(Files)",
                 path: directoryPath + "/(files)",
-                size: topLevelFilesSize
+                size: topLevelFilesSize,
+                isFilesAggregate: true
             ))
         }
 
@@ -204,8 +206,8 @@ public enum DirectorySizeScanner: Sendable {
             let total = directories.count
             var inflight = 0
 
-            while nextIndex < total, inflight < maxConcurrent {
-                if Task.isCancelled { break }
+            func enqueueNext() {
+                guard nextIndex < total, !Task.isCancelled else { return }
                 let url = directories[nextIndex]
                 group.addTask {
                     if Task.isCancelled { return nil }
@@ -216,6 +218,8 @@ public enum DirectorySizeScanner: Sendable {
                 nextIndex += 1
             }
 
+            for _ in 0..<maxConcurrent { enqueueNext() }
+
             while inflight > 0 {
                 if Task.isCancelled {
                     group.cancelAll()
@@ -224,7 +228,10 @@ public enum DirectorySizeScanner: Sendable {
                 guard let result = await group.next() else { break }
                 inflight -= 1
 
-                if let (url, size) = result {
+                // Re-check cancellation between resuming and yielding — if the
+                // consumer bailed while we were suspended, drop the result
+                // rather than pushing it through a torn-down stream.
+                if let (url, size) = result, !Task.isCancelled {
                     yield(DirectoryItem(
                         name: url.lastPathComponent,
                         path: url.path,
@@ -232,17 +239,7 @@ public enum DirectorySizeScanner: Sendable {
                         isSizing: false
                     ))
                 }
-
-                if nextIndex < total, !Task.isCancelled {
-                    let url = directories[nextIndex]
-                    group.addTask {
-                        if Task.isCancelled { return nil }
-                        let size = directorySize(at: url.path)
-                        return (url, size)
-                    }
-                    inflight += 1
-                    nextIndex += 1
-                }
+                enqueueNext()
             }
         }
     }

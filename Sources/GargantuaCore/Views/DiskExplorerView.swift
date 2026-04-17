@@ -164,7 +164,7 @@ public struct DiskExplorerView: View {
     }
 
     private func drillDown(into item: DirectoryItem) {
-        guard !item.isPermissionDenied, !item.path.hasSuffix("/(files)") else { return }
+        guard !item.isPermissionDenied, !item.isFilesAggregate else { return }
         pathStack.append((path: item.path, name: item.name))
     }
 
@@ -193,7 +193,7 @@ private struct DirectoryRowView: View {
     }
 
     private var isFilesAggregate: Bool {
-        item.path.hasSuffix("/(files)")
+        item.isFilesAggregate
     }
 
     var body: some View {

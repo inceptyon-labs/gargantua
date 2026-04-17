@@ -102,12 +102,17 @@ struct DirectorySizeScannerTests {
             events.append(item)
         }
 
-        let bigPlaceholderIndex = events.firstIndex(where: { $0.name == "big" && $0.isSizing }) ?? -1
-        let bigFinalIndex = events.firstIndex(where: { $0.name == "big" && !$0.isSizing }) ?? -1
-
-        #expect(bigPlaceholderIndex >= 0, "expected a sizing placeholder for 'big'")
-        #expect(bigFinalIndex >= 0, "expected a final row for 'big'")
-        #expect(bigPlaceholderIndex < bigFinalIndex, "placeholder must precede final row")
+        // Assert ordering for every final directory row: a sizing placeholder
+        // with the same id must exist strictly before it in the event stream.
+        let finals = events.enumerated().filter { !$0.element.isSizing && !$0.element.isFilesAggregate }
+        #expect(!finals.isEmpty, "expected at least one final directory row")
+        for (finalIndex, finalEvent) in finals {
+            let placeholderIndex = events.firstIndex { $0.id == finalEvent.id && $0.isSizing }
+            #expect(placeholderIndex != nil, "missing placeholder for \(finalEvent.name)")
+            if let placeholderIndex {
+                #expect(placeholderIndex < finalIndex, "placeholder for \(finalEvent.name) must precede its final row")
+            }
+        }
     }
 
     @Test("streamChildren emits exactly one placeholder and one final row per subdirectory")
@@ -160,6 +165,37 @@ struct DirectorySizeScannerTests {
             count += 1
         }
         #expect(count == 0)
+    }
+
+    @Test("streamChildren disambiguates a real (files) directory from the aggregate")
+    func streamHandlesLiteralFilesDir() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dss-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        // Create a real subdirectory literally named "(files)" alongside
+        // loose files that would otherwise be aggregated into a synthetic
+        // row with the same filesystem path.
+        let realFilesDir = root.appendingPathComponent("(files)", isDirectory: true)
+        try fm.createDirectory(at: realFilesDir, withIntermediateDirectories: true)
+        try Data(count: 512).write(to: realFilesDir.appendingPathComponent("inner.txt"))
+        try Data(count: 4_096).write(to: root.appendingPathComponent("loose1.txt"))
+        try Data(count: 4_096).write(to: root.appendingPathComponent("loose2.txt"))
+
+        var finals: [DirectoryItem] = []
+        for await item in DirectorySizeScanner.streamChildren(of: root.path) where !item.isSizing {
+            finals.append(item)
+        }
+
+        // Both rows must survive; the aggregate's id must not collide with the real dir's id.
+        let realDirRow = finals.first { $0.name == "(files)" && !$0.isFilesAggregate }
+        let aggregateRow = finals.first { $0.isFilesAggregate }
+        #expect(realDirRow != nil, "real (files) directory must appear as a distinct row")
+        #expect(aggregateRow != nil, "loose files must appear as a (Files) aggregate row")
+        if let realDirRow, let aggregateRow {
+            #expect(realDirRow.id != aggregateRow.id, "ids must differ to survive upsert dedupe")
+        }
     }
 
     @Test("streamChildren cancellation stops emitting promptly")
