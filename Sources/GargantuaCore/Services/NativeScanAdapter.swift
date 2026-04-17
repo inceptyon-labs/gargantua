@@ -248,7 +248,13 @@ public struct NativeScanAdapter: ScanAdapter {
         profile: CleanupProfile
     ) -> ScanResult? {
         let fileManager = FileManager.default
-        let isDirectory = (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+        let url = URL(fileURLWithPath: path)
+        let values = try? url.resourceValues(forKeys: [
+            .isDirectoryKey,
+            .contentAccessDateKey,
+            .contentModificationDateKey,
+        ])
+        let isDirectory = values?.isDirectory ?? false
         let size: Int64
         if isDirectory {
             size = DirectorySizeScanner.directorySize(at: path)
@@ -258,8 +264,9 @@ public struct NativeScanAdapter: ScanAdapter {
         }
         guard size > 0 else { return nil }
 
-        let attrs = try? fileManager.attributesOfItem(atPath: path)
-        let lastAccessed = (attrs?[.modificationDate] as? Date)
+        // Prefer access time so stale-mtime-but-actively-read caches aren't
+        // mis-classified safe. Fall back to mtime on filesystems without atime.
+        let lastAccessed = values?.contentAccessDate ?? values?.contentModificationDate
 
         let displayName = Self.displayName(forRule: rule, path: path)
 
