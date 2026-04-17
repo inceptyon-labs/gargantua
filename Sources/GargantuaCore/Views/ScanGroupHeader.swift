@@ -108,6 +108,8 @@ struct ScanGroupHeader: View {
                         EmptyView()
                     }
                 }
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
