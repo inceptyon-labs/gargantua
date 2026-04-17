@@ -420,14 +420,14 @@ public struct ScanBucketListView: View {
     }
 
     /// Bulk-toggle selection for a group. Protected items are always skipped.
-    /// Any selection (partial or all) clears; fully empty groups get selected.
-    /// State is recomputed from the live `selectedIDs` rather than captured at
-    /// closure-creation time to avoid any risk of stale state.
+    /// Only a fully-selected group deselects on click; `.none` and `.partial`
+    /// both complete to `.all`. This matches the user's mental model that the
+    /// checkbox affordance is "fill the box".
+    /// State is recomputed from live `selectedIDs` at call time.
     private func toggleGroupSelection(_ group: ScanGroup) {
         let ids = group.selectableIDs
         guard !ids.isEmpty else { return }
-        let anySelected = ids.contains { selectedIDs.contains($0) }
-        if anySelected {
+        if ids.allSatisfy(selectedIDs.contains) {
             selectedIDs.subtract(ids)
         } else {
             selectedIDs.formUnion(ids)
