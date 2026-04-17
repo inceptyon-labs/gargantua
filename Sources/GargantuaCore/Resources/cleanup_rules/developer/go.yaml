@@ -1,0 +1,56 @@
+rules:
+  - id: go_build_cache
+    name: Go Build Cache
+    paths:
+      - "~/Library/Caches/go-build"
+    safety: safe
+    confidence: 98
+    explanation: "Go build cache. Rebuilt incrementally on next 'go build'."
+    source:
+      name: Go
+    regenerates: true
+    regenerate_command: "go clean -cache"
+    category: dev_artifacts
+    tags:
+      - developer
+      - go
+      - build_cache
+
+  - id: go_mod_cache
+    name: Go Module Cache
+    paths:
+      - "~/go/pkg/mod"
+    safety: safe
+    confidence: 95
+    explanation: "Go module download cache (GOMODCACHE). Re-downloaded from proxy as needed."
+    source:
+      name: Go
+    regenerates: true
+    regenerate_command: "go clean -modcache"
+    category: dev_artifacts
+    tags:
+      - developer
+      - go
+      - cache
+
+  - id: go_bin
+    name: Go Binaries
+    paths:
+      - "~/go/bin"
+    safety: review
+    confidence: 60
+    explanation: "Binaries installed via 'go install'. Restored by reinstalling each tool."
+    source:
+      name: Go
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - go
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 80
+        explanation_suffix: "No new installs in 90+ days."
+        profiles:
+          - deep

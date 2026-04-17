@@ -1,0 +1,111 @@
+rules:
+  - id: rust_cargo_target
+    name: Cargo Target Directories
+    paths:
+      - "**/target"
+    safety: review
+    confidence: 80
+    explanation: "Cargo build output. Restored with 'cargo build' but recompile can be slow."
+    source:
+      name: Cargo
+    regenerates: true
+    regenerate_command: "cargo build"
+    category: dev_artifacts
+    tags:
+      - developer
+      - rust
+      - build_cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 95
+        explanation_suffix: "No build activity in 30+ days. Project likely inactive."
+        profiles:
+          - developer
+      - condition: "age > 7d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Inactive for over a week."
+        profiles:
+          - deep
+
+  - id: rust_cargo_registry_cache
+    name: Cargo Registry Cache
+    paths:
+      - "~/.cargo/registry/cache"
+    safety: safe
+    confidence: 98
+    explanation: "Cargo crate download cache. Re-fetched from crates.io as needed."
+    source:
+      name: Cargo
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - rust
+      - cache
+
+  - id: rust_cargo_registry_src
+    name: Cargo Registry Sources
+    paths:
+      - "~/.cargo/registry/src"
+    safety: safe
+    confidence: 95
+    explanation: "Unpacked crate sources. Re-extracted from the registry cache on next build."
+    source:
+      name: Cargo
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - rust
+      - cache
+
+  - id: rust_cargo_git_db
+    name: Cargo Git Checkouts
+    paths:
+      - "~/.cargo/git"
+    safety: safe
+    confidence: 93
+    explanation: "Cargo git dependency checkouts. Re-cloned as needed."
+    source:
+      name: Cargo
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - rust
+      - cache
+
+  - id: rust_sccache
+    name: sccache Cache
+    paths:
+      - "~/Library/Caches/Mozilla.sccache"
+    safety: safe
+    confidence: 97
+    explanation: "sccache compiler cache. Rebuilt on subsequent compiles."
+    source:
+      name: sccache
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - rust
+      - cache
+
+  - id: rust_rustup_toolchains_tmp
+    name: rustup Tmp
+    paths:
+      - "~/.rustup/tmp"
+      - "~/.rustup/downloads"
+    safety: safe
+    confidence: 95
+    explanation: "rustup staging files for toolchain downloads. Recreated on next 'rustup update'."
+    source:
+      name: rustup
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - rust
+      - cache
