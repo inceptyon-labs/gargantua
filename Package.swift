@@ -9,7 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "GargantuaCore", targets: ["GargantuaCore"]),
-        .executable(name: "Gargantua", targets: ["Gargantua"])
+        .executable(name: "Gargantua", targets: ["Gargantua"]),
+        .executable(name: "GargantuaMCP", targets: ["GargantuaMCP"])
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
@@ -19,6 +20,11 @@ let package = Package(
             name: "Gargantua",
             dependencies: ["GargantuaCore"],
             path: "Sources/Gargantua"
+        ),
+        .executableTarget(
+            name: "GargantuaMCP",
+            dependencies: ["GargantuaCore"],
+            path: "Sources/GargantuaMCP"
         ),
         .target(
             name: "GargantuaCore",
