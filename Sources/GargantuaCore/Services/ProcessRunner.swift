@@ -75,23 +75,27 @@ public struct DefaultProcessRunner: ProcessRunner {
 
         try process.run()
 
-        let timeoutFlag = AtomicFlag()
+        let coordinator = TimeoutCoordinator()
         var watchdog: DispatchWorkItem?
         if let timeout, timeout > 0 {
             let deadline = DispatchTime.now() + timeout
             let item = DispatchWorkItem { [weak process] in
-                guard let process, process.isRunning else { return }
-                // Record that *we* chose to kill the process — any later
-                // `.uncaughtSignal` termination is our doing, not a crash.
-                timeoutFlag.set()
+                guard let process else { return }
+                // Atomically claim the timeout state. If the main thread has
+                // already marked natural completion, bail — we lost the race.
+                guard coordinator.tryArmTimeout(process: process) else { return }
                 process.terminate()
             }
             watchdog = item
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline, execute: item)
         }
         process.waitUntilExit()
+        // DispatchWorkItem.cancel() prevents a *queued* item from running but
+        // does NOT interrupt one already executing. The coordinator serializes
+        // "natural exit" vs "timeout fired" under a single lock to close the
+        // race at the instant of deadline.
+        let timedOut = coordinator.markNaturalCompletion() == .timedOut
         watchdog?.cancel()
-        let timedOut = timeoutFlag.isSet
 
         outHandle.readabilityHandler = nil
         errHandle.readabilityHandler = nil
@@ -124,19 +128,42 @@ public struct DefaultProcessRunner: ProcessRunner {
             return data
         }
     }
+}
 
-    private final class AtomicFlag: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value = false
+private enum TimeoutState: Sendable { case running, naturallyCompleted, timedOut }
 
-        func set() {
-            lock.lock(); defer { lock.unlock() }
-            value = true
+/// Serializes the "process exited naturally" vs "watchdog fired" decision.
+///
+/// Only one transition out of `.running` is possible; whichever thread grabs
+/// the lock first wins. The watchdog additionally re-checks `process.isRunning`
+/// under the lock so a process that just exited before the watchdog block
+/// dispatched isn't spuriously marked as timed out.
+private final class TimeoutCoordinator: @unchecked Sendable {
+    private let lock = NSLock()
+    private var state: TimeoutState = .running
+
+    /// Called by the watchdog block. Returns true only if the timeout
+    /// transition was claimed (caller should call `terminate()`).
+    func tryArmTimeout(process: Process) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard state == .running else { return false }
+        // Process may have exited between the deadline firing and this block
+        // being dispatched; treat that as natural completion.
+        guard process.isRunning else {
+            state = .naturallyCompleted
+            return false
         }
+        state = .timedOut
+        return true
+    }
 
-        var isSet: Bool {
-            lock.lock(); defer { lock.unlock() }
-            return value
+    /// Called by the main thread after `waitUntilExit` returns. Records
+    /// natural completion unless the watchdog already won the race.
+    func markNaturalCompletion() -> TimeoutState {
+        lock.lock(); defer { lock.unlock() }
+        if state == .running {
+            state = .naturallyCompleted
         }
+        return state
     }
 }

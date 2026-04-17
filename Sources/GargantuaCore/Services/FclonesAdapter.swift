@@ -179,8 +179,8 @@ public struct FclonesAdapter: ScanAdapter {
             var emittedInGroup = 0
             for path in group.paths where seenPaths.insert(path).inserted {
                 let result = ScanResult(
-                    id: "fclones-\(group.id)-\(results.count)",
-                    name: path.split(separator: "/").last.map(String.init) ?? path,
+                    id: "fclones-\(group.id)-\(emittedInGroup)",
+                    name: URL(fileURLWithPath: path).lastPathComponent,
                     path: path,
                     size: group.fileLen,
                     safety: entry.safety,
@@ -198,8 +198,14 @@ public struct FclonesAdapter: ScanAdapter {
             }
             // At least one copy must be kept, so reclaimable space for a group
             // of N identical files is (N - 1) × fileLen, not N × fileLen.
+            // Overflow-safe: clamp rather than trap on a corrupt fclones report
+            // that claims absurdly large fileLen values.
             if emittedInGroup >= 2 {
-                reclaimableBytes += Int64(emittedInGroup - 1) * group.fileLen
+                let copies = Int64(emittedInGroup - 1)
+                let (product, productOverflow) = copies.multipliedReportingOverflow(by: group.fileLen)
+                let addend = productOverflow ? Int64.max : product
+                let (sum, sumOverflow) = reclaimableBytes.addingReportingOverflow(addend)
+                reclaimableBytes = sumOverflow ? Int64.max : sum
             }
         }
 
