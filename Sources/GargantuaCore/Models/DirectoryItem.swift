@@ -12,6 +12,10 @@ public struct DirectoryItem: Identifiable, Sendable {
     public let size: Int64
     public let isPermissionDenied: Bool
 
+    /// `true` when `size` is a lower-bound total because recursive sizing
+    /// stopped early, usually after hitting a wall-clock timeout.
+    public let isPartial: Bool
+
     /// `true` while the directory's recursive size is still being computed
     /// (used by streaming scans to render a placeholder row with a spinner).
     public let isSizing: Bool
@@ -30,6 +34,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         path: String,
         size: Int64,
         isPermissionDenied: Bool = false,
+        isPartial: Bool = false,
         isSizing: Bool = false,
         isFilesAggregate: Bool = false,
         children: [DirectoryItem]? = nil
@@ -39,6 +44,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         self.path = path
         self.size = size
         self.isPermissionDenied = isPermissionDenied
+        self.isPartial = isPartial
         self.isSizing = isSizing
         self.isFilesAggregate = isFilesAggregate
         self.children = children

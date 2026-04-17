@@ -257,7 +257,7 @@ public struct NativeScanAdapter: ScanAdapter {
         let isDirectory = values?.isDirectory ?? false
         let size: Int64
         if isDirectory {
-            size = DirectorySizeScanner.directorySize(at: path)
+            size = DirectorySizeScanner.directorySize(at: path).totalSize
         } else {
             let attrs = try? fileManager.attributesOfItem(atPath: path)
             size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0

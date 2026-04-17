@@ -157,6 +157,46 @@ struct DirectorySizeScannerTests {
         #expect((finalByName["big"] ?? 0) > (finalByName["small"] ?? 0))
     }
 
+    @Test("directorySize reports partial result when timeout is exceeded")
+    func directorySizeTimeoutReturnsPartialResult() throws {
+        let root = try makeFixture()
+        defer { cleanup(root) }
+
+        let result = DirectorySizeScanner.directorySize(at: root.path, timeout: .zero)
+
+        #expect(result.isPartial)
+        #expect(result.totalSize >= 0)
+    }
+
+    @Test("directorySize reports complete result when no timeout is exceeded")
+    func directorySizeWithoutTimeoutReturnsCompleteResult() throws {
+        let root = try makeFixture()
+        defer { cleanup(root) }
+
+        let result = DirectorySizeScanner.directorySize(at: root.path, timeout: nil)
+
+        #expect(!result.isPartial)
+        #expect(result.totalSize > 0)
+    }
+
+    @Test("streamChildren marks timed out final rows as partial")
+    func streamChildrenMarksPartialFinalRows() async throws {
+        let root = try makeFixture()
+        defer { cleanup(root) }
+
+        var partialFinalCount = 0
+        for await item in DirectorySizeScanner.streamChildren(
+            of: root.path,
+            directorySizeTimeout: .zero
+        ) where !item.isSizing && !item.isFilesAggregate {
+            if item.isPartial {
+                partialFinalCount += 1
+            }
+        }
+
+        #expect(partialFinalCount == 2)
+    }
+
     @Test("streamChildren returns empty stream for non-existent path")
     func streamNonExistentPath() async throws {
         let fakePath = "/nonexistent-\(UUID().uuidString)"
