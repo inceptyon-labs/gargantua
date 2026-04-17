@@ -12,6 +12,10 @@ public struct DirectoryItem: Identifiable, Sendable {
     public let size: Int64
     public let isPermissionDenied: Bool
 
+    /// `true` while the directory's recursive size is still being computed
+    /// (used by streaming scans to render a placeholder row with a spinner).
+    public let isSizing: Bool
+
     /// Child items, loaded on demand. `nil` means not yet loaded.
     public var children: [DirectoryItem]?
 
@@ -20,6 +24,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         path: String,
         size: Int64,
         isPermissionDenied: Bool = false,
+        isSizing: Bool = false,
         children: [DirectoryItem]? = nil
     ) {
         self.id = path
@@ -27,6 +32,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         self.path = path
         self.size = size
         self.isPermissionDenied = isPermissionDenied
+        self.isSizing = isSizing
         self.children = children
     }
 }
