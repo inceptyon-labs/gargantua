@@ -1,11 +1,11 @@
 ---
 # gargantua-anqg
 title: 'Task: RemnantRuleLoader (directory loader for uninstall rules)'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-17T21:49:47Z
-updated_at: 2026-04-17T21:49:47Z
+updated_at: 2026-04-17T23:19:26Z
 parent: gargantua-j8a1
 ---
 
