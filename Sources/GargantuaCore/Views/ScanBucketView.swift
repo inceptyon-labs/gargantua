@@ -251,7 +251,6 @@ public struct ScanBucketListView: View {
         }
     }
 
-    @ViewBuilder
     private func itemRow(_ item: ScanResult) -> some View {
         let selected = selectedIDs.contains(item.id)
         return Group {
