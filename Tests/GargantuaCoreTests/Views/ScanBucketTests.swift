@@ -192,3 +192,60 @@ struct ScanGrouperCategoryTests {
         #expect(groups[1].title == "Small Cat")
     }
 }
+
+// MARK: - Group Selection State
+
+@Suite("ScanGroup.selectionState")
+struct ScanGroupSelectionTests {
+    @Test("All items protected returns .allProtected")
+    func allProtected() {
+        let results = [
+            makeScanResult(id: "p1", safety: .protected_),
+            makeScanResult(id: "p2", safety: .protected_),
+        ]
+        let group = ScanGrouper.group(results, mode: .safety).first { $0.id == "safety:protected_" }!
+        #expect(group.selectionState(selectedIDs: []) == .allProtected)
+    }
+
+    @Test("No selectable items selected returns .none")
+    func noneSelected() {
+        let results = [
+            makeScanResult(id: "s1", safety: .safe),
+            makeScanResult(id: "s2", safety: .safe),
+        ]
+        let group = ScanGrouper.group(results, mode: .safety).first { $0.id == "safety:safe" }!
+        #expect(group.selectionState(selectedIDs: []) == .none)
+    }
+
+    @Test("All selectable items selected returns .all")
+    func allSelected() {
+        let results = [
+            makeScanResult(id: "s1", safety: .safe),
+            makeScanResult(id: "s2", safety: .safe),
+        ]
+        let group = ScanGrouper.group(results, mode: .safety).first { $0.id == "safety:safe" }!
+        #expect(group.selectionState(selectedIDs: ["s1", "s2"]) == .all)
+    }
+
+    @Test("Some selected returns .partial")
+    func partialSelected() {
+        let results = [
+            makeScanResult(id: "s1", safety: .safe),
+            makeScanResult(id: "s2", safety: .safe),
+        ]
+        let group = ScanGrouper.group(results, mode: .safety).first { $0.id == "safety:safe" }!
+        #expect(group.selectionState(selectedIDs: ["s1"]) == .partial)
+    }
+
+    @Test("Mixed group ignores protected items when deciding .all")
+    func mixedGroupIgnoresProtected() {
+        // Folder mode: a folder with one safe + one protected item
+        let results = [
+            makeScanResult(id: "s1", safety: .safe, path: "/x/y/a"),
+            makeScanResult(id: "p1", safety: .protected_, path: "/x/y/b"),
+        ]
+        let group = ScanGrouper.group(results, mode: .folder).first!
+        #expect(group.selectableIDs == ["s1"])
+        #expect(group.selectionState(selectedIDs: ["s1"]) == .all)
+    }
+}

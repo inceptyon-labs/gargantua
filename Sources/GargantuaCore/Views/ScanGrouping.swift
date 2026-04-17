@@ -36,6 +36,35 @@ public struct ScanGroup: Identifiable {
 
     public var count: Int { items.count }
     public var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
+
+    /// IDs of items eligible for bulk selection — protected rows are skipped
+    /// since they can never be cleaned.
+    public var selectableIDs: [String] {
+        items.filter { $0.safety != .protected_ }.map(\.id)
+    }
+}
+
+/// Tri-state selection summary for a group. Drives the group-header checkbox.
+public enum GroupSelectionState: Equatable {
+    /// Every group item is protected — no checkbox should be shown.
+    case allProtected
+    /// At least one selectable item exists; none are currently selected.
+    case none
+    /// Some (not all) selectable items are selected.
+    case partial
+    /// Every selectable item in the group is selected.
+    case all
+}
+
+public extension ScanGroup {
+    func selectionState(selectedIDs: Set<String>) -> GroupSelectionState {
+        let ids = selectableIDs
+        guard !ids.isEmpty else { return .allProtected }
+        let hits = ids.filter { selectedIDs.contains($0) }.count
+        if hits == 0 { return .none }
+        if hits == ids.count { return .all }
+        return .partial
+    }
 }
 
 public enum ScanGrouper {

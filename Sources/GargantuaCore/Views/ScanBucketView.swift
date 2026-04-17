@@ -227,11 +227,14 @@ public struct ScanBucketListView: View {
     @ViewBuilder
     private func groupSection(_ group: ScanGroup) -> some View {
         let isExpanded = expandedGroupIDs.contains(group.id)
+        let state = group.selectionState(selectedIDs: selectedIDs)
 
         ScanGroupHeader(
             group: group,
             isExpanded: isExpanded,
-            onToggle: { toggleGroup(group.id) }
+            selectionState: state,
+            onToggle: { toggleGroup(group.id) },
+            onToggleSelection: { toggleGroupSelection(group, state: state) }
         )
 
         Rectangle()
@@ -413,6 +416,19 @@ public struct ScanBucketListView: View {
             expandedGroupIDs.remove(id)
         } else {
             expandedGroupIDs.insert(id)
+        }
+    }
+
+    /// Bulk-toggle selection for a group. Protected items are always skipped.
+    /// Partial state collapses to "select all" so a single click finishes the job.
+    private func toggleGroupSelection(_ group: ScanGroup, state: GroupSelectionState) {
+        let ids = group.selectableIDs
+        guard !ids.isEmpty else { return }
+        switch state {
+        case .all:
+            selectedIDs.subtract(ids)
+        case .none, .partial, .allProtected:
+            selectedIDs.formUnion(ids)
         }
     }
 
