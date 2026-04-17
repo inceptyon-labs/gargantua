@@ -300,14 +300,17 @@ extension PathExpander {
     /// Prefers common developer project locations (`~/Projects`, `~/GitHub`, etc.) that
     /// actually exist on the user's machine. Avoids walking the full home directory
     /// because that would traverse `~/Library` and dominate scan time.
+    ///
+    /// Returns an empty array when none of the candidates exist; callers should treat
+    /// that as "no globs to expand" rather than falling back to `$HOME`, which would
+    /// silently widen scope to the entire user directory.
     public static func defaultScanRoots() -> [URL] {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
         let candidates = ["Projects", "GitHub", "dev", "www", "Code", "Development", "Documents", "Desktop"]
-        let roots = candidates.compactMap { name -> URL? in
+        return candidates.compactMap { name -> URL? in
             let url = home.appendingPathComponent(name, isDirectory: true)
             return fm.fileExists(atPath: url.path) ? url : nil
         }
-        return roots.isEmpty ? [home] : roots
     }
 }

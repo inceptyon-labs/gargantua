@@ -122,6 +122,27 @@ extension CleanupProfile {
         ]
     )
 
+    /// Built-in Dev Purge profile.
+    ///
+    /// Narrow scope for the Dev Artifact Purge view: only developer artifacts,
+    /// Docker, and Homebrew. Deliberately excludes browser caches, system caches,
+    /// temp files, etc. so Dev Purge cannot inadvertently widen into a full clean.
+    public static let devPurge = CleanupProfile(
+        id: "devPurge",
+        name: "Dev Purge",
+        description: "Developer artifacts + Docker + Homebrew only",
+        categories: ["dev_artifacts", "docker", "homebrew"],
+        safetyOverrides: [
+            SafetyOverride(
+                condition: "age > 30d",
+                safety: .safe,
+                confidence: 95,
+                explanationSuffix: "No project activity in 30+ days. Restore with package manager.",
+                profiles: ["devPurge"]
+            ),
+        ]
+    )
+
     /// All built-in profiles.
     public static let builtIn: [CleanupProfile] = [.developer, .light, .deep]
 }

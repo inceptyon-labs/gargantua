@@ -105,18 +105,23 @@ public final class PersistedSettings {
     public var retentionDays: Int
     public var lastScanDate: Date?
     public var autoScanEnabled: Bool
+    /// User-configurable project roots for Dev Purge scans (parity with `mo purge --paths`).
+    /// Empty means "use `PathExpander.defaultScanRoots()`".
+    public var scanRoots: [String] = []
 
     public init(
         activeProfileID: String = "developer",
         retentionDays: Int = 90,
         lastScanDate: Date? = nil,
-        autoScanEnabled: Bool = false
+        autoScanEnabled: Bool = false,
+        scanRoots: [String] = []
     ) {
         self.key = "default"
         self.activeProfileID = activeProfileID
         self.retentionDays = retentionDays
         self.lastScanDate = lastScanDate
         self.autoScanEnabled = autoScanEnabled
+        self.scanRoots = scanRoots
     }
 }
 
