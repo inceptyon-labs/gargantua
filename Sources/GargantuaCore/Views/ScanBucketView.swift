@@ -227,12 +227,11 @@ public struct ScanBucketListView: View {
     @ViewBuilder
     private func groupSection(_ group: ScanGroup) -> some View {
         let isExpanded = expandedGroupIDs.contains(group.id)
-        let state = group.selectionState(selectedIDs: selectedIDs)
 
         ScanGroupHeader(
             group: group,
             isExpanded: isExpanded,
-            selectionState: state,
+            selectedIDs: selectedIDs,
             onToggle: { toggleGroup(group.id) },
             onToggleSelection: { toggleGroupSelection(group) }
         )

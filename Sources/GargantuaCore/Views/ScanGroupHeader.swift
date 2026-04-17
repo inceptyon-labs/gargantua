@@ -9,9 +9,13 @@ import SwiftUI
 struct ScanGroupHeader: View {
     let group: ScanGroup
     let isExpanded: Bool
-    let selectionState: GroupSelectionState
+    let selectedIDs: Set<String>
     let onToggle: () -> Void
     let onToggleSelection: () -> Void
+
+    private var selectionState: GroupSelectionState {
+        group.selectionState(selectedIDs: selectedIDs)
+    }
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space2) {
