@@ -64,6 +64,7 @@ public struct NativeScanAdapter: ScanAdapter {
         logger.info("NativeScanAdapter: \(applicable.count) rules match profile \(profile.id, privacy: .public)")
 
         var results: [ScanResult] = []
+        var seenPaths: Set<String> = []
         let total = max(applicable.count, 1)
 
         for (idx, rule) in applicable.enumerated() {
@@ -82,7 +83,11 @@ public struct NativeScanAdapter: ScanAdapter {
             for warning in evaluation.warnings {
                 await progress?.recordError(warning)
             }
-            results.append(contentsOf: evaluation.results)
+            // Deduplicate by path across rules so overlapping rules don't double-count
+            // bytes or trigger a second recycle attempt after the first succeeds.
+            for result in evaluation.results where seenPaths.insert(result.path).inserted {
+                results.append(result)
+            }
         }
 
         await progress?.finish(itemsFound: results.count)
@@ -128,31 +133,23 @@ public struct NativeScanAdapter: ScanAdapter {
             }
 
             for path in resolvedPaths {
-                // Glob-expanded paths already represent concrete matches; only literal
-                // paths without glob get the "enumerate children if excludes set" behaviour
-                // (so e.g. ~/Library/Caches reports one row per app cache, not one big row).
-                if !isGlob, !rule.exclude.isEmpty {
-                    let url = URL(fileURLWithPath: path)
-                    let children = (try? fileManager.contentsOfDirectory(
-                        at: url,
-                        includingPropertiesForKeys: [.isDirectoryKey],
-                        options: [.skipsHiddenFiles]
-                    )) ?? []
+                // A rule with a `pattern:` field selects individual files inside the resolved
+                // directory (e.g. `~/Downloads` + `*.dmg`). A literal path with `exclude`
+                // patterns enumerates immediate children and skips the excluded ones.
+                // Everything else treats the resolved path itself as one result.
+                let needsChildEnumeration = rule.pattern != nil || (!isGlob && !rule.exclude.isEmpty)
 
-                    for child in children {
-                        if isExcluded(child: child, excludes: rule.exclude) { continue }
-                        if let result = makeResult(
-                            rule: rule,
-                            path: child.path,
-                            counter: &counter,
-                            classifier: classifier,
-                            profile: profile
-                        ) {
-                            out.append(result)
-                        }
-                    }
+                if needsChildEnumeration {
+                    enumerateChildren(
+                        at: path,
+                        rule: rule,
+                        classifier: classifier,
+                        profile: profile,
+                        counter: &counter,
+                        fileManager: fileManager,
+                        into: &out
+                    )
                 } else {
-                    // Apply any exclude filters to the full path itself.
                     if !rule.exclude.isEmpty,
                        isExcluded(child: URL(fileURLWithPath: path), excludes: rule.exclude) {
                         continue
@@ -171,6 +168,41 @@ public struct NativeScanAdapter: ScanAdapter {
         }
 
         return RuleEvaluation(results: out, warnings: warnings)
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private static func enumerateChildren(
+        at path: String,
+        rule: ScanRule,
+        classifier: SafetyClassifier,
+        profile: CleanupProfile,
+        counter: inout Int,
+        fileManager: FileManager,
+        into out: inout [ScanResult]
+    ) {
+        let url = URL(fileURLWithPath: path)
+        let children = (try? fileManager.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        for child in children {
+            if let filePattern = rule.pattern,
+               !fnmatch(pattern: filePattern, name: child.lastPathComponent) {
+                continue
+            }
+            if !rule.exclude.isEmpty, isExcluded(child: child, excludes: rule.exclude) { continue }
+            if let result = makeResult(
+                rule: rule,
+                path: child.path,
+                counter: &counter,
+                classifier: classifier,
+                profile: profile
+            ) {
+                out.append(result)
+            }
+        }
     }
 
     private static func makeResult(
