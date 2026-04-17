@@ -126,45 +126,85 @@ public struct DeepCleanView: View {
     }
 
     private var scanFooter: some View {
-        HStack {
+        Group {
             if isScanning {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(.trailing, GargantuaSpacing.space2)
-
-                Text(scanProgress.currentCategory ?? "Scanning...")
-                    .font(GargantuaFonts.body)
-                    .foregroundStyle(GargantuaColors.ink2)
-
-                Spacer()
+                scanningFooter
             } else {
-                if scanProgress.errors.isEmpty == false {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(GargantuaColors.review)
-
-                    Text(scanProgress.errors.first ?? "Scan error")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.review)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Button(action: startScan) {
-                    Text("Start Deep Clean Scan")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
+                idleFooter
             }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    private var scanningFooter: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            ProgressView(value: scanProgress.fractionCompleted)
+                .progressViewStyle(.linear)
+                .animation(.easeInOut(duration: 0.15), value: scanProgress.fractionCompleted)
+
+            HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
+                Text(prettyScanCategory(scanProgress.currentCategory) ?? "Scanning…")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                if let path = scanProgress.currentPath {
+                    Text("·")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                    Text(abbreviateHomePath(path))
+                        .font(GargantuaFonts.monoPath)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: GargantuaSpacing.space2)
+
+                Text("\(scanProgress.itemsFound) items")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .monospacedDigit()
+
+                if scanProgress.reclaimableBytes > 0 {
+                    Text("·")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                    Text(AlertItem.formatBytes(scanProgress.reclaimableBytes))
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink2)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var idleFooter: some View {
+        HStack {
+            if scanProgress.errors.isEmpty == false {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(GargantuaColors.review)
+
+                Text(scanProgress.errors.first ?? "Scan error")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.review)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button(action: startScan) {
+                Text("Start Deep Clean Scan")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .background(GargantuaColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Results
@@ -267,4 +307,25 @@ public struct DeepCleanView: View {
             }
         }
     }
+}
+
+// MARK: - Footer helpers
+
+/// Turn a rule category like "browser_cache" into "Browser Cache" for the footer.
+func prettyScanCategory(_ raw: String?) -> String? {
+    guard let raw, !raw.isEmpty else { return nil }
+    return raw
+        .split(separator: "_")
+        .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+        .joined(separator: " ")
+}
+
+/// Replace `$HOME` in an absolute path with `~` for display.
+func abbreviateHomePath(_ path: String) -> String {
+    let home = NSHomeDirectory()
+    if path == home { return "~" }
+    if path.hasPrefix(home + "/") {
+        return "~" + path.dropFirst(home.count)
+    }
+    return path
 }
