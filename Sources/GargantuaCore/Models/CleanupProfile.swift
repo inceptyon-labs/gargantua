@@ -145,4 +145,25 @@ extension CleanupProfile {
 
     /// All built-in profiles.
     public static let builtIn: [CleanupProfile] = [.developer, .light, .deep]
+
+    /// Resolve a cleanup profile for the given active profile ID.
+    ///
+    /// Searches the provided persisted profiles first (user overrides win),
+    /// then the built-in set (including `.devPurge`), and finally returns the
+    /// supplied fallback when nothing matches. Call sites that cannot reach
+    /// persistence should pass `persisted: []` and rely on the fallback.
+    public static func resolve(
+        activeProfileID: String,
+        persisted: [CleanupProfile] = [],
+        fallback: CleanupProfile = .deep
+    ) -> CleanupProfile {
+        if let match = persisted.first(where: { $0.id == activeProfileID }) {
+            return match
+        }
+        for profile in [CleanupProfile.developer, .light, .deep, .devPurge]
+        where profile.id == activeProfileID {
+            return profile
+        }
+        return fallback
+    }
 }

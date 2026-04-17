@@ -43,7 +43,7 @@ struct MainContentView: View {
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
                             case "deepClean":
-                                DeepCleanView(profile: .deep, session: deepCleanSession)
+                                DeepCleanView(profile: activeDeepCleanProfile, session: deepCleanSession)
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":
@@ -80,6 +80,25 @@ struct MainContentView: View {
                 }
             }
         }
+    }
+
+    /// Resolve the cleanup profile to use for Deep Clean.
+    ///
+    /// Reads `activeProfileID` from persisted settings and looks the profile up
+    /// in persisted profiles first, then built-ins. Falls back to `.deep` when
+    /// persistence isn't ready yet or the stored ID doesn't match anything so
+    /// Deep Clean always has a safe, broad default.
+    private var activeDeepCleanProfile: CleanupProfile {
+        guard let persistence,
+              let settings = try? persistence.fetchSettings()
+        else { return .deep }
+
+        let persisted = (try? persistence.fetchProfiles()) ?? []
+        return CleanupProfile.resolve(
+            activeProfileID: settings.activeProfileID,
+            persisted: persisted,
+            fallback: .deep
+        )
     }
 
     /// Resolve the scan roots for Dev Purge from persisted settings, falling back

@@ -65,6 +65,66 @@ struct CleanupProfileTests {
         #expect(CleanupProfile.builtIn.count == 3)
     }
 
+    @Test("resolve returns persisted profile when active ID matches a user override")
+    func resolvePrefersPersistedOverride() {
+        let customDeep = CleanupProfile(
+            id: "deep",
+            name: "Deep (customized)",
+            description: "User-tweaked deep clean",
+            categories: ["custom_only"],
+            isCustom: true
+        )
+        let resolved = CleanupProfile.resolve(
+            activeProfileID: "deep",
+            persisted: [customDeep],
+            fallback: .deep
+        )
+        #expect(resolved.name == "Deep (customized)")
+        #expect(resolved.categories == ["custom_only"])
+        #expect(resolved.isCustom)
+    }
+
+    @Test("resolve returns built-in profile when no persisted match")
+    func resolveFallsBackToBuiltIn() {
+        let resolved = CleanupProfile.resolve(
+            activeProfileID: "developer",
+            persisted: [],
+            fallback: .deep
+        )
+        #expect(resolved.id == "developer")
+        #expect(resolved.name == "Developer")
+    }
+
+    @Test("resolve finds devPurge even though it is not in builtIn")
+    func resolveFindsDevPurge() {
+        let resolved = CleanupProfile.resolve(
+            activeProfileID: "devPurge",
+            persisted: [],
+            fallback: .deep
+        )
+        #expect(resolved.id == "devPurge")
+    }
+
+    @Test("resolve falls back to fallback when ID is unknown")
+    func resolveUsesFallbackForUnknownID() {
+        let resolved = CleanupProfile.resolve(
+            activeProfileID: "does-not-exist",
+            persisted: [],
+            fallback: .deep
+        )
+        #expect(resolved.id == "deep")
+    }
+
+    @Test("resolve returns .deep fallback for empty active ID")
+    func resolveUsesFallbackForEmptyID() {
+        let resolved = CleanupProfile.resolve(
+            activeProfileID: "",
+            persisted: [.developer],
+            fallback: .deep
+        )
+        #expect(resolved.id == "deep")
+    }
+
     @Test("Codable round-trip preserves profile with overrides")
     func codableRoundTrip() throws {
         let encoder = JSONEncoder()
