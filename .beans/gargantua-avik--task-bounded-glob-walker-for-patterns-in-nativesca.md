@@ -1,11 +1,11 @@
 ---
 # gargantua-avik
 title: 'Task: Bounded glob walker for ** patterns in NativeScanAdapter'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-17T01:07:11Z
-updated_at: 2026-04-17T01:41:16Z
+updated_at: 2026-04-17T01:43:38Z
 parent: gargantua-l9dk
 ---
 
@@ -72,3 +72,9 @@ Codex surfaced these during review; not blocking but worth tracking:
 
 ## Summary of Changes
 Replaced the glob-skip guard in NativeScanAdapter with a bounded filesystem walker (`PathExpander`) that supports `**`, `*`, `~`, and the existing literal + tilde forms. Hard depth/entry caps plus a time budget prevent runaway walks; cap trips surface through ScanProgress as non-fatal warnings. SC review caught that the `ScanRule.pattern` field was going unused — installer rules like `~/Downloads` + `*.dmg` were treating the entire Downloads folder as one deletable result; now those rules enumerate matching files instead. Added cross-rule path de-duplication to prevent double-counting on overlapping rules.
+
+
+
+## Merged
+
+Completed in 49573d1 (merged to main).
