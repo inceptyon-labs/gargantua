@@ -246,10 +246,7 @@ private struct DirectoryRowView: View {
                             .controlSize(.mini)
                             .frame(width: 70, alignment: .trailing)
                     } else {
-                        Text(item.isPermissionDenied ? "—" : AlertItem.formatBytes(item.size))
-                            .font(GargantuaFonts.monoData)
-                            .foregroundStyle(item.isPermissionDenied ? GargantuaColors.ink4 : GargantuaColors.ink)
-                            .frame(width: 70, alignment: .trailing)
+                        sizeLabelView
                     }
                 }
             }
@@ -301,6 +298,35 @@ private struct DirectoryRowView: View {
                 }
         }
         .frame(width: 100, height: 6)
+    }
+
+    @ViewBuilder
+    private var sizeLabelView: some View {
+        if item.isPartial {
+            formattedSizeLabel
+                .help("Partial size. This directory hit the sizing time limit.")
+        } else {
+            formattedSizeLabel
+        }
+    }
+
+    private var formattedSizeLabel: some View {
+        Text(sizeLabel)
+            .font(GargantuaFonts.monoData)
+            .foregroundStyle(sizeLabelColor)
+            .frame(width: 70, alignment: .trailing)
+    }
+
+    private var sizeLabel: String {
+        guard !item.isPermissionDenied else { return "—" }
+        let prefix = item.isPartial ? "~" : ""
+        return "\(prefix)\(AlertItem.formatBytes(item.size))"
+    }
+
+    private var sizeLabelColor: Color {
+        if item.isPermissionDenied { return GargantuaColors.ink4 }
+        if item.isPartial { return GargantuaColors.ink2 }
+        return GargantuaColors.ink
     }
 
     private var iconName: String {

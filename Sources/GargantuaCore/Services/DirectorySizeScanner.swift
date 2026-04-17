@@ -5,6 +5,12 @@ import Foundation
 /// Returns immediate children of a directory with their total sizes (recursively computed).
 /// Handles permission-denied paths gracefully by marking them in the result.
 public enum DirectorySizeScanner: Sendable {
+    struct DirectorySizeResult: Sendable, Equatable {
+        let totalSize: Int64
+        let isPartial: Bool
+    }
+
+    public static let defaultDirectorySizeTimeout: Duration = .seconds(15)
 
     /// Maximum number of concurrent `directorySize` computations.
     ///
@@ -17,9 +23,15 @@ public enum DirectorySizeScanner: Sendable {
     ///
     /// Files at the top level are aggregated into a single "(Files)" entry.
     /// Permission-denied children are included with `isPermissionDenied = true` and size 0.
-    public static func scanChildren(of directoryPath: String) async -> [DirectoryItem] {
+    public static func scanChildren(
+        of directoryPath: String,
+        directorySizeTimeout: Duration? = defaultDirectorySizeTimeout
+    ) async -> [DirectoryItem] {
         var items: [DirectoryItem] = []
-        for await item in streamChildren(of: directoryPath) where !item.isSizing {
+        for await item in streamChildren(
+            of: directoryPath,
+            directorySizeTimeout: directorySizeTimeout
+        ) where !item.isSizing {
             // Drop the `isSizing` placeholder events; we only want final rows.
             items.append(item)
         }
@@ -45,7 +57,10 @@ public enum DirectorySizeScanner: Sendable {
     /// The stream honors cancellation: if the consuming task is cancelled (typically
     /// because `DiskExplorerView`'s `.task(id:)` restarted with a new path), in-flight
     /// sizing tasks stop enumerating on their next iteration and the stream terminates.
-    public static func streamChildren(of directoryPath: String) -> AsyncStream<DirectoryItem> {
+    public static func streamChildren(
+        of directoryPath: String,
+        directorySizeTimeout: Duration? = defaultDirectorySizeTimeout
+    ) -> AsyncStream<DirectoryItem> {
         AsyncStream { continuation in
             let task = Task.detached { [continuation] in
                 let fm = FileManager.default
@@ -115,6 +130,7 @@ public enum DirectorySizeScanner: Sendable {
                 await sizeDirectoriesStreaming(
                     subdirectoriesToSize,
                     maxConcurrent: sizingConcurrency,
+                    directorySizeTimeout: directorySizeTimeout,
                     yield: { continuation.yield($0) }
                 )
 
@@ -151,11 +167,15 @@ public enum DirectorySizeScanner: Sendable {
 
             if isDirectory {
                 if fm.isReadableFile(atPath: child.path) {
-                    let size = directorySize(at: child.path)
+                    let result = directorySize(
+                        at: child.path,
+                        timeout: defaultDirectorySizeTimeout
+                    )
                     items.append(DirectoryItem(
                         name: child.lastPathComponent,
                         path: child.path,
-                        size: size
+                        size: result.totalSize,
+                        isPartial: result.isPartial
                     ))
                 } else {
                     items.append(DirectoryItem(
@@ -197,11 +217,12 @@ public enum DirectorySizeScanner: Sendable {
     private static func sizeDirectoriesStreaming(
         _ directories: [URL],
         maxConcurrent: Int,
+        directorySizeTimeout: Duration?,
         yield: @escaping @Sendable (DirectoryItem) -> Void
     ) async {
         guard !directories.isEmpty else { return }
 
-        await withTaskGroup(of: (URL, Int64)?.self) { group in
+        await withTaskGroup(of: (URL, DirectorySizeResult)?.self) { group in
             var nextIndex = 0
             let total = directories.count
             var inflight = 0
@@ -211,8 +232,8 @@ public enum DirectorySizeScanner: Sendable {
                 let url = directories[nextIndex]
                 group.addTask {
                     if Task.isCancelled { return nil }
-                    let size = directorySize(at: url.path)
-                    return (url, size)
+                    let result = directorySize(at: url.path, timeout: directorySizeTimeout)
+                    return (url, result)
                 }
                 inflight += 1
                 nextIndex += 1
@@ -231,11 +252,12 @@ public enum DirectorySizeScanner: Sendable {
                 // Re-check cancellation between resuming and yielding — if the
                 // consumer bailed while we were suspended, drop the result
                 // rather than pushing it through a torn-down stream.
-                if let (url, size) = result, !Task.isCancelled {
+                if let (url, directorySize) = result, !Task.isCancelled {
                     yield(DirectoryItem(
                         name: url.lastPathComponent,
                         path: url.path,
-                        size: size,
+                        size: directorySize.totalSize,
+                        isPartial: directorySize.isPartial,
                         isSizing: false
                     ))
                 }
@@ -245,9 +267,17 @@ public enum DirectorySizeScanner: Sendable {
     }
 
     /// Recursively compute the total allocated size of all files under `path`.
-    static func directorySize(at path: String) -> Int64 {
+    static func directorySize(at path: String, timeout: Duration? = nil) -> DirectorySizeResult {
         let fm = FileManager.default
         let url = URL(fileURLWithPath: path)
+        let clock = ContinuousClock()
+        let deadline = timeout.map { clock.now.advanced(by: $0) }
+
+        func shouldStop() -> Bool {
+            if Task.isCancelled { return true }
+            if let deadline, clock.now >= deadline { return true }
+            return false
+        }
 
         guard let enumerator = fm.enumerator(
             at: url,
@@ -255,12 +285,14 @@ public enum DirectorySizeScanner: Sendable {
             options: [.skipsHiddenFiles],
             errorHandler: nil
         ) else {
-            return 0
+            return DirectorySizeResult(totalSize: 0, isPartial: false)
         }
 
         var total: Int64 = 0
         for case let fileURL as URL in enumerator {
-            if Task.isCancelled { return total }
+            if shouldStop() {
+                return DirectorySizeResult(totalSize: total, isPartial: true)
+            }
             guard let values = try? fileURL.resourceValues(
                 forKeys: [.totalFileAllocatedSizeKey, .isSymbolicLinkKey]
             ) else {
@@ -272,6 +304,6 @@ public enum DirectorySizeScanner: Sendable {
             }
             total += Int64(values.totalFileAllocatedSize ?? 0)
         }
-        return total
+        return DirectorySizeResult(totalSize: total, isPartial: false)
     }
 }
