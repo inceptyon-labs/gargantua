@@ -5,12 +5,13 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "DeepClea
 
 // MARK: - Deep Clean View
 
-/// Full-system cleanup scan view using `MoCleanAdapter`.
+/// Full-system cleanup scan view.
 ///
-/// Shows a scan trigger button, progress during scan, and results
-/// in the three-bucket `ScanBucketListView` pattern.
+/// Runs a deep scan against the YAML rule set using the active `CleanupProfile`,
+/// then presents results in the three-bucket `ScanBucketListView` pattern.
 public struct DeepCleanView: View {
-    private let adapter: MoCleanAdapter
+    private let profile: CleanupProfile
+    private let adapterOverride: (any ScanAdapter)?
 
     @State private var scanProgress = ScanProgress()
     @State private var scanResults: [ScanResult]?
@@ -21,8 +22,9 @@ public struct DeepCleanView: View {
     @State private var isCleaning = false
     @State private var cleanupResult: CleanupResult?
 
-    public init(adapter: MoCleanAdapter) {
-        self.adapter = adapter
+    public init(profile: CleanupProfile = .deep, adapter: (any ScanAdapter)? = nil) {
+        self.profile = profile
+        self.adapterOverride = adapter
     }
 
     public var body: some View {
@@ -248,6 +250,8 @@ public struct DeepCleanView: View {
         Task {
             let start = Date()
             do {
+                let adapter: any ScanAdapter = try adapterOverride
+                    ?? NativeScanAdapter.loadDefaults(profile: profile)
                 let results = try await adapter.scan(progress: scanProgress)
                 scanDuration = Date().timeIntervalSince(start)
 
@@ -258,6 +262,7 @@ public struct DeepCleanView: View {
                 scanResults = results
                 isScanning = false
             } catch {
+                scanProgress.recordError(error.localizedDescription)
                 isScanning = false
             }
         }

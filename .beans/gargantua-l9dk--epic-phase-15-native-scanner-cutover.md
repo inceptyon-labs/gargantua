@@ -1,0 +1,37 @@
+---
+# gargantua-l9dk
+title: 'Epic: Phase 1.5 Native Scanner Cutover'
+status: in-progress
+type: epic
+priority: critical
+created_at: 2026-04-17T01:05:59Z
+updated_at: 2026-04-17T01:08:08Z
+---
+
+Replace Mole subprocess scanners with the native YAML-rule-driven scanner. Per PRD §3.3 and §10 Phase 1.5. Prompted by the discovery that mo clean and mo purge do not support --json output, leaving Deep Clean and Dev Purge non-functional despite their beans being marked completed.
+
+## Context
+
+PRD §3.3 calls for a Phase 1.5 "parallel track" that ports Mole's path knowledge into YAML rules + a native Swift scanner, with gradual cutover from the Mole subprocess. The YAML rule porting (gargantua-hi9b) and rule loader (gargantua-5la2) were completed, but the native filesystem scanner and the view wiring were never built — Quick Scan, Deep Clean, and Dev Purge all continued to route through Mole subprocess adapters.
+
+This epic was triggered by the 2026-04-16 discovery (gargantua-9hhj) that `mo clean` and `mo purge` never supported `--json`, so the Phase 1 Mole integration has always been non-functional for those two commands. `mo analyze` and `mo status` remain valid JSON contracts and are not affected.
+
+## Scope
+
+- [x] NativeScanAdapter + RuleDirectoryResolver (gargantua-lm94)
+- [ ] Deep Clean view rewired (gargantua-lupo)
+- [ ] Dev Purge view rewired (gargantua-guga)
+- [ ] Bounded glob walker for `**` patterns (gargantua-avik)
+- [ ] Bundle cleanup_rules + decide mo strategy for shipped .app (gargantua-gf5w)
+- [ ] Dead-code cleanup / adapter protocol (gargantua-2xrw)
+
+## Success Criteria
+- [ ] Quick Scan, Deep Clean, and Dev Purge all produce real results against the YAML rule set without invoking `mo clean`/`mo purge`
+- [ ] Built `.app` (not just `swift run`) finds rules and scans
+- [ ] `CleanupEngine` end-to-end flow (scan → confirm → Trash → audit) verified working
+- [ ] `MoCleanAdapter` and `MoPurgeAdapter` are either deleted or gated behind a protocol with a non-default implementation
+
+## Out of Scope
+- MCP server (Phase 2 per PRD §10)
+- AI tier integration (Phase 2-3)
+- fclones / czkawka adapters (Phase 2)

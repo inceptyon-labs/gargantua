@@ -1,7 +1,7 @@
 ---
 # gargantua-mqc6
 title: Wire CleanupEngine execution and post-cleanup summary
-status: in-progress
+status: completed
 type: task
 priority: normal
 tags:
@@ -10,7 +10,7 @@ tags:
     - pasiv
     - size:M
 created_at: 2026-04-16T11:06:58Z
-updated_at: 2026-04-16T15:17:24Z
+updated_at: 2026-04-16T15:17:54Z
 parent: gargantua-omp3
 blocked_by:
     - gargantua-1m6x

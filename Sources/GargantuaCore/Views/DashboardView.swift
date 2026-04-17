@@ -152,13 +152,13 @@ public struct DashboardView: View {
     private func startQuickScan() {
         scanProgress = ScanProgress()
         Task {
-            let runner = MoleRunner()
-            let adapter = MoCleanAdapter(runner: runner)
             do {
+                let adapter = try NativeScanAdapter.loadDefaults(profile: .light)
                 let results = try await adapter.scan(progress: scanProgress)
                 alerts = AlertItem.aggregate(from: results)
             } catch {
-                // Errors recorded in scanProgress
+                scanProgress.recordError(error.localizedDescription)
+                scanProgress.finish(itemsFound: 0)
             }
         }
     }

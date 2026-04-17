@@ -89,8 +89,10 @@ public final class MoleRunner: Sendable {
     ///
     /// Checks in order:
     /// 1. Explicit `config.binaryPath` if set
-    /// 2. `Bundle.main.resourceURL/mo`
-    /// 3. `Bundle.main.bundleURL/Contents/Resources/mo`
+    /// 2. `MOLE_BINARY_PATH` environment variable
+    /// 3. `Bundle.main.resourceURL/mo` (packaged .app)
+    /// 4. `Bundle.main.bundleURL/Contents/Resources/mo` (packaged .app)
+    /// 5. Homebrew locations (`/opt/homebrew/bin/mo`, `/usr/local/bin/mo`) — dev fallback
     public func resolveBinaryPath() throws -> String {
         if let explicit = config.binaryPath {
             guard FileManager.default.fileExists(atPath: explicit) else {
@@ -99,7 +101,12 @@ public final class MoleRunner: Sendable {
             return explicit
         }
 
-        // Try Bundle.main resource URL first
+        if let envPath = ProcessInfo.processInfo.environment["MOLE_BINARY_PATH"],
+           !envPath.isEmpty,
+           FileManager.default.fileExists(atPath: envPath) {
+            return envPath
+        }
+
         if let resourceURL = Bundle.main.resourceURL {
             let path = resourceURL.appendingPathComponent("mo").path
             if FileManager.default.fileExists(atPath: path) {
@@ -107,14 +114,19 @@ public final class MoleRunner: Sendable {
             }
         }
 
-        // Fallback: explicit Contents/Resources path
-        let fallback = Bundle.main.bundleURL
+        let contentsResources = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Resources/mo").path
-        if FileManager.default.fileExists(atPath: fallback) {
-            return fallback
+        if FileManager.default.fileExists(atPath: contentsResources) {
+            return contentsResources
         }
 
-        let searched = Bundle.main.resourceURL?.appendingPathComponent("mo").path ?? fallback
+        for brewPath in ["/opt/homebrew/bin/mo", "/usr/local/bin/mo"] {
+            if FileManager.default.fileExists(atPath: brewPath) {
+                return brewPath
+            }
+        }
+
+        let searched = Bundle.main.resourceURL?.appendingPathComponent("mo").path ?? contentsResources
         throw MoleError.binaryNotFound(searchedPath: searched)
     }
 

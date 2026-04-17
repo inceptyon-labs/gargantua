@@ -42,9 +42,7 @@ struct MainContentView: View {
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
                             case "deepClean":
-                                DeepCleanView(
-                                    adapter: MoCleanAdapter(runner: MoleRunner())
-                                )
+                                DeepCleanView(profile: .deep)
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":
