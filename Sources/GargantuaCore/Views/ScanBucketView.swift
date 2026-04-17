@@ -1,35 +1,6 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Scan Bucket
-
-/// Groups scan results by safety level with computed totals.
-public struct ScanBucket: Identifiable {
-    public let id: SafetyLevel
-    public let items: [ScanResult]
-
-    public var count: Int { items.count }
-    public var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
-
-    /// Display title for the bucket header.
-    public var title: String {
-        switch id {
-        case .safe:       return "Safe to Clean"
-        case .review:     return "Review Required"
-        case .protected_: return "Protected"
-        }
-    }
-
-    /// Groups an array of scan results into ordered buckets: safe, review, protected.
-    /// Empty buckets are included so headers always render.
-    public static func group(_ results: [ScanResult]) -> [ScanBucket] {
-        let grouped = Dictionary(grouping: results) { $0.safety }
-        return SafetyLevel.allCases.map { level in
-            ScanBucket(id: level, items: grouped[level] ?? [])
-        }
-    }
-}
-
 // MARK: - Summary Bar
 
 /// Top bar showing total items, reclaimable space, and scan duration.
@@ -83,78 +54,21 @@ public struct ScanSummaryBar: View {
     }
 }
 
-// MARK: - Bucket Header
-
-/// Collapsible header for a scan bucket: "Safe to Clean · 18.2 GB"
-struct ScanBucketHeader: View {
-    let bucket: ScanBucket
-    let isExpanded: Bool
-    let onToggle: () -> Void
-
-    var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .frame(width: 12)
-
-                // Safety color indicator dot
-                Circle()
-                    .fill(safetyColor)
-                    .frame(width: 8, height: 8)
-
-                Text(bucket.title)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text("·")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink3)
-
-                Text("\(bucket.count) items")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink2)
-
-                Text("·")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink3)
-
-                Text(AlertItem.formatBytes(bucket.totalSize))
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Spacer()
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .background(GargantuaColors.surface1)
-    }
-
-    private var safetyColor: Color {
-        switch bucket.id {
-        case .safe:       return GargantuaColors.safe
-        case .review:     return GargantuaColors.review
-        case .protected_: return GargantuaColors.protected_
-        }
-    }
-}
-
 // MARK: - Scan Bucket List View
 
-/// Three-bucket scan results layout with collapsible sections and keyboard navigation.
+/// Scan results list with switchable grouping (safety / folder / category).
 ///
-/// Safe items are expanded and pre-selected, Review items are expanded
-/// but unchecked, Protected items are visible but locked (no checkboxes).
+/// Safety mode keeps the existing three-bucket UX with pre-selection of safe
+/// items. Folder and category modes produce groups sorted by total reclaimable
+/// bytes so the biggest piles float to the top. Protected items are always
+/// rendered locked regardless of grouping.
 ///
 /// Keyboard shortcuts:
 /// - Up/Down arrows: navigate between items
 /// - Space: toggle selection of focused item
 /// - Cmd+A: select all safe items
 /// - Enter: trigger clean flow
-/// - Tab: jump to next bucket
+/// - Tab: jump to next group
 /// - Escape: clear focus or cancel
 public struct ScanBucketListView: View {
     public let results: [ScanResult]
@@ -166,7 +80,8 @@ public struct ScanBucketListView: View {
     public let onAddToWhitelist: ((ScanResult) -> Void)?
     public let onViewRule: ((ScanResult) -> Void)?
 
-    @State private var expandedBuckets: Set<SafetyLevel> = [.safe, .review, .protected_]
+    @State private var groupingMode: ScanGroupingMode = .safety
+    @State private var expandedGroupIDs: Set<String>
     @State private var focusedItemID: String?
 
     public init(
@@ -187,24 +102,29 @@ public struct ScanBucketListView: View {
         self.onCancel = onCancel
         self.onAddToWhitelist = onAddToWhitelist
         self.onViewRule = onViewRule
+        // Start with every safety group expanded so the list doesn't flash
+        // collapsed on mount.
+        let initialGroups = ScanGrouper.group(results, mode: .safety)
+        self._expandedGroupIDs = State(initialValue: Set(initialGroups.map(\.id)))
     }
 
-    private var buckets: [ScanBucket] { ScanBucket.group(results) }
+    private var groups: [ScanGroup] {
+        ScanGrouper.group(results, mode: groupingMode)
+    }
 
     private var reclaimableBytes: Int64 {
         results.filter { selectedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
     }
 
-    /// Flat list of all visible item IDs, respecting expanded/collapsed buckets.
+    /// Flat list of all visible item IDs, respecting expanded/collapsed groups.
     private var navigableItemIDs: [String] {
-        buckets.flatMap { bucket in
-            expandedBuckets.contains(bucket.id) ? bucket.items.map(\.id) : []
+        groups.flatMap { group in
+            expandedGroupIDs.contains(group.id) ? group.items.map(\.id) : []
         }
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Summary bar
             ScanSummaryBar(
                 totalItems: results.count,
                 reclaimableBytes: reclaimableBytes,
@@ -215,12 +135,29 @@ public struct ScanBucketListView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            // Buckets
+            HStack {
+                ScanGroupingPicker(mode: $groupingMode)
+                    .onChange(of: groupingMode) { _, _ in
+                        // Expand all groups after a mode change so users see the new
+                        // structure immediately rather than having to open every one.
+                        expandedGroupIDs = Set(groups.map(\.id))
+                        focusedItemID = nil
+                    }
+                Spacer()
+            }
+            .padding(.horizontal, GargantuaSpacing.space4)
+            .padding(.vertical, GargantuaSpacing.space2)
+            .background(GargantuaColors.surface2)
+
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(buckets) { bucket in
-                            bucketSection(bucket)
+                        ForEach(groups) { group in
+                            groupSection(group)
                         }
                     }
                 }
@@ -237,38 +174,7 @@ public struct ScanBucketListView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            // Action bar
-            HStack {
-                Text("\(selectedIDs.count) selected")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-
-                if !selectedIDs.isEmpty {
-                    Text("(\(AlertItem.formatBytes(reclaimableBytes)))")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                }
-
-                Spacer()
-
-                Button(action: triggerClean) {
-                    Text("Clean Selected")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(
-                            selectedIDs.isEmpty
-                                ? GargantuaColors.protected_.opacity(0.4)
-                                : GargantuaColors.protected_
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-                .disabled(selectedIDs.isEmpty)
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
+            actionBar
         }
         .focusable()
         .onKeyPress(.upArrow) { moveFocus(direction: -1); return .handled }
@@ -276,7 +182,7 @@ public struct ScanBucketListView: View {
         .onKeyPress(.space) { toggleFocusedSelection(); return .handled }
         .onKeyPress(.return) { triggerClean(); return .handled }
         .onKeyPress(.escape) { handleEscape(); return .handled }
-        .onKeyPress(.tab) { jumpToNextBucket(); return .handled }
+        .onKeyPress(.tab) { jumpToNextGroup(); return .handled }
         .onKeyPress(characters: .init(charactersIn: "a")) { keyPress in
             guard keyPress.modifiers == .command else { return .ignored }
             selectAllSafe()
@@ -284,14 +190,48 @@ public struct ScanBucketListView: View {
         }
     }
 
-    @ViewBuilder
-    private func bucketSection(_ bucket: ScanBucket) -> some View {
-        let isExpanded = expandedBuckets.contains(bucket.id)
+    private var actionBar: some View {
+        HStack {
+            Text("\(selectedIDs.count) selected")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
 
-        ScanBucketHeader(
-            bucket: bucket,
+            if !selectedIDs.isEmpty {
+                Text("(\(AlertItem.formatBytes(reclaimableBytes)))")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+
+            Spacer()
+
+            Button(action: triggerClean) {
+                Text("Clean Selected")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .background(
+                        selectedIDs.isEmpty
+                            ? GargantuaColors.protected_.opacity(0.4)
+                            : GargantuaColors.protected_
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedIDs.isEmpty)
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    @ViewBuilder
+    private func groupSection(_ group: ScanGroup) -> some View {
+        let isExpanded = expandedGroupIDs.contains(group.id)
+
+        ScanGroupHeader(
+            group: group,
             isExpanded: isExpanded,
-            onToggle: { toggleBucket(bucket.id) }
+            onToggle: { toggleGroup(group.id) }
         )
 
         Rectangle()
@@ -299,22 +239,8 @@ public struct ScanBucketListView: View {
             .frame(height: 1)
 
         if isExpanded {
-            ForEach(bucket.items) { item in
-                if bucket.id == .protected_ {
-                    // Protected: visible but locked, no interaction
-                    protectedRow(item)
-                        .contextMenu { scanItemContextMenu(item) }
-                } else {
-                    DenseScanItemRow(
-                        item: item,
-                        isSelected: selectedIDs.contains(item.id),
-                        isFocused: focusedItemID == item.id,
-                        onToggleSelection: { toggleSelection(item.id) },
-                        onExplain: onExplain.map { handler in { handler(item) } }
-                    )
-                    .id(item.id)
-                    .contextMenu { scanItemContextMenu(item) }
-                }
+            ForEach(group.items) { item in
+                itemRow(item)
 
                 Rectangle()
                     .fill(GargantuaColors.borderSoft)
@@ -323,12 +249,29 @@ public struct ScanBucketListView: View {
         }
     }
 
+    @ViewBuilder
+    private func itemRow(_ item: ScanResult) -> some View {
+        if item.safety == .protected_ {
+            protectedRow(item)
+                .contextMenu { scanItemContextMenu(item) }
+        } else {
+            DenseScanItemRow(
+                item: item,
+                isSelected: selectedIDs.contains(item.id),
+                isFocused: focusedItemID == item.id,
+                onToggleSelection: { toggleSelection(item.id) },
+                onExplain: onExplain.map { handler in { handler(item) } }
+            )
+            .id(item.id)
+            .contextMenu { scanItemContextMenu(item) }
+        }
+    }
+
     /// Protected items: shown but dimmed, locked indicator, no checkbox.
     private func protectedRow(_ item: ScanResult) -> some View {
         HStack(spacing: GargantuaSpacing.space2) {
             ConfidenceOrbit(confidence: item.confidence, safety: item.safety)
 
-            // Lock icon instead of checkbox
             Image(systemName: "lock.fill")
                 .font(.system(size: 11))
                 .foregroundStyle(GargantuaColors.ink4)
@@ -414,7 +357,6 @@ public struct ScanBucketListView: View {
         guard !items.isEmpty else { return }
 
         guard let current = focusedItemID, let index = items.firstIndex(of: current) else {
-            // No focus yet — focus first (down) or last (up) item
             focusedItemID = direction > 0 ? items.first : items.last
             return
         }
@@ -426,7 +368,6 @@ public struct ScanBucketListView: View {
 
     private func toggleFocusedSelection() {
         guard let id = focusedItemID else { return }
-        // Only toggle if the item is not protected
         let item = results.first { $0.id == id }
         guard item?.safety != .protected_ else { return }
         toggleSelection(id)
@@ -450,34 +391,28 @@ public struct ScanBucketListView: View {
         }
     }
 
-    private func jumpToNextBucket() {
-        let expandedBucketList = buckets.filter { expandedBuckets.contains($0.id) && !$0.items.isEmpty }
-        guard !expandedBucketList.isEmpty else { return }
+    private func jumpToNextGroup() {
+        let expandedList = groups.filter { expandedGroupIDs.contains($0.id) && !$0.items.isEmpty }
+        guard !expandedList.isEmpty else { return }
 
         if let currentID = focusedItemID {
-            // Find which bucket the current item is in
-            let currentBucketIndex = expandedBucketList.firstIndex { bucket in
-                bucket.items.contains { $0.id == currentID }
-            }
-
-            if let idx = currentBucketIndex {
-                // Jump to first item of next bucket (wrap around)
-                let nextIdx = (idx + 1) % expandedBucketList.count
-                focusedItemID = expandedBucketList[nextIdx].items.first?.id
+            let currentIdx = expandedList.firstIndex { $0.items.contains { $0.id == currentID } }
+            if let idx = currentIdx {
+                let nextIdx = (idx + 1) % expandedList.count
+                focusedItemID = expandedList[nextIdx].items.first?.id
             } else {
-                focusedItemID = expandedBucketList.first?.items.first?.id
+                focusedItemID = expandedList.first?.items.first?.id
             }
         } else {
-            // No focus — jump to first item of first expanded bucket
-            focusedItemID = expandedBucketList.first?.items.first?.id
+            focusedItemID = expandedList.first?.items.first?.id
         }
     }
 
-    private func toggleBucket(_ level: SafetyLevel) {
-        if expandedBuckets.contains(level) {
-            expandedBuckets.remove(level)
+    private func toggleGroup(_ id: String) {
+        if expandedGroupIDs.contains(id) {
+            expandedGroupIDs.remove(id)
         } else {
-            expandedBuckets.insert(level)
+            expandedGroupIDs.insert(id)
         }
     }
 
