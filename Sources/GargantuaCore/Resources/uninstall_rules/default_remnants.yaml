@@ -1,0 +1,161 @@
+# Default generic remnant rules applied to every uninstalled app.
+#
+# Path templates support placeholders that the scanner expands against the
+# target AppInfo at discovery time:
+#   {bundleID} — e.g. com.google.Chrome
+#   {appName}  — e.g. "Google Chrome"
+#   {teamID}   — code-signing team identifier, when known
+#
+# Omit `safety` to inherit the category default (see RemnantCategory).
+remnant_rules:
+
+  - id: generic_application_support
+    name: Application Support folder
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/{appName}"
+      - "~/Library/Containers/{bundleID}/Data/Library/Application Support"
+    confidence: 92
+    explanation: App-written support data; regenerated if the app is reinstalled.
+    source:
+      name: "{appName}"
+      verify_signature: false
+    regenerates: true
+    tags: [generic, support]
+
+  - id: generic_caches
+    name: Caches
+    category: caches
+    path_templates:
+      - "~/Library/Caches/{bundleID}"
+      - "~/Library/Caches/{appName}"
+    confidence: 99
+    explanation: Disposable cache data regenerated on next run.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, cache]
+
+  - id: generic_preferences_plist
+    name: Preferences plist
+    category: preferences
+    path_templates:
+      - "~/Library/Preferences/{bundleID}.plist"
+    confidence: 85
+    explanation: User preferences for the app; removing discards customisations.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, preferences]
+
+  - id: generic_containers
+    name: Sandbox container
+    category: containers
+    path_templates:
+      - "~/Library/Containers/{bundleID}"
+    confidence: 80
+    explanation: Sandboxed user data for the app; may include user-created content.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, sandbox]
+
+  - id: generic_group_containers
+    name: Group container
+    category: group_containers
+    path_templates:
+      - "~/Library/Group Containers/*.{bundleID}"
+    confidence: 70
+    explanation: Shared sandbox data; verify no other installed app relies on it.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, sandbox, shared]
+
+  - id: generic_user_launch_agents
+    name: User launch agents
+    category: launch_agents
+    path_templates:
+      - "~/Library/LaunchAgents/{bundleID}.plist"
+      - "~/Library/LaunchAgents/{bundleID}.*.plist"
+    confidence: 90
+    explanation: Per-user launch agents registered by the app.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, launchd]
+
+  - id: generic_system_launch_agents
+    name: System launch agents
+    category: launch_agents
+    path_templates:
+      - "/Library/LaunchAgents/{bundleID}.plist"
+      - "/Library/LaunchAgents/{bundleID}.*.plist"
+    confidence: 85
+    explanation: System-wide launch agents registered by the app installer.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, launchd, system]
+
+  - id: generic_launch_daemons
+    name: Launch daemons
+    category: launch_daemons
+    path_templates:
+      - "/Library/LaunchDaemons/{bundleID}.plist"
+      - "/Library/LaunchDaemons/{bundleID}.*.plist"
+    confidence: 80
+    explanation: System-wide daemons; removing requires administrator privileges.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, launchd, daemon]
+
+  - id: generic_logs
+    name: Logs
+    category: logs
+    path_templates:
+      - "~/Library/Logs/{appName}"
+      - "~/Library/Logs/{bundleID}"
+    confidence: 98
+    explanation: App logs; safe to remove after uninstall.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, logs]
+
+  - id: generic_saved_state
+    name: Saved application state
+    category: saved_state
+    path_templates:
+      - "~/Library/Saved Application State/{bundleID}.savedState"
+    confidence: 99
+    explanation: Window-restore state cached by the app.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, state]
+
+  - id: generic_webkit_storage
+    name: WebKit storage
+    category: web_data
+    path_templates:
+      - "~/Library/WebKit/{bundleID}"
+    confidence: 96
+    explanation: WebKit-backed local storage, IndexedDB, service workers.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, webkit]
+
+  - id: generic_privileged_helpers
+    name: Privileged helpers
+    category: helpers
+    path_templates:
+      - "/Library/PrivilegedHelperTools/{bundleID}*"
+    confidence: 80
+    explanation: Privileged helper tools installed by the app; require admin.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, helpers, privileged]
