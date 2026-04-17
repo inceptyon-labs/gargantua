@@ -289,7 +289,7 @@ public struct NativeScanAdapter: ScanAdapter {
         // user nothing on their own — disambiguate with the parent directory name.
         let repeatedLeafNames: Set<String> = [
             "node_modules", "target", "DerivedData", "build", "dist",
-            ".venv", "venv", ".gradle", "vendor", ".next", ".nuxt"
+            ".venv", "venv", ".gradle", "vendor", ".next", ".nuxt",
         ]
         if repeatedLeafNames.contains(last), !parent.isEmpty {
             return "\(rule.name) — \(parent)"
