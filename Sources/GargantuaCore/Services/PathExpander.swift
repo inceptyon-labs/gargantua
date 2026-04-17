@@ -93,8 +93,9 @@ public struct PathExpander: Sendable {
         }
 
         if state.hitCap {
+            let reason = state.capReason ?? "unknown"
             logger.warning(
-                "PathExpander hit cap (\(state.capReason ?? "unknown", privacy: .public)) while expanding '\(pattern, privacy: .public)' — returning \(results.count) partial results"
+                "PathExpander cap \(reason, privacy: .public) on '\(pattern, privacy: .public)' — partial: \(results.count)"
             )
         }
 
@@ -130,29 +131,58 @@ public struct PathExpander: Sendable {
         let rest = Array(remaining.dropFirst())
 
         if segment == "**" {
-            // Match zero directories: proceed with the remaining segments here.
-            walk(atPath: path, remaining: rest, depth: depth, results: &results, state: state)
-            // Match one or more directories: descend, keep `**` in remaining.
-            let children = enumerateChildren(atPath: path, state: state)
-            for (childPath, _) in children {
-                if state.shouldStop { return }
-                walk(atPath: childPath, remaining: remaining, depth: depth + 1, results: &results, state: state)
-            }
-            return
+            walkRecursive(path: path, remaining: remaining, rest: rest, depth: depth, results: &results, state: state)
+        } else if segment.contains("*") {
+            walkWildcard(path: path, segment: segment, rest: rest, depth: depth, results: &results, state: state)
+        } else {
+            walkLiteral(path: path, segment: segment, rest: rest, depth: depth, results: &results, state: state)
         }
+    }
 
-        if segment.contains("*") {
-            let children = enumerateChildren(atPath: path, state: state)
-            for (childPath, childName) in children {
-                if state.shouldStop { return }
-                if Self.fnmatch(pattern: segment, name: childName) {
-                    walk(atPath: childPath, remaining: rest, depth: depth + 1, results: &results, state: state)
-                }
-            }
-            return
+    // swiftlint:disable:next function_parameter_count
+    private func walkRecursive(
+        path: String,
+        remaining: [String],
+        rest: [String],
+        depth: Int,
+        results: inout Set<String>,
+        state: WalkState
+    ) {
+        // Match zero directories: proceed with the remaining segments here.
+        walk(atPath: path, remaining: rest, depth: depth, results: &results, state: state)
+        // Match one or more directories: descend, keep `**` in remaining.
+        for (childPath, _) in enumerateChildren(atPath: path, state: state) {
+            if state.shouldStop { return }
+            walk(atPath: childPath, remaining: remaining, depth: depth + 1, results: &results, state: state)
         }
+    }
 
-        // Literal segment — no directory read required.
+    // swiftlint:disable:next function_parameter_count
+    private func walkWildcard(
+        path: String,
+        segment: String,
+        rest: [String],
+        depth: Int,
+        results: inout Set<String>,
+        state: WalkState
+    ) {
+        for (childPath, childName) in enumerateChildren(atPath: path, state: state) {
+            if state.shouldStop { return }
+            if Self.fnmatch(pattern: segment, name: childName) {
+                walk(atPath: childPath, remaining: rest, depth: depth + 1, results: &results, state: state)
+            }
+        }
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private func walkLiteral(
+        path: String,
+        segment: String,
+        rest: [String],
+        depth: Int,
+        results: inout Set<String>,
+        state: WalkState
+    ) {
         let child = (path as NSString).appendingPathComponent(segment)
         if FileManager.default.fileExists(atPath: child) {
             walk(atPath: child, remaining: rest, depth: depth + 1, results: &results, state: state)
@@ -233,7 +263,7 @@ private final class WalkState {
     let start: Date = Date()
     var entries: Int = 0
     private(set) var hitCap: Bool = false
-    private(set) var capReason: String? = nil
+    private(set) var capReason: String?
 
     init(limits: PathExpander.Limits) {
         self.limits = limits

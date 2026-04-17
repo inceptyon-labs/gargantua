@@ -117,8 +117,9 @@ public struct NativeScanAdapter: ScanAdapter {
                 let expansion = expander.expand(pattern: pattern, roots: scanRoots)
                 resolvedPaths = expansion.paths
                 if expansion.hitCap {
+                    let reason = expansion.capReason ?? "cap"
                     warnings.append(
-                        "Stopped scanning \(rule.name) pattern '\(pattern)' — \(expansion.capReason ?? "cap") reached. \(resolvedPaths.count) partial results."
+                        "Stopped scanning \(rule.name): \(reason) reached. \(resolvedPaths.count) partial results."
                     )
                 }
             } else {
