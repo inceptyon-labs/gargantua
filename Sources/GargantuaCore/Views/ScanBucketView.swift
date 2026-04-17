@@ -253,20 +253,37 @@ public struct ScanBucketListView: View {
 
     @ViewBuilder
     private func itemRow(_ item: ScanResult) -> some View {
-        if item.safety == .protected_ {
-            protectedRow(item)
-                .contextMenu { scanItemContextMenu(item) }
-        } else {
-            DenseScanItemRow(
-                item: item,
-                isSelected: selectedIDs.contains(item.id),
-                isFocused: focusedItemID == item.id,
-                onToggleSelection: { toggleSelection(item.id) },
-                onExplain: onExplain.map { handler in { handler(item) } }
-            )
-            .id(item.id)
-            .contextMenu { scanItemContextMenu(item) }
+        let selected = selectedIDs.contains(item.id)
+        return Group {
+            if item.safety == .protected_ {
+                protectedRow(item)
+                    .contextMenu { scanItemContextMenu(item) }
+            } else {
+                // Branch on selection so SwiftUI sees two different structural
+                // paths and cannot reuse a stale DenseScanItemRow whose isSelected
+                // field it treated as unchanged. Forces a fresh render on flip.
+                if selected {
+                    DenseScanItemRow(
+                        item: item,
+                        isSelected: true,
+                        isFocused: focusedItemID == item.id,
+                        onToggleSelection: { toggleSelection(item.id) },
+                        onExplain: onExplain.map { handler in { handler(item) } }
+                    )
+                    .contextMenu { scanItemContextMenu(item) }
+                } else {
+                    DenseScanItemRow(
+                        item: item,
+                        isSelected: false,
+                        isFocused: focusedItemID == item.id,
+                        onToggleSelection: { toggleSelection(item.id) },
+                        onExplain: onExplain.map { handler in { handler(item) } }
+                    )
+                    .contextMenu { scanItemContextMenu(item) }
+                }
+            }
         }
+        .id(item.id)
     }
 
     /// Protected items: shown but dimmed, locked indicator, no checkbox.
@@ -317,7 +334,6 @@ public struct ScanBucketListView: View {
                 .padding(1)
                 .opacity(focusedItemID == item.id ? 1 : 0)
         )
-        .id(item.id)
     }
 
     // MARK: - Context Menu
