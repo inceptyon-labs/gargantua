@@ -1,11 +1,11 @@
 ---
 # gargantua-9wxo
 title: 'Task: Define Smart Uninstaller model and remnant rule schema'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-17T18:07:38Z
-updated_at: 2026-04-17T21:23:51Z
+updated_at: 2026-04-17T21:45:44Z
 parent: gargantua-j8a1
 ---
 
@@ -28,3 +28,7 @@ Introduced the data-model foundation for the Smart Uninstaller (Phase 2).
 - `Package.swift` — copies `uninstall_rules` into the bundle.
 
 **Tests** (42 new): Codable round-trips, category defaults, scope matching, parser happy/error paths, bundled-YAML sanity check. Suite: 335/335 passing.
+
+
+
+Merged in b6069c3.
