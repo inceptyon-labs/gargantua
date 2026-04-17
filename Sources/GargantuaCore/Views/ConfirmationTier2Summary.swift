@@ -6,6 +6,7 @@ import SwiftUI
 struct SummaryDialogContent: View {
     let items: [ScanResult]
     let totalSize: Int64
+    @Binding var cleanupMethod: CleanupMethod
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -68,12 +69,19 @@ struct SummaryDialogContent: View {
 
             // Total + buttons
             VStack(spacing: GargantuaSpacing.space3) {
-                TotalLine(itemCount: items.count, totalSize: totalSize)
+                TotalLine(
+                    itemCount: items.count,
+                    totalSize: totalSize,
+                    cleanupMethod: cleanupMethod
+                )
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                CleanupMethodPicker(selection: $cleanupMethod)
 
                 ConfirmationButtons(
                     itemCount: items.count,
                     totalSize: totalSize,
+                    cleanupMethod: cleanupMethod,
                     isEnabled: true,
                     onConfirm: onConfirm,
                     onCancel: onCancel

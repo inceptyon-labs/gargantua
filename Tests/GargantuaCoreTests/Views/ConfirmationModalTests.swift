@@ -128,14 +128,21 @@ struct ConfirmationTotalTests {
         #expect(smallSizeText == "5.3 GB")
 
         let countText = "45 items"
-        let expected = "Clean \(countText) (\(sizeText)) · Move to Trash"
-        #expect(expected == "Clean 45 items (18 GB) · Move to Trash")
+        let expected = cleanupTotalLineText(itemCount: 45, totalSize: 18_200_000_000, method: .trash)
+        #expect(countText == "45 items")
+        #expect(expected == "Clean 45 items (18 GB) - Move to Trash")
+    }
+
+    @Test("Total line reflects permanent delete method")
+    func totalLineDeleteFormat() {
+        let expected = cleanupTotalLineText(itemCount: 1, totalSize: 5_300_000_000, method: .delete)
+        #expect(expected == "Clean 1 item (5.3 GB) - Delete Permanently")
     }
 
     @Test("Singular item count: '1 item' not '1 items'")
     func singularCount() {
-        let countText = 1 == 1 ? "1 item" : "\(1) items"
-        #expect(countText == "1 item")
+        let expected = cleanupTotalLineText(itemCount: 1, totalSize: 100, method: .trash)
+        #expect(expected.contains("Clean 1 item"))
     }
 }
 

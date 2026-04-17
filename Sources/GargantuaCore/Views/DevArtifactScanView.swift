@@ -56,6 +56,7 @@ public struct DevArtifactScanView: View {
     @State private var isScanRequested = false
     @State private var showConfirmation = false
     @State private var isCleaning = false
+    @State private var activeCleanupMethod: CleanupMethod = .trash
     @State private var cleanupResult: CleanupResult?
 
     public init(
@@ -89,7 +90,7 @@ public struct DevArtifactScanView: View {
                 let selected = results.filter { selectedResultIDs.contains($0.id) }
                 ConfirmationModalView(
                     items: selected,
-                    onConfirm: { confirmCleanup(selected) },
+                    onConfirm: { method in confirmCleanup(selected, method: method) },
                     onCancel: { showConfirmation = false }
                 )
                 .transition(.opacity)
@@ -108,7 +109,7 @@ public struct DevArtifactScanView: View {
                 ProgressView()
                     .controlSize(.regular)
 
-                Text("Moving items to Trash…")
+                Text(activeCleanupMethod.progressTitle)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
             }
@@ -386,12 +387,13 @@ public struct DevArtifactScanView: View {
 
     // MARK: - Actions
 
-    private func confirmCleanup(_ items: [ScanResult]) {
+    private func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         showConfirmation = false
         isCleaning = true
+        activeCleanupMethod = method
         Task {
             let engine = CleanupEngine()
-            let result = await engine.clean(items)
+            let result = await engine.clean(items, method: method)
             do {
                 try AuditWriter().record(result: result)
             } catch {
@@ -405,6 +407,7 @@ public struct DevArtifactScanView: View {
     private func dismissSummary() {
         cleanupResult = nil
         scanResults = nil
+        activeCleanupMethod = .trash
     }
 
     private func toggleCategory(_ id: String) {

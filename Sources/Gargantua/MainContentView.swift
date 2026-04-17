@@ -10,6 +10,7 @@ struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var sidebarSelection: String? = "dashboard"
     @State private var persistence: PersistenceController?
+    @State private var deepCleanSession = DeepCleanSessionState()
 
     var body: some View {
         ZStack {
@@ -42,7 +43,7 @@ struct MainContentView: View {
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
                             case "deepClean":
-                                DeepCleanView(profile: .deep)
+                                DeepCleanView(profile: .deep, session: deepCleanSession)
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":

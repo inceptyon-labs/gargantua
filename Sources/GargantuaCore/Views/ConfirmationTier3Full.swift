@@ -6,6 +6,7 @@ import SwiftUI
 struct FullModalContent: View {
     let items: [ScanResult]
     let totalSize: Int64
+    @Binding var cleanupMethod: CleanupMethod
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -68,8 +69,14 @@ struct FullModalContent: View {
 
             // Total + buttons
             VStack(spacing: GargantuaSpacing.space3) {
-                TotalLine(itemCount: items.count, totalSize: totalSize)
+                TotalLine(
+                    itemCount: items.count,
+                    totalSize: totalSize,
+                    cleanupMethod: cleanupMethod
+                )
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                CleanupMethodPicker(selection: $cleanupMethod)
 
                 if !allProtectedAcknowledged {
                     let remaining = protectedItems.count - acknowledgedIDs.count
@@ -82,6 +89,7 @@ struct FullModalContent: View {
                 ConfirmationButtons(
                     itemCount: items.count,
                     totalSize: totalSize,
+                    cleanupMethod: cleanupMethod,
                     isEnabled: allProtectedAcknowledged,
                     onConfirm: onConfirm,
                     onCancel: onCancel

@@ -4,11 +4,16 @@ import Testing
 
 @Suite("CleanupResult")
 struct CleanupResultTests {
-    private func makeItem(id: String = "test", size: Int64 = 1000, safety: SafetyLevel = .safe) -> ScanResult {
+    private func makeItem(
+        id: String = "test",
+        path: String? = nil,
+        size: Int64 = 1000,
+        safety: SafetyLevel = .safe
+    ) -> ScanResult {
         ScanResult(
             id: id,
             name: "Test Item \(id)",
-            path: "/tmp/test/\(id)",
+            path: path ?? "/tmp/test/\(id)",
             size: size,
             safety: safety,
             confidence: 95,
@@ -27,6 +32,7 @@ struct CleanupResultTests {
         ])
 
         #expect(result.totalFreed == 800)
+        #expect(result.cleanupMethod == .trash)
         #expect(result.succeededItems.count == 2)
         #expect(result.failedItems.count == 1)
         #expect(!result.allSucceeded)
@@ -88,5 +94,25 @@ struct CleanupResultTests {
 
         #expect(itemResult.trashURL == nil)
         #expect(itemResult.error == "Permission denied")
+    }
+
+    @Test("delete cleanup method permanently removes existing file")
+    @MainActor
+    func deleteMethodRemovesFile() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gargantua-delete-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let file = dir.appendingPathComponent("delete-me.txt")
+        try Data("delete".utf8).write(to: file)
+
+        let item = makeItem(id: "delete", path: file.path, size: 6)
+        let result = await CleanupEngine().clean([item], method: .delete)
+
+        #expect(result.cleanupMethod == .delete)
+        #expect(result.allSucceeded)
+        #expect(result.totalFreed == 6)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 }

@@ -84,6 +84,7 @@ public final class AuditWriter: Sendable {
             files: succeeded.map { AuditFile(path: $0.item.path, size: $0.item.size) },
             safetyLevel: highestSafety,
             confirmationMethod: tier,
+            cleanupMethod: result.cleanupMethod,
             bytesFreed: result.totalFreed
         )
 

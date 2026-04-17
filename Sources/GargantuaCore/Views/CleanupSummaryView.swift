@@ -7,7 +7,7 @@ import SwiftUI
 /// - Total items cleaned and bytes freed
 /// - Failed items (if partial failure)
 /// - "Open Audit Trail" link
-/// - "Reveal Trash" undo button
+/// - "Reveal Trash" undo button when applicable
 public struct CleanupSummaryView: View {
     let result: CleanupResult
     let onDismiss: () -> Void
@@ -78,7 +78,9 @@ public struct CleanupSummaryView: View {
     private var successSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             let count = result.succeededItems.count
-            Text(count == 1 ? "1 item moved to Trash" : "\(count) items moved to Trash")
+            Text(count == 1
+                 ? "1 item \(result.cleanupMethod.summaryActionText)"
+                 : "\(count) items \(result.cleanupMethod.summaryActionText)")
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink2)
         }
@@ -145,25 +147,27 @@ public struct CleanupSummaryView: View {
 
             Spacer()
 
-            // Undo — reveal Trash
-            Button(action: revealTrash) {
-                HStack(spacing: GargantuaSpacing.space1) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11))
-                    Text("Reveal Trash")
-                        .font(GargantuaFonts.label)
+            if result.cleanupMethod == .trash {
+                // Undo - reveal Trash
+                Button(action: revealTrash) {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                        Text("Reveal Trash")
+                            .font(GargantuaFonts.label)
+                    }
+                    .foregroundStyle(GargantuaColors.ink)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .padding(.horizontal, GargantuaSpacing.space3)
+                    .background(Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                            .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                    )
                 }
-                .foregroundStyle(GargantuaColors.ink)
-                .padding(.vertical, GargantuaSpacing.space2)
-                .padding(.horizontal, GargantuaSpacing.space3)
-                .background(Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                .overlay(
-                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                        .stroke(GargantuaColors.borderEm, lineWidth: 1)
-                )
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             // Done
             Button(action: onDismiss) {

@@ -12,50 +12,52 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "DeepClea
 public struct DeepCleanView: View {
     private let profile: CleanupProfile
     private let adapterOverride: (any ScanAdapter)?
+    private let session: DeepCleanSessionState
 
-    @State private var scanProgress = ScanProgress()
-    @State private var scanResults: [ScanResult]?
-    @State private var scanDuration: TimeInterval = 0
-    @State private var selectedResultIDs: Set<String> = []
-    @State private var isScanning = false
-    @State private var showConfirmation = false
-    @State private var isCleaning = false
-    @State private var cleanupResult: CleanupResult?
-
-    public init(profile: CleanupProfile = .deep, adapter: (any ScanAdapter)? = nil) {
+    public init(
+        profile: CleanupProfile = .deep,
+        adapter: (any ScanAdapter)? = nil,
+        session: DeepCleanSessionState
+    ) {
         self.profile = profile
         self.adapterOverride = adapter
+        self.session = session
+    }
+
+    @MainActor
+    public init(profile: CleanupProfile = .deep, adapter: (any ScanAdapter)? = nil) {
+        self.init(profile: profile, adapter: adapter, session: DeepCleanSessionState())
     }
 
     public var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                if let result = cleanupResult {
+                if let result = session.cleanupResult {
                     CleanupSummaryView(result: result, onDismiss: dismissSummary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let results = scanResults {
+                } else if let results = session.scanResults {
                     resultsView(results)
                 } else {
                     startView
                 }
             }
 
-            if isCleaning {
+            if session.isCleaning {
                 cleaningOverlay
             }
 
-            if showConfirmation, let results = scanResults {
-                let selected = results.filter { selectedResultIDs.contains($0.id) }
+            if session.showConfirmation, let results = session.scanResults {
+                let selected = results.filter { session.selectedResultIDs.contains($0.id) }
                 ConfirmationModalView(
                     items: selected,
-                    onConfirm: { confirmCleanup(selected) },
-                    onCancel: { showConfirmation = false }
+                    onConfirm: { method in confirmCleanup(selected, method: method) },
+                    onCancel: { session.showConfirmation = false }
                 )
                 .transition(.opacity)
             }
         }
         .background(GargantuaColors.void_)
-        .animation(.easeOut(duration: 0.15), value: showConfirmation)
+        .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
     }
 
     private var cleaningOverlay: some View {
@@ -67,7 +69,7 @@ public struct DeepCleanView: View {
                 ProgressView()
                     .controlSize(.regular)
 
-                Text("Moving items to Trash…")
+                Text(session.activeCleanupMethod.progressTitle)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
             }
@@ -127,7 +129,7 @@ public struct DeepCleanView: View {
 
     private var scanFooter: some View {
         Group {
-            if isScanning {
+            if session.isScanning {
                 scanningFooter
             } else {
                 idleFooter
@@ -139,17 +141,17 @@ public struct DeepCleanView: View {
 
     private var scanningFooter: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            ProgressView(value: scanProgress.fractionCompleted)
+            ProgressView(value: session.scanProgress.fractionCompleted)
                 .progressViewStyle(.linear)
-                .animation(.easeInOut(duration: 0.15), value: scanProgress.fractionCompleted)
+                .animation(.easeInOut(duration: 0.15), value: session.scanProgress.fractionCompleted)
 
             HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
-                Text(prettyScanCategory(scanProgress.currentCategory) ?? "Scanning…")
+                Text(prettyScanCategory(session.scanProgress.currentCategory) ?? "Scanning...")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
 
-                if let path = scanProgress.currentPath {
-                    Text("·")
+                if let path = session.scanProgress.currentPath {
+                    Text("-")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                     Text(abbreviateHomePath(path))
@@ -161,16 +163,16 @@ public struct DeepCleanView: View {
 
                 Spacer(minLength: GargantuaSpacing.space2)
 
-                Text("\(scanProgress.itemsFound) items")
+                Text("\(session.scanProgress.itemsFound) items")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
                     .monospacedDigit()
 
-                if scanProgress.reclaimableBytes > 0 {
-                    Text("·")
+                if session.scanProgress.reclaimableBytes > 0 {
+                    Text("-")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
-                    Text(AlertItem.formatBytes(scanProgress.reclaimableBytes))
+                    Text(AlertItem.formatBytes(session.scanProgress.reclaimableBytes))
                         .font(GargantuaFonts.monoData)
                         .foregroundStyle(GargantuaColors.ink2)
                 }
@@ -181,12 +183,12 @@ public struct DeepCleanView: View {
     @ViewBuilder
     private var idleFooter: some View {
         HStack {
-            if scanProgress.errors.isEmpty == false {
+            if session.scanProgress.errors.isEmpty == false {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 12))
                     .foregroundStyle(GargantuaColors.review)
 
-                Text(scanProgress.errors.first ?? "Scan error")
+                Text(session.scanProgress.errors.first ?? "Scan error")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.review)
                     .lineLimit(1)
@@ -214,7 +216,7 @@ public struct DeepCleanView: View {
             // Back header
             HStack {
                 Button {
-                    scanResults = nil
+                    session.clearResults()
                 } label: {
                     HStack(spacing: GargantuaSpacing.space1) {
                         Image(systemName: "chevron.left")
@@ -234,14 +236,20 @@ public struct DeepCleanView: View {
 
                 Spacer()
 
-                // Invisible spacer to balance the back button
-                HStack(spacing: GargantuaSpacing.space1) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Back")
-                        .font(GargantuaFonts.label)
+                Button(action: refreshScan) {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Refresh")
+                            .font(GargantuaFonts.label)
+                    }
+                    .foregroundStyle(GargantuaColors.accent)
                 }
-                .foregroundStyle(.clear)
+                .buttonStyle(.plain)
+                .disabled(session.isScanning)
+                .opacity(session.isScanning ? 0.5 : 1)
+                .accessibilityLabel("Refresh Deep Clean Scan")
+                .frame(minWidth: 78, alignment: .trailing)
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space3)
@@ -253,57 +261,52 @@ public struct DeepCleanView: View {
             // Three-bucket scan results
             ScanBucketListView(
                 results: results,
-                scanDuration: scanDuration,
-                selectedIDs: $selectedResultIDs,
-                onClean: { showConfirmation = true },
-                onCancel: { scanResults = nil }
+                scanDuration: session.scanDuration,
+                selectedIDs: Binding(
+                    get: { session.selectedResultIDs },
+                    set: { session.selectedResultIDs = $0 }
+                ),
+                onClean: { session.showConfirmation = true },
+                onCancel: { session.clearResults() }
             )
         }
     }
 
     // MARK: - Actions
 
-    private func confirmCleanup(_ items: [ScanResult]) {
-        showConfirmation = false
-        isCleaning = true
+    private func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
+        session.beginCleanup(method: method)
         Task {
             let engine = CleanupEngine()
-            let result = await engine.clean(items)
+            let result = await engine.clean(items, method: method)
             do {
                 try AuditWriter().record(result: result)
             } catch {
                 logger.warning("Failed to write audit entry: \(error.localizedDescription)")
             }
-            isCleaning = false
-            cleanupResult = result
+            session.finishCleanup(result: result)
         }
     }
 
     private func dismissSummary() {
-        cleanupResult = nil
-        scanResults = nil
+        session.dismissSummary()
+    }
+
+    private func refreshScan() {
+        startScan()
     }
 
     private func startScan() {
-        isScanning = true
-        scanProgress = ScanProgress()
+        session.prepareForScan()
         Task {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
                     ?? NativeScanAdapter.loadDefaults(profile: profile)
-                let results = try await adapter.scan(progress: scanProgress)
-                scanDuration = Date().timeIntervalSince(start)
-
-                // Pre-select safe items
-                selectedResultIDs = Set(
-                    results.filter { $0.safety == .safe }.map(\.id)
-                )
-                scanResults = results
-                isScanning = false
+                let results = try await adapter.scan(progress: session.scanProgress)
+                session.finishScan(results: results, duration: Date().timeIntervalSince(start))
             } catch {
-                scanProgress.recordError(error.localizedDescription)
-                isScanning = false
+                session.failScan(error.localizedDescription)
             }
         }
     }

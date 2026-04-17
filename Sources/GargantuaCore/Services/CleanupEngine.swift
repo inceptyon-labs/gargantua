@@ -24,6 +24,8 @@ public struct CleanupItemResult: Sendable {
 public struct CleanupResult: Sendable {
     /// Per-item results.
     public let itemResults: [CleanupItemResult]
+    /// How the items were removed.
+    public let cleanupMethod: CleanupMethod
     /// Timestamp when the cleanup completed.
     public let completedAt: Date
 
@@ -43,31 +45,46 @@ public struct CleanupResult: Sendable {
         failedItems.isEmpty
     }
 
-    public init(itemResults: [CleanupItemResult], completedAt: Date = Date()) {
+    public init(
+        itemResults: [CleanupItemResult],
+        cleanupMethod: CleanupMethod = .trash,
+        completedAt: Date = Date()
+    ) {
         self.itemResults = itemResults
+        self.cleanupMethod = cleanupMethod
         self.completedAt = completedAt
     }
 }
 
-/// Moves files to Trash via NSWorkspace and tracks per-item results.
+/// Removes files via the selected cleanup method and tracks per-item results.
 public final class CleanupEngine: Sendable {
     public init() {}
 
-    /// Move the given scan results to Trash.
+    /// Remove the given scan results with the selected cleanup method.
     ///
-    /// Each file is recycled individually so partial failures are tracked.
+    /// Each file is handled individually so partial failures are tracked.
     /// Returns a `CleanupResult` with per-item success/failure details.
     @MainActor
-    public func clean(_ items: [ScanResult]) async -> CleanupResult {
+    public func clean(_ items: [ScanResult], method: CleanupMethod = .trash) async -> CleanupResult {
         var results: [CleanupItemResult] = []
 
         for item in items {
             let url = URL(fileURLWithPath: item.path)
-            let result = await recycleSingle(url: url, item: item)
+            let result = await cleanSingle(url: url, item: item, method: method)
             results.append(result)
         }
 
-        return CleanupResult(itemResults: results)
+        return CleanupResult(itemResults: results, cleanupMethod: method)
+    }
+
+    @MainActor
+    private func cleanSingle(url: URL, item: ScanResult, method: CleanupMethod) async -> CleanupItemResult {
+        switch method {
+        case .trash:
+            await recycleSingle(url: url, item: item)
+        case .delete:
+            deleteSingle(url: url, item: item)
+        }
     }
 
     /// Recycle a single URL via NSWorkspace, returning the Trash URL on success.
@@ -89,6 +106,20 @@ public final class CleanupEngine: Sendable {
                     ))
                 }
             }
+        }
+    }
+
+    /// Permanently delete a single URL.
+    private func deleteSingle(url: URL, item: ScanResult) -> CleanupItemResult {
+        do {
+            try FileManager.default.removeItem(at: url)
+            return CleanupItemResult(item: item, succeeded: true)
+        } catch {
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: error.localizedDescription
+            )
         }
     }
 }

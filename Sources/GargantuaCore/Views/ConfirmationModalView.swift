@@ -5,9 +5,9 @@ import SwiftUI
 /// Determines the required confirmation tier from a set of selected scan results.
 ///
 /// The tier scales with the highest-risk item in the selection:
-/// - All safe → `.singleButton` (skip modal entirely)
-/// - Any review items → `.summaryDialog` (list review items explicitly)
-/// - Any protected items → `.fullModal` (item-by-item acknowledgment)
+/// - All safe -> `.singleButton` (compact confirmation)
+/// - Any review items -> `.summaryDialog` (list review items explicitly)
+/// - Any protected items -> `.fullModal` (item-by-item acknowledgment)
 public func confirmationTier(for items: [ScanResult]) -> ConfirmationTier {
     if items.contains(where: { $0.safety == .protected_ }) { return .fullModal }
     if items.contains(where: { $0.safety == .review }) { return .summaryDialog }
@@ -19,16 +19,17 @@ public func confirmationTier(for items: [ScanResult]) -> ConfirmationTier {
 /// Three-tier confirmation view that scales UX complexity with cleanup risk.
 ///
 /// Routes to the appropriate confirmation variant based on the safety levels
-/// of the selected items. Designed as a modal overlay (`.fullModal`, `.summaryDialog`)
-/// or an inline action (`.singleButton`).
+/// of the selected items.
 public struct ConfirmationModalView: View {
     let items: [ScanResult]
-    let onConfirm: () -> Void
+    let onConfirm: (CleanupMethod) -> Void
     let onCancel: () -> Void
+
+    @State private var cleanupMethod: CleanupMethod = .trash
 
     public init(
         items: [ScanResult],
-        onConfirm: @escaping () -> Void,
+        onConfirm: @escaping (CleanupMethod) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.items = items
@@ -47,17 +48,22 @@ public struct ConfirmationModalView: View {
     public var body: some View {
         switch tier {
         case .singleButton:
-            SingleButtonConfirmation(
-                itemCount: items.count,
-                totalSize: totalSize,
-                onConfirm: onConfirm
-            )
+            ModalChrome(onCancel: onCancel) {
+                SafeCleanupConfirmationContent(
+                    itemCount: items.count,
+                    totalSize: totalSize,
+                    cleanupMethod: $cleanupMethod,
+                    onConfirm: { onConfirm(cleanupMethod) },
+                    onCancel: onCancel
+                )
+            }
         case .summaryDialog:
             ModalChrome(onCancel: onCancel) {
                 SummaryDialogContent(
                     items: items,
                     totalSize: totalSize,
-                    onConfirm: onConfirm,
+                    cleanupMethod: $cleanupMethod,
+                    onConfirm: { onConfirm(cleanupMethod) },
                     onCancel: onCancel
                 )
             }
@@ -66,7 +72,8 @@ public struct ConfirmationModalView: View {
                 FullModalContent(
                     items: items,
                     totalSize: totalSize,
-                    onConfirm: onConfirm,
+                    cleanupMethod: $cleanupMethod,
+                    onConfirm: { onConfirm(cleanupMethod) },
                     onCancel: onCancel
                 )
             }
@@ -76,16 +83,14 @@ public struct ConfirmationModalView: View {
 
 // MARK: - Shared: Total Line
 
-/// Formats the total line: "Clean 45 items (18.2 GB) · Move to Trash"
+/// Formats the total line: "Clean 45 items (18.2 GB) - Move to Trash"
 struct TotalLine: View {
     let itemCount: Int
     let totalSize: Int64
+    let cleanupMethod: CleanupMethod
 
     var body: some View {
-        let countText = itemCount == 1 ? "1 item" : "\(itemCount) items"
-        let sizeText = AlertItem.formatBytes(totalSize)
-
-        Text("Clean \(countText) (\(sizeText)) · Move to Trash")
+        Text(cleanupTotalLineText(itemCount: itemCount, totalSize: totalSize, method: cleanupMethod))
             .font(GargantuaFonts.label)
             .foregroundStyle(GargantuaColors.ink2)
     }
@@ -126,6 +131,7 @@ struct ModalChrome<Content: View>: View {
 struct ConfirmationButtons: View {
     let itemCount: Int
     let totalSize: Int64
+    let cleanupMethod: CleanupMethod
     let isEnabled: Bool
     let onConfirm: () -> Void
     let onCancel: () -> Void
@@ -153,13 +159,13 @@ struct ConfirmationButtons: View {
                 let countText = itemCount == 1 ? "1 item" : "\(itemCount) items"
                 let sizeText = AlertItem.formatBytes(totalSize)
 
-                Text("Clean \(countText) (\(sizeText))")
+                Text("\(cleanupMethod.actionTitle) \(countText) (\(sizeText))")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(
-                        isEnabled ? GargantuaColors.protected_ : GargantuaColors.protected_.opacity(0.4)
+                        isEnabled ? cleanupMethod.accentColor : cleanupMethod.accentColor.opacity(0.4)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             }

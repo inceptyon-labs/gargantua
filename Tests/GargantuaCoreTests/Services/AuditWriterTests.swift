@@ -118,13 +118,14 @@ struct AuditWriterTests {
             ),
         ]
 
-        let result = CleanupResult(itemResults: items)
+        let result = CleanupResult(itemResults: items, cleanupMethod: .delete)
         try writer.record(result: result)
 
         let content = try String(contentsOf: writer.logFile, encoding: .utf8)
         let data = Data(content.trimmingCharacters(in: .whitespacesAndNewlines).utf8)
         let decoded = try JSONDecoder.auditDecoder.decode(AuditEntry.self, from: data)
         #expect(decoded.safetyLevel == .review)
+        #expect(decoded.cleanupMethod == .delete)
         #expect(decoded.bytesFreed == 300)
     }
 
