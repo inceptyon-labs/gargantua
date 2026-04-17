@@ -3,8 +3,8 @@ import Observation
 
 /// Observable progress state for scan operations.
 ///
-/// Shared by all scan adapters (MoClean, MoPurge, future native) to drive
-/// UI progress indicators regardless of which engine is running.
+/// Shared by scan adapters to drive UI progress indicators regardless of
+/// which engine is running.
 ///
 /// Usage:
 /// ```swift

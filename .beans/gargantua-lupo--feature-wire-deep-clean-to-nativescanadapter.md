@@ -5,10 +5,8 @@ status: in-progress
 type: feature
 priority: critical
 created_at: 2026-04-17T01:06:43Z
-updated_at: 2026-04-17T01:14:28Z
+updated_at: 2026-04-17T18:07:52Z
 parent: gargantua-l9dk
-blocked_by:
-    - gargantua-9hhj
 ---
 
 Replace MoCleanAdapter in the Deep Clean view with NativeScanAdapter so Deep Clean produces real results instead of hanging. Covers injection site + adapter construction + profile selection + UI integration.
