@@ -75,21 +75,23 @@ public struct DefaultProcessRunner: ProcessRunner {
 
         try process.run()
 
-        var timedOut = false
+        let timeoutFlag = AtomicFlag()
+        var watchdog: DispatchWorkItem?
         if let timeout, timeout > 0 {
             let deadline = DispatchTime.now() + timeout
-            let watchdog = DispatchWorkItem { [weak process] in
+            let item = DispatchWorkItem { [weak process] in
                 guard let process, process.isRunning else { return }
+                // Record that *we* chose to kill the process — any later
+                // `.uncaughtSignal` termination is our doing, not a crash.
+                timeoutFlag.set()
                 process.terminate()
             }
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline, execute: watchdog)
-            process.waitUntilExit()
-            // If the watchdog fired before exit, the process was killed by us.
-            timedOut = watchdog.isCancelled == false && process.terminationReason == .uncaughtSignal
-            watchdog.cancel()
-        } else {
-            process.waitUntilExit()
+            watchdog = item
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline, execute: item)
         }
+        process.waitUntilExit()
+        watchdog?.cancel()
+        let timedOut = timeoutFlag.isSet
 
         outHandle.readabilityHandler = nil
         errHandle.readabilityHandler = nil
@@ -120,6 +122,21 @@ public struct DefaultProcessRunner: ProcessRunner {
         func snapshot() -> Data {
             lock.lock(); defer { lock.unlock() }
             return data
+        }
+    }
+
+    private final class AtomicFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+
+        func set() {
+            lock.lock(); defer { lock.unlock() }
+            value = true
+        }
+
+        var isSet: Bool {
+            lock.lock(); defer { lock.unlock() }
+            return value
         }
     }
 }

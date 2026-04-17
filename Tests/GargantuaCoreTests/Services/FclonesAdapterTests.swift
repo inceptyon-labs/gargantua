@@ -230,6 +230,45 @@ struct FclonesAdapterTests {
         #expect(progress.errors.contains { $0.contains("parse failed") })
     }
 
+    @Test("empty scanRoots short-circuits: records an error and does not invoke fclones")
+    @MainActor
+    func emptyScanRootsShortCircuits() async throws {
+        let runner = StubRunner()
+        let progress = ScanProgress()
+        let adapter = FclonesAdapter(
+            binary: URL(fileURLWithPath: "/bin/fclones"),
+            scanRoots: [],
+            runner: runner
+        )
+
+        let results = try await adapter.scan(progress: progress)
+
+        #expect(results.isEmpty)
+        #expect(runner.calls.isEmpty, "fclones must not run when no scan roots are supplied")
+        #expect(progress.errors.contains { $0.lowercased().contains("scan roots") })
+    }
+
+    @Test("reclaimable bytes count (N - 1) × fileLen per group, not N × fileLen")
+    @MainActor
+    func reclaimableBytesExcludeOneCopyPerGroup() async throws {
+        let json = Self.reportJSON(groups: [
+            GroupFixture(len: 1000, hash: "h1", paths: ["/a1", "/a2", "/a3"]),  // reclaim 2000
+            GroupFixture(len: 500, hash: "h2", paths: ["/b1", "/b2"]),           // reclaim 500
+        ])
+        let runner = StubRunner(output: ProcessOutput(stdout: json, stderr: "", exitCode: 0))
+        let progress = ScanProgress()
+        let adapter = FclonesAdapter(
+            binary: URL(fileURLWithPath: "/bin/fclones"),
+            scanRoots: [URL(fileURLWithPath: "/root")],
+            runner: runner
+        )
+
+        _ = try await adapter.scan(progress: progress)
+
+        // 2 × 1000 (keep one of three) + 1 × 500 (keep one of two) = 2500
+        #expect(progress.reclaimableBytes == 2500)
+    }
+
     // MARK: - Trust defaults
 
     @Test("builtIn trust defaults map duplicates to review with moderate confidence")

@@ -104,6 +104,14 @@ public struct FclonesAdapter: ScanAdapter {
             reclaimableBytes: 0
         )
 
+        // fclones with no positional path arguments silently scans the current
+        // working directory, which is never what the caller wants.
+        guard !scanRoots.isEmpty else {
+            await progress?.recordError("fclones scan requested without any scan roots")
+            await progress?.finish(itemsFound: 0)
+            return []
+        }
+
         let output: ProcessOutput
         do {
             output = try runner.run(
@@ -138,6 +146,29 @@ public struct FclonesAdapter: ScanAdapter {
             return []
         }
 
+        let mapped = mapResults(groups: groups, category: category)
+        await progress?.update(
+            fractionCompleted: 1,
+            currentCategory: category,
+            itemsFound: mapped.results.count,
+            reclaimableBytes: mapped.reclaimableBytes
+        )
+        let results = mapped.results
+        await progress?.finish(itemsFound: results.count)
+        logger.info(
+            "FclonesAdapter: \(groups.count, privacy: .public) groups, \(results.count, privacy: .public) duplicate files"
+        )
+        return results
+    }
+
+    // MARK: - Private
+
+    private struct MappedResults {
+        let results: [ScanResult]
+        let reclaimableBytes: Int64
+    }
+
+    private func mapResults(groups: [FclonesDuplicateGroup], category: String) -> MappedResults {
         var results: [ScanResult] = []
         var seenPaths: Set<String> = []
         var reclaimableBytes: Int64 = 0
@@ -145,6 +176,7 @@ public struct FclonesAdapter: ScanAdapter {
 
         for group in groups {
             let shortHash = String(group.fileHash.prefix(8))
+            var emittedInGroup = 0
             for path in group.paths where seenPaths.insert(path).inserted {
                 let result = ScanResult(
                     id: "fclones-\(group.id)-\(results.count)",
@@ -162,24 +194,17 @@ public struct FclonesAdapter: ScanAdapter {
                     regenerateCommand: nil
                 )
                 results.append(result)
-                reclaimableBytes += group.fileLen
+                emittedInGroup += 1
+            }
+            // At least one copy must be kept, so reclaimable space for a group
+            // of N identical files is (N - 1) × fileLen, not N × fileLen.
+            if emittedInGroup >= 2 {
+                reclaimableBytes += Int64(emittedInGroup - 1) * group.fileLen
             }
         }
 
-        await progress?.update(
-            fractionCompleted: 1,
-            currentCategory: category,
-            itemsFound: results.count,
-            reclaimableBytes: reclaimableBytes
-        )
-        await progress?.finish(itemsFound: results.count)
-        logger.info(
-            "FclonesAdapter: \(groups.count, privacy: .public) groups, \(results.count, privacy: .public) duplicate files"
-        )
-        return results
+        return MappedResults(results: results, reclaimableBytes: reclaimableBytes)
     }
-
-    // MARK: - Private
 
     private func arguments() -> [String] {
         // `fclones group --format json <roots>` writes a JSON report to stdout.
