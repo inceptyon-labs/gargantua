@@ -17,6 +17,8 @@ public final class DeepCleanSessionState {
     public init() {}
 
     public func clearResults() {
+        scanProgress = ScanProgress()
+        scanDuration = 0
         scanResults = nil
         selectedResultIDs = []
         cleanupResult = nil
@@ -57,6 +59,8 @@ public final class DeepCleanSessionState {
     }
 
     public func dismissSummary() {
+        scanProgress = ScanProgress()
+        scanDuration = 0
         cleanupResult = nil
         scanResults = nil
         selectedResultIDs = []
