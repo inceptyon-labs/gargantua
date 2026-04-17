@@ -13,6 +13,17 @@ struct CleanupProfileTests {
         #expect(dev.categories.contains("browser_cache"))
     }
 
+    @Test("Dev Purge profile is scoped to dev artifact categories only")
+    func devPurgeCategories() {
+        let purge = CleanupProfile.devPurge
+        #expect(purge.categories == ["dev_artifacts", "docker", "homebrew"])
+        #expect(!purge.categories.contains("browser_cache"))
+        #expect(!purge.categories.contains("system_cache"))
+        #expect(!purge.categories.contains("temp_files"))
+        #expect(!purge.categories.contains("trash"))
+        #expect(!purge.categories.contains("installers"))
+    }
+
     @Test("Light profile is conservative")
     func lightCategories() {
         let light = CleanupProfile.light

@@ -54,7 +54,7 @@ struct MainContentView: View {
                                 }
                             case "devPurge":
                                 DevArtifactScanView(
-                                    profile: .developer,
+                                    profile: .devPurge,
                                     scanRoots: resolvedScanRoots
                                 )
                             case "settings":
@@ -84,12 +84,22 @@ struct MainContentView: View {
     /// Resolve the scan roots for Dev Purge from persisted settings, falling back
     /// to auto-detected defaults when no override is stored or persistence isn't
     /// ready yet.
+    ///
+    /// Stored entries are trimmed and tilde-expanded; anything empty, a bare `/`,
+    /// or a bare `~` is dropped to prevent accidentally widening scan scope to
+    /// the whole filesystem or home directory.
     private var resolvedScanRoots: [URL]? {
         guard let persistence,
-              let stored = try? persistence.fetchSettings().scanRoots,
-              !stored.isEmpty
+              let stored = try? persistence.fetchSettings().scanRoots
         else { return nil }
-        return stored.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
+
+        let urls = stored.compactMap { raw -> URL? in
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, trimmed != "/", trimmed != "~" else { return nil }
+            let expanded = (trimmed as NSString).expandingTildeInPath
+            return URL(fileURLWithPath: expanded, isDirectory: true)
+        }
+        return urls.isEmpty ? nil : urls
     }
 
     private var placeholderView: some View {

@@ -28,9 +28,6 @@ extension DevArtifactCategory {
         DevArtifactCategory(id: "xcode", label: "Xcode Derived Data", icon: "hammer"),
         DevArtifactCategory(id: "docker", label: "Docker", icon: "cube"),
         DevArtifactCategory(id: "homebrew", label: "Homebrew", icon: "mug"),
-        DevArtifactCategory(id: "python", label: "Python (.venv)", icon: "chevron.left.forwardslash.chevron.right"),
-        DevArtifactCategory(id: "rust", label: "Rust (target/)", icon: "gearshape.2"),
-        DevArtifactCategory(id: "go", label: "Go (GOPATH/pkg)", icon: "arrow.triangle.branch"),
     ]
 }
 
@@ -217,6 +214,26 @@ public struct DevArtifactScanView: View {
         .buttonStyle(.plain)
     }
 
+    private var scanWarningsBanner: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            ForEach(Array(scanProgress.errors.enumerated()), id: \.offset) { _, message in
+                HStack(spacing: GargantuaSpacing.space1) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(GargantuaColors.review)
+                    Text(message)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.review)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space3)
+        .background(GargantuaColors.surface1)
+    }
+
     private var profileOverrideBanner: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
             HStack(spacing: GargantuaSpacing.space1) {
@@ -343,6 +360,16 @@ public struct DevArtifactScanView: View {
                     .frame(height: 1)
             }
 
+            // Walker-cap warnings from the scan (e.g., "Stopped scanning … time cap reached").
+            // Partial-result scans can otherwise look complete in the bucket view.
+            if !scanProgress.errors.isEmpty {
+                scanWarningsBanner
+
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
+            }
+
             // Three-bucket scan results
             ScanBucketListView(
                 results: results,
@@ -421,7 +448,25 @@ public struct DevArtifactScanView: View {
         }
     }
 
-    private func matchesCategory(result: ScanResult, categoryID: String) -> Bool {
+    private func updateEstimatedSizes(from results: [ScanResult]) {
+        for index in categories.indices {
+            let categoryID = categories[index].id
+            let matching = results.filter { Self.matchesCategory(result: $0, categoryID: categoryID) }
+            if !matching.isEmpty {
+                categories[index].estimatedSize = matching.reduce(0) { $0 + $1.size }
+            }
+        }
+    }
+}
+
+// MARK: - Category Matching
+
+extension DevArtifactScanView {
+    fileprivate func matchesCategory(result: ScanResult, categoryID: String) -> Bool {
+        Self.matchesCategory(result: result, categoryID: categoryID)
+    }
+
+    fileprivate static func matchesCategory(result: ScanResult, categoryID: String) -> Bool {
         switch categoryID {
         case "node_modules":
             return result.category == "dev_artifacts"
@@ -433,31 +478,12 @@ public struct DevArtifactScanView: View {
             return result.category == "docker"
         case "homebrew":
             return result.category == "homebrew"
-        case "python":
-            return result.category == "dev_artifacts"
-                && (result.path.contains(".venv") || result.path.contains("__pycache__"))
-        case "rust":
-            return result.category == "dev_artifacts"
-                && result.path.contains("/target/")
-        case "go":
-            return result.category == "dev_artifacts"
-                && (result.path.contains("GOPATH") || result.path.contains("/go/pkg"))
         default:
             return false
         }
     }
 
-    private func updateEstimatedSizes(from results: [ScanResult]) {
-        for index in categories.indices {
-            let categoryID = categories[index].id
-            let matching = results.filter { matchesCategory(result: $0, categoryID: categoryID) }
-            if !matching.isEmpty {
-                categories[index].estimatedSize = matching.reduce(0) { $0 + $1.size }
-            }
-        }
-    }
-
-    private func safetyColor(_ level: SafetyLevel) -> Color {
+    fileprivate func safetyColor(_ level: SafetyLevel) -> Color {
         switch level {
         case .safe: GargantuaColors.safe
         case .review: GargantuaColors.review
