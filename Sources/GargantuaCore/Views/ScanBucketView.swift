@@ -177,6 +177,7 @@ public struct ScanBucketListView: View {
             actionBar
         }
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.upArrow) { moveFocus(direction: -1); return .handled }
         .onKeyPress(.downArrow) { moveFocus(direction: 1); return .handled }
         .onKeyPress(.space) { toggleFocusedSelection(); return .handled }
