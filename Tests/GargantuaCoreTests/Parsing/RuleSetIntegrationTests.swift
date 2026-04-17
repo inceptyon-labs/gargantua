@@ -30,9 +30,9 @@ struct RuleSetIntegrationTests {
     func expectedFileCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
         // browser: chrome, safari, firefox, arc
-        // developer: xcode, node, docker, homebrew
+        // developer: xcode, node, docker, homebrew, python, rust, go
         // system: caches, logs, temp, trash
-        #expect(result.filesLoaded == 12)
+        #expect(result.filesLoaded == 15)
     }
 
     // MARK: - Rule Completeness
@@ -107,7 +107,7 @@ struct RuleSetIntegrationTests {
         #expect(browserRuleIDs.contains(where: { $0.hasPrefix("arc") }), "Missing Arc rules")
     }
 
-    @Test("Developer rules cover Xcode, node_modules, Docker, Homebrew")
+    @Test("Developer rules cover Xcode, node_modules, Docker, Homebrew, Python, Rust, Go")
     func developerCoverage() throws {
         let result = try loader.loadRules(from: rulesDirectory)
         let ids = result.rules.map(\.id)
@@ -116,6 +116,9 @@ struct RuleSetIntegrationTests {
         #expect(ids.contains(where: { $0.hasPrefix("node") || $0 == "npm_cache" }), "Missing Node.js rules")
         #expect(ids.contains(where: { $0.hasPrefix("docker") }), "Missing Docker rules")
         #expect(ids.contains(where: { $0.hasPrefix("homebrew") }), "Missing Homebrew rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("python") }), "Missing Python rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("rust") }), "Missing Rust rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("go") }), "Missing Go rules")
     }
 
     @Test("System rules cover caches, logs, temp, trash")

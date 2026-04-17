@@ -28,6 +28,9 @@ extension DevArtifactCategory {
         DevArtifactCategory(id: "xcode", label: "Xcode Derived Data", icon: "hammer"),
         DevArtifactCategory(id: "docker", label: "Docker", icon: "cube"),
         DevArtifactCategory(id: "homebrew", label: "Homebrew", icon: "mug"),
+        DevArtifactCategory(id: "python", label: "Python", icon: "chevron.left.forwardslash.chevron.right"),
+        DevArtifactCategory(id: "rust", label: "Rust / Cargo", icon: "gearshape.2"),
+        DevArtifactCategory(id: "go", label: "Go", icon: "shippingbox.and.arrow.backward"),
     ]
 }
 
@@ -478,6 +481,12 @@ extension DevArtifactScanView {
             return result.category == "docker"
         case "homebrew":
             return result.category == "homebrew"
+        case "python":
+            return result.tags.contains("python")
+        case "rust":
+            return result.tags.contains("rust")
+        case "go":
+            return result.tags.contains("go")
         default:
             return false
         }

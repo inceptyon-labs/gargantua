@@ -1,0 +1,187 @@
+rules:
+  - id: python_venv
+    name: Python Virtual Environments
+    paths:
+      - "**/.venv"
+      - "**/venv"
+    safety: review
+    confidence: 80
+    explanation: "Python virtual environment. Restored with 'python -m venv' + 'pip install -r requirements.txt'."
+    source:
+      name: Python
+    regenerates: true
+    regenerate_command: "python -m venv .venv && pip install -r requirements.txt"
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - dependencies
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 95
+        explanation_suffix: "No project activity in 30+ days. Restore with venv + pip install."
+        profiles:
+          - developer
+      - condition: "age > 7d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "Inactive for over a week."
+        profiles:
+          - deep
+
+  - id: python_pycache
+    name: Python __pycache__
+    paths:
+      - "**/__pycache__"
+    safety: safe
+    confidence: 98
+    explanation: "Compiled Python bytecode. Regenerated automatically on next import."
+    source:
+      name: Python
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: python_pytest_cache
+    name: pytest Cache
+    paths:
+      - "**/.pytest_cache"
+    safety: safe
+    confidence: 97
+    explanation: "pytest test cache. Regenerated on next run."
+    source:
+      name: pytest
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: python_mypy_cache
+    name: mypy Cache
+    paths:
+      - "**/.mypy_cache"
+    safety: safe
+    confidence: 97
+    explanation: "mypy incremental type-check cache. Regenerated on next run."
+    source:
+      name: mypy
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: python_ruff_cache
+    name: Ruff Cache
+    paths:
+      - "**/.ruff_cache"
+    safety: safe
+    confidence: 98
+    explanation: "Ruff linter cache. Regenerated on next run."
+    source:
+      name: Ruff
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: python_tox
+    name: tox Environments
+    paths:
+      - "**/.tox"
+    safety: review
+    confidence: 85
+    explanation: "tox test-matrix environments. Recreated on next 'tox' run, which takes time."
+    source:
+      name: tox
+    regenerates: true
+    regenerate_command: "tox"
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - build_cache
+    safety_overrides:
+      - condition: "age > 14d"
+        safety: safe
+        confidence: 92
+        explanation_suffix: "No tox activity in 2+ weeks."
+        profiles:
+          - developer
+          - deep
+
+  - id: pip_cache
+    name: pip Cache
+    paths:
+      - "~/Library/Caches/pip"
+    safety: safe
+    confidence: 98
+    explanation: "pip wheel cache. Re-downloaded from PyPI as needed."
+    source:
+      name: pip
+    regenerates: true
+    regenerate_command: "pip cache purge"
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: pipx_cache
+    name: pipx Cache
+    paths:
+      - "~/.cache/pipx"
+    safety: safe
+    confidence: 97
+    explanation: "pipx download/build cache. Rebuilt on next install."
+    source:
+      name: pipx
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: poetry_cache
+    name: Poetry Cache
+    paths:
+      - "~/Library/Caches/pypoetry"
+    safety: safe
+    confidence: 97
+    explanation: "Poetry dependency cache. Re-downloaded as needed."
+    source:
+      name: Poetry
+    regenerates: true
+    regenerate_command: "poetry cache clear --all ."
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
+
+  - id: uv_cache
+    name: uv Cache
+    paths:
+      - "~/Library/Caches/uv"
+    safety: safe
+    confidence: 97
+    explanation: "uv package installer cache. Re-downloaded as needed."
+    source:
+      name: uv
+    regenerates: true
+    regenerate_command: "uv cache clean"
+    category: dev_artifacts
+    tags:
+      - developer
+      - python
+      - cache
