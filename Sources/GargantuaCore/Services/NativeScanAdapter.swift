@@ -194,13 +194,7 @@ public struct NativeScanAdapter: ScanAdapter {
         let attrs = try? fileManager.attributesOfItem(atPath: path)
         let lastAccessed = (attrs?[.modificationDate] as? Date)
 
-        // Use child directory name for display when enumerated from a parent.
-        let displayName: String
-        if rule.paths.contains(where: { expandTilde($0) == path }) {
-            displayName = rule.name
-        } else {
-            displayName = "\(rule.name) — \(URL(fileURLWithPath: path).lastPathComponent)"
-        }
+        let displayName = Self.displayName(forRule: rule, path: path)
 
         let base = ScanResult(
             id: "\(rule.id)-\(counter)",
@@ -240,6 +234,35 @@ public struct NativeScanAdapter: ScanAdapter {
     private static func expandTilde(_ path: String) -> String {
         guard path.hasPrefix("~") else { return path }
         return (path as NSString).expandingTildeInPath
+    }
+
+    /// Pick a human-readable display name for a result.
+    ///
+    /// - If `path` matches one of the rule's declared paths verbatim, use the rule
+    ///   name alone (e.g. "User Library Caches").
+    /// - If `path` is a child of a declared path (enumerated via `exclude` filtering),
+    ///   append the child's own name (e.g. "User Library Caches — com.apple.Safari").
+    /// - For glob-expanded paths where the matched segment is a common repeated name
+    ///   like `node_modules`, append the parent directory's name instead so each
+    ///   match is distinguishable (e.g. "Node Modules — my-project").
+    private static func displayName(forRule rule: ScanRule, path: String) -> String {
+        if rule.paths.contains(where: { expandTilde($0) == path }) {
+            return rule.name
+        }
+        let url = URL(fileURLWithPath: path)
+        let last = url.lastPathComponent
+        let parent = url.deletingLastPathComponent().lastPathComponent
+
+        // Repeated leaf names (node_modules, target, DerivedData, .venv, etc.) tell the
+        // user nothing on their own — disambiguate with the parent directory name.
+        let repeatedLeafNames: Set<String> = [
+            "node_modules", "target", "DerivedData", "build", "dist",
+            ".venv", "venv", ".gradle", "vendor", ".next", ".nuxt"
+        ]
+        if repeatedLeafNames.contains(last), !parent.isEmpty {
+            return "\(rule.name) — \(parent)"
+        }
+        return "\(rule.name) — \(last)"
     }
 
     private static func isExcluded(child: URL, excludes: [String]) -> Bool {
