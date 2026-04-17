@@ -1,11 +1,11 @@
 ---
 # gargantua-4xkj
 title: 'Task: NSWorkspace/LaunchServices app scanner'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-17T21:49:38Z
-updated_at: 2026-04-17T21:49:38Z
+updated_at: 2026-04-17T22:41:08Z
 parent: gargantua-j8a1
 ---
 

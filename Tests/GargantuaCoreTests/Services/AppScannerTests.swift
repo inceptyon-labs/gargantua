@@ -119,7 +119,11 @@ struct AppScannerTests {
 
         let xcode = try #require(apps.first(where: { $0.bundleID == "com.apple.dt.Xcode" }))
         #expect(xcode.isRunning == false)
-        #expect(xcode.isSystemApp == true)  // via Apple team identifier
+        // Xcode lives in /Applications, not /System/, so it is not a system app even
+        // though it is Apple-signed. This matches user expectations — Xcode is
+        // user-installable and user-removable.
+        #expect(xcode.isSystemApp == false)
+        #expect(xcode.teamIdentifier == "Apple Software")
         #expect(xcode.signatureValid == true)
     }
 
@@ -197,23 +201,31 @@ struct AppScannerTests {
         #expect(apps.first?.isSystemApp == true)
     }
 
-    @Test("Apple team identifier marks bundle as system app even outside /System/")
-    func appleTeamIdentifierDetection() async {
-        let url = URL(fileURLWithPath: "/Applications/Xcode.app")
+    @Test("Apple-signed apps installed in /Applications are NOT flagged isSystemApp")
+    func appleSignedUserAppNotSystem() async {
+        // Keynote ships in /Applications signed by Apple. It is user-installable
+        // and must remain uninstallable — do not mark isSystemApp.
+        let url = URL(fileURLWithPath: "/Applications/Keynote.app")
         let scanner = DefaultAppScanner(
             enumerator: StubEnumerator(urls: [url]),
             reader: StubReader(
-                metadata: [url.path: Self.meta(bundleID: "com.apple.dt.Xcode", name: "Xcode", path: url.path)],
+                metadata: [
+                    url.path: Self.meta(
+                        bundleID: "com.apple.iWork.Keynote",
+                        name: "Keynote",
+                        path: url.path
+                    ),
+                ],
                 sizes: [:]
             ),
             runningChecker: StubRunningChecker(running: []),
             signatureVerifier: StubVerifier(infos: [
-                url.path: CodeSignatureInfo(valid: true, teamIdentifier: "Software Signing")
+                url.path: CodeSignatureInfo(valid: true, teamIdentifier: "APPLECOMPUTER")
             ])
         )
 
         let apps = await scanner.scanApps()
-        #expect(apps.first?.isSystemApp == true)
+        #expect(apps.first?.isSystemApp == false)
     }
 
     // MARK: - Dedup

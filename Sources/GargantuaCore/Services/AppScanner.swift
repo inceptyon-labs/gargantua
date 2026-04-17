@@ -67,8 +67,11 @@ public struct DefaultAppScanner: AppScanning {
 
             let signature = signatureVerifier.verify(bundleURL: bundleURL)
             let isRunning = runningChecker.isRunning(bundleID: metadata.bundleID)
+            // `isSystemApp` is path-based only. Apple-distributed apps that live in
+            // /Applications (Keynote, Pages, etc.) are user-installable/removable and
+            // must not be flagged as system apps — doing so would let a naive caller
+            // block their uninstallation even though the user can freely remove them.
             let isSystemApp = systemAppPrefixes.contains { bundleURL.path.hasPrefix($0) }
-                || (signature.teamIdentifier.map(Self.isAppleTeamIdentifier) ?? false)
             let sizeOnDisk = reader.sizeOnDisk(bundleURL: bundleURL)
 
             let info = AppInfo(
@@ -97,11 +100,5 @@ public struct DefaultAppScanner: AppScanning {
         }
 
         return order.compactMap { byBundleID[$0] }
-    }
-
-    /// Apple uses reserved team identifiers for its own signing; the public
-    /// code signature reports them as such on system binaries.
-    private static func isAppleTeamIdentifier(_ teamID: String) -> Bool {
-        teamID == "Software Signing" || teamID == "Apple Software"
     }
 }

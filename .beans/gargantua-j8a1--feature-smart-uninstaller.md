@@ -1,11 +1,11 @@
 ---
 # gargantua-j8a1
 title: 'Feature: Smart Uninstaller'
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-04-17T18:07:38Z
-updated_at: 2026-04-17T18:07:38Z
+updated_at: 2026-04-17T22:41:09Z
 parent: gargantua-qe4a
 ---
 

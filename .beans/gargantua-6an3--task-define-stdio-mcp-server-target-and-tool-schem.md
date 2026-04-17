@@ -1,11 +1,11 @@
 ---
 # gargantua-6an3
 title: 'Task: Define stdio MCP server target and tool schemas'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-17T18:07:39Z
-updated_at: 2026-04-17T22:01:15Z
+updated_at: 2026-04-17T22:01:32Z
 parent: gargantua-2h06
 ---
 
