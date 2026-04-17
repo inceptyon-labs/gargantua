@@ -124,10 +124,34 @@ public struct DiskExplorerView: View {
     private func loadDirectory(_ path: String) async {
         isLoading = true
         expandedItems = [:]
-        let scanned = await DirectorySizeScanner.scanChildren(of: path)
-        items = scanned
-        maxSize = scanned.first?.size ?? 1
-        isLoading = false
+        items = []
+        maxSize = 1
+
+        for await item in DirectorySizeScanner.streamChildren(of: path) {
+            if Task.isCancelled { return }
+            upsert(item)
+        }
+
+        if !Task.isCancelled {
+            isLoading = false
+        }
+    }
+
+    /// Insert or replace `item` (keyed by `item.id`), then keep `items` sorted
+    /// largest-first with permission-denied rows pushed to the bottom.
+    private func upsert(_ item: DirectoryItem) {
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items[index] = item
+        } else {
+            items.append(item)
+        }
+        items.sort { lhs, rhs in
+            if lhs.isPermissionDenied != rhs.isPermissionDenied {
+                return !lhs.isPermissionDenied
+            }
+            return lhs.size > rhs.size
+        }
+        maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
     }
 
     private func toggleExpand(_ item: DirectoryItem) async {
@@ -140,7 +164,7 @@ public struct DiskExplorerView: View {
     }
 
     private func drillDown(into item: DirectoryItem) {
-        guard !item.isPermissionDenied, !item.path.hasSuffix("/(files)") else { return }
+        guard !item.isPermissionDenied, !item.isFilesAggregate else { return }
         pathStack.append((path: item.path, name: item.name))
     }
 
@@ -169,7 +193,7 @@ private struct DirectoryRowView: View {
     }
 
     private var isFilesAggregate: Bool {
-        item.path.hasSuffix("/(files)")
+        item.isFilesAggregate
     }
 
     var body: some View {
@@ -211,14 +235,22 @@ private struct DirectoryRowView: View {
 
                 // Size bar + size label
                 HStack(spacing: GargantuaSpacing.space3) {
-                    if !item.isPermissionDenied {
+                    if !item.isPermissionDenied && !item.isSizing {
                         sizeBar
+                    } else if item.isSizing {
+                        Color.clear.frame(width: 100, height: 6)
                     }
 
-                    Text(item.isPermissionDenied ? "—" : AlertItem.formatBytes(item.size))
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(item.isPermissionDenied ? GargantuaColors.ink4 : GargantuaColors.ink)
-                        .frame(width: 70, alignment: .trailing)
+                    if item.isSizing {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .frame(width: 70, alignment: .trailing)
+                    } else {
+                        Text(item.isPermissionDenied ? "—" : AlertItem.formatBytes(item.size))
+                            .font(GargantuaFonts.monoData)
+                            .foregroundStyle(item.isPermissionDenied ? GargantuaColors.ink4 : GargantuaColors.ink)
+                            .frame(width: 70, alignment: .trailing)
+                    }
                 }
             }
             .padding(.horizontal, GargantuaSpacing.space4)
