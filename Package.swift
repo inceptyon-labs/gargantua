@@ -23,7 +23,8 @@ let package = Package(
         .target(
             name: "GargantuaCore",
             dependencies: ["Yams"],
-            path: "Sources/GargantuaCore"
+            path: "Sources/GargantuaCore",
+            resources: [.copy("Resources/cleanup_rules")]
         ),
         .testTarget(
             name: "GargantuaCoreTests",

@@ -9,44 +9,36 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "SystemMe
 
 /// Collects live system metrics (CPU, memory, disk, thermal) using native macOS APIs.
 ///
-/// Falls back to `mo status` via `MoleRunner` when native APIs are unavailable
-/// (e.g., sandboxed environments that restrict Mach host ports).
-///
 /// Usage:
 /// ```swift
 /// let collector = SystemMetricCollector()
-/// let metrics = try await collector.collect()
+/// let metrics = await collector.collect()
 /// print("Health: \(metrics.healthScore)")
 /// ```
 public struct SystemMetricCollector: Sendable {
-    private let runner: MoleRunner?
-
-    /// Create a collector.
-    ///
-    /// - Parameter runner: Optional `MoleRunner` for `mo status` fallback.
-    ///   Pass `nil` to use native APIs only (no fallback on failure).
-    public init(runner: MoleRunner? = nil) {
-        self.runner = runner
-    }
+    public init() {}
 
     /// Collect a snapshot of current system metrics.
-    public func collect() async throws -> SystemMetrics {
-        async let cpu = collectCPU()
-        async let mem = collectMemory()
-        async let disk = collectDisk()
+    ///
+    /// All underlying queries (Mach host APIs, FileManager) are fast and
+    /// synchronous; kept `async` so callers remain unchanged and so future
+    /// metric sources (e.g. disk-backed history) can be added without a
+    /// breaking API change.
+    public func collect() async -> SystemMetrics {
+        let cpu = collectCPU()
+        let mem = collectMemory()
+        let disk = collectDisk()
         let thermal = collectThermal()
 
-        let (cpuResult, memResult, diskResult) = try await (cpu, mem, disk)
-
         return SystemMetrics(
-            cpuUsage: cpuResult,
-            memoryPressure: memResult.pressure,
-            memoryTotal: memResult.total,
-            memoryUsed: memResult.used,
-            diskUsage: diskResult.usage,
-            diskTotal: diskResult.total,
-            diskUsed: diskResult.used,
-            diskFree: diskResult.free,
+            cpuUsage: cpu,
+            memoryPressure: mem.pressure,
+            memoryTotal: mem.total,
+            memoryUsed: mem.used,
+            diskUsage: disk.usage,
+            diskTotal: disk.total,
+            diskUsed: disk.used,
+            diskFree: disk.free,
             thermalLevel: thermal
         )
     }
@@ -56,7 +48,7 @@ public struct SystemMetricCollector: Sendable {
     /// CPU usage via Mach `host_processor_info`.
     ///
     /// Returns aggregate usage across all cores as a 0.0–1.0 fraction.
-    private func collectCPU() async throws -> Double {
+    private func collectCPU() -> Double {
         #if canImport(Darwin)
         var numCPUs: natural_t = 0
         var cpuInfo: processor_info_array_t?
@@ -71,8 +63,8 @@ public struct SystemMetricCollector: Sendable {
         )
 
         guard result == KERN_SUCCESS, let info = cpuInfo else {
-            logger.warning("host_processor_info failed (\(result)), falling back to mo status")
-            return try await cpuFromMoStatus()
+            logger.warning("host_processor_info failed (\(result))")
+            return 0
         }
 
         defer {
@@ -103,7 +95,7 @@ public struct SystemMetricCollector: Sendable {
         logger.debug("CPU usage: \(String(format: "%.1f", usage * 100))%")
         return usage
         #else
-        return try await cpuFromMoStatus()
+        return 0
         #endif
     }
 
@@ -116,7 +108,7 @@ public struct SystemMetricCollector: Sendable {
     }
 
     /// Memory usage via Mach `host_statistics64`.
-    private func collectMemory() async throws -> MemoryInfo {
+    private func collectMemory() -> MemoryInfo {
         #if canImport(Darwin)
         let total = UInt64(ProcessInfo.processInfo.physicalMemory)
 
@@ -132,8 +124,8 @@ public struct SystemMetricCollector: Sendable {
         }
 
         guard result == KERN_SUCCESS else {
-            logger.warning("host_statistics64 failed (\(result)), falling back to mo status")
-            return try await memoryFromMoStatus()
+            logger.warning("host_statistics64 failed (\(result))")
+            return MemoryInfo(pressure: 0, total: total, used: 0)
         }
 
         let pageSize = UInt64(vm_kernel_page_size)
@@ -147,7 +139,7 @@ public struct SystemMetricCollector: Sendable {
 
         return MemoryInfo(pressure: pressure, total: total, used: used)
         #else
-        return try await memoryFromMoStatus()
+        return MemoryInfo(pressure: 0, total: 0, used: 0)
         #endif
     }
 
@@ -161,7 +153,7 @@ public struct SystemMetricCollector: Sendable {
     }
 
     /// Disk usage via `FileManager.attributesOfFileSystem`.
-    private func collectDisk() async throws -> DiskInfo {
+    private func collectDisk() -> DiskInfo {
         do {
             let attrs = try FileManager.default.attributesOfFileSystem(forPath: "/")
             let total = (attrs[.systemSize] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
@@ -173,7 +165,7 @@ public struct SystemMetricCollector: Sendable {
             return DiskInfo(usage: usage, total: total, used: used, free: free)
         } catch {
             logger.warning("FileManager disk query failed: \(error.localizedDescription)")
-            return try await diskFromMoStatus()
+            return DiskInfo(usage: 0, total: 0, used: 0, free: 0)
         }
     }
 
@@ -185,64 +177,5 @@ public struct SystemMetricCollector: Sendable {
         let level = ThermalLevel(from: state)
         logger.debug("Thermal: \(level.rawValue)")
         return level
-    }
-
-    // MARK: - mo status Fallbacks
-
-    private func cpuFromMoStatus() async throws -> Double {
-        let json = try await runMoStatus()
-        guard let cpu = json["cpu_usage"] as? Double else {
-            logger.error("mo status missing cpu_usage field")
-            return 0
-        }
-        // mo status returns percentage (0-100), convert to fraction
-        return cpu / 100.0
-    }
-
-    private func memoryFromMoStatus() async throws -> MemoryInfo {
-        let json = try await runMoStatus()
-        let total = (json["memory_total"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
-        let used = (json["memory_used"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
-        let pressure = total > 0 ? Double(used) / Double(total) : 0
-        return MemoryInfo(pressure: pressure, total: total, used: used)
-    }
-
-    private func diskFromMoStatus() async throws -> DiskInfo {
-        let json = try await runMoStatus()
-        let total = (json["disk_total"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
-        let free = (json["disk_free"] as? NSNumber).map { UInt64($0.uint64Value) } ?? 0
-        let used = total > free ? total - free : 0
-        let usage = total > 0 ? Double(used) / Double(total) : 0
-        return DiskInfo(usage: usage, total: total, used: used, free: free)
-    }
-
-    /// Run `mo status --json` and parse the response.
-    private func runMoStatus() async throws -> [String: Any] {
-        guard let runner else {
-            throw MetricCollectionError.noFallbackAvailable
-        }
-
-        let result = try await runner.run(command: "status", arguments: ["--json"])
-        guard let json = try JSONSerialization.jsonObject(with: result.stdout) as? [String: Any] else {
-            throw MetricCollectionError.invalidMoStatusOutput
-        }
-        return json
-    }
-}
-
-// MARK: - Errors
-
-/// Errors specific to metric collection.
-public enum MetricCollectionError: Error, LocalizedError, Sendable {
-    case noFallbackAvailable
-    case invalidMoStatusOutput
-
-    public var errorDescription: String? {
-        switch self {
-        case .noFallbackAvailable:
-            "Native metric collection failed and no MoleRunner fallback is configured"
-        case .invalidMoStatusOutput:
-            "Failed to parse mo status output as JSON"
-        }
     }
 }

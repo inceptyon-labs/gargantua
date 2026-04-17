@@ -1,6 +1,6 @@
 import Foundation
 
-/// Abstraction over scan backends (native YAML rules, Mole subprocess, future fclones/czkawka).
+/// Abstraction over scan backends (native YAML rules, future fclones/czkawka).
 ///
 /// Views depend on `any ScanAdapter` so the underlying engine can be swapped
 /// without touching the UI. Matches PRD §8.2 "Scan Engine (Abstraction)".
@@ -17,7 +17,7 @@ public enum ScanAdapterError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .rulesDirectoryNotFound:
-            "cleanup_rules directory not found. Set GARGANTUA_RULES_DIR or run from the project root."
+            "cleanup_rules resource missing from GargantuaCore bundle. Set GARGANTUA_RULES_DIR to override."
         }
     }
 }

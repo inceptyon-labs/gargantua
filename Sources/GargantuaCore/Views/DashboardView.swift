@@ -164,15 +164,11 @@ public struct DashboardView: View {
     }
 
     private func loadMetrics() async {
-        do {
-            let metrics = try await collector.collect()
-            healthScore = metrics.healthScore
-            diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
-            diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
-            diskUsage = metrics.diskUsage
-        } catch {
-            // Fallback: show zeros, not an error state
-        }
+        let metrics = await collector.collect()
+        healthScore = metrics.healthScore
+        diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
+        diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
+        diskUsage = metrics.diskUsage
         isLoading = false
     }
 }

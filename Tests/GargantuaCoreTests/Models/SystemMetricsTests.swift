@@ -145,13 +145,3 @@ struct SystemMetricsTests {
     }
 }
 
-// MARK: - MetricCollectionError
-
-@Suite("MetricCollectionError")
-struct MetricCollectionErrorTests {
-    @Test("Error descriptions are non-empty")
-    func errorDescriptions() {
-        #expect(MetricCollectionError.noFallbackAvailable.errorDescription != nil)
-        #expect(MetricCollectionError.invalidMoStatusOutput.errorDescription != nil)
-    }
-}

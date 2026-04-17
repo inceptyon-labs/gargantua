@@ -276,8 +276,10 @@ public struct RuleViewerView: View {
     private func loadRules() async {
         isLoading = true
         let loader = RuleLoader()
-        let rulesURL = Bundle.main.resourceURL?.appendingPathComponent("cleanup_rules")
-            ?? URL(fileURLWithPath: "cleanup_rules")
+        guard let rulesURL = RuleDirectoryResolver.resolve() else {
+            isLoading = false
+            return
+        }
 
         do {
             let result = try loader.loadRules(from: rulesURL)

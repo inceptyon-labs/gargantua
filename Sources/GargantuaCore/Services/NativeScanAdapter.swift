@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "NativeSc
 ///
 /// Walks the paths declared in `ScanRule` files, measures sizes, applies
 /// profile-aware safety overrides via `SafetyClassifier`, and emits `ScanResult`
-/// values. Mirrors the `MoCleanAdapter.scan` shape for drop-in use.
+/// values.
 ///
 /// This is the Phase 1.5 replacement for the `mo clean` subprocess — the YAML
 /// rules were hand-ported from Mole's domain knowledge and are now the

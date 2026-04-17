@@ -1,11 +1,11 @@
 ---
 # gargantua-9hhj
 title: 'Bug: mo clean and mo purge don''t emit JSON'
-status: todo
+status: completed
 type: bug
 priority: critical
 created_at: 2026-04-17T01:06:04Z
-updated_at: 2026-04-17T01:06:17Z
+updated_at: 2026-04-17T15:39:31Z
 parent: gargantua-l9dk
 ---
 
@@ -39,6 +39,10 @@ These should not be retroactively edited; the cutover epic (gargantua-l9dk) supe
 Cutover to native scanner for clean + purge. `mo analyze` and `mo status` continue to use their real JSON contracts.
 
 ## Fix Tasks
-- [ ] Deep Clean view wired to NativeScanAdapter (see child feature under epic)
-- [ ] Dev Purge view wired to native dev-artifact walker (see child feature)
-- [ ] Mark MoCleanAdapter + MoPurgeAdapter as deprecated, remove callsites before release
+- [x] Deep Clean view wired to NativeScanAdapter (gargantua-lupo)
+- [x] Dev Purge view wired to native dev-artifact walker (gargantua-guga)
+- [x] MoCleanAdapter + MoPurgeAdapter deleted (callsites already gone via lupo + guga)
+
+## Summary of Changes
+
+Deleted `Sources/GargantuaCore/Services/MoCleanAdapter.swift`, `MoPurgeAdapter.swift`, and their test files. Scrubbed a stale `MoCleanAdapter.scan`-shape comment from `NativeScanAdapter.swift`. Production callsites were already removed by gargantua-lupo (Deep Clean) and gargantua-guga (Dev Purge), so deletion only touched the adapters + tests. `swift build` clean; 281 tests across 40 suites pass. This also closes gargantua-2xrw (same work).
