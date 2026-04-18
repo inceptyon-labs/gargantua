@@ -1,11 +1,11 @@
 ---
 # gargantua-2g77
 title: Harden DefaultProcessRunner pipe draining against handler/readToEOF race
-status: todo
+status: in-progress
 type: task
 priority: low
 created_at: 2026-04-17T21:12:38Z
-updated_at: 2026-04-17T21:12:38Z
+updated_at: 2026-04-18T13:12:13Z
 parent: gargantua-qe4a
 ---
 

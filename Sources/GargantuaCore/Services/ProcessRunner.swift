@@ -64,16 +64,32 @@ public struct DefaultProcessRunner: ProcessRunner {
         process.standardOutput = outPipe
         process.standardError = errPipe
 
-        // Drain both pipes concurrently so large stderr output can't block the
-        // child on a full 64K pipe buffer while we sit on waitUntilExit.
         let outHandle = outPipe.fileHandleForReading
         let errHandle = errPipe.fileHandleForReading
         let outBuffer = DataBuffer()
         let errBuffer = DataBuffer()
-        outHandle.readabilityHandler = { outBuffer.append($0.availableData) }
-        errHandle.readabilityHandler = { errBuffer.append($0.availableData) }
 
         try process.run()
+
+        // Drain each pipe on a dedicated background queue with a single
+        // blocking readDataToEndOfFile(). This is a deliberately simpler drain
+        // than a readabilityHandler + post-exit readDataToEndOfFile() pair:
+        // that approach can race because setting the handler to nil is not
+        // documented to block for in-flight invocations, so a late handler
+        // chunk can interleave with the final drain. Here, exactly one read
+        // per pipe returns all bytes up to EOF — which happens when the child
+        // closes its end of the pipe (either by exiting naturally or being
+        // terminated by the watchdog). Draining concurrently on both pipes
+        // also prevents a full 64K buffer on one stream from blocking the
+        // child while we sit on waitUntilExit.
+        let drainGroup = DispatchGroup()
+        let drainQueue = DispatchQueue.global(qos: .utility)
+        drainQueue.async(group: drainGroup) {
+            outBuffer.append(outHandle.readDataToEndOfFile())
+        }
+        drainQueue.async(group: drainGroup) {
+            errBuffer.append(errHandle.readDataToEndOfFile())
+        }
 
         let coordinator = TimeoutCoordinator()
         var watchdog: DispatchWorkItem?
@@ -97,10 +113,10 @@ public struct DefaultProcessRunner: ProcessRunner {
         let timedOut = coordinator.markNaturalCompletion() == .timedOut
         watchdog?.cancel()
 
-        outHandle.readabilityHandler = nil
-        errHandle.readabilityHandler = nil
-        outBuffer.append(outHandle.readDataToEndOfFile())
-        errBuffer.append(errHandle.readDataToEndOfFile())
+        // Pipe ends close on child exit, so the blocking reads return shortly
+        // after waitUntilExit. Join here so the buffers are fully populated
+        // before we snapshot them.
+        drainGroup.wait()
 
         if timedOut, let timeout {
             throw ProcessRunnerError.timedOut(seconds: timeout)
