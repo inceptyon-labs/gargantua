@@ -110,11 +110,14 @@ public struct EventHorizonConsoleView: View {
 
     @ViewBuilder
     private var activityEllipsis: some View {
-        let style: Text = Text("…")
-            .font(GargantuaFonts.body.italic())
-            .foregroundStyle(GargantuaColors.ink2)
+        // Both branches reserve the same width so toggling reduce-motion
+        // doesn't shift the subtitle baseline.
         if reduceMotion {
-            style.accessibilityHidden(true)
+            Text("…")
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
+                .frame(width: 18, alignment: .leading)
+                .accessibilityHidden(true)
         } else {
             TimelineView(.periodic(from: .now, by: 0.45)) { context in
                 let step = Int(context.date.timeIntervalSinceReferenceDate / 0.45) % 3

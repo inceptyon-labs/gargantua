@@ -15,6 +15,7 @@ public struct CleanupSummaryView: View {
 
     @State private var sort: SummarySort = .size
     @State private var succeededExpanded: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Sort options for the cleaned-item lists in the summary.
     public enum SummarySort: String, CaseIterable, Sendable {
@@ -38,8 +39,9 @@ public struct CleanupSummaryView: View {
         self.onDismiss = onDismiss
     }
 
-    /// Size descending, then name ascending as the tiebreaker. Sort by name
-    /// is case-insensitive so "AppCleaner" and "aria2" sort lexically.
+    /// Size descending with name as the deterministic tiebreaker so rows
+    /// don't reshuffle between refreshes when sizes match. Name sort is
+    /// case-insensitive so "AppCleaner" and "aria2" sort lexically.
     private func sorted(_ items: [CleanupItemResult]) -> [CleanupItemResult] {
         switch sort {
         case .name:
@@ -47,7 +49,26 @@ public struct CleanupSummaryView: View {
                 $0.item.name.localizedCaseInsensitiveCompare($1.item.name) == .orderedAscending
             }
         case .size:
-            items.sorted { $0.item.size > $1.item.size }
+            items.sorted {
+                if $0.item.size != $1.item.size {
+                    return $0.item.size > $1.item.size
+                }
+                return $0.item.name.localizedCaseInsensitiveCompare($1.item.name) == .orderedAscending
+            }
+        }
+    }
+
+    /// True if there is at least one item (succeeded or failed) that the
+    /// user could plausibly want to sort.
+    private var hasSortableItems: Bool {
+        !result.succeededItems.isEmpty || !result.failedItems.isEmpty
+    }
+
+    private func toggleSucceededExpanded() {
+        if reduceMotion {
+            succeededExpanded.toggle()
+        } else {
+            withAnimation(.easeOut(duration: 0.18)) { succeededExpanded.toggle() }
         }
     }
 
@@ -128,15 +149,21 @@ public struct CleanupSummaryView: View {
 
                 Spacer()
 
+                // Sort picker lives here (stable position) whenever there is
+                // anything to sort — either expanded succeeded items, or any
+                // failed items (which are always rendered below). Keeping it
+                // anchored prevents it from jumping into the failure header
+                // when succeeded items are collapsed.
+                if hasSortableItems, succeededExpanded || !result.failedItems.isEmpty {
+                    sortPicker
+                }
+
                 if count > 0 {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            succeededExpanded.toggle()
-                        }
-                    } label: {
+                    Button(action: toggleSucceededExpanded) {
                         HStack(spacing: GargantuaSpacing.space1) {
                             Image(systemName: succeededExpanded ? "chevron.down" : "chevron.right")
                                 .font(.system(size: 10, weight: .semibold))
+                                .accessibilityHidden(true)
                             Text(succeededExpanded ? "Hide items" : "Show items")
                                 .font(GargantuaFonts.caption)
                         }
@@ -148,7 +175,6 @@ public struct CleanupSummaryView: View {
             }
 
             if succeededExpanded, !result.succeededItems.isEmpty {
-                sortPicker
                 itemList(sorted(result.succeededItems), foreground: GargantuaColors.ink)
             }
         }
@@ -169,13 +195,6 @@ public struct CleanupSummaryView: View {
                     .foregroundStyle(GargantuaColors.protected_)
 
                 Spacer()
-
-                // Sort picker only renders on the failure side if the success
-                // list isn't already showing one (avoids two identical pickers
-                // stacked on top of each other in partial-failure summaries).
-                if !succeededExpanded || result.succeededItems.isEmpty {
-                    sortPicker
-                }
             }
 
             ForEach(sorted(result.failedItems), id: \.item.id) { failed in
@@ -217,7 +236,7 @@ public struct CleanupSummaryView: View {
         .pickerStyle(.segmented)
         .frame(width: 140)
         .controlSize(.small)
-        .accessibilityLabel("Sort items")
+        .accessibilityLabel("Sort cleanup items")
     }
 
     private func itemList(_ items: [CleanupItemResult], foreground: Color) -> some View {
@@ -233,11 +252,15 @@ public struct CleanupSummaryView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
 
-                        Spacer()
+                        Spacer(minLength: GargantuaSpacing.space2)
 
+                        // Size text gets layout priority so a long app name
+                        // truncates before the byte count does.
                         Text(AlertItem.formatBytes(entry.item.size))
                             .font(GargantuaFonts.monoData)
                             .foregroundStyle(GargantuaColors.ink3)
+                            .lineLimit(1)
+                            .layoutPriority(1)
                     }
                     .padding(.vertical, 1)
                 }
