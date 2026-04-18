@@ -17,7 +17,8 @@ struct SmartUninstallerExecutionTests {
         let vm = SmartUninstallerViewModel(
             appScanner: StubAppScanner(apps: [app]),
             planner: StubPlanner(build: { _, _ in plan }),
-            executor: executor
+            executor: executor,
+            postExecutionLinger: 0
         )
         await vm.selectApp(app)
         vm.toggleSelection(a)
@@ -41,7 +42,8 @@ struct SmartUninstallerExecutionTests {
             appScanner: StubAppScanner(apps: [app]),
             planner: StubPlanner(build: { _, _ in plan }),
             executor: executor,
-            authorizationProvider: { .authorizedForTesting }
+            authorizationProvider: { .authorizedForTesting },
+            postExecutionLinger: 0
         )
         await vm.selectApp(app)
         vm.setIncludeProtected(true)
@@ -63,7 +65,8 @@ struct SmartUninstallerExecutionTests {
         let vm = SmartUninstallerViewModel(
             appScanner: StubAppScanner(apps: [app]),
             planner: StubPlanner(build: { _, _ in plan }),
-            executor: StubExecutor(result: .failure(UninstallExecutionError.authorizationRequired))
+            executor: StubExecutor(result: .failure(UninstallExecutionError.authorizationRequired)),
+            postExecutionLinger: 0
         )
         await vm.selectApp(app)
 
@@ -85,7 +88,8 @@ struct SmartUninstallerExecutionTests {
         let vm = SmartUninstallerViewModel(
             appScanner: StubAppScanner(apps: [app]),
             planner: StubPlanner(build: { _, _ in plan }),
-            executor: executor
+            executor: executor,
+            postExecutionLinger: 0
         )
         await vm.selectApp(app)
 
@@ -103,7 +107,8 @@ struct SmartUninstallerExecutionTests {
         let vm = SmartUninstallerViewModel(
             appScanner: StubAppScanner(apps: [app]),
             planner: StubPlanner(build: { _, _ in plan }),
-            executor: executor
+            executor: executor,
+            postExecutionLinger: 0
         )
         await vm.selectApp(app)
         await vm.execute()

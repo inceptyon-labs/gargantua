@@ -11,6 +11,7 @@ struct MainContentView: View {
     @State private var sidebarSelection: String? = "dashboard"
     @State private var persistence: PersistenceController?
     @State private var deepCleanSession = DeepCleanSessionState()
+    @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
 
     var body: some View {
         ZStack {
@@ -45,7 +46,7 @@ struct MainContentView: View {
                             case "deepClean":
                                 DeepCleanView(profile: activeDeepCleanProfile, session: deepCleanSession)
                             case "smartUninstaller":
-                                SmartUninstallerView()
+                                SmartUninstallerView(viewModel: smartUninstallerViewModel)
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":

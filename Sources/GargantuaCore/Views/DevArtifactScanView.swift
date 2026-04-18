@@ -58,6 +58,9 @@ public struct DevArtifactScanView: View {
     @State private var isCleaning = false
     @State private var activeCleanupMethod: CleanupMethod = .trash
     @State private var cleanupResult: CleanupResult?
+    @State private var phase: DeepCleanPhase = .idle
+    @State private var pathStream = PathStreamViewModel()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         profile: CleanupProfile = .developer,
@@ -71,20 +74,34 @@ public struct DevArtifactScanView: View {
 
     public var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                if let result = cleanupResult {
-                    CleanupSummaryView(result: result, onDismiss: dismissSummary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let results = scanResults {
-                    resultsView(results)
-                } else {
+            GargantuaColors.void_
+                .ignoresSafeArea()
+
+            ZStack {
+                switch phase {
+                case .idle:
                     categorySelectionView
+                        .transition(phaseTransition)
+                case .scanning, .cleaning:
+                    EventHorizonConsoleView(
+                        context: .devPurge(phase: phase, profileName: profile.name),
+                        stream: pathStream
+                    )
+                    .transition(phaseTransition)
+                case .results:
+                    if let results = scanResults {
+                        resultsView(results)
+                            .transition(phaseTransition)
+                    }
+                case .summary:
+                    if let result = cleanupResult {
+                        summaryState(result: result)
+                            .transition(phaseTransition)
+                    }
                 }
             }
-
-            if isCleaning {
-                cleaningOverlay
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.65), value: phase)
 
             if showConfirmation, let results = scanResults {
                 let selected = results.filter { selectedResultIDs.contains($0.id) }
@@ -96,26 +113,50 @@ public struct DevArtifactScanView: View {
                 .transition(.opacity)
             }
         }
-        .background(GargantuaColors.void_)
         .animation(.easeOut(duration: 0.15), value: showConfirmation)
     }
 
-    private var cleaningOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
+    /// Asymmetric phase transition matching SmartUninstaller / Deep Clean.
+    private var phaseTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .opacity
+                .combined(with: .scale(scale: 0.92))
+                .combined(with: .offset(y: 16)),
+            removal: .opacity.combined(with: .offset(y: -16))
+        )
+    }
 
-            VStack(spacing: GargantuaSpacing.space3) {
-                ProgressView()
-                    .controlSize(.regular)
+    private func summaryState(result: CleanupResult) -> some View {
+        let outcome = SingularityCloseMessage.Outcome.from(result: result)
+        let accent = outcomeAccentColor(outcome.accent)
+        return VStack(spacing: GargantuaSpacing.space2) {
+            Spacer()
+            VStack(spacing: GargantuaSpacing.space2) {
+                Text(SingularityCloseMessage.heading(for: result))
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(3)
+                    .foregroundStyle(accent)
 
-                Text(activeCleanupMethod.progressTitle)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
+                Text(SingularityCloseMessage.line(for: result))
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 480)
             }
-            .padding(GargantuaSpacing.space6)
-            .background(GargantuaColors.surface3)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            CleanupSummaryView(result: result, outcomeAccent: accent) {
+                dismissSummary()
+            }
+            Spacer()
+        }
+        .padding(GargantuaSpacing.space6)
+    }
+
+    private func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {
+        switch accent {
+        case .safe: return GargantuaColors.safe
+        case .accretion: return GargantuaColors.accretion
+        case .protected: return GargantuaColors.protected_
         }
     }
 
@@ -320,6 +361,8 @@ public struct DevArtifactScanView: View {
             HStack {
                 Button {
                     scanResults = nil
+                    pathStream.clear()
+                    phase = .idle
                 } label: {
                     HStack(spacing: GargantuaSpacing.space1) {
                         Image(systemName: "chevron.left")
@@ -380,7 +423,11 @@ public struct DevArtifactScanView: View {
                 scanDuration: scanDuration,
                 selectedIDs: $selectedResultIDs,
                 onClean: { showConfirmation = true },
-                onCancel: { scanResults = nil }
+                onCancel: {
+                    scanResults = nil
+                    pathStream.clear()
+                    phase = .idle
+                }
             )
         }
     }
@@ -391,16 +438,25 @@ public struct DevArtifactScanView: View {
         showConfirmation = false
         isCleaning = true
         activeCleanupMethod = method
+        pathStream.clear()
+        phase = .cleaning
         Task {
             let engine = CleanupEngine()
-            let result = await engine.clean(items, method: method)
+            let result = await engine.clean(items, method: method, observer: pathStream)
             do {
                 try AuditWriter().record(result: result)
             } catch {
                 logger.warning("Failed to write audit entry: \(error.localizedDescription)")
             }
+            // Mirror SmartUninstaller / Deep Clean: hold the EventHorizon
+            // console on screen long enough for spaghettify swallow
+            // animations to play before transitioning to the summary card.
+            if !result.itemResults.filter(\.succeeded).isEmpty, !reduceMotion {
+                try? await Task.sleep(nanoseconds: 750_000_000)
+            }
             isCleaning = false
             cleanupResult = result
+            phase = .summary
         }
     }
 
@@ -408,6 +464,8 @@ public struct DevArtifactScanView: View {
         cleanupResult = nil
         scanResults = nil
         activeCleanupMethod = .trash
+        pathStream.clear()
+        phase = .idle
     }
 
     private func toggleCategory(_ id: String) {
@@ -421,12 +479,14 @@ public struct DevArtifactScanView: View {
     private func startScan() {
         isScanRequested = true
         scanProgress = ScanProgress()
+        pathStream.clear()
+        phase = .scanning
         Task {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
                     ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
-                let results = try await adapter.scan(progress: scanProgress)
+                let results = try await adapter.scan(progress: scanProgress, observer: pathStream)
 
                 // Filter results to selected categories by matching against
                 // category or tag patterns
@@ -447,9 +507,11 @@ public struct DevArtifactScanView: View {
                 )
                 scanResults = filtered
                 isScanRequested = false
+                phase = .results
             } catch {
                 scanProgress.recordError(error.localizedDescription)
                 isScanRequested = false
+                phase = .idle
             }
         }
     }

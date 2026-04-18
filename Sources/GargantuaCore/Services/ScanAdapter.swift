@@ -7,6 +7,23 @@ import Foundation
 public protocol ScanAdapter: Sendable {
     /// Run a scan, reporting progress and returning discovered items.
     func scan(progress: ScanProgress?) async throws -> [ScanResult]
+
+    /// Run a scan with an additional path-level event observer for the
+    /// EventHorizon-style console. Default implementation ignores the
+    /// observer; conformers that can emit per-path events override.
+    func scan(
+        progress: ScanProgress?,
+        observer: (any ScanProgressObserving)?
+    ) async throws -> [ScanResult]
+}
+
+extension ScanAdapter {
+    public func scan(
+        progress: ScanProgress?,
+        observer: (any ScanProgressObserving)?
+    ) async throws -> [ScanResult] {
+        try await scan(progress: progress)
+    }
 }
 
 /// Errors raised when building a scan adapter from app state.

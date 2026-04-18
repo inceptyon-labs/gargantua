@@ -20,13 +20,17 @@ public struct DiskExplorerView: View {
     private var currentPath: String { pathStack.last?.path ?? NSHomeDirectory() }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            headerView
-            breadcrumbView
-            listView
+        ZStack {
+            GargantuaColors.void_
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                headerView
+                breadcrumbView
+                listView
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(GargantuaColors.void_)
         .task(id: currentPath) {
             await loadDirectory(currentPath)
         }
@@ -35,16 +39,21 @@ public struct DiskExplorerView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack {
+        HStack(spacing: GargantuaSpacing.space3) {
             Text("Disk Explorer")
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
 
+            if isLoading {
+                Text("Probing gravitational pull…")
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+            }
+
             Spacer()
 
             if isLoading {
-                ProgressView()
-                    .controlSize(.small)
+                AccretionDiskView(activityRate: 0, size: 14)
             }
         }
         .padding(.horizontal, GargantuaSpacing.space6)
@@ -87,36 +96,59 @@ public struct DiskExplorerView: View {
     // MARK: - List
 
     private var listView: some View {
-        ScrollView {
-            LazyVStack(spacing: 1) {
-                ForEach(items) { item in
-                    DirectoryRowView(
-                        item: item,
-                        maxSize: maxSize,
-                        isExpanded: expandedItems[item.path] != nil,
-                        onExpand: { await toggleExpand(item) },
-                        onDrillDown: { drillDown(into: item) }
-                    )
-
-                    // Expanded children
-                    if let children = expandedItems[item.path] {
-                        ForEach(children) { child in
+        Group {
+            if !isLoading, items.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(items) { item in
                             DirectoryRowView(
-                                item: child,
+                                item: item,
                                 maxSize: maxSize,
-                                isExpanded: false,
-                                onExpand: nil,
-                                onDrillDown: { drillDown(into: child) },
-                                indentLevel: 1
+                                isExpanded: expandedItems[item.path] != nil,
+                                onExpand: { await toggleExpand(item) },
+                                onDrillDown: { drillDown(into: item) }
                             )
+
+                            // Expanded children
+                            if let children = expandedItems[item.path] {
+                                ForEach(children) { child in
+                                    DirectoryRowView(
+                                        item: child,
+                                        maxSize: maxSize,
+                                        isExpanded: false,
+                                        onExpand: nil,
+                                        onDrillDown: { drillDown(into: child) },
+                                        indentLevel: 1
+                                    )
+                                }
+                            }
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+                    .padding(.horizontal, GargantuaSpacing.space6)
+                    .padding(.bottom, GargantuaSpacing.space6)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
-            .padding(.horizontal, GargantuaSpacing.space6)
-            .padding(.bottom, GargantuaSpacing.space6)
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: GargantuaSpacing.space2) {
+            AccretionDiskView(activityRate: 0, size: 28, color: GargantuaColors.ink3)
+                .opacity(0.4)
+
+            Text("Empty orbit")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Text("No bodies detected at this radius.")
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink3)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, GargantuaSpacing.space6)
     }
 
     // MARK: - Actions

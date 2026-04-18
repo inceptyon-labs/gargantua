@@ -22,12 +22,14 @@ struct UninstallAppPickerView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(viewModel.visibleApps) { app in
-                            Button {
-                                Task { await viewModel.selectApp(app) }
-                            } label: {
-                                AppRow(app: app)
-                            }
-                            .buttonStyle(.plain)
+                            AppRow(
+                                app: app,
+                                isChecked: viewModel.multiSelected.contains(app.bundleID),
+                                categoryCount: viewModel.categoryCounts[app.bundleID],
+                                onToggleCheck: { viewModel.toggleMultiSelect(bundleID: app.bundleID) },
+                                onQuickUninstall: { Task { await viewModel.quickUninstall(app) } },
+                                onOpen: { Task { await viewModel.selectApp(app) } }
+                            )
                             .accessibilityLabel(Text(accessibilityLabel(for: app)))
 
                             if app.id != viewModel.visibleApps.last?.id {
@@ -38,6 +40,10 @@ struct UninstallAppPickerView: View {
                         }
                     }
                 }
+            }
+
+            if !viewModel.multiSelected.isEmpty {
+                batchActionBar
             }
         }
     }
@@ -83,9 +89,81 @@ struct UninstallAppPickerView: View {
             Text("\(viewModel.visibleApps.count) of \(viewModel.apps.count)")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
+
+            refreshButton
         }
         .padding(.horizontal, GargantuaSpacing.space5)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    private var batchActionBar: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            Text(viewModel.multiSelected.count == 1
+                 ? "1 app selected"
+                 : "\(viewModel.multiSelected.count) apps selected")
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Spacer()
+
+            Button {
+                viewModel.clearMultiSelect()
+            } label: {
+                Text("Clear")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .padding(.horizontal, GargantuaSpacing.space3)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                            .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear app selection")
+
+            Button {
+                Task { await viewModel.startBatchUninstall() }
+            } label: {
+                Text(viewModel.multiSelected.count == 1
+                     ? "Uninstall 1 app"
+                     : "Uninstall \(viewModel.multiSelected.count) apps")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(.white)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .background(GargantuaColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.return, modifiers: [])
+        }
+        .padding(.horizontal, GargantuaSpacing.space5)
+        .padding(.vertical, GargantuaSpacing.space3)
+        .background(GargantuaColors.surface1)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
+        }
+    }
+
+    private var refreshButton: some View {
+        Button {
+            Task { await viewModel.refreshApps() }
+        } label: {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Refresh")
+                    .font(GargantuaFonts.label)
+            }
+            .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("r", modifiers: .command)
+        .accessibilityLabel("Refresh installed apps")
+        .help("Re-scan installed apps (⌘R)")
     }
 
     private var emptyState: some View {
@@ -161,16 +239,89 @@ private struct SearchField: View {
 
 private struct AppRow: View {
     let app: AppInfo
+    let isChecked: Bool
+    let categoryCount: Int?
+    let onToggleCheck: () -> Void
+    let onQuickUninstall: () -> Void
+    let onOpen: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "app.dashed")
-                .font(.system(size: 18))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 28)
+            checkbox
 
+            // Open-row tap target: use a tap gesture instead of a Button so
+            // it nests cleanly inside the same HStack as the checkbox /
+            // quick-uninstall Buttons. macOS SwiftUI routes Button taps to
+            // the innermost Button, but a parent Button with sibling Buttons
+            // makes hit-testing on the parent unreliable.
+            rowContent
+                .contentShape(Rectangle())
+                .onTapGesture { onOpen() }
+
+            quickUninstallButton
+
+            Button(action: onOpen) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(GargantuaColors.ink4)
+                    .frame(width: 20, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show details for \(app.displayName ?? app.name)")
+        }
+        .padding(.vertical, GargantuaSpacing.space2)
+        .padding(.horizontal, GargantuaSpacing.space5)
+        .background(rowBackground)
+        .onHover { isHovered = $0 }
+    }
+
+    private var rowBackground: Color {
+        if isChecked {
+            return GargantuaColors.accent.opacity(0.10)
+        }
+        return isHovered ? GargantuaColors.surface1 : Color.clear
+    }
+
+    private var checkbox: some View {
+        Button(action: onToggleCheck) {
+            ZStack {
+                // Filled rect (or transparent) provides a hit-testable
+                // interior. A bare RoundedRectangle().stroke() only
+                // registers clicks on the 1.5pt outline, which is why the
+                // checkbox felt unclickable even when the cursor was
+                // visibly over it.
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isChecked ? GargantuaColors.accent : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(
+                                isChecked ? GargantuaColors.accent : GargantuaColors.borderEm,
+                                lineWidth: 1.5
+                            )
+                    )
+                    .frame(width: 18, height: 18)
+
+                if isChecked {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            // Pad the visual checkbox out to a 32x32 tap target so the
+            // user doesn't have to be pixel-precise on an 18pt control.
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isChecked ? "Deselect \(app.displayName ?? app.name)" : "Select \(app.displayName ?? app.name)")
+        .accessibilityAddTraits(isChecked ? .isSelected : [])
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: GargantuaSpacing.space2) {
                     Text(app.displayName ?? app.name)
@@ -200,22 +351,33 @@ private struct AppRow: View {
                         .font(GargantuaFonts.monoData)
                         .foregroundStyle(GargantuaColors.ink2)
                 }
-                if let date = app.lastUsedDate {
+                if let count = categoryCount, count > 0 {
+                    Text(count == 1 ? "1 category" : "\(count) categories")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                } else if let date = app.lastUsedDate {
                     Text(relativeDate(date))
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink4)
                 }
             }
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(GargantuaColors.ink4)
         }
-        .padding(.vertical, GargantuaSpacing.space2)
-        .padding(.horizontal, GargantuaSpacing.space5)
-        .background(isHovered ? GargantuaColors.surface1 : Color.clear)
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
+    }
+
+    @ViewBuilder
+    private var quickUninstallButton: some View {
+        Button(action: onQuickUninstall) {
+            Image(systemName: "trash")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(GargantuaColors.protected_)
+                .frame(width: 28, height: 24)
+                .background(GargantuaColors.protected_.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        }
+        .buttonStyle(.plain)
+        .opacity(isHovered ? 1 : 0)
+        .accessibilityLabel("Quick uninstall \(app.displayName ?? app.name)")
+        .help("Uninstall \(app.displayName ?? app.name) (skip review)")
     }
 
     private func relativeDate(_ date: Date) -> String {

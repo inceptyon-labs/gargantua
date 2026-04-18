@@ -76,11 +76,37 @@ public final class CleanupEngine: Sendable {
     /// Returns a `CleanupResult` with per-item success/failure details.
     @MainActor
     public func clean(_ items: [ScanResult], method: CleanupMethod = .trash) async -> CleanupResult {
+        await clean(items, method: method, observer: nil)
+    }
+
+    /// Variant that emits a `ScanProgressEvent` per item to feed the
+    /// EventHorizon console during the cleaning phase. Successful removals
+    /// surface as `.match` (with bytes); failures surface as `.failed`.
+    @MainActor
+    public func clean(
+        _ items: [ScanResult],
+        method: CleanupMethod = .trash,
+        observer: (any ScanProgressObserving)?
+    ) async -> CleanupResult {
         var results: [CleanupItemResult] = []
 
         for item in items {
             let url = URL(fileURLWithPath: item.path)
             let result = await cleanSingle(url: url, item: item, method: method)
+            if let observer {
+                if result.succeeded {
+                    observer.didEmit(ScanProgressEvent(
+                        path: item.path,
+                        outcome: .match,
+                        bytes: item.size
+                    ))
+                } else {
+                    observer.didEmit(ScanProgressEvent(
+                        path: item.path,
+                        outcome: .failed(reason: result.error ?? "unknown error")
+                    ))
+                }
+            }
             results.append(result)
         }
 

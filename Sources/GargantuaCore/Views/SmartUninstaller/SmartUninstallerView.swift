@@ -8,17 +8,13 @@ import SwiftUI
 /// `UninstallExecutor` by default; callers can inject alternatives for tests
 /// or previews.
 public struct SmartUninstallerView: View {
-    @State private var viewModel: SmartUninstallerViewModel
+    private let viewModel: SmartUninstallerViewModel
     @State private var showingConfirmation = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var errorRetryFocused: Bool
 
-    public init(viewModel: SmartUninstallerViewModel? = nil) {
-        if let viewModel {
-            _viewModel = State(initialValue: viewModel)
-        } else {
-            _viewModel = State(initialValue: SmartUninstallerView.makeDefaultViewModel())
-        }
+    public init(viewModel: SmartUninstallerViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -28,9 +24,10 @@ public struct SmartUninstallerView: View {
 
             ZStack {
                 switch viewModel.phase {
-                case .idle, .loadingApps, .scanning, .executing:
+                case .idle, .loadingApps, .scanning, .executing,
+                     .batchScanning, .batchExecuting:
                     EventHorizonConsoleView(
-                        phase: viewModel.phase,
+                        context: .uninstaller(phase: viewModel.phase),
                         stream: viewModel.pathStream
                     )
                     .transition(phaseTransition)
@@ -47,6 +44,9 @@ public struct SmartUninstallerView: View {
                 case .summary(_, let result):
                     summaryState(result: result)
                         .transition(phaseTransition)
+                case .batchSummary(let results):
+                    batchSummaryState(results: results)
+                        .transition(phaseTransition)
                 case .failed(let message):
                     errorState(message: message)
                         .transition(phaseTransition)
@@ -55,7 +55,8 @@ public struct SmartUninstallerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.65), value: phaseKey)
 
-            if showingConfirmation, viewModel.currentPlan != nil {
+            if showingConfirmation || viewModel.quickConfirmActive,
+               viewModel.currentPlan != nil {
                 // Cleanup method is ignored: UninstallExecutor is Trash-only.
                 // Picking "Delete" in the modal would otherwise surface as a
                 // failed uninstall after final confirmation.
@@ -63,9 +64,33 @@ public struct SmartUninstallerView: View {
                     items: viewModel.selectedScanResults,
                     onConfirm: { _ in
                         showingConfirmation = false
+                        viewModel.quickConfirmActive = false
                         Task { await viewModel.execute() }
                     },
-                    onCancel: { showingConfirmation = false }
+                    onCancel: {
+                        showingConfirmation = false
+                        // Quick-uninstall cancel returns the user to the
+                        // picker — they didn't ask for the plan-review
+                        // detour. Plan-review uninstall keeps the review
+                        // open in case they want to re-tweak selections.
+                        if viewModel.quickConfirmActive {
+                            viewModel.quickConfirmActive = false
+                            viewModel.reset()
+                        }
+                    }
+                )
+                .transition(.opacity)
+            }
+
+            if !viewModel.batchPlans.isEmpty,
+               case .batchScanning(let completed, let total) = viewModel.phase,
+               completed == total {
+                ConfirmationModalView(
+                    items: viewModel.batchSelectedScanResults,
+                    onConfirm: { _ in
+                        Task { await viewModel.executeBatch() }
+                    },
+                    onCancel: { viewModel.cancelBatch() }
                 )
                 .transition(.opacity)
             }
@@ -177,8 +202,42 @@ public struct SmartUninstallerView: View {
         case .reviewingPlan: "reviewingPlan"
         case .executing: "executing"
         case .summary: "summary"
+        case .batchScanning: "batchScanning"
+        case .batchExecuting: "batchExecuting"
+        case .batchSummary: "batchSummary"
         case .failed: "failed"
         }
+    }
+
+    private func batchSummaryState(results: [UninstallExecutionResult]) -> some View {
+        // Combine every per-plan CleanupResult into one CleanupResult so the
+        // existing SingularityCloseMessage + CleanupSummaryView can render
+        // it without needing a batch-aware variant.
+        let allItemResults = results.flatMap { $0.cleanupResult.itemResults }
+        let combined = CleanupResult(itemResults: allItemResults, cleanupMethod: .trash)
+        let outcome = SingularityCloseMessage.Outcome.from(result: combined)
+        let accent = outcomeAccentColor(outcome.accent)
+        let appCount = results.count
+        return VStack(spacing: GargantuaSpacing.space2) {
+            Spacer()
+            VStack(spacing: GargantuaSpacing.space2) {
+                Text(SingularityCloseMessage.heading(for: combined))
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(3)
+                    .foregroundStyle(accent)
+
+                Text("\(appCount) apps · \(SingularityCloseMessage.line(for: combined))")
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 480)
+            }
+            CleanupSummaryView(result: combined, outcomeAccent: accent) {
+                viewModel.reset()
+            }
+            Spacer()
+        }
+        .padding(GargantuaSpacing.space6)
     }
 
     /// Transition between phase screens. Incoming view fades + rises up from
@@ -200,8 +259,11 @@ public struct SmartUninstallerView: View {
 
     // MARK: - Default wiring
 
+    /// Build the production view model with the default scanner, planner, and
+    /// executor wired through the same `PathStreamViewModel`. Public so the
+    /// app shell can hoist the instance and let it survive sidebar navigation.
     @MainActor
-    private static func makeDefaultViewModel() -> SmartUninstallerViewModel {
+    public static func makeDefaultViewModel() -> SmartUninstallerViewModel {
         let stream = PathStreamViewModel()
         let scanner = DefaultAppScanner(observer: stream)
         let planner: any UninstallPlanning

@@ -67,6 +67,18 @@ public struct NativeScanAdapter: ScanAdapter {
     /// - Parameter progress: Optional observer driven per-rule for UI feedback.
     /// - Returns: Scan results with final (classified) safety levels.
     public func scan(progress: ScanProgress? = nil) async throws -> [ScanResult] {
+        try await scan(progress: progress, observer: nil)
+    }
+
+    /// Run the scan and emit per-path events to an EventHorizon-style observer.
+    ///
+    /// Each child the size walker visits emits a `.checked` event; each result
+    /// that survives deduplication emits a `.match` event with byte count;
+    /// per-rule warnings emit a `.failed` event.
+    public func scan(
+        progress: ScanProgress? = nil,
+        observer: (any ScanProgressObserving)?
+    ) async throws -> [ScanResult] {
         await progress?.start()
 
         let applicable = rules.filter { rule in
@@ -82,10 +94,14 @@ public struct NativeScanAdapter: ScanAdapter {
 
         // Fire-and-forget sizing updates so the UI ticks per child path during a
         // rule whose `directorySize` walk would otherwise sit silent for seconds.
+        // The same callback also feeds path-level events to the EventHorizon
+        // console when an observer is attached.
+        let observerRef = observer
         let onSizing: @Sendable (String) -> Void = { path in
             Task { @MainActor [weak progress] in
                 progress?.noteSizing(path: path)
             }
+            observerRef?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
         }
 
         for (idx, rule) in applicable.enumerated() {
@@ -111,12 +127,21 @@ public struct NativeScanAdapter: ScanAdapter {
 
             for warning in evaluation.warnings {
                 await progress?.recordError(warning)
+                observerRef?.didEmit(ScanProgressEvent(
+                    path: rule.id,
+                    outcome: .failed(reason: warning)
+                ))
             }
             // Deduplicate by path across rules so overlapping rules don't double-count
             // bytes or trigger a second recycle attempt after the first succeeds.
             for result in evaluation.results where seenPaths.insert(result.path).inserted {
                 results.append(result)
                 reclaimableBytes += result.size
+                observerRef?.didEmit(ScanProgressEvent(
+                    path: result.path,
+                    outcome: .match,
+                    bytes: result.size
+                ))
             }
         }
 

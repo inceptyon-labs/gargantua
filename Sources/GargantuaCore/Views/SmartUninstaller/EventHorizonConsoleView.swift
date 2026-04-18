@@ -1,20 +1,228 @@
 import SwiftUI
 
+/// Caller-supplied view-model for the EventHorizon console.
+///
+/// Decouples the console from any specific phase enum so the same chrome can
+/// be driven by Smart Uninstaller, Deep Clean, Dev Purge, etc. Each tool
+/// derives a context from its own phase and passes it in.
+public struct EventHorizonContext: Equatable {
+    /// Top-bar label, e.g. `"ENDURANCE · UNINSTALL SEQUENCE"` or
+    /// `"ENDURANCE · DEEP CLEAN SWEEP"`.
+    public let header: String
+    /// Inline target identifier shown after `TARGET:`, e.g. an app name or
+    /// a profile name. Pass `"—"` when no target makes sense.
+    public let target: String
+    /// Subtitle line under the header (italic, paired with the activity disk).
+    public let subtitle: String
+    /// Whether the console is still working — drives the spinning indicator
+    /// and the trailing animated ellipsis.
+    public let isInProgress: Bool
+    /// Whether the console is in the destructive phase — gates the spaghettify
+    /// swallow effect on `.match` events.
+    public let isExecuting: Bool
+    /// Stable identity for `onChange` reset hooks. Distinct values trigger a
+    /// re-anchoring of the executing-baseline and clear the swallowed set.
+    public let phaseKey: String
+
+    public init(
+        header: String,
+        target: String,
+        subtitle: String,
+        isInProgress: Bool,
+        isExecuting: Bool,
+        phaseKey: String
+    ) {
+        self.header = header
+        self.target = target
+        self.subtitle = subtitle
+        self.isInProgress = isInProgress
+        self.isExecuting = isExecuting
+        self.phaseKey = phaseKey
+    }
+}
+
+extension EventHorizonContext {
+    /// Build a context from a `SmartUninstallerPhase`. Keeps the original
+    /// uninstall copy so existing screens render identically.
+    public static func uninstaller(phase: SmartUninstallerPhase) -> EventHorizonContext {
+        EventHorizonContext(
+            header: "ENDURANCE · UNINSTALL SEQUENCE",
+            target: uninstallTarget(for: phase),
+            subtitle: uninstallSubtitle(for: phase),
+            isInProgress: uninstallInProgress(for: phase),
+            isExecuting: uninstallExecuting(for: phase),
+            phaseKey: uninstallPhaseKey(for: phase)
+        )
+    }
+
+    private static func uninstallTarget(for phase: SmartUninstallerPhase) -> String {
+        switch phase {
+        case .idle, .loadingApps:
+            return "/Applications · Launch Services"
+        case .pickingApp:
+            return "—"
+        case .scanning(let app):
+            return app.displayName ?? app.name
+        case .reviewingPlan(let plan):
+            return plan.app.displayName ?? plan.app.name
+        case .executing(let plan):
+            return plan.app.displayName ?? plan.app.name
+        case .summary(let plan, _):
+            return plan.app.displayName ?? plan.app.name
+        case .batchScanning(let completed, let total):
+            return "BATCH \(completed)/\(total)"
+        case .batchExecuting(let completed, let total):
+            return "BATCH \(completed)/\(total)"
+        case .batchSummary(let results):
+            return "BATCH \(results.count) apps"
+        case .failed:
+            return "—"
+        }
+    }
+
+    private static func uninstallSubtitle(for phase: SmartUninstallerPhase) -> String {
+        switch phase {
+        case .idle, .loadingApps:
+            return "Surveying nearby star systems"
+        case .pickingApp:
+            return "Awaiting mission parameters"
+        case .scanning(let app):
+            return "Tracing gravitational echoes from \(app.displayName ?? app.name)"
+        case .reviewingPlan:
+            return "Plan locked. Awaiting authorization."
+        case .executing:
+            return "Crossing the event horizon"
+        case .summary(let plan, _):
+            let name = plan.app.displayName ?? plan.app.name
+            return "Signal recovered. \(name) has passed into Gargantua."
+        case .batchScanning:
+            return "Tracing gravitational echoes across the batch"
+        case .batchExecuting:
+            return "Crossing the event horizon"
+        case .batchSummary:
+            return "Signal recovered. Batch artifacts have passed into Gargantua."
+        case .failed:
+            return "Signal lost in the accretion disk."
+        }
+    }
+
+    private static func uninstallInProgress(for phase: SmartUninstallerPhase) -> Bool {
+        switch phase {
+        case .loadingApps, .scanning, .executing, .batchScanning, .batchExecuting: true
+        default: false
+        }
+    }
+
+    private static func uninstallExecuting(for phase: SmartUninstallerPhase) -> Bool {
+        switch phase {
+        case .executing, .batchExecuting: true
+        default: false
+        }
+    }
+
+    private static func uninstallPhaseKey(for phase: SmartUninstallerPhase) -> String {
+        switch phase {
+        case .idle: "idle"
+        case .loadingApps: "loadingApps"
+        case .pickingApp: "pickingApp"
+        case .scanning: "scanning"
+        case .reviewingPlan: "reviewingPlan"
+        case .executing: "executing"
+        case .summary: "summary"
+        case .batchScanning: "batchScanning"
+        case .batchExecuting: "batchExecuting"
+        case .batchSummary: "batchSummary"
+        case .failed: "failed"
+        }
+    }
+
+    /// Build a context from a `DeepCleanPhase` + profile name. Mirrors the
+    /// uninstaller's vocabulary so the two surfaces feel the same.
+    public static func deepClean(
+        phase: DeepCleanPhase,
+        profileName: String
+    ) -> EventHorizonContext {
+        EventHorizonContext(
+            header: "ENDURANCE · DEEP CLEAN SWEEP",
+            target: profileName,
+            subtitle: deepCleanSubtitle(for: phase, profileName: profileName),
+            isInProgress: phase == .scanning || phase == .cleaning,
+            isExecuting: phase == .cleaning,
+            phaseKey: deepCleanPhaseKey(for: phase)
+        )
+    }
+
+    private static func deepCleanSubtitle(for phase: DeepCleanPhase, profileName: String) -> String {
+        switch phase {
+        case .idle: return "Awaiting mission parameters"
+        case .scanning: return "Tracing gravitational echoes from \(profileName)"
+        case .results: return "Plan locked. Awaiting authorization."
+        case .cleaning: return "Crossing the event horizon"
+        case .summary: return "Signal recovered. Gargantua has consumed the cache."
+        }
+    }
+
+    private static func deepCleanPhaseKey(for phase: DeepCleanPhase) -> String {
+        switch phase {
+        case .idle: "deepClean.idle"
+        case .scanning: "deepClean.scanning"
+        case .results: "deepClean.results"
+        case .cleaning: "deepClean.cleaning"
+        case .summary: "deepClean.summary"
+        }
+    }
+
+    /// Build a context for Dev Artifact Purge.
+    public static func devPurge(
+        phase: DeepCleanPhase,
+        profileName: String
+    ) -> EventHorizonContext {
+        EventHorizonContext(
+            header: "ENDURANCE · DEV ARTIFACT PURGE",
+            target: profileName,
+            subtitle: devPurgeSubtitle(for: phase, profileName: profileName),
+            isInProgress: phase == .scanning || phase == .cleaning,
+            isExecuting: phase == .cleaning,
+            phaseKey: devPurgePhaseKey(for: phase)
+        )
+    }
+
+    private static func devPurgeSubtitle(for phase: DeepCleanPhase, profileName: String) -> String {
+        switch phase {
+        case .idle: return "Awaiting mission parameters"
+        case .scanning: return "Tracing dev artifact debris (\(profileName))"
+        case .results: return "Plan locked. Awaiting authorization."
+        case .cleaning: return "Crossing the event horizon"
+        case .summary: return "Signal recovered. The build artifacts are gone."
+        }
+    }
+
+    private static func devPurgePhaseKey(for phase: DeepCleanPhase) -> String {
+        switch phase {
+        case .idle: "devPurge.idle"
+        case .scanning: "devPurge.scanning"
+        case .results: "devPurge.results"
+        case .cleaning: "devPurge.cleaning"
+        case .summary: "devPurge.summary"
+        }
+    }
+}
+
 /// Live terminal-style console that streams filesystem paths being
-/// inspected during the Smart Uninstaller flow, wrapped in Gargantua's
+/// inspected during a long-running operation, wrapped in Gargantua's
 /// space-horror aesthetic.
 ///
-/// Replaces the static `centeredStatus` placeholders with something
-/// that (a) proves work is happening and (b) gives the user visibility
-/// into what the app is actually doing. Real data in a good costume.
+/// Originally built for Smart Uninstaller; generalized to accept an
+/// `EventHorizonContext` so any tool with a `PathStreamViewModel` can
+/// drive it (Deep Clean, Dev Purge, etc.).
 public struct EventHorizonConsoleView: View {
-    let phase: SmartUninstallerPhase
+    let context: EventHorizonContext
     @Bindable var stream: PathStreamViewModel
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Stable sequence IDs of events that have finished spaghettifying
-    /// during the current `.executing` phase. Using sequence numbers
+    /// during the current `isExecuting` phase. Using sequence numbers
     /// (`PathStreamViewModel.firstSequence + offset`) rather than array
     /// offsets keeps this set correct when the ring buffer rolls over.
     @State private var swallowedSeqs: Set<Int> = []
@@ -35,8 +243,8 @@ public struct EventHorizonConsoleView: View {
     /// for the current executing phase.
     @State private var showTimeDilation = false
 
-    public init(phase: SmartUninstallerPhase, stream: PathStreamViewModel) {
-        self.phase = phase
+    public init(context: EventHorizonContext, stream: PathStreamViewModel) {
+        self.context = context
         self._stream = Bindable(stream)
     }
 
@@ -55,7 +263,7 @@ public struct EventHorizonConsoleView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(GargantuaColors.void_)
         .onAppear { resetPhaseTracking() }
-        .onChange(of: phaseKey) { _, _ in resetPhaseTracking() }
+        .onChange(of: context.phaseKey) { _, _ in resetPhaseTracking() }
         .onChange(of: stream.events.count) { oldCount, newCount in
             updateActivityRate(delta: max(newCount - oldCount, 0))
             tripTimeDilationIfDue()
@@ -67,7 +275,7 @@ public struct EventHorizonConsoleView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             HStack {
-                Text("ENDURANCE · UNINSTALL SEQUENCE")
+                Text(context.header)
                     .font(GargantuaFonts.sectionLabel)
                     .tracking(2)
                     .foregroundStyle(GargantuaColors.ink2)
@@ -78,7 +286,7 @@ public struct EventHorizonConsoleView: View {
             }
 
             HStack(spacing: GargantuaSpacing.space5) {
-                Text("TARGET: \(targetLabel)")
+                Text("TARGET: \(context.target)")
                     .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink)
 
@@ -99,10 +307,10 @@ public struct EventHorizonConsoleView: View {
         // on big apps during quiet event stretches.
         HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
             AccretionDiskView(activityRate: activityRate, size: 11)
-            Text(phaseSubtitle)
+            Text(context.subtitle)
                 .font(GargantuaFonts.body.italic())
                 .foregroundStyle(GargantuaColors.ink2)
-            if isInProgressPhase {
+            if context.isInProgress {
                 activityEllipsis
             }
         }
@@ -127,13 +335,6 @@ public struct EventHorizonConsoleView: View {
                     .frame(width: 18, alignment: .leading)
                     .accessibilityHidden(true)
             }
-        }
-    }
-
-    private var isInProgressPhase: Bool {
-        switch phase {
-        case .loadingApps, .scanning, .executing: true
-        default: false
         }
     }
 
@@ -180,7 +381,7 @@ public struct EventHorizonConsoleView: View {
         return SpaghettifyEventRow(
             event: event,
             seq: seq,
-            shouldSpaghettify: isExecutingPhase && postBaseline && isSuccessOutcome(event.outcome),
+            shouldSpaghettify: context.isExecuting && postBaseline && isSuccessOutcome(event.outcome),
             reduceMotion: reduceMotion,
             badge: badge(for: event.outcome),
             badgeColor: badgeColor(for: event.outcome),
@@ -222,26 +423,6 @@ public struct EventHorizonConsoleView: View {
 
     // MARK: - Phase / activity tracking
 
-    /// A hashable key derived from the phase enum so `onChange` fires only
-    /// when the bucket (not the associated plan) changes.
-    private var phaseKey: String {
-        switch phase {
-        case .idle: "idle"
-        case .loadingApps: "loadingApps"
-        case .pickingApp: "pickingApp"
-        case .scanning: "scanning"
-        case .reviewingPlan: "reviewingPlan"
-        case .executing: "executing"
-        case .summary: "summary"
-        case .failed: "failed"
-        }
-    }
-
-    private var isExecutingPhase: Bool {
-        if case .executing = phase { return true }
-        return false
-    }
-
     private func resetPhaseTracking() {
         phaseEnteredAt = Date()
         swallowedSeqs = []
@@ -250,7 +431,7 @@ public struct EventHorizonConsoleView: View {
         // be assigned. Any event already in the buffer belongs to a prior
         // phase (e.g. scan matches) and must not be spaghettified.
         executingBaselineSeq = stream.firstSequence + stream.events.count
-        if !isExecutingPhase {
+        if !context.isExecuting {
             showTimeDilation = false
         }
     }
@@ -264,54 +445,13 @@ public struct EventHorizonConsoleView: View {
     }
 
     private func tripTimeDilationIfDue() {
-        guard isExecutingPhase, !showTimeDilation else { return }
+        guard context.isExecuting, !showTimeDilation else { return }
         let elapsed = Date().timeIntervalSince(phaseEnteredAt)
         guard elapsed >= 10 else { return }
         guard !SingularitySession.shared.timeDilationShown else { return }
         SingularitySession.shared.timeDilationShown = true
         withAnimation(.easeIn(duration: 0.8)) {
             showTimeDilation = true
-        }
-    }
-
-    // MARK: - Derived strings
-
-    private var targetLabel: String {
-        switch phase {
-        case .idle, .loadingApps:
-            return "/Applications · Launch Services"
-        case .pickingApp:
-            return "—"
-        case .scanning(let app):
-            return app.displayName ?? app.name
-        case .reviewingPlan(let plan):
-            return plan.app.displayName ?? plan.app.name
-        case .executing(let plan):
-            return plan.app.displayName ?? plan.app.name
-        case .summary(let plan, _):
-            return plan.app.displayName ?? plan.app.name
-        case .failed:
-            return "—"
-        }
-    }
-
-    private var phaseSubtitle: String {
-        switch phase {
-        case .idle, .loadingApps:
-            return "Surveying nearby star systems"
-        case .pickingApp:
-            return "Awaiting mission parameters"
-        case .scanning(let app):
-            return "Tracing gravitational echoes from \(app.displayName ?? app.name)"
-        case .reviewingPlan:
-            return "Plan locked. Awaiting authorization."
-        case .executing:
-            return "Crossing the event horizon"
-        case .summary(let plan, _):
-            let name = plan.app.displayName ?? plan.app.name
-            return "Signal recovered. \(name) has passed into Gargantua."
-        case .failed:
-            return "Signal lost in the accretion disk."
         }
     }
 
