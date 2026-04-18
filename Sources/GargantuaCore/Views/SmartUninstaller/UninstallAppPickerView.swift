@@ -63,14 +63,12 @@ struct UninstallAppPickerView: View {
             SearchField(text: $viewModel.query)
                 .frame(maxWidth: 320)
 
-            Picker("Sort", selection: $viewModel.sort) {
-                ForEach(UninstallAppSort.allCases, id: \.self) { option in
-                    Text(option.label).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 240)
-            .accessibilityLabel("Sort apps")
+            GargantuaSegmentedPicker(
+                selection: $viewModel.sort,
+                options: UninstallAppSort.allCases.map { (value: $0, label: $0.label) },
+                accessibilityLabel: "Sort apps"
+            )
+            .frame(width: 260)
 
             Toggle(isOn: $viewModel.showSystemApps) {
                 Text("System apps")

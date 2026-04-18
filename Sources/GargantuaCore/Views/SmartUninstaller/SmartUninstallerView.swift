@@ -26,7 +26,7 @@ public struct SmartUninstallerView: View {
             GargantuaColors.void_
                 .ignoresSafeArea()
 
-            Group {
+            ZStack {
                 switch viewModel.phase {
                 case .idle, .loadingApps, .scanning, .executing:
                     EventHorizonConsoleView(
@@ -53,7 +53,7 @@ public struct SmartUninstallerView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: phaseKey)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.65), value: phaseKey)
 
             if showingConfirmation, viewModel.currentPlan != nil {
                 // Cleanup method is ignored: UninstallExecutor is Trash-only.
@@ -181,18 +181,20 @@ public struct SmartUninstallerView: View {
         }
     }
 
-    /// Transition between phase screens. Incoming view fades + materializes
-    /// up from 97% scale; outgoing view just fades. The subtle scale makes
-    /// the cut from the executing console to the summary card read as a
-    /// deliberate transition rather than a pop — a plain opacity fade
-    /// at this duration is too subtle against the dark void background.
-    /// Reduce-motion collapses to a cut so users who have the OS preference
-    /// set don't get the half-second fade every time they click.
+    /// Transition between phase screens. Incoming view fades + rises up from
+    /// 12pt below with a scale bump from 0.92; outgoing fades and drops away.
+    /// The substantial motion + offset make the executing → summary swap feel
+    /// like a deliberate transition against the dark background, where the
+    /// two screens are so visually different that a subtle opacity fade reads
+    /// as a hard cut. Reduce-motion collapses to a cut so users with the OS
+    /// preference set don't get the animation every time they click.
     private var phaseTransition: AnyTransition {
         guard !reduceMotion else { return .identity }
         return .asymmetric(
-            insertion: .opacity.combined(with: .scale(scale: 0.97)),
-            removal: .opacity
+            insertion: .opacity
+                .combined(with: .scale(scale: 0.92))
+                .combined(with: .offset(y: 16)),
+            removal: .opacity.combined(with: .offset(y: -16))
         )
     }
 

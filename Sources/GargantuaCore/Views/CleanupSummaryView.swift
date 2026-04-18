@@ -14,7 +14,9 @@ public struct CleanupSummaryView: View {
     let onDismiss: () -> Void
 
     @State private var sort: SummarySort = .size
-    @State private var succeededExpanded: Bool = false
+    // Expanded by default so the list + sort picker are immediately visible.
+    // Users can collapse to the compact card if they want.
+    @State private var succeededExpanded: Bool = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Sort options for the cleaned-item lists in the summary.
@@ -150,11 +152,10 @@ public struct CleanupSummaryView: View {
                 Spacer()
 
                 // Sort picker lives here (stable position) whenever there is
-                // anything to sort — either expanded succeeded items, or any
-                // failed items (which are always rendered below). Keeping it
-                // anchored prevents it from jumping into the failure header
-                // when succeeded items are collapsed.
-                if hasSortableItems, succeededExpanded || !result.failedItems.isEmpty {
+                // anything sortable visible — always, if there are any items.
+                // The picker drives both the succeeded list (when expanded)
+                // and the always-rendered failure list below.
+                if hasSortableItems {
                     sortPicker
                 }
 
@@ -228,15 +229,12 @@ public struct CleanupSummaryView: View {
     // MARK: - Shared item list
 
     private var sortPicker: some View {
-        Picker("Sort", selection: $sort) {
-            ForEach(SummarySort.allCases, id: \.self) { option in
-                Text(option.label).tag(option)
-            }
-        }
-        .pickerStyle(.segmented)
+        GargantuaSegmentedPicker(
+            selection: $sort,
+            options: SummarySort.allCases.map { (value: $0, label: $0.label) },
+            accessibilityLabel: "Sort cleanup items"
+        )
         .frame(width: 140)
-        .controlSize(.small)
-        .accessibilityLabel("Sort cleanup items")
     }
 
     private func itemList(_ items: [CleanupItemResult], foreground: Color) -> some View {
