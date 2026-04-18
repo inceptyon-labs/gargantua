@@ -1,0 +1,223 @@
+import Darwin
+import Foundation
+import Testing
+@testable import GargantuaCore
+
+@Suite("RemnantScanner")
+struct RemnantScannerTests {
+
+    private final class FixtureTree {
+        let root: URL
+
+        init() throws {
+            let raw = FileManager.default.temporaryDirectory
+                .appendingPathComponent("RemnantScannerTests-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
+            let resolved = Self.realpath(raw.path) ?? raw.path
+            root = URL(fileURLWithPath: resolved, isDirectory: true)
+        }
+
+        deinit {
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        @discardableResult
+        func makeDir(_ relative: String) throws -> URL {
+            let url = root.appendingPathComponent(relative, isDirectory: true)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            return url
+        }
+
+        @discardableResult
+        func makeFile(_ relative: String, contents: String = "x") throws -> URL {
+            let url = root.appendingPathComponent(relative)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try contents.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        }
+
+        private static func realpath(_ path: String) -> String? {
+            guard let cstr = Darwin.realpath(path, nil) else { return nil }
+            defer { free(cstr) }
+            return String(cString: cstr)
+        }
+    }
+
+    private static func app(bundlePath: String = "/Applications/Google Chrome.app") -> AppInfo {
+        AppInfo(
+            bundleID: "com.google.Chrome",
+            name: "Google Chrome",
+            bundlePath: bundlePath,
+            lastUsedDate: Date(timeIntervalSince1970: 1_700_000_000),
+            teamIdentifier: "EQHXZ8M8AV"
+        )
+    }
+
+    @Test("Expands placeholders without escaping spaces or punctuation in appName")
+    func expandsPlaceholders() {
+        let app = AppInfo(
+            bundleID: "com.example.Writer",
+            name: "Writer Pro+ Beta",
+            bundlePath: "/Applications/Writer.app",
+            teamIdentifier: "TEAM123"
+        )
+
+        let expanded = RemnantScanner.expand(
+            template: "/tmp/{teamID}/{bundleID}/{appName}",
+            for: app
+        )
+
+        #expect(expanded == "/tmp/TEAM123/com.example.Writer/Writer Pro+ Beta")
+    }
+
+    @Test("Skips templates requiring teamID when app has no team identifier")
+    func missingTeamIDSkipsTemplate() {
+        let app = AppInfo(bundleID: "com.example.NoTeam", name: "No Team", bundlePath: "/NoTeam.app")
+        #expect(RemnantScanner.expand(template: "/tmp/{teamID}/{bundleID}", for: app) == nil)
+    }
+
+    @Test("Scans literal templates and resolves remnant metadata")
+    func scansLiteralTemplates() throws {
+        let fixture = try FixtureTree()
+        let cache = try fixture.makeFile("Library/Caches/com.google.Chrome/cache.db", contents: "abcdef")
+        let rule = RemnantRule(
+            id: "generic_caches",
+            name: "Caches",
+            category: .caches,
+            pathTemplates: [fixture.root.appendingPathComponent("Library/Caches/{bundleID}").path],
+            confidence: 99,
+            explanation: "Disposable cache data.",
+            source: SourceAttribution(name: "{appName}"),
+            regenerates: true,
+            tags: ["cache"]
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: Self.app(), includeAppBundle: false)
+
+        #expect(plan.app.bundleID == "com.google.Chrome")
+        #expect(plan.appBundle == nil)
+        #expect(plan.remnants.count == 1)
+        #expect(plan.remnants[0].path == cache.deletingLastPathComponent().path)
+        #expect(plan.remnants[0].size >= 6)
+        #expect(plan.remnants[0].source.name == "Google Chrome")
+        #expect(plan.remnants[0].source.bundleID == "com.google.Chrome")
+        #expect(plan.remnants[0].ruleID == "generic_caches")
+        #expect(plan.remnants[0].lastAccessed != nil)
+        #expect(plan.totalBytes == plan.remnants[0].size)
+    }
+
+    @Test("Applies rule scope before scanning")
+    func appliesRuleScope() throws {
+        let fixture = try FixtureTree()
+        try fixture.makeFile("Library/Caches/com.google.Chrome/cache.db", contents: "abcdef")
+        let rule = RemnantRule(
+            id: "firefox_only",
+            name: "Firefox Only",
+            category: .caches,
+            pathTemplates: [fixture.root.appendingPathComponent("Library/Caches/{bundleID}").path],
+            confidence: 90,
+            explanation: "Scoped rule.",
+            source: SourceAttribution(name: "{appName}"),
+            appliesTo: AppScope(bundleIDs: ["org.mozilla.firefox"])
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: Self.app(), includeAppBundle: false)
+
+        #expect(plan.remnants.isEmpty)
+    }
+
+    @Test("Uses PathExpander glob semantics and excludes matching paths")
+    func globAndExclude() throws {
+        let fixture = try FixtureTree()
+        let keep = try fixture.makeDir("Profiles/Default/Google Chrome/Cache")
+        try fixture.makeFile("Profiles/Default/Google Chrome/Cache/data", contents: "keep")
+        try fixture.makeDir("Profiles/Default/Google Chrome/Cache/backup")
+        try fixture.makeFile("Profiles/Default/Google Chrome/Cache/backup/data", contents: "skip")
+        let other = try fixture.makeDir("Profiles/Beta/Google Chrome/Cache")
+        try fixture.makeFile("Profiles/Beta/Google Chrome/Cache/data", contents: "other")
+        let rule = RemnantRule(
+            id: "profile_cache",
+            name: "Profile Cache",
+            category: .caches,
+            pathTemplates: [fixture.root.appendingPathComponent("Profiles/**/{appName}/Cache").path],
+            exclude: ["*/backup"],
+            confidence: 95,
+            explanation: "Profile caches.",
+            source: SourceAttribution(name: "{appName}")
+        )
+
+        let plan = RemnantScanner(
+            rules: [rule],
+            scanRoots: [fixture.root],
+            expander: PathExpander(limits: .init(maxDepth: 8, maxEntries: 10_000, timeBudget: 5))
+        ).plan(for: Self.app(), includeAppBundle: false)
+
+        #expect(Set(plan.remnants.map(\.path)) == [keep.path, other.path])
+        #expect(plan.remnants.allSatisfy { !$0.path.contains("/backup") })
+    }
+
+    @Test("Excludes filter children when a literal directory is enumerated")
+    func literalDirectoryExcludes() throws {
+        let fixture = try FixtureTree()
+        let support = try fixture.makeDir("Library/Application Support/Google Chrome")
+        let keep = try fixture.makeFile("Library/Application Support/Google Chrome/state.db", contents: "keep")
+        try fixture.makeFile("Library/Application Support/Google Chrome/CrashpadMetrics.pma", contents: "skip")
+        let rule = RemnantRule(
+            id: "support_files",
+            name: "Support Files",
+            category: .supportFiles,
+            pathTemplates: [support.path],
+            exclude: ["Crashpad*"],
+            confidence: 90,
+            explanation: "Support files.",
+            source: SourceAttribution(name: "{appName}")
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: Self.app(), includeAppBundle: false)
+
+        #expect(plan.remnants.map(\.path) == [keep.path])
+    }
+
+    @Test("Pattern enumerates child files and missing paths are graceful")
+    func patternAndMissingPaths() throws {
+        let fixture = try FixtureTree()
+        let prefs = try fixture.makeDir("Library/Preferences")
+        let match = try fixture.makeFile("Library/Preferences/com.google.Chrome.plist", contents: "prefs")
+        try fixture.makeFile("Library/Preferences/other.txt", contents: "skip")
+        let rule = RemnantRule(
+            id: "prefs",
+            name: "Preferences",
+            category: .preferences,
+            pathTemplates: [
+                prefs.path,
+                fixture.root.appendingPathComponent("missing").path,
+            ],
+            pattern: "{bundleID}.plist",
+            confidence: 85,
+            explanation: "Preferences.",
+            source: SourceAttribution(name: "{appName}")
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: Self.app(), includeAppBundle: false)
+
+        #expect(plan.remnants.map(\.path) == [match.path])
+    }
+
+    @Test("Includes optional app bundle when present")
+    func includesAppBundle() throws {
+        let fixture = try FixtureTree()
+        let appBundle = try fixture.makeDir("Applications/Google Chrome.app")
+        try fixture.makeFile("Applications/Google Chrome.app/Contents/Info.plist", contents: "plist")
+        let app = Self.app(bundlePath: appBundle.path)
+
+        let plan = RemnantScanner(rules: []).plan(for: app)
+
+        #expect(plan.appBundle?.path == appBundle.path)
+        #expect(plan.appBundle?.category == .other)
+        #expect(plan.appBundle?.ruleID == "app_bundle")
+        #expect(plan.totalBytes > 0)
+    }
+}
