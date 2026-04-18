@@ -16,8 +16,8 @@ struct DefaultProcessRunnerTests {
 
         #expect(output.exitCode == 0)
         #expect(output.stdout.utf8.count == byteCount)
-        // `yes` emits "y\n" repeatedly; every even index should be "y",
-        // every odd index should be "\n".
+        // `yes` emits "y\n" repeatedly. With an even byteCount, the capture
+        // should start with "y" and end with "\n".
         let bytes = Array(output.stdout.utf8)
         #expect(bytes.first == UInt8(ascii: "y"))
         #expect(bytes.last == UInt8(ascii: "\n"))

@@ -77,11 +77,14 @@ public struct DefaultProcessRunner: ProcessRunner {
         // that approach can race because setting the handler to nil is not
         // documented to block for in-flight invocations, so a late handler
         // chunk can interleave with the final drain. Here, exactly one read
-        // per pipe returns all bytes up to EOF — which happens when the child
-        // closes its end of the pipe (either by exiting naturally or being
-        // terminated by the watchdog). Draining concurrently on both pipes
-        // also prevents a full 64K buffer on one stream from blocking the
-        // child while we sit on waitUntilExit.
+        // per pipe returns all bytes up to EOF. EOF requires every writer to
+        // the pipe to close — normally just the child, but a descendant that
+        // inherits and keeps the fd open could delay or prevent EOF. Adapters
+        // here (czkawka_cli, fclones) don't spawn detached children, so this
+        // is safe in practice; hardening against inherited-fd hangs is
+        // tracked separately. Draining concurrently on both pipes also
+        // prevents a full 64K buffer on one stream from blocking the child
+        // while we sit on waitUntilExit.
         let drainGroup = DispatchGroup()
         let drainQueue = DispatchQueue.global(qos: .utility)
         drainQueue.async(group: drainGroup) {
