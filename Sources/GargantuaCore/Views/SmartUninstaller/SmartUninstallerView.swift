@@ -11,6 +11,7 @@ public struct SmartUninstallerView: View {
     @State private var viewModel: SmartUninstallerViewModel
     @State private var showingConfirmation = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var errorRetryFocused: Bool
 
     public init(viewModel: SmartUninstallerViewModel? = nil) {
         if let viewModel {
@@ -139,8 +140,16 @@ public struct SmartUninstallerView: View {
                     .padding(.horizontal, GargantuaSpacing.space4)
                     .background(GargantuaColors.accent)
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    .overlay {
+                        if errorRetryFocused {
+                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                .stroke(GargantuaColors.borderFocus, lineWidth: 2)
+                        }
+                    }
             }
             .buttonStyle(.plain)
+            .focusable()
+            .focused($errorRetryFocused)
         }
         .frame(maxWidth: 480)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
