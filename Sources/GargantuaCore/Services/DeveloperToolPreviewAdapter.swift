@@ -1,0 +1,369 @@
+import Foundation
+
+/// Supported developer tool cleanup surfaces.
+public enum DeveloperTool: String, Codable, Sendable, CaseIterable, Identifiable {
+    case homebrew
+    case docker
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .homebrew: "Homebrew"
+        case .docker: "Docker"
+        }
+    }
+}
+
+/// Runtime install/availability state for an external developer tool.
+public struct DeveloperToolAvailability: Equatable, Sendable {
+    public let tool: DeveloperTool
+    public let isInstalled: Bool
+    public let executable: URL?
+    public let version: String?
+    public let error: String?
+
+    public init(
+        tool: DeveloperTool,
+        isInstalled: Bool,
+        executable: URL?,
+        version: String? = nil,
+        error: String? = nil
+    ) {
+        self.tool = tool
+        self.isInstalled = isInstalled
+        self.executable = executable
+        self.version = version
+        self.error = error
+    }
+}
+
+/// A read-only preview row returned by a developer tool.
+public struct DeveloperToolPreviewItem: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let tool: DeveloperTool
+    public let title: String
+    public let detail: String?
+    public let reclaimableBytes: Int64?
+    public let commandPreview: [String]
+
+    public init(
+        id: String,
+        tool: DeveloperTool,
+        title: String,
+        detail: String? = nil,
+        reclaimableBytes: Int64? = nil,
+        commandPreview: [String]
+    ) {
+        self.id = id
+        self.tool = tool
+        self.title = title
+        self.detail = detail
+        self.reclaimableBytes = reclaimableBytes
+        self.commandPreview = commandPreview
+    }
+}
+
+/// Read-only preview for a developer tool cleanup/introspection command.
+public struct DeveloperToolPreview: Equatable, Sendable {
+    public let tool: DeveloperTool
+    public let commandPreview: [String]
+    public let items: [DeveloperToolPreviewItem]
+    public let rawOutput: String
+    public let error: String?
+
+    public init(
+        tool: DeveloperTool,
+        commandPreview: [String],
+        items: [DeveloperToolPreviewItem],
+        rawOutput: String,
+        error: String? = nil
+    ) {
+        self.tool = tool
+        self.commandPreview = commandPreview
+        self.items = items
+        self.rawOutput = rawOutput
+        self.error = error
+    }
+
+    public var reclaimableBytes: Int64 {
+        items.compactMap(\.reclaimableBytes).reduce(0, +)
+    }
+}
+
+public enum DeveloperToolPreviewError: Error, Equatable, LocalizedError {
+    case notInstalled(DeveloperTool)
+    case commandFailed(tool: DeveloperTool, exitCode: Int32, stderr: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .notInstalled(let tool):
+            "\(tool.displayName) is not installed."
+        case .commandFailed(let tool, let exitCode, let stderr):
+            "\(tool.displayName) preview failed with exit \(exitCode): \(stderr)"
+        }
+    }
+}
+
+/// Locates Homebrew and Docker binaries without requiring a login shell PATH.
+public struct DeveloperToolBinaryResolver: Sendable {
+    public static let homebrewEnvVarName = "GARGANTUA_BREW_BIN"
+    public static let dockerEnvVarName = "GARGANTUA_DOCKER_BIN"
+
+    static let homebrewCandidatePaths: [String] = [
+        "/opt/homebrew/bin/brew",
+        "/usr/local/bin/brew",
+        "/usr/bin/brew",
+    ]
+
+    static let dockerCandidatePaths: [String] = [
+        "/usr/local/bin/docker",
+        "/opt/homebrew/bin/docker",
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "/usr/bin/docker",
+    ]
+
+    private let environment: [String: String]
+
+    public init(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
+        self.environment = environment
+    }
+
+    public func resolve(_ tool: DeveloperTool) -> URL? {
+        let envVar = Self.envVarName(for: tool)
+        if let override = environment[envVar], !override.isEmpty {
+            return executableURL(at: override)
+        }
+
+        return Self.candidatePaths(for: tool)
+            .lazy
+            .compactMap { executableURL(at: $0) }
+            .first
+    }
+
+    public func availability(
+        for tool: DeveloperTool,
+        runner: any ProcessRunner = DefaultProcessRunner()
+    ) -> DeveloperToolAvailability {
+        guard let executable = resolve(tool) else {
+            return DeveloperToolAvailability(
+                tool: tool,
+                isInstalled: false,
+                executable: nil,
+                error: "\(tool.displayName) executable not found."
+            )
+        }
+
+        let version = try? runner.run(
+            executable: executable,
+            arguments: Self.versionArguments(for: tool),
+            timeout: 5
+        )
+
+        return DeveloperToolAvailability(
+            tool: tool,
+            isInstalled: true,
+            executable: executable,
+            version: version.flatMap { Self.parseVersion(tool: tool, output: $0) }
+        )
+    }
+
+    private func executableURL(at path: String) -> URL? {
+        FileManager.default.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path) : nil
+    }
+
+    private static func envVarName(for tool: DeveloperTool) -> String {
+        switch tool {
+        case .homebrew: homebrewEnvVarName
+        case .docker: dockerEnvVarName
+        }
+    }
+
+    private static func candidatePaths(for tool: DeveloperTool) -> [String] {
+        switch tool {
+        case .homebrew: homebrewCandidatePaths
+        case .docker: dockerCandidatePaths
+        }
+    }
+
+    private static func versionArguments(for tool: DeveloperTool) -> [String] {
+        switch tool {
+        case .homebrew: ["--version"]
+        case .docker: ["--version"]
+        }
+    }
+
+    private static func parseVersion(tool: DeveloperTool, output: ProcessOutput) -> String? {
+        guard output.exitCode == 0 else { return nil }
+        let text = [output.stdout, output.stderr]
+            .joined(separator: "\n")
+            .split(separator: "\n")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text?.isEmpty == false ? text : nil
+    }
+}
+
+/// Runs read-only developer tool previews. No destructive command is exposed.
+public struct DeveloperToolPreviewAdapter: Sendable {
+    private let resolver: DeveloperToolBinaryResolver
+    private let runner: any ProcessRunner
+    private let timeout: TimeInterval
+
+    public init(
+        resolver: DeveloperToolBinaryResolver = DeveloperToolBinaryResolver(),
+        runner: any ProcessRunner = DefaultProcessRunner(),
+        timeout: TimeInterval = 15
+    ) {
+        self.resolver = resolver
+        self.runner = runner
+        self.timeout = timeout
+    }
+
+    public func availability() -> [DeveloperToolAvailability] {
+        DeveloperTool.allCases.map { resolver.availability(for: $0, runner: runner) }
+    }
+
+    public func availability(for tool: DeveloperTool) -> DeveloperToolAvailability {
+        resolver.availability(for: tool, runner: runner)
+    }
+
+    public func preview(_ tool: DeveloperTool) throws -> DeveloperToolPreview {
+        guard let executable = resolver.resolve(tool) else {
+            throw DeveloperToolPreviewError.notInstalled(tool)
+        }
+
+        let arguments = Self.previewArguments(for: tool)
+        let output = try runner.run(executable: executable, arguments: arguments, timeout: timeout)
+        guard output.exitCode == 0 else {
+            throw DeveloperToolPreviewError.commandFailed(
+                tool: tool,
+                exitCode: output.exitCode,
+                stderr: output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+
+        let rawOutput = output.stdout.isEmpty ? output.stderr : output.stdout
+        return DeveloperToolPreview(
+            tool: tool,
+            commandPreview: [executable.path] + arguments,
+            items: Self.parsePreview(tool: tool, commandPreview: [executable.path] + arguments, output: rawOutput),
+            rawOutput: rawOutput
+        )
+    }
+
+    static func previewArguments(for tool: DeveloperTool) -> [String] {
+        switch tool {
+        case .homebrew:
+            ["cleanup", "-n"]
+        case .docker:
+            ["system", "df"]
+        }
+    }
+
+    static func parsePreview(
+        tool: DeveloperTool,
+        commandPreview: [String],
+        output: String
+    ) -> [DeveloperToolPreviewItem] {
+        switch tool {
+        case .homebrew:
+            parseHomebrewCleanupPreview(output: output, commandPreview: commandPreview)
+        case .docker:
+            parseDockerSystemDF(output: output, commandPreview: commandPreview)
+        }
+    }
+
+    private static func parseHomebrewCleanupPreview(
+        output: String,
+        commandPreview: [String]
+    ) -> [DeveloperToolPreviewItem] {
+        output.split(separator: "\n").enumerated().compactMap { index, rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { return nil }
+            guard line.lowercased().contains("would") || line.lowercased().contains("remove") else {
+                return nil
+            }
+
+            let bytes = parseFirstSize(in: line)
+            return DeveloperToolPreviewItem(
+                id: "homebrew-\(index)",
+                tool: .homebrew,
+                title: line,
+                reclaimableBytes: bytes,
+                commandPreview: commandPreview
+            )
+        }
+    }
+
+    private static func parseDockerSystemDF(
+        output: String,
+        commandPreview: [String]
+    ) -> [DeveloperToolPreviewItem] {
+        output.split(separator: "\n").compactMap { rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { return nil }
+            let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            guard fields.count >= 5, fields[0] != "TYPE" else { return nil }
+            guard let reclaimableIndex = fields.indices.last(where: { fields[$0].contains("B") }) else {
+                return nil
+            }
+            let reclaimableToken = fields[reclaimableIndex]
+            let reclaimableBytes = parseDockerReclaimable(reclaimableToken)
+            let metricsStart = max(1, reclaimableIndex - 3)
+            let type = fields[..<metricsStart].joined(separator: " ")
+            return DeveloperToolPreviewItem(
+                id: "docker-\(type.lowercased().replacingOccurrences(of: " ", with: "-"))",
+                tool: .docker,
+                title: type,
+                detail: line,
+                reclaimableBytes: reclaimableBytes,
+                commandPreview: commandPreview
+            )
+        }
+    }
+
+    private static func parseDockerReclaimable(_ token: String) -> Int64? {
+        let sizePart = token.split(separator: "(").first.map(String.init) ?? token
+        return parseSize(sizePart)
+    }
+
+    private static func parseFirstSize(in line: String) -> Int64? {
+        let pattern = #"(?i)(\d+(?:\.\d+)?)\s*([KMGT]?B)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, range: range),
+              match.numberOfRanges == 3,
+              let valueRange = Range(match.range(at: 1), in: line),
+              let unitRange = Range(match.range(at: 2), in: line) else {
+            return nil
+        }
+        return parseSize("\(line[valueRange])\(line[unitRange])")
+    }
+
+    private static func parseSize(_ token: String) -> Int64? {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = #"(?i)^(\d+(?:\.\d+)?)\s*([KMGT]?B)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+        guard let match = regex.firstMatch(in: trimmed, range: range),
+              match.numberOfRanges == 3,
+              let valueRange = Range(match.range(at: 1), in: trimmed),
+              let unitRange = Range(match.range(at: 2), in: trimmed),
+              let value = Double(trimmed[valueRange]) else {
+            return nil
+        }
+
+        let unit = trimmed[unitRange].uppercased()
+        let multiplier: Double = switch unit {
+        case "KB": 1_000
+        case "MB": 1_000_000
+        case "GB": 1_000_000_000
+        case "TB": 1_000_000_000_000
+        default: 1
+        }
+        return Int64(value * multiplier)
+    }
+}
