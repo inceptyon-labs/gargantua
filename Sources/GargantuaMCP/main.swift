@@ -3,26 +3,37 @@ import GargantuaCore
 
 // Phase 2 stdio MCP server entry point.
 //
-// This task defines the target shape and tool schemas only. Dispatch,
-// JSON-RPC framing, and tool handlers land in follow-up tasks under
-// Feature gargantua-2h06. Running the binary today prints the registered
-// tool catalog to stderr so integrators can confirm wiring, then exits.
+// This task wires JSON-RPC 2.0 framing over newline-delimited stdio. No
+// dispatch yet — every request receives a `method not found` response.
+// The follow-up task under Feature gargantua-2h06 (tools/list + tools/call)
+// replaces the default handler with real routing.
 
-let encoder = JSONEncoder()
-encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-let catalog = MCPPhase2Tools.all
-
-FileHandle.standardError.write(Data("Gargantua MCP server — Phase 2 (schemas only)\n".utf8))
-FileHandle.standardError.write(Data("Registered tools:\n".utf8))
-for tool in catalog {
-    FileHandle.standardError.write(Data("  - \(tool.name.rawValue): \(tool.description)\n".utf8))
+FileHandle.standardError.write(Data(
+    "Gargantua MCP server — Phase 2 (framing only)\n".utf8
+))
+FileHandle.standardError.write(Data(
+    "Registered tools (advertised once dispatch lands):\n".utf8
+))
+for tool in MCPPhase2Tools.all {
+    FileHandle.standardError.write(Data(
+        "  - \(tool.name.rawValue): \(tool.description)\n".utf8
+    ))
 }
 
-if let payload = try? encoder.encode(catalog),
-   let json = String(data: payload, encoding: .utf8) {
-    FileHandle.standardOutput.write(Data(json.utf8))
-    FileHandle.standardOutput.write(Data("\n".utf8))
-}
+let transport = MCPStdioTransport(
+    source: StandardInputMessageSource(),
+    sink: StandardOutputMessageSink(),
+    handler: { request in
+        let requestID = request.id ?? .null
+        return .failure(
+            id: requestID,
+            code: MCPErrorCode.methodNotFound,
+            message: "Method not found: \(request.method)"
+        )
+    },
+    log: { message in
+        FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
+    }
+)
 
-exit(EXIT_SUCCESS)
+transport.run()
