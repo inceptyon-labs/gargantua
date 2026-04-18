@@ -1,11 +1,11 @@
 ---
 # gargantua-9dxb
 title: 'Task: Uninstall execution path (Trash-first + admin helper)'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-17T21:50:04Z
-updated_at: 2026-04-17T21:50:04Z
+updated_at: 2026-04-18T01:12:40Z
 parent: gargantua-j8a1
 blocked_by:
     - gargantua-8cs1
