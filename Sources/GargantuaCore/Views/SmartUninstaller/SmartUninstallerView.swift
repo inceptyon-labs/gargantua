@@ -10,6 +10,7 @@ import SwiftUI
 public struct SmartUninstallerView: View {
     @State private var viewModel: SmartUninstallerViewModel
     @State private var showingConfirmation = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(viewModel: SmartUninstallerViewModel? = nil) {
         if let viewModel {
@@ -31,21 +32,27 @@ public struct SmartUninstallerView: View {
                         phase: viewModel.phase,
                         stream: viewModel.pathStream
                     )
+                    .transition(phaseTransition)
                 case .pickingApp:
                     UninstallAppPickerView(viewModel: viewModel)
+                        .transition(phaseTransition)
                 case .reviewingPlan:
                     UninstallPlanReviewView(
                         viewModel: viewModel,
                         onUninstallTapped: { showingConfirmation = true },
                         onBack: { viewModel.reset() }
                     )
+                    .transition(phaseTransition)
                 case .summary(_, let result):
                     summaryState(result: result)
+                        .transition(phaseTransition)
                 case .failed(let message):
                     errorState(message: message)
+                        .transition(phaseTransition)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.30), value: phaseKey)
 
             if showingConfirmation, viewModel.currentPlan != nil {
                 // Cleanup method is ignored: UninstallExecutor is Trash-only.
@@ -73,13 +80,14 @@ public struct SmartUninstallerView: View {
     // MARK: - Phase subviews
 
     private func summaryState(result: UninstallExecutionResult) -> some View {
-        VStack(spacing: GargantuaSpacing.space4) {
+        let outcome = SingularityCloseMessage.Outcome.from(result: result.cleanupResult)
+        return VStack(spacing: GargantuaSpacing.space4) {
             Spacer()
             VStack(spacing: GargantuaSpacing.space2) {
-                Text("SIGNAL RECOVERED")
+                Text(SingularityCloseMessage.heading(for: result.cleanupResult))
                     .font(GargantuaFonts.sectionLabel)
                     .tracking(3)
-                    .foregroundStyle(GargantuaColors.accretion)
+                    .foregroundStyle(outcome == .totalFailure ? GargantuaColors.protected_ : GargantuaColors.accretion)
 
                 Text(SingularityCloseMessage.line(for: result.cleanupResult))
                     .font(GargantuaFonts.body.italic())
@@ -125,6 +133,31 @@ public struct SmartUninstallerView: View {
         }
         .frame(maxWidth: 480)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Phase animation plumbing
+
+    /// Stable key for the phase bucket. `.scanning(app)` and
+    /// `.scanning(otherApp)` share a key so SwiftUI doesn't crossfade when
+    /// only the associated value changes; only real phase transitions do.
+    private var phaseKey: String {
+        switch viewModel.phase {
+        case .idle: "idle"
+        case .loadingApps: "loadingApps"
+        case .pickingApp: "pickingApp"
+        case .scanning: "scanning"
+        case .reviewingPlan: "reviewingPlan"
+        case .executing: "executing"
+        case .summary: "summary"
+        case .failed: "failed"
+        }
+    }
+
+    /// Crossfade between phase screens. Reduce-motion collapses to a cut so
+    /// users who have the OS preference set don't get the half-second fade
+    /// every time they click.
+    private var phaseTransition: AnyTransition {
+        reduceMotion ? .identity : .opacity
     }
 
     // MARK: - Default wiring

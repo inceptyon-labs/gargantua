@@ -132,4 +132,18 @@ struct SingularityCloseMessageTests {
         #expect(SingularityCloseMessage.Outcome.from(result: partial) == .partial)
         #expect(SingularityCloseMessage.Outcome.from(result: fail) == .totalFailure)
     }
+
+    @Test("Heading matches outcome bucket and never contradicts the close line")
+    func headingMatchesOutcome() {
+        let success = makeResult(succeeded: [1_000_000], failed: [])
+        let partial = makeResult(succeeded: [100], failed: [100])
+        let fail = makeResult(succeeded: [], failed: [100])
+        #expect(SingularityCloseMessage.heading(for: success) == "SIGNAL RECOVERED")
+        #expect(SingularityCloseMessage.heading(for: partial) == "PARTIAL TRANSFER")
+        #expect(SingularityCloseMessage.heading(for: fail) == "SIGNAL LOST")
+        // The bug this guards against: "SIGNAL RECOVERED" + "Signal lost."
+        // shown together when every item failed.
+        #expect(SingularityCloseMessage.heading(for: fail) != "SIGNAL RECOVERED")
+        #expect(SingularityCloseMessage.line(for: fail).contains("Signal lost"))
+    }
 }

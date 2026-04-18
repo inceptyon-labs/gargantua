@@ -20,6 +20,18 @@ public enum SingularityCloseMessage {
         }
     }
 
+    /// All-caps heading shown above the flavor line. Keyed to the same
+    /// outcome bucket as `line(for:)` so the two never contradict each
+    /// other (heading "SIGNAL RECOVERED" with message "Signal lost." was
+    /// a real bug before this helper existed).
+    public static func heading(for result: CleanupResult) -> String {
+        switch Outcome.from(result: result) {
+        case .success: return "SIGNAL RECOVERED"
+        case .partial: return "PARTIAL TRANSFER"
+        case .totalFailure: return "SIGNAL LOST"
+        }
+    }
+
     /// Build the flavor line shown above the summary.
     ///
     /// - `success`: "{n} artifacts lost to Gargantua. Mass recovered: {size}."
