@@ -23,6 +23,7 @@ public extension ProcessRunner {
 public enum ProcessRunnerError: Error, LocalizedError, Sendable, Equatable {
     case timedOut(seconds: TimeInterval)
     case spawnFailed(errno: Int32)
+    case waitFailed(errno: Int32)
 
     public var errorDescription: String? {
         switch self {
@@ -30,6 +31,8 @@ public enum ProcessRunnerError: Error, LocalizedError, Sendable, Equatable {
             "Process did not finish within \(Int(seconds))s and was terminated."
         case .spawnFailed(let errno):
             "Failed to spawn process (errno \(errno))."
+        case .waitFailed(let errno):
+            "Failed to wait for process exit (errno \(errno))."
         }
     }
 }
@@ -133,12 +136,16 @@ public struct DefaultProcessRunner: ProcessRunner {
                 // group returns ESRCH, which is harmless.
                 _ = killpg(pid, SIGTERM)
 
-                // Escalate to SIGKILL after a grace period. The group may
-                // already be gone while a descendant holds the pipe; sending
-                // killpg unconditionally is safe.
+                // Escalate to SIGKILL after a grace period — but only if the
+                // main thread hasn't already reaped the child. Without this
+                // gate, the 0.5s-delayed killpg could land on a pgid that was
+                // recycled after waitpid freed it, hitting an innocent
+                // process group.
                 let killDeadline = DispatchTime.now() + 0.5
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: killDeadline) {
-                    _ = killpg(pid, SIGKILL)
+                    if coordinator.shouldEscalateKill() {
+                        _ = killpg(pid, SIGKILL)
+                    }
                 }
             }
             watchdog = item
@@ -150,10 +157,24 @@ public struct DefaultProcessRunner: ProcessRunner {
         // stray signal delivered to our thread doesn't leave the child
         // un-reaped and our status word uninitialized.
         var status: Int32 = 0
-        while waitpid(pid, &status, 0) == -1 && errno == EINTR {
-            continue
+        var waitResult: pid_t = 0
+        repeat {
+            waitResult = waitpid(pid, &status, 0)
+        } while waitResult == -1 && errno == EINTR
+        if waitResult == -1 {
+            // Bubble up to the caller rather than silently reporting exit 0.
+            // ECHILD/EINVAL here indicate serious process-accounting failure
+            // (child reaped by someone else, bad args) — masking it would
+            // give callers fake success.
+            let waitErrno = errno
+            coordinator.markReaped()
+            watchdog?.cancel()
+            throw ProcessRunnerError.waitFailed(errno: waitErrno)
         }
 
+        // Tell any pending SIGKILL escalation that the child is already
+        // reaped and its pid is eligible for reuse — don't signal it.
+        coordinator.markReaped()
         // DispatchWorkItem.cancel() prevents a *queued* item from running but
         // does NOT interrupt one already executing. The coordinator serializes
         // "natural exit" vs "timeout fired" under a single lock to close the
@@ -222,24 +243,27 @@ public struct DefaultProcessRunner: ProcessRunner {
 
 private enum TimeoutState: Sendable { case running, naturallyCompleted, timedOut }
 
-/// Serializes the "process exited naturally" vs "watchdog fired" decision.
+/// Serializes the "process exited naturally" vs "watchdog fired" decision,
+/// and the "child still reapable" vs "already reaped" decision.
 ///
 /// Only one transition out of `.running` is possible; whichever thread grabs
-/// the lock first wins. Unlike the previous `Process`-backed version, we do
-/// not re-check liveness from the watchdog — with a guaranteed process group
-/// from `posix_spawn`, `killpg` on a dead group is a harmless ESRCH, and the
-/// state-machine ordering is sufficient to avoid signalling a recycled pid
-/// (main thread marks natural completion before we waitpid, so any late
-/// watchdog call sees `.naturallyCompleted` and bails).
+/// the lock first wins. The `reaped` flag is set by the main thread after
+/// `waitpid` returns and is consulted by the delayed SIGKILL escalation to
+/// avoid signalling a pid/pgid that has already been freed and may now
+/// identify an unrelated process group.
 private final class TimeoutCoordinator: @unchecked Sendable {
     private let lock = NSLock()
     private var state: TimeoutState = .running
+    private var reaped: Bool = false
 
     /// Called by the watchdog block. Returns true only if the timeout
     /// transition was claimed (caller should send the TERM/KILL signals).
+    /// Also refuses to arm once the child has been reaped — if the main
+    /// thread's `waitpid` already returned, no signal we send from here can
+    /// be safely delivered to the original pid.
     func tryArmTimeout() -> Bool {
         lock.lock(); defer { lock.unlock() }
-        guard state == .running else { return false }
+        guard state == .running && !reaped else { return false }
         state = .timedOut
         return true
     }
@@ -252,5 +276,20 @@ private final class TimeoutCoordinator: @unchecked Sendable {
             state = .naturallyCompleted
         }
         return state
+    }
+
+    /// Called by the main thread after `waitpid` returns (including on
+    /// error). Once set, the pending SIGKILL escalation must not fire.
+    func markReaped() {
+        lock.lock(); defer { lock.unlock() }
+        reaped = true
+    }
+
+    /// Consulted by the delayed SIGKILL escalation closure. Returns true
+    /// only if the timeout path armed us AND the main thread has not yet
+    /// reaped the child.
+    func shouldEscalateKill() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return state == .timedOut && !reaped
     }
 }
