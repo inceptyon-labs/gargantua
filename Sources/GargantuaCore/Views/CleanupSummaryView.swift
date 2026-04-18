@@ -29,6 +29,7 @@ public struct CleanupSummaryView: View {
                 Rectangle()
                     .fill(outcomeAccent)
                     .frame(height: 3)
+                    .accessibilityHidden(true)
             }
 
             header

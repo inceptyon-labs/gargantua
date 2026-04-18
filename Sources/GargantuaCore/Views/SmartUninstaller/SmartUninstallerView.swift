@@ -110,6 +110,9 @@ public struct SmartUninstallerView: View {
                 .font(GargantuaFonts.sectionLabel)
                 .tracking(3)
                 .foregroundStyle(GargantuaColors.protected_)
+                // Tracking + all-caps makes VoiceOver read "S I G N A L…";
+                // override with a natural-language label.
+                .accessibilityLabel("Signal failed — uninstall error")
 
             Text("Transmission aborted. The operation could not complete.")
                 .font(GargantuaFonts.body.italic())
@@ -122,6 +125,7 @@ public struct SmartUninstallerView: View {
                 .foregroundStyle(GargantuaColors.ink3)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
                 .padding(.horizontal, GargantuaSpacing.space4)
                 .padding(.vertical, GargantuaSpacing.space2)
                 .background(GargantuaColors.surface2)
@@ -140,7 +144,6 @@ public struct SmartUninstallerView: View {
         }
         .frame(maxWidth: 480)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(GargantuaSpacing.space6)
     }
 
     private func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {

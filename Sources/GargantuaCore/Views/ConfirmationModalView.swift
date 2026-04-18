@@ -190,18 +190,24 @@ struct ConfirmationButtons: View {
                     .padding(.horizontal, GargantuaSpacing.space4)
                     .background(confirmBackground)
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .stroke(
-                                focusedButton == .confirm ? GargantuaColors.borderFocus : Color.clear,
-                                lineWidth: 2
-                            )
-                    )
+                    .overlay {
+                        if isEnabled && focusedButton == .confirm {
+                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                .stroke(GargantuaColors.borderFocus, lineWidth: 2)
+                        }
+                    }
             }
             .buttonStyle(.plain)
             .focusable(isEnabled)
             .focused($focusedButton, equals: .confirm)
             .disabled(!isEnabled)
+            // Prevent a stale focus ring when the button becomes disabled
+            // mid-flow (e.g. user un-acknowledges a protected item).
+            .onChange(of: isEnabled) { _, nowEnabled in
+                if !nowEnabled, focusedButton == .confirm {
+                    focusedButton = nil
+                }
+            }
         }
     }
 }
