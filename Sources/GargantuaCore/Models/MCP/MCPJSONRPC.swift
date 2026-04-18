@@ -181,7 +181,14 @@ extension MCPRequest: Codable {
             id = nil
         }
         let method = try c.decode(String.self, forKey: .method)
-        let params = try c.decodeIfPresent(MCPJSONAny.self, forKey: .params)
+        // Preserve explicit null params so dispatch can distinguish "no
+        // params" from "params: null"; parallels the id handling above.
+        let params: MCPJSONAny?
+        if c.contains(.params) {
+            params = try c.decode(MCPJSONAny.self, forKey: .params)
+        } else {
+            params = nil
+        }
         self.init(jsonrpc: version, id: id, method: method, params: params)
     }
 
@@ -251,16 +258,19 @@ extension MCPResponse: Codable {
             )
         }
         let id = try c.decode(MCPRequestID.self, forKey: .id)
-        let result = try c.decodeIfPresent(MCPJSONAny.self, forKey: .result)
-        let error = try c.decodeIfPresent(MCPResponseError.self, forKey: .error)
-        switch (result, error) {
-        case (nil, nil):
+        // Distinguish success from error by key PRESENCE, not by value,
+        // so a well-formed `{"result": null}` decodes as a success with
+        // `.null` rather than being rejected as an empty response.
+        let hasResult = c.contains(.result)
+        let hasError = c.contains(.error)
+        switch (hasResult, hasError) {
+        case (false, false):
             throw DecodingError.dataCorruptedError(
                 forKey: .result,
                 in: c,
                 debugDescription: "JSON-RPC response must contain either result or error"
             )
-        case (.some, .some):
+        case (true, true):
             throw DecodingError.dataCorruptedError(
                 forKey: .result,
                 in: c,
@@ -269,6 +279,12 @@ extension MCPResponse: Codable {
         default:
             break
         }
+        let result: MCPJSONAny? = hasResult
+            ? try c.decode(MCPJSONAny.self, forKey: .result)
+            : nil
+        let error: MCPResponseError? = hasError
+            ? try c.decode(MCPResponseError.self, forKey: .error)
+            : nil
         self.init(jsonrpc: version, id: id, result: result, error: error)
     }
 

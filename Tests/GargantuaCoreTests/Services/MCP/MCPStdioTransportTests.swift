@@ -183,4 +183,45 @@ struct MCPStdioTransportTests {
         #expect(responses.count == 1)
         #expect(responses[0].id == .null)
     }
+
+    // MARK: Encode-failure fallback
+
+    @Test("non-finite handler result falls back to internal-error response")
+    func nonFiniteResultFallsBackToInternalError() {
+        let line = #"{"jsonrpc":"2.0","id":5,"method":"bad"}"#
+        let responses = runTransport(lines: [line]) { _ in
+            .success(id: .int(5), result: .number(Double.infinity))
+        }
+        #expect(responses.count == 1)
+        #expect(responses[0].id == .int(5))
+        #expect(responses[0].error?.code == MCPErrorCode.internalError)
+        #expect(responses[0].error?.message.contains("failed to encode") == true)
+    }
+
+    // MARK: Log truncation
+
+    @Test("log truncates oversized input and escapes control characters")
+    func logTruncatesAndEscapes() {
+        final class LogSink: @unchecked Sendable {
+            var entries: [String] = []
+            func append(_ message: String) { entries.append(message) }
+        }
+        let sink = LogSink()
+        let huge = String(repeating: "x", count: 2_000)
+        let payloadWithControl = "\u{07}\(huge)"   // BEL at the head
+        let source = QueueSource([payloadWithControl])
+        let outSink = RecordingSink()
+        let transport = MCPStdioTransport(
+            source: source,
+            sink: outSink,
+            handler: Self.methodNotFoundHandler,
+            log: { sink.append($0) }
+        )
+        transport.run()
+        #expect(sink.entries.count == 1)
+        let entry = sink.entries[0]
+        #expect(entry.contains("\\u0007"), "control chars must be escaped: \(entry.prefix(40))")
+        #expect(entry.contains("truncated"), "oversize logs must be truncated")
+        #expect(!entry.contains("\u{07}"), "raw BEL must not leak to stderr")
+    }
 }

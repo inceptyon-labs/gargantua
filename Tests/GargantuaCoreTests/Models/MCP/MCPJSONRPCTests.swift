@@ -143,6 +143,39 @@ struct MCPJSONRPCTests {
         }
     }
 
+    @Test("response with explicit result: null is a successful response")
+    func responseWithExplicitNullResultIsSuccess() throws {
+        let json = #"{"jsonrpc":"2.0","id":1,"result":null}"#
+        let response = try Self.decoder.decode(MCPResponse.self, from: Data(json.utf8))
+        #expect(response.id == .int(1))
+        #expect(response.result == .null)
+        #expect(response.error == nil)
+    }
+
+    @Test("success with null result round-trips through encode/decode")
+    func successNullResultRoundTrip() throws {
+        let original = MCPResponse.success(id: .int(9), result: .null)
+        let data = try Self.encoder.encode(original)
+        let decoded = try Self.decoder.decode(MCPResponse.self, from: data)
+        #expect(decoded == original)
+    }
+
+    // MARK: Request params presence
+
+    @Test("request preserves explicit null params")
+    func requestPreservesNullParams() throws {
+        let json = #"{"jsonrpc":"2.0","id":1,"method":"x","params":null}"#
+        let req = try Self.decoder.decode(MCPRequest.self, from: Data(json.utf8))
+        #expect(req.params == .null)
+    }
+
+    @Test("request with absent params decodes to nil")
+    func requestAbsentParamsIsNil() throws {
+        let json = #"{"jsonrpc":"2.0","id":1,"method":"x"}"#
+        let req = try Self.decoder.decode(MCPRequest.self, from: Data(json.utf8))
+        #expect(req.params == nil)
+    }
+
     @Test("success response does not emit an error key")
     func successResponseHasNoErrorKey() throws {
         let data = try Self.encoder.encode(
