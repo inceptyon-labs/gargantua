@@ -1,11 +1,11 @@
 ---
 # gargantua-tr4w
 title: 'Task: MCP tools/list + tools/call dispatch'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-18T22:18:34Z
-updated_at: 2026-04-18T22:18:34Z
+updated_at: 2026-04-18T22:48:10Z
 parent: gargantua-2h06
 blocked_by:
     - gargantua-xc7m
