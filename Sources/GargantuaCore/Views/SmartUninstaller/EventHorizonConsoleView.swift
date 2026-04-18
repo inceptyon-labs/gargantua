@@ -13,9 +13,16 @@ public struct EventHorizonConsoleView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Indices of `stream.events` that have finished spaghettifying during
-    /// the current `.executing` phase and should be hidden from the list.
-    @State private var swallowedIndices: Set<Int> = []
+    /// Stable sequence IDs of events that have finished spaghettifying
+    /// during the current `.executing` phase. Using sequence numbers
+    /// (`PathStreamViewModel.firstSequence + offset`) rather than array
+    /// offsets keeps this set correct when the ring buffer rolls over.
+    @State private var swallowedSeqs: Set<Int> = []
+
+    /// Sequence number of the first event that belongs to the current
+    /// executing phase. Match events from earlier phases (scanning) are
+    /// below this threshold and must not be spaghettified.
+    @State private var executingBaselineSeq: Int = 0
 
     /// Wall-clock the current phase was entered. Used to gate the
     /// time-dilation easter egg line.
@@ -109,9 +116,10 @@ public struct EventHorizonConsoleView: View {
                             .foregroundStyle(GargantuaColors.ink4)
                             .padding(.vertical, GargantuaSpacing.space2)
                     }
-                    ForEach(Array(stream.events.enumerated()), id: \.offset) { index, event in
-                        eventRow(event, index: index)
-                            .id(index)
+                    ForEach(Array(stream.events.enumerated()), id: \.offset) { offset, event in
+                        let seq = stream.firstSequence + offset
+                        eventRow(event, seq: seq)
+                            .id(seq)
                     }
                     Color.clear
                         .frame(height: 1)
@@ -134,21 +142,27 @@ public struct EventHorizonConsoleView: View {
         }
     }
 
-    private func eventRow(_ event: ScanProgressEvent, index: Int) -> some View {
-        SpaghettifyEventRow(
+    private func eventRow(_ event: ScanProgressEvent, seq: Int) -> some View {
+        let postBaseline = seq >= executingBaselineSeq
+        return SpaghettifyEventRow(
             event: event,
-            index: index,
-            isExecuting: isExecutingPhase,
+            seq: seq,
+            shouldSpaghettify: isExecutingPhase && postBaseline && isSuccessOutcome(event.outcome),
             reduceMotion: reduceMotion,
             badge: badge(for: event.outcome),
             badgeColor: badgeColor(for: event.outcome),
             rowColor: rowColor(for: event.outcome),
             displayPath: displayPath(event.path),
-            onSwallowed: { swallowedIndices.insert($0) }
+            onSwallowed: { swallowedSeqs.insert($0) }
         )
-        .opacity(swallowedIndices.contains(index) ? 0 : 1)
-        .frame(maxHeight: swallowedIndices.contains(index) ? 0 : nil)
+        .opacity(swallowedSeqs.contains(seq) ? 0 : 1)
+        .frame(maxHeight: swallowedSeqs.contains(seq) ? 0 : nil)
         .clipped()
+    }
+
+    private func isSuccessOutcome(_ outcome: ScanProgressEvent.Outcome) -> Bool {
+        if case .match = outcome { return true }
+        return false
     }
 
     // MARK: - Footer
@@ -197,8 +211,12 @@ public struct EventHorizonConsoleView: View {
 
     private func resetPhaseTracking() {
         phaseEnteredAt = Date()
-        swallowedIndices = []
+        swallowedSeqs = []
         activityRate = 0
+        // Anchor the executing baseline to the next sequence ID that will
+        // be assigned. Any event already in the buffer belongs to a prior
+        // phase (e.g. scan matches) and must not be spaghettified.
+        executingBaselineSeq = stream.firstSequence + stream.events.count
         if !isExecutingPhase {
             showTimeDilation = false
         }
@@ -314,8 +332,8 @@ public struct EventHorizonConsoleView: View {
 /// every row into the parent's update loop.
 private struct SpaghettifyEventRow: View {
     let event: ScanProgressEvent
-    let index: Int
-    let isExecuting: Bool
+    let seq: Int
+    let shouldSpaghettify: Bool
     let reduceMotion: Bool
     let badge: String
     let badgeColor: Color
@@ -324,12 +342,6 @@ private struct SpaghettifyEventRow: View {
     let onSwallowed: (Int) -> Void
 
     @State private var progress: Double = 0
-
-    private var shouldSpaghettify: Bool {
-        guard isExecuting else { return false }
-        if case .match = event.outcome { return true }
-        return false
-    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
@@ -346,19 +358,25 @@ private struct SpaghettifyEventRow: View {
                 .frame(width: 72, alignment: .trailing)
         }
         .spaghettify(progress: progress, reduceMotion: reduceMotion)
-        .task(id: index) {
+        .task(id: seq) {
             guard shouldSpaghettify else { return }
-            try? await Task.sleep(for: .seconds(Spaghettify.dwell))
+            // Respect cancellation: SwiftUI cancels `.task` when the view is
+            // replaced (phase change, ring-buffer rollover, identity churn).
+            // `try? await Task.sleep` swallows the cancellation error, so the
+            // closure would continue mutating stale state — check explicitly.
+            do { try await Task.sleep(for: .seconds(Spaghettify.dwell)) } catch { return }
+            if Task.isCancelled { return }
             if reduceMotion {
                 progress = 1
-                onSwallowed(index)
+                onSwallowed(seq)
                 return
             }
             withAnimation(.easeIn(duration: Spaghettify.duration)) {
                 progress = 1
             }
-            try? await Task.sleep(for: .seconds(Spaghettify.duration))
-            onSwallowed(index)
+            do { try await Task.sleep(for: .seconds(Spaghettify.duration)) } catch { return }
+            if Task.isCancelled { return }
+            onSwallowed(seq)
         }
     }
 }

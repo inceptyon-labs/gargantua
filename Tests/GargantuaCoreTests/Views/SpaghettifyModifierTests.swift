@@ -39,18 +39,18 @@ struct SpaghettifyTextTests {
     @Test("Tail length grows monotonically through the middle third")
     func tailGrowsMonotonically() {
         let base = String(repeating: "x", count: 40)
-        let mid = Spaghettify.text(base, progress: 0.50)
-        let late = Spaghettify.text(base, progress: 0.60)
-        let midStrip = 40 - mid.reversed().prefix(while: { $0 == "x" }).count
-        let lateStrip = 40 - late.reversed().prefix(while: { $0 == "x" }).count
-        let midReplaced = midStrip // chars replaced
-        let lateReplaced = lateStrip
-        // Actually we want count of replaced chars — easier: total - leading x's.
-        let midKept = mid.prefix(while: { $0 == "x" }).count
-        let lateKept = late.prefix(while: { $0 == "x" }).count
-        #expect(midKept >= lateKept)
-        _ = midReplaced
-        _ = lateReplaced
+        // Sample every 4% from just above 0.33 through 0.66 — the range where
+        // the tail is actively growing. `kept` (count of leading x's) must
+        // never increase as progress advances.
+        var lastKept = base.count
+        for sample in stride(from: 0.34, through: 0.66, by: 0.04) {
+            let result = Spaghettify.text(base, progress: sample)
+            let kept = result.prefix(while: { $0 == "x" }).count
+            #expect(kept <= lastKept, "kept grew at progress \(sample): \(kept) > \(lastKept)")
+            lastKept = kept
+        }
+        // By the end of the middle third, the tail is at the 10-char cap.
+        #expect(lastKept == base.count - Spaghettify.maxTailStrip)
     }
 
     @Test("Short strings have their entire length stripped when progress is high")

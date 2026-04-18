@@ -67,6 +67,34 @@ struct PathStreamViewModelTests {
         #expect(vm.totalBytes == 0)
     }
 
+    @Test("firstSequence advances when events roll off the buffer")
+    func firstSequenceAdvancesOnRollover() {
+        let vm = PathStreamViewModel(bufferCap: 2)
+        #expect(vm.firstSequence == 0)
+        vm.append(ScanProgressEvent(path: "/a", outcome: .checked))
+        vm.append(ScanProgressEvent(path: "/b", outcome: .checked))
+        #expect(vm.firstSequence == 0) // no rollover yet
+        vm.append(ScanProgressEvent(path: "/c", outcome: .checked))
+        #expect(vm.firstSequence == 1) // /a dropped
+        vm.append(ScanProgressEvent(path: "/d", outcome: .checked))
+        #expect(vm.firstSequence == 2) // /b dropped
+        // Stable IDs: events[0] is /c with seq 2, events[1] is /d with seq 3.
+        #expect(vm.firstSequence + 0 == 2)
+        #expect(vm.firstSequence + 1 == 3)
+    }
+
+    @Test("firstSequence is monotonic across clear() so IDs never collide")
+    func firstSequenceMonotonicAcrossClear() {
+        let vm = PathStreamViewModel()
+        vm.append(ScanProgressEvent(path: "/a", outcome: .match, bytes: 10))
+        vm.append(ScanProgressEvent(path: "/b", outcome: .match, bytes: 10))
+        vm.clear()
+        #expect(vm.firstSequence >= 2)
+        let afterClear = vm.firstSequence
+        vm.append(ScanProgressEvent(path: "/c", outcome: .match, bytes: 10))
+        #expect(vm.firstSequence == afterClear)
+    }
+
     @Test("didEmit from nonisolated context forwards to main actor in order")
     func nonisolatedForwarding() async {
         let vm = PathStreamViewModel()

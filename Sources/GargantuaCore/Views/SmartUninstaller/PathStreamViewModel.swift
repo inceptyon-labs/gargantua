@@ -13,6 +13,12 @@ public final class PathStreamViewModel: ScanProgressObserving {
     /// Event log, capped at `bufferCap`. Oldest events drop first.
     public private(set) var events: [ScanProgressEvent] = []
 
+    /// Sequence number of `events[0]`. Increments when events are dropped
+    /// off the front of the ring buffer so callers that need a stable row
+    /// identity can compute `firstSequence + index` and keep referring to
+    /// the same event after buffer rollover.
+    public private(set) var firstSequence: Int = 0
+
     /// Running count of `.match` outcomes since the last `clear()`.
     public private(set) var matchCount: Int = 0
 
@@ -38,7 +44,9 @@ public final class PathStreamViewModel: ScanProgressObserving {
     public func append(_ event: ScanProgressEvent) {
         events.append(event)
         if events.count > bufferCap {
-            events.removeFirst(events.count - bufferCap)
+            let dropped = events.count - bufferCap
+            events.removeFirst(dropped)
+            firstSequence += dropped
         }
         switch event.outcome {
         case .match:
@@ -51,8 +59,11 @@ public final class PathStreamViewModel: ScanProgressObserving {
         }
     }
 
-    /// Reset the buffer and all aggregate counters.
+    /// Reset the buffer and all aggregate counters. The sequence counter is
+    /// preserved across clears so IDs never collide with previously-swallowed
+    /// events that a view might still remember.
     public func clear() {
+        firstSequence += events.count
         events = []
         matchCount = 0
         failureCount = 0
