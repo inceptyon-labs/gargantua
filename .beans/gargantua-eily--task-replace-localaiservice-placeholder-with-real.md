@@ -1,11 +1,11 @@
 ---
 # gargantua-eily
 title: 'Task: Replace LocalAIService placeholder with real inference boundary'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-17T18:07:39Z
-updated_at: 2026-04-17T18:07:39Z
+updated_at: 2026-04-18T02:10:18Z
 parent: gargantua-8igf
 ---
 

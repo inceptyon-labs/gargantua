@@ -8,6 +8,11 @@ import Foundation
 ///
 /// When no model file is available on disk, `explain` returns the YAML rule's
 /// built-in explanation string instead.
+///
+/// The actual text generation is delegated to an injected
+/// `AIInferenceEngine`. The default engine (`TemplateInferenceEngine`)
+/// produces deterministic structured text; swapping in an MLX-backed engine
+/// replaces it with real model output without changing this class.
 @MainActor
 public final class LocalAIService: ObservableObject, AIServiceProtocol {
     /// Current lifecycle state of the model.
@@ -23,16 +28,24 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
     public let idleTimeout: TimeInterval
 
     private let downloadManager: ModelDownloadManager
-    private var modelData: Data?
+    private let engine: AIInferenceEngine
     private var idleTask: Task<Void, Never>?
 
     /// Creates a new LocalAIService.
     ///
     /// - Parameters:
     ///   - downloadManager: Provides model file path and download state.
+    ///   - engine: Backend that runs inference. Defaults to
+    ///     `TemplateInferenceEngine`, which produces deterministic
+    ///     structured text from rule/result metadata.
     ///   - idleTimeout: Seconds before auto-unload (default: 60).
-    public init(downloadManager: ModelDownloadManager, idleTimeout: TimeInterval = 60) {
+    public init(
+        downloadManager: ModelDownloadManager,
+        engine: AIInferenceEngine? = nil,
+        idleTimeout: TimeInterval = 60
+    ) {
         self.downloadManager = downloadManager
+        self.engine = engine ?? TemplateInferenceEngine()
         self.idleTimeout = idleTimeout
     }
 
@@ -63,14 +76,20 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
         resetIdleTimer()
 
-        let explanation = generateExplanation(for: result, rule: rule)
-        return AIExplanation(text: explanation, source: .ai)
+        do {
+            let text = try await engine.generate(for: result, rule: rule)
+            return AIExplanation(text: text, source: .ai)
+        } catch {
+            // Engine failure is advisory — surface the YAML rule rather than
+            // throwing, so callers always get a usable explanation.
+            return AIExplanation(text: rule.explanation, source: .rule)
+        }
     }
 
     public func unloadModel() {
         idleTask?.cancel()
         idleTask = nil
-        modelData = nil
+        engine.unload()
         modelMemoryUsage = 0
         lifecycleState = .unloaded
     }
@@ -90,13 +109,11 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         lifecycleState = .loading
 
         do {
-            let url = URL(fileURLWithPath: path)
-            let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            modelData = data
-            modelMemoryUsage = Int64(data.count)
+            try await engine.load(modelPath: path, modelSize: size)
+            modelMemoryUsage = engine.memoryUsage
             lifecycleState = .ready
         } catch {
-            modelData = nil
+            engine.unload()
             modelMemoryUsage = 0
             lifecycleState = .unloaded
             throw AIServiceError.loadFailed(underlying: error)
@@ -110,30 +127,6 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             guard !Task.isCancelled else { return }
             self?.unloadModel()
         }
-    }
-
-    /// Placeholder inference — returns a structured explanation using rule metadata.
-    ///
-    /// Replace this method body with actual MLX Swift inference when the
-    /// framework dependency is added.
-    private func generateExplanation(for result: ScanResult, rule: ScanRule) -> String {
-        // TODO: Replace with MLX inference when framework is available
-        var parts: [String] = []
-        parts.append("\(result.name) is a \(rule.category.replacingOccurrences(of: "_", with: " ")) item")
-        parts.append("created by \(result.source.name).")
-
-        if result.regenerates {
-            if let cmd = result.regenerateCommand {
-                parts.append("It can be regenerated with `\(cmd)`.")
-            } else {
-                parts.append("It regenerates automatically.")
-            }
-        }
-
-        parts.append("Safety: \(result.safety.rawValue) (\(result.confidence)% confidence).")
-        parts.append(rule.explanation)
-
-        return parts.joined(separator: " ")
     }
 }
 

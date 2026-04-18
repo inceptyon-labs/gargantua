@@ -125,6 +125,11 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
     // MARK: - Private
 
+    /// Test-only seam: override the state directly. Not for production use.
+    internal func _setStateForTesting(_ newState: ModelState) {
+        self.state = newState
+    }
+
     private func checkExistingModel() {
         let fm = FileManager.default
         if fm.fileExists(atPath: destinationURL.path) {

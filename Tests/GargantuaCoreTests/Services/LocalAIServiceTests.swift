@@ -171,4 +171,166 @@ struct LocalAIServiceTests {
         let service = LocalAIService(downloadManager: manager)
         #expect(service.idleTimeout == 60)
     }
+
+    // MARK: - Inference Engine Boundary
+
+    @Test("Injected engine is used when model is available")
+    func injectedEngineProducesOutput() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = FakeInferenceEngine(output: "ENGINE_OUTPUT")
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let explanation = try await service.explain(result: makeResult(), rule: makeRule())
+
+        #expect(explanation.source == .ai)
+        #expect(explanation.text == "ENGINE_OUTPUT")
+        #expect(engine.generateCallCount == 1)
+        #expect(engine.loadCallCount == 1)
+    }
+
+    @Test("Engine generate failure falls back to YAML rule explanation")
+    func engineGenerateFailureFallsBack() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = FakeInferenceEngine(output: "unused", generateError: FakeEngineError.boom)
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let rule = makeRule(explanation: "YAML fallback text.")
+        let explanation = try await service.explain(result: makeResult(), rule: rule)
+
+        #expect(explanation.source == .rule)
+        #expect(explanation.text == "YAML fallback text.")
+        #expect(service.lifecycleState == .ready, "engine load succeeded even though generate failed")
+    }
+
+    @Test("Engine load failure is wrapped in AIServiceError.loadFailed")
+    func engineLoadFailureWrapped() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = FakeInferenceEngine(output: "unused", loadError: FakeEngineError.boom)
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        await #expect(throws: AIServiceError.self) {
+            _ = try await service.explain(result: self.makeResult(), rule: self.makeRule())
+        }
+        #expect(service.lifecycleState == .unloaded)
+        #expect(service.modelMemoryUsage == 0)
+    }
+
+    @Test("unloadModel forwards to engine")
+    func unloadForwardsToEngine() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = FakeInferenceEngine(output: "x")
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        _ = try await service.explain(result: makeResult(), rule: makeRule())
+        #expect(engine.isLoaded == true)
+
+        service.unloadModel()
+
+        #expect(engine.unloadCallCount >= 1)
+        #expect(engine.isLoaded == false)
+        #expect(service.modelMemoryUsage == 0)
+        #expect(service.lifecycleState == .unloaded)
+    }
+
+    @Test("MLXInferenceEngine.load throws notImplemented")
+    func mlxEngineLoadThrows() async {
+        let engine = MLXInferenceEngine()
+        await #expect(throws: AIInferenceEngineError.self) {
+            try await engine.load(modelPath: "/tmp/x", modelSize: 1)
+        }
+    }
+
+    @Test("MLXInferenceEngine.generate throws notImplemented")
+    func mlxEngineGenerateThrows() async {
+        let engine = MLXInferenceEngine()
+        await #expect(throws: AIInferenceEngineError.self) {
+            _ = try await engine.generate(for: makeResult(), rule: makeRule())
+        }
+    }
+
+    @Test("TemplateInferenceEngine produces structured text")
+    func templateEngineProducesText() async throws {
+        let engine = TemplateInferenceEngine()
+        let text = try await engine.generate(for: makeResult(), rule: makeRule())
+        #expect(text.contains("Chrome Browser Cache"))
+        #expect(text.contains("browser cache"))
+        #expect(text.contains("Safety:"))
+    }
+
+    // MARK: - Test helpers
+
+    private func makeTempModelFile(contents: String) throws -> (path: String, size: Int64) {
+        let dir = FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("gargantua-test-model-\(UUID().uuidString).bin")
+        try contents.data(using: .utf8)!.write(to: url)
+        let size = Int64(contents.utf8.count)
+        return (url.path, size)
+    }
+}
+
+// MARK: - Test doubles
+
+private enum FakeEngineError: Error { case boom }
+
+@MainActor
+private final class FakeInferenceEngine: AIInferenceEngine {
+    private(set) var isLoaded: Bool = false
+    private(set) var memoryUsage: Int64 = 0
+
+    private(set) var loadCallCount = 0
+    private(set) var unloadCallCount = 0
+    private(set) var generateCallCount = 0
+
+    private let output: String
+    private let loadError: Error?
+    private let generateError: Error?
+
+    init(output: String, loadError: Error? = nil, generateError: Error? = nil) {
+        self.output = output
+        self.loadError = loadError
+        self.generateError = generateError
+    }
+
+    func load(modelPath: String, modelSize: Int64) async throws {
+        loadCallCount += 1
+        if let loadError {
+            throw loadError
+        }
+        isLoaded = true
+        memoryUsage = modelSize
+    }
+
+    func unload() {
+        unloadCallCount += 1
+        isLoaded = false
+        memoryUsage = 0
+    }
+
+    func generate(for result: ScanResult, rule: ScanRule) async throws -> String {
+        generateCallCount += 1
+        if let generateError {
+            throw generateError
+        }
+        return output
+    }
 }
