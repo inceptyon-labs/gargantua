@@ -1,11 +1,11 @@
 ---
 # gargantua-xc7m
 title: 'Task: MCP JSON-RPC 2.0 stdio framing'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-18T22:18:28Z
-updated_at: 2026-04-18T22:18:28Z
+updated_at: 2026-04-18T22:27:26Z
 parent: gargantua-2h06
 blocked_by:
     - gargantua-6an3
