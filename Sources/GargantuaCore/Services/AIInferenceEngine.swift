@@ -30,8 +30,10 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
 
     /// Generate explanation text for a scan result using the loaded model.
     ///
-    /// Precondition: `isLoaded` is true. Calling on an unloaded engine is
-    /// a programmer error — `LocalAIService` guards this.
+    /// Engines that rely on model weights require `isLoaded == true`;
+    /// `LocalAIService` ensures the engine is loaded before calling.
+    /// Engines that don't need weights (e.g., deterministic templates)
+    /// may generate without being loaded.
     func generate(for result: ScanResult, rule: ScanRule) async throws -> String
 }
 

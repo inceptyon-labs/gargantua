@@ -30,6 +30,7 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
     private let downloadManager: ModelDownloadManager
     private let engine: AIInferenceEngine
     private var idleTask: Task<Void, Never>?
+    private var activeInferenceCount: Int = 0
 
     /// Creates a new LocalAIService.
     ///
@@ -74,7 +75,18 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             return AIExplanation(text: rule.explanation, source: .rule)
         }
 
-        resetIdleTimer()
+        // Suspend the idle timer while inference is in flight so a long
+        // generation on a real MLX backend cannot be unloaded mid-call.
+        // The timer is restarted once no inference is active.
+        idleTask?.cancel()
+        idleTask = nil
+        activeInferenceCount += 1
+        defer {
+            activeInferenceCount -= 1
+            if activeInferenceCount == 0 && lifecycleState == .ready {
+                resetIdleTimer()
+            }
+        }
 
         do {
             let text = try await engine.generate(for: result, rule: rule)
@@ -110,14 +122,26 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
         do {
             try await engine.load(modelPath: path, modelSize: size)
-            modelMemoryUsage = engine.memoryUsage
-            lifecycleState = .ready
         } catch {
             engine.unload()
             modelMemoryUsage = 0
             lifecycleState = .unloaded
             throw AIServiceError.loadFailed(underlying: error)
         }
+
+        // Resident-memory guard: on-disk size is pre-validated, but a real
+        // backend may decompress or expand weights in memory. Refuse if the
+        // engine's reported memory exceeds the RAM limit.
+        let resident = engine.memoryUsage
+        if resident > Self.maxModelMemory {
+            engine.unload()
+            modelMemoryUsage = 0
+            lifecycleState = .unloaded
+            throw AIServiceError.modelTooLarge(size: resident, limit: Self.maxModelMemory)
+        }
+
+        modelMemoryUsage = resident
+        lifecycleState = .ready
     }
 
     private func resetIdleTimer() {

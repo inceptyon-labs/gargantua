@@ -268,6 +268,48 @@ struct LocalAIServiceTests {
         }
     }
 
+    @Test("Idle timer does not unload during in-flight inference")
+    func idleTimerSuspendedDuringInference() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        // Use a very short idle timeout and a slow engine whose generate
+        // takes longer than the timeout. The timer must not unload mid-call.
+        let engine = FakeInferenceEngine(output: "SLOW", generateDelay: .milliseconds(200))
+        let service = LocalAIService(downloadManager: manager, engine: engine, idleTimeout: 0.05)
+
+        let explanation = try await service.explain(result: makeResult(), rule: makeRule())
+
+        #expect(explanation.source == .ai)
+        #expect(explanation.text == "SLOW")
+        #expect(engine.unloadCallsDuringGenerate == 0, "engine was unloaded while generate was in flight")
+    }
+
+    @Test("Post-load memory guard rejects models over RAM limit")
+    func residentMemoryGuard() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        // Engine reports resident memory far above the 3 GB limit, despite
+        // a small on-disk file (simulating decompressed weights).
+        let bloated = LocalAIService.maxModelMemory + 1_000_000
+        let engine = FakeInferenceEngine(output: "unused", reportedMemoryUsage: bloated)
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        await #expect(throws: AIServiceError.self) {
+            _ = try await service.explain(result: self.makeResult(), rule: self.makeRule())
+        }
+        #expect(service.lifecycleState == .unloaded)
+        #expect(service.modelMemoryUsage == 0)
+        #expect(engine.unloadCallCount >= 1)
+    }
+
     @Test("TemplateInferenceEngine produces structured text")
     func templateEngineProducesText() async throws {
         let engine = TemplateInferenceEngine()
@@ -300,15 +342,27 @@ private final class FakeInferenceEngine: AIInferenceEngine {
     private(set) var loadCallCount = 0
     private(set) var unloadCallCount = 0
     private(set) var generateCallCount = 0
+    private(set) var unloadCallsDuringGenerate = 0
 
     private let output: String
     private let loadError: Error?
     private let generateError: Error?
+    private let generateDelay: Duration?
+    private let reportedMemoryUsage: Int64?
+    private var inFlight: Int = 0
 
-    init(output: String, loadError: Error? = nil, generateError: Error? = nil) {
+    init(
+        output: String,
+        loadError: Error? = nil,
+        generateError: Error? = nil,
+        generateDelay: Duration? = nil,
+        reportedMemoryUsage: Int64? = nil
+    ) {
         self.output = output
         self.loadError = loadError
         self.generateError = generateError
+        self.generateDelay = generateDelay
+        self.reportedMemoryUsage = reportedMemoryUsage
     }
 
     func load(modelPath: String, modelSize: Int64) async throws {
@@ -317,17 +371,25 @@ private final class FakeInferenceEngine: AIInferenceEngine {
             throw loadError
         }
         isLoaded = true
-        memoryUsage = modelSize
+        memoryUsage = reportedMemoryUsage ?? modelSize
     }
 
     func unload() {
         unloadCallCount += 1
+        if inFlight > 0 {
+            unloadCallsDuringGenerate += 1
+        }
         isLoaded = false
         memoryUsage = 0
     }
 
     func generate(for result: ScanResult, rule: ScanRule) async throws -> String {
         generateCallCount += 1
+        inFlight += 1
+        defer { inFlight -= 1 }
+        if let generateDelay {
+            try? await Task.sleep(for: generateDelay)
+        }
         if let generateError {
             throw generateError
         }
