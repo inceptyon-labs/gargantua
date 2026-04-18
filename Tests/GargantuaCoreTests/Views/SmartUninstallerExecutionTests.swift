@@ -76,6 +76,47 @@ struct SmartUninstallerExecutionTests {
         #expect(message.contains("authorization") || message.contains("Admin"))
     }
 
+    @Test("execute() always passes cleanupMethod=.trash, ignoring prior state")
+    func executeForcesTrash() async {
+        let app = makeApp()
+        let a = makeRemnant(id: "a", app: app, safety: .safe)
+        let plan = makePlan(app: app, remnants: [a])
+        let executor = StubExecutor(result: .success(makeExecutionResult(plan: plan)))
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: [app]),
+            planner: StubPlanner(build: { _, _ in plan }),
+            executor: executor
+        )
+        await vm.selectApp(app)
+
+        await vm.execute()
+
+        #expect(executor.optionsSeen?.cleanupMethod == .trash)
+    }
+
+    @Test("execute() is swallowed outside .reviewingPlan phase")
+    func executeReentrancyGuard() async {
+        let app = makeApp()
+        let a = makeRemnant(id: "a", app: app, safety: .safe)
+        let plan = makePlan(app: app, remnants: [a])
+        let executor = StubExecutor(result: .success(makeExecutionResult(plan: plan)))
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: [app]),
+            planner: StubPlanner(build: { _, _ in plan }),
+            executor: executor
+        )
+        await vm.selectApp(app)
+        await vm.execute()
+        #expect(isPhase(vm.phase, "summary"))
+
+        // Second invocation while in .summary should be a no-op — no new
+        // executor call, no phase change.
+        let planSeenAfterFirst = executor.planSeen
+        await vm.execute()
+        #expect(isPhase(vm.phase, "summary"))
+        #expect(executor.planSeen?.id == planSeenAfterFirst?.id)
+    }
+
     @Test("reset() returns to pickingApp and clears selection")
     func resetClears() async {
         let app = makeApp()

@@ -21,7 +21,7 @@ struct UninstallPlanReviewView: View {
             VStack(spacing: 0) {
                 header(plan: plan)
 
-                if plan.app.isRunning {
+                if plan.app.isRunning, isAppBundleSelected(plan: plan) {
                     runningBanner(app: plan.app)
                 }
 
@@ -39,7 +39,7 @@ struct UninstallPlanReviewView: View {
                             categorySection(category: category, plan: plan)
                         }
 
-                        protectedToggle(plan: plan)
+                        ProtectedItemsTogglePanel(viewModel: viewModel, plan: plan)
                     }
                     .padding(GargantuaSpacing.space5)
                 }
@@ -140,34 +140,36 @@ struct UninstallPlanReviewView: View {
         let totalBytes = items.reduce(Int64(0)) { $0 + $1.size }
 
         return VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            Button {
-                if isCollapsed {
-                    collapsedCategories.remove(category)
-                } else {
-                    collapsedCategories.insert(category)
+            HStack(spacing: GargantuaSpacing.space2) {
+                Button {
+                    if isCollapsed {
+                        collapsedCategories.remove(category)
+                    } else {
+                        collapsedCategories.insert(category)
+                    }
+                } label: {
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(GargantuaColors.ink3)
+                            .frame(width: 10)
+
+                        Text(category.displayLabel)
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text("\(selectedCount) of \(items.count) · \(AlertItem.formatBytes(totalBytes))")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
                 }
-            } label: {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .frame(width: 10)
+                .buttonStyle(.plain)
 
-                    Text(category.displayLabel)
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
-
-                    Text("\(selectedCount) of \(items.count) · \(AlertItem.formatBytes(totalBytes))")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-
-                    Spacer()
-
-                    categoryBulkAction(items: items, selectedCount: selectedCount)
-                }
-                .contentShape(Rectangle())
+                categoryBulkAction(items: items, selectedCount: selectedCount)
             }
-            .buttonStyle(.plain)
 
             if !isCollapsed {
                 VStack(spacing: GargantuaSpacing.space1) {
@@ -201,52 +203,6 @@ struct UninstallPlanReviewView: View {
         }
         .buttonStyle(.plain)
         .disabled(actionable.isEmpty)
-    }
-
-    // MARK: - Protected toggle
-
-    private func protectedToggle(plan: UninstallPlan) -> some View {
-        let protectedItems = plan.allItems.filter { $0.safety == .protected_ }
-        return Group {
-            if !protectedItems.isEmpty {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    Image(systemName: viewModel.includeProtected ? "lock.open.fill" : "lock.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(GargantuaColors.protected_)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(protectedItems.count) protected item\(protectedItems.count == 1 ? "" : "s")")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-
-                        Text("System-level files (launch daemons, helpers). Unlock to select them — you'll acknowledge each one before uninstall.")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer()
-
-                    Toggle(
-                        "",
-                        isOn: Binding(
-                            get: { viewModel.includeProtected },
-                            set: { viewModel.setIncludeProtected($0) }
-                        )
-                    )
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-                .padding(GargantuaSpacing.space3)
-                .background(GargantuaColors.protected_.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                .overlay(
-                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                        .stroke(GargantuaColors.protected_.opacity(0.3), lineWidth: 1)
-                )
-            }
-        }
     }
 
     // MARK: - Footer
@@ -309,5 +265,12 @@ struct UninstallPlanReviewView: View {
     private func orderedCategories(in plan: UninstallPlan) -> [RemnantCategory] {
         let present = Set(plan.remnants.map(\.category))
         return RemnantCategory.allCases.filter { present.contains($0) }
+    }
+
+    /// True when the app bundle itself is selected — i.e. we'll actually
+    /// need to quit the running process before uninstall.
+    private func isAppBundleSelected(plan: UninstallPlan) -> Bool {
+        guard let bundleID = plan.appBundle?.id else { return false }
+        return viewModel.selectedIDs.contains(bundleID)
     }
 }

@@ -63,8 +63,6 @@ public final class SmartUninstallerViewModel {
     public private(set) var selectedIDs: Set<String> = []
     /// Whether the user has explicitly unlocked protected items for this plan.
     public private(set) var includeProtected: Bool = false
-    /// Per-plan chosen cleanup method (Trash-only today, reserved for future).
-    public var cleanupMethod: CleanupMethod = .trash
 
     // MARK: - Dependencies
 
@@ -166,9 +164,14 @@ public final class SmartUninstallerViewModel {
     }
 
     /// Begin uninstall planning for a chosen app.
+    ///
+    /// Planning hits the filesystem (glob expansion, directory enumeration,
+    /// size scanning), so we run it off the main actor to keep the
+    /// `.scanning` phase actually observable on large apps.
     public func selectApp(_ app: AppInfo) async {
         phase = .scanning(app)
-        let plan = planner.plan(for: app, includeAppBundle: true)
+        let planner = self.planner
+        let plan = await Task.detached { planner.plan(for: app, includeAppBundle: true) }.value
         selectedIDs = Set(plan.allItems
             .filter { $0.safety.isSelectedByDefault }
             .map(\.id))
@@ -210,8 +213,12 @@ public final class SmartUninstallerViewModel {
 
     /// Run the uninstall. Surfaces execution errors as a `.failed` phase so
     /// the UI can show the message and offer retry.
+    ///
+    /// Only runs from `.reviewingPlan`; double-confirms or key-repeat on the
+    /// confirm button are swallowed. Cleanup is hard-wired to Trash because
+    /// `UninstallExecutor` rejects anything else.
     public func execute() async {
-        guard let plan = currentPlan, canProceed else { return }
+        guard case .reviewingPlan(let plan) = phase, canProceed else { return }
         let selectedItems = plan.allItems.filter { selectedIDs.contains($0.id) }
         let prunedPlan = UninstallPlan(
             id: plan.id,
@@ -225,7 +232,7 @@ public final class SmartUninstallerViewModel {
         let options = UninstallExecutionOptions(
             includeProtectedItems: includeProtected,
             confirmationMethod: tier,
-            cleanupMethod: cleanupMethod,
+            cleanupMethod: .trash,
             authorization: authorizationProvider()
         )
 
@@ -242,7 +249,6 @@ public final class SmartUninstallerViewModel {
     public func reset() {
         selectedIDs = []
         includeProtected = false
-        cleanupMethod = .trash
         phase = .pickingApp
     }
 }
