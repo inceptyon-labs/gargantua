@@ -94,13 +94,43 @@ public struct EventHorizonConsoleView: View {
     }
 
     private var subtitleLine: some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            Text("⟳")
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.accretion)
+        // Spinning disk sits right next to the phase text so motion is always
+        // in eyeline during long scans — the header disk can be easy to miss
+        // on big apps during quiet event stretches.
+        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
+            AccretionDiskView(activityRate: activityRate, size: 11)
             Text(phaseSubtitle)
                 .font(GargantuaFonts.body.italic())
                 .foregroundStyle(GargantuaColors.ink2)
+            if isInProgressPhase {
+                activityEllipsis
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var activityEllipsis: some View {
+        let style: Text = Text("…")
+            .font(GargantuaFonts.body.italic())
+            .foregroundStyle(GargantuaColors.ink2)
+        if reduceMotion {
+            style.accessibilityHidden(true)
+        } else {
+            TimelineView(.periodic(from: .now, by: 0.45)) { context in
+                let step = Int(context.date.timeIntervalSinceReferenceDate / 0.45) % 3
+                Text(String(repeating: ".", count: step + 1))
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .frame(width: 18, alignment: .leading)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var isInProgressPhase: Bool {
+        switch phase {
+        case .loadingApps, .scanning, .executing: true
+        default: false
         }
     }
 
@@ -323,73 +353,4 @@ public struct EventHorizonConsoleView: View {
         if bytes == 0 { return "0 B" }
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
-}
-
-// MARK: - Row
-
-/// Individual log row. Factored out of `EventHorizonConsoleView.body` so it
-/// can own its own `@State` for the spaghettify progress without forcing
-/// every row into the parent's update loop.
-private struct SpaghettifyEventRow: View {
-    let event: ScanProgressEvent
-    let seq: Int
-    let shouldSpaghettify: Bool
-    let reduceMotion: Bool
-    let badge: String
-    let badgeColor: Color
-    let rowColor: Color
-    let displayPath: String
-    let onSwallowed: (Int) -> Void
-
-    @State private var progress: Double = 0
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
-            Text(Spaghettify.text(displayPath, progress: progress))
-                .font(GargantuaFonts.monoPath)
-                .foregroundStyle(rowColor)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(badge)
-                .font(GargantuaFonts.monoPath.weight(.semibold))
-                .foregroundStyle(badgeColor)
-                .frame(width: 72, alignment: .trailing)
-        }
-        .spaghettify(progress: progress, reduceMotion: reduceMotion)
-        .task(id: seq) {
-            guard shouldSpaghettify else { return }
-            // Respect cancellation: SwiftUI cancels `.task` when the view is
-            // replaced (phase change, ring-buffer rollover, identity churn).
-            // `try? await Task.sleep` swallows the cancellation error, so the
-            // closure would continue mutating stale state — check explicitly.
-            do { try await Task.sleep(for: .seconds(Spaghettify.dwell)) } catch { return }
-            if Task.isCancelled { return }
-            if reduceMotion {
-                progress = 1
-                onSwallowed(seq)
-                return
-            }
-            withAnimation(.easeIn(duration: Spaghettify.duration)) {
-                progress = 1
-            }
-            do { try await Task.sleep(for: .seconds(Spaghettify.duration)) } catch { return }
-            if Task.isCancelled { return }
-            onSwallowed(seq)
-        }
-    }
-}
-
-// MARK: - Session flag
-
-/// Per-process home for the "once per session" time-dilation easter egg.
-/// A struct-level `@State` survives only a single `.executing` phase; this
-/// lives for the app's lifetime so the line fires exactly once no matter how
-/// many uninstalls the user runs.
-@MainActor
-final class SingularitySession {
-    static let shared = SingularitySession()
-    var timeDilationShown = false
-    private init() {}
 }

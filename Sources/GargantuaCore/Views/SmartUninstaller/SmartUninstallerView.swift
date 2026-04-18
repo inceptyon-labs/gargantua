@@ -53,7 +53,7 @@ public struct SmartUninstallerView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.30), value: phaseKey)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: phaseKey)
 
             if showingConfirmation, viewModel.currentPlan != nil {
                 // Cleanup method is ignored: UninstallExecutor is Trash-only.
@@ -181,11 +181,19 @@ public struct SmartUninstallerView: View {
         }
     }
 
-    /// Crossfade between phase screens. Reduce-motion collapses to a cut so
-    /// users who have the OS preference set don't get the half-second fade
-    /// every time they click.
+    /// Transition between phase screens. Incoming view fades + materializes
+    /// up from 97% scale; outgoing view just fades. The subtle scale makes
+    /// the cut from the executing console to the summary card read as a
+    /// deliberate transition rather than a pop — a plain opacity fade
+    /// at this duration is too subtle against the dark void background.
+    /// Reduce-motion collapses to a cut so users who have the OS preference
+    /// set don't get the half-second fade every time they click.
     private var phaseTransition: AnyTransition {
-        reduceMotion ? .identity : .opacity
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.97)),
+            removal: .opacity
+        )
     }
 
     // MARK: - Default wiring

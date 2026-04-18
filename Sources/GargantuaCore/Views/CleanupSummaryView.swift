@@ -13,6 +13,21 @@ public struct CleanupSummaryView: View {
     let outcomeAccent: Color?
     let onDismiss: () -> Void
 
+    @State private var sort: SummarySort = .size
+    @State private var succeededExpanded: Bool = false
+
+    /// Sort options for the cleaned-item lists in the summary.
+    public enum SummarySort: String, CaseIterable, Sendable {
+        case name, size
+
+        var label: String {
+            switch self {
+            case .name: "Name"
+            case .size: "Size"
+            }
+        }
+    }
+
     public init(
         result: CleanupResult,
         outcomeAccent: Color? = nil,
@@ -21,6 +36,19 @@ public struct CleanupSummaryView: View {
         self.result = result
         self.outcomeAccent = outcomeAccent
         self.onDismiss = onDismiss
+    }
+
+    /// Size descending, then name ascending as the tiebreaker. Sort by name
+    /// is case-insensitive so "AppCleaner" and "aria2" sort lexically.
+    private func sorted(_ items: [CleanupItemResult]) -> [CleanupItemResult] {
+        switch sort {
+        case .name:
+            items.sorted {
+                $0.item.name.localizedCaseInsensitiveCompare($1.item.name) == .orderedAscending
+            }
+        case .size:
+            items.sorted { $0.item.size > $1.item.size }
+        }
     }
 
     public var body: some View {
@@ -91,11 +119,38 @@ public struct CleanupSummaryView: View {
     private var successSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             let count = result.succeededItems.count
-            Text(count == 1
-                 ? "1 item \(result.cleanupMethod.summaryActionText)"
-                 : "\(count) items \(result.cleanupMethod.summaryActionText)")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink2)
+            HStack(spacing: GargantuaSpacing.space2) {
+                Text(count == 1
+                     ? "1 item \(result.cleanupMethod.summaryActionText)"
+                     : "\(count) items \(result.cleanupMethod.summaryActionText)")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink2)
+
+                Spacer()
+
+                if count > 0 {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            succeededExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: GargantuaSpacing.space1) {
+                            Image(systemName: succeededExpanded ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(succeededExpanded ? "Hide items" : "Show items")
+                                .font(GargantuaFonts.caption)
+                        }
+                        .foregroundStyle(GargantuaColors.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(succeededExpanded ? "Hide cleaned items" : "Show cleaned items")
+                }
+            }
+
+            if succeededExpanded, !result.succeededItems.isEmpty {
+                sortPicker
+                itemList(sorted(result.succeededItems), foreground: GargantuaColors.ink)
+            }
         }
         .padding(GargantuaSpacing.space4)
     }
@@ -112,9 +167,18 @@ public struct CleanupSummaryView: View {
                 Text(count == 1 ? "1 item failed" : "\(count) items failed")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.protected_)
+
+                Spacer()
+
+                // Sort picker only renders on the failure side if the success
+                // list isn't already showing one (avoids two identical pickers
+                // stacked on top of each other in partial-failure summaries).
+                if !succeededExpanded || result.succeededItems.isEmpty {
+                    sortPicker
+                }
             }
 
-            ForEach(result.failedItems, id: \.item.id) { failed in
+            ForEach(sorted(result.failedItems), id: \.item.id) { failed in
                 HStack(spacing: GargantuaSpacing.space2) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(failed.item.name)
@@ -140,6 +204,46 @@ public struct CleanupSummaryView: View {
             }
         }
         .padding(GargantuaSpacing.space4)
+    }
+
+    // MARK: - Shared item list
+
+    private var sortPicker: some View {
+        Picker("Sort", selection: $sort) {
+            ForEach(SummarySort.allCases, id: \.self) { option in
+                Text(option.label).tag(option)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 140)
+        .controlSize(.small)
+        .accessibilityLabel("Sort items")
+    }
+
+    private func itemList(_ items: [CleanupItemResult], foreground: Color) -> some View {
+        // Cap the inline list height so an app like Xcode with hundreds of
+        // remnants can't push the footer off-screen; scroll inside the card.
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(items, id: \.item.id) { entry in
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        Text(entry.item.name)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(foreground)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        Spacer()
+
+                        Text(AlertItem.formatBytes(entry.item.size))
+                            .font(GargantuaFonts.monoData)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                    .padding(.vertical, 1)
+                }
+            }
+        }
+        .frame(maxHeight: 180)
     }
 
     // MARK: - Footer Actions
