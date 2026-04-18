@@ -116,12 +116,21 @@ public protocol UninstallAuditRecording: AnyObject, Sendable {
 
 extension AuditWriter: UninstallAuditRecording {}
 
+/// Executes an `UninstallPlan` — test seam for the Smart Uninstaller UI.
+public protocol UninstallExecuting: Sendable {
+    @MainActor
+    func execute(
+        _ plan: UninstallPlan,
+        options: UninstallExecutionOptions
+    ) async throws -> UninstallExecutionResult
+}
+
 /// Executes a Smart Uninstaller plan.
 ///
 /// This layer is intentionally Trash-first. Non-privileged files are moved via
 /// `NSWorkspace.recycle`; launch daemons and privileged helpers are delegated to
 /// an authorized helper boundary because app-sandboxed code cannot remove them.
-public final class UninstallExecutor: Sendable {
+public final class UninstallExecutor: UninstallExecuting, Sendable {
     private let remover: any UninstallRemoving
     private let privilegedHelper: (any PrivilegedUninstallHelping)?
     private let processTerminator: any RunningApplicationTerminating
@@ -149,7 +158,7 @@ public final class UninstallExecutor: Sendable {
         }
 
         let items = plan.allItems
-        let scanItems = items.map(Self.scanResult(from:))
+        let scanItems = items.map { $0.toScanResult() }
         if options.dryRun {
             return dryRunResult(items: scanItems)
         }
@@ -259,23 +268,6 @@ public final class UninstallExecutor: Sendable {
             || item.category == RemnantCategory.helpers.rawValue
             || item.path.hasPrefix("/Library/LaunchDaemons/")
             || item.path.hasPrefix("/Library/PrivilegedHelperTools/")
-    }
-
-    private static func scanResult(from item: RemnantItem) -> ScanResult {
-        ScanResult(
-            id: item.id,
-            name: URL(fileURLWithPath: item.path).lastPathComponent,
-            path: item.path,
-            size: item.size,
-            safety: item.safety,
-            confidence: item.confidence,
-            explanation: item.explanation,
-            source: item.source,
-            lastAccessed: item.lastAccessed,
-            category: item.category.rawValue,
-            tags: item.tags,
-            regenerates: item.regenerates
-        )
     }
 }
 

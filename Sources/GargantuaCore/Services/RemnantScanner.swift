@@ -3,8 +3,14 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.gargantua.core", category: "RemnantScanner")
 
+/// Builds uninstall plans for a single app — test seam for the Smart
+/// Uninstaller UI.
+public protocol UninstallPlanning: Sendable {
+    func plan(for app: AppInfo, includeAppBundle: Bool) -> UninstallPlan
+}
+
 /// Builds uninstall plans by expanding remnant rules against one app.
-public struct RemnantScanner: Sendable {
+public struct RemnantScanner: UninstallPlanning, Sendable {
     private let rules: [RemnantRule]
     private let scanRoots: [URL]
     private let expander: PathExpander
