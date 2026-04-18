@@ -146,9 +146,13 @@ public struct DefaultProcessRunner: ProcessRunner {
         }
 
         // waitpid blocks until the child exits (or is killed). WUNTRACED/WCONTINUED
-        // are not set, so we only return for exit events.
+        // are not set, so we only return for exit events. Retry on EINTR so a
+        // stray signal delivered to our thread doesn't leave the child
+        // un-reaped and our status word uninitialized.
         var status: Int32 = 0
-        _ = waitpid(pid, &status, 0)
+        while waitpid(pid, &status, 0) == -1 && errno == EINTR {
+            continue
+        }
 
         // DispatchWorkItem.cancel() prevents a *queued* item from running but
         // does NOT interrupt one already executing. The coordinator serializes
