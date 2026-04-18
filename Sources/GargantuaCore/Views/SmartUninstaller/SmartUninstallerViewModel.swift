@@ -71,16 +71,23 @@ public final class SmartUninstallerViewModel {
     private let executor: any UninstallExecuting
     private let authorizationProvider: @MainActor @Sendable () -> UninstallAuthorization?
 
+    /// Live path-streaming view model backing the Event Horizon Console.
+    /// Observed by the scanners and executor when they support it (via
+    /// `withObserver(_:)` on concrete types).
+    public let pathStream: PathStreamViewModel
+
     public init(
         appScanner: any AppScanning,
         planner: any UninstallPlanning,
         executor: any UninstallExecuting,
-        authorizationProvider: @escaping @MainActor @Sendable () -> UninstallAuthorization? = { nil }
+        authorizationProvider: @escaping @MainActor @Sendable () -> UninstallAuthorization? = { nil },
+        pathStream: PathStreamViewModel = PathStreamViewModel()
     ) {
         self.appScanner = appScanner
         self.planner = planner
         self.executor = executor
         self.authorizationProvider = authorizationProvider
+        self.pathStream = pathStream
     }
 
     // MARK: - Derived: filtered + sorted apps
@@ -157,8 +164,10 @@ public final class SmartUninstallerViewModel {
 
     /// Load the installed-app list and transition into the picker.
     public func loadApps() async {
+        pathStream.clear()
         phase = .loadingApps
-        let loaded = await appScanner.scanApps()
+        let scanner = observing(appScanner)
+        let loaded = await scanner.scanApps()
         apps = loaded
         phase = .pickingApp
     }
@@ -169,14 +178,34 @@ public final class SmartUninstallerViewModel {
     /// size scanning), so we run it off the main actor to keep the
     /// `.scanning` phase actually observable on large apps.
     public func selectApp(_ app: AppInfo) async {
+        pathStream.clear()
         phase = .scanning(app)
-        let planner = self.planner
+        let planner = observing(self.planner)
         let plan = await Task.detached { planner.plan(for: app, includeAppBundle: true) }.value
         selectedIDs = Set(plan.allItems
             .filter { $0.safety.isSelectedByDefault }
             .map(\.id))
         includeProtected = false
         phase = .reviewingPlan(plan)
+    }
+
+    /// Wrap a scanner/executor with the live `pathStream` as observer,
+    /// if the concrete type supports it via `withObserver(_:)`. Types
+    /// that don't support it pass through unchanged (e.g. test stubs).
+    private func observing(_ scanner: any AppScanning) -> any AppScanning {
+        // `DefaultAppScanner` accepts the observer at init; test stubs do
+        // not. Since structs can't be retrofitted post-init, we return
+        // the input untouched. The ViewModel's caller is expected to
+        // construct the production scanner with the observer already
+        // attached (see `SmartUninstallerView.makeDefaultViewModel`).
+        return scanner
+    }
+
+    private func observing(_ planner: any UninstallPlanning) -> any UninstallPlanning {
+        if let remnant = planner as? RemnantScanner {
+            return remnant.withObserver(pathStream)
+        }
+        return planner
     }
 
     public func toggleSelection(_ item: RemnantItem) {
@@ -237,12 +266,20 @@ public final class SmartUninstallerViewModel {
         )
 
         phase = .executing(prunedPlan)
+        let exec = observing(executor)
         do {
-            let result = try await executor.execute(prunedPlan, options: options)
+            let result = try await exec.execute(prunedPlan, options: options)
             phase = .summary(prunedPlan, result)
         } catch {
             phase = .failed(message: error.localizedDescription)
         }
+    }
+
+    private func observing(_ executor: any UninstallExecuting) -> any UninstallExecuting {
+        if let uninst = executor as? UninstallExecutor {
+            return uninst.withObserver(pathStream)
+        }
+        return executor
     }
 
     /// Return to the app picker and clear per-plan state.

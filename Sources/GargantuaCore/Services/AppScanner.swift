@@ -37,19 +37,22 @@ public struct DefaultAppScanner: AppScanning {
     private let runningChecker: RunningAppChecking
     private let signatureVerifier: CodeSignatureVerifying
     private let systemAppPrefixes: [String]
+    private let observer: (any ScanProgressObserving)?
 
     public init(
         enumerator: AppBundleEnumerating = DefaultAppBundleEnumerator(),
         reader: AppBundleReading = DefaultAppBundleReader(),
         runningChecker: RunningAppChecking = DefaultRunningAppChecker(),
         signatureVerifier: CodeSignatureVerifying = DefaultCodeSignatureVerifier(),
-        systemAppPrefixes: [String] = ["/System/"]
+        systemAppPrefixes: [String] = ["/System/"],
+        observer: (any ScanProgressObserving)? = nil
     ) {
         self.enumerator = enumerator
         self.reader = reader
         self.runningChecker = runningChecker
         self.signatureVerifier = signatureVerifier
         self.systemAppPrefixes = systemAppPrefixes
+        self.observer = observer
     }
 
     public func scanApps() async -> [AppInfo] {
@@ -62,6 +65,10 @@ public struct DefaultAppScanner: AppScanning {
         for bundleURL in bundles {
             guard let metadata = reader.readMetadata(bundleURL: bundleURL) else {
                 logger.debug("AppScanner: skipping unreadable bundle at \(bundleURL.path, privacy: .public)")
+                observer?.didEmit(ScanProgressEvent(
+                    path: bundleURL.path,
+                    outcome: .skipped(reason: "unreadable bundle")
+                ))
                 continue
             }
 
@@ -96,6 +103,16 @@ public struct DefaultAppScanner: AppScanning {
             if byBundleID[metadata.bundleID] == nil {
                 byBundleID[metadata.bundleID] = info
                 order.append(metadata.bundleID)
+                observer?.didEmit(ScanProgressEvent(
+                    path: bundleURL.path,
+                    outcome: .match,
+                    bytes: sizeOnDisk
+                ))
+            } else {
+                observer?.didEmit(ScanProgressEvent(
+                    path: bundleURL.path,
+                    outcome: .skipped(reason: "duplicate bundleID")
+                ))
             }
         }
 

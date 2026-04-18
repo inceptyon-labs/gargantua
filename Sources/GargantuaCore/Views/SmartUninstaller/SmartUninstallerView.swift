@@ -26,20 +26,19 @@ public struct SmartUninstallerView: View {
 
             Group {
                 switch viewModel.phase {
-                case .idle, .loadingApps:
-                    loadingState
+                case .idle, .loadingApps, .scanning, .executing:
+                    EventHorizonConsoleView(
+                        phase: viewModel.phase,
+                        stream: viewModel.pathStream
+                    )
                 case .pickingApp:
                     UninstallAppPickerView(viewModel: viewModel)
-                case .scanning(let app):
-                    scanningState(for: app)
                 case .reviewingPlan:
                     UninstallPlanReviewView(
                         viewModel: viewModel,
                         onUninstallTapped: { showingConfirmation = true },
                         onBack: { viewModel.reset() }
                     )
-                case .executing:
-                    executingState
                 case .summary(_, let result):
                     summaryState(result: result)
                 case .failed(let message):
@@ -72,31 +71,6 @@ public struct SmartUninstallerView: View {
     }
 
     // MARK: - Phase subviews
-
-    private var loadingState: some View {
-        centeredStatus(
-            icon: "hourglass",
-            title: "Scanning installed apps",
-            detail: "Reading /Applications and Launch Services…"
-        )
-    }
-
-    private func scanningState(for app: AppInfo) -> some View {
-        centeredStatus(
-            icon: "magnifyingglass",
-            title: "Analyzing \(app.displayName ?? app.name)",
-            detail: "Matching remnant rules against the filesystem…"
-        )
-    }
-
-    private var executingState: some View {
-        centeredStatus(
-            icon: "trash",
-            title: "Uninstalling…",
-            detail: "Moving items to Trash and writing audit entries.",
-            tint: GargantuaColors.accent
-        )
-    }
 
     private func summaryState(result: UninstallExecutionResult) -> some View {
         VStack {
@@ -141,46 +115,26 @@ public struct SmartUninstallerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func centeredStatus(
-        icon: String,
-        title: String,
-        detail: String,
-        tint: Color = GargantuaColors.ink3
-    ) -> some View {
-        VStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(tint)
-
-            Text(title)
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text(detail)
-                .font(GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink3)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     // MARK: - Default wiring
 
     @MainActor
     private static func makeDefaultViewModel() -> SmartUninstallerViewModel {
-        let scanner = DefaultAppScanner()
+        let stream = PathStreamViewModel()
+        let scanner = DefaultAppScanner(observer: stream)
         let planner: any UninstallPlanning
         do {
-            planner = try RemnantScanner.loadDefaults()
+            planner = try RemnantScanner.loadDefaults(observer: stream)
         } catch {
             // Falling back to an empty rule set means the picker still works
             // but plans will only contain the app bundle. Better than a hard
             // crash when the bundled resource is missing in a dev build.
-            planner = RemnantScanner(rules: [])
+            planner = RemnantScanner(rules: [], observer: stream)
         }
         return SmartUninstallerViewModel(
             appScanner: scanner,
             planner: planner,
-            executor: UninstallExecutor()
+            executor: UninstallExecutor(observer: stream),
+            pathStream: stream
         )
     }
 }

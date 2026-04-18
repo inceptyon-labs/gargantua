@@ -135,17 +135,31 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
     private let privilegedHelper: (any PrivilegedUninstallHelping)?
     private let processTerminator: any RunningApplicationTerminating
     private let auditRecorder: any UninstallAuditRecording
+    private let observer: (any ScanProgressObserving)?
 
     public init(
         remover: any UninstallRemoving = WorkspaceUninstallRemover(),
         privilegedHelper: (any PrivilegedUninstallHelping)? = nil,
         processTerminator: any RunningApplicationTerminating = WorkspaceRunningApplicationTerminator(),
-        auditRecorder: any UninstallAuditRecording = AuditWriter()
+        auditRecorder: any UninstallAuditRecording = AuditWriter(),
+        observer: (any ScanProgressObserving)? = nil
     ) {
         self.remover = remover
         self.privilegedHelper = privilegedHelper
         self.processTerminator = processTerminator
         self.auditRecorder = auditRecorder
+        self.observer = observer
+    }
+
+    /// Return a copy with a progress observer attached.
+    public func withObserver(_ observer: any ScanProgressObserving) -> UninstallExecutor {
+        UninstallExecutor(
+            remover: remover,
+            privilegedHelper: privilegedHelper,
+            processTerminator: processTerminator,
+            auditRecorder: auditRecorder,
+            observer: observer
+        )
     }
 
     @MainActor
@@ -178,14 +192,20 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
 
         var itemResults: [CleanupItemResult] = []
         for item in ordinary {
-            itemResults.append(await remover.moveToTrash(item))
+            let result = await remover.moveToTrash(item)
+            emit(result: result, item: item)
+            itemResults.append(result)
         }
 
         if let authorizedHelper {
-            itemResults.append(contentsOf: await authorizedHelper.helper.movePrivilegedItemsToTrash(
+            let privilegedResults = await authorizedHelper.helper.movePrivilegedItemsToTrash(
                 privileged,
                 authorization: authorizedHelper.authorization
-            ))
+            )
+            for (item, result) in zip(privileged, privilegedResults) {
+                emit(result: result, item: item)
+            }
+            itemResults.append(contentsOf: privilegedResults)
         }
 
         let cleanupResult = CleanupResult(itemResults: itemResults, cleanupMethod: .trash)
@@ -268,6 +288,22 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
             || item.category == RemnantCategory.helpers.rawValue
             || item.path.hasPrefix("/Library/LaunchDaemons/")
             || item.path.hasPrefix("/Library/PrivilegedHelperTools/")
+    }
+
+    private func emit(result: CleanupItemResult, item: ScanResult) {
+        guard let observer else { return }
+        if result.succeeded {
+            observer.didEmit(ScanProgressEvent(
+                path: item.path,
+                outcome: .match,
+                bytes: item.size
+            ))
+        } else {
+            observer.didEmit(ScanProgressEvent(
+                path: item.path,
+                outcome: .failed(reason: result.error ?? "unknown error")
+            ))
+        }
     }
 }
 

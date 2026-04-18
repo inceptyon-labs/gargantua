@@ -14,19 +14,25 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
     private let rules: [RemnantRule]
     private let scanRoots: [URL]
     private let expander: PathExpander
+    private let observer: (any ScanProgressObserving)?
 
     public init(
         rules: [RemnantRule],
         scanRoots: [URL] = PathExpander.defaultScanRoots(),
-        expander: PathExpander = PathExpander()
+        expander: PathExpander = PathExpander(),
+        observer: (any ScanProgressObserving)? = nil
     ) {
         self.rules = rules
         self.scanRoots = scanRoots
         self.expander = expander
+        self.observer = observer
     }
 
     /// Build a scanner against the bundled `uninstall_rules` directory.
-    public static func loadDefaults(scanRoots: [URL]? = nil) throws -> RemnantScanner {
+    public static func loadDefaults(
+        scanRoots: [URL]? = nil,
+        observer: (any ScanProgressObserving)? = nil
+    ) throws -> RemnantScanner {
         guard let url = Bundle.module.url(forResource: "uninstall_rules", withExtension: nil) else {
             throw RemnantScannerError.rulesDirectoryNotFound
         }
@@ -38,7 +44,20 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
 
         return RemnantScanner(
             rules: load.rules,
-            scanRoots: scanRoots ?? PathExpander.defaultScanRoots()
+            scanRoots: scanRoots ?? PathExpander.defaultScanRoots(),
+            observer: observer
+        )
+    }
+
+    /// Return a copy with a progress observer attached. Useful when the
+    /// scanner is built once (e.g. `loadDefaults`) and later wired to a
+    /// view-model-owned stream.
+    public func withObserver(_ observer: any ScanProgressObserving) -> RemnantScanner {
+        RemnantScanner(
+            rules: rules,
+            scanRoots: scanRoots,
+            expander: expander,
+            observer: observer
         )
     }
 
@@ -52,13 +71,25 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         var seenPaths: Set<String> = []
 
         for rule in applicable {
-            for item in Self.evaluate(rule: rule, app: app, expander: expander, scanRoots: scanRoots)
+            for item in evaluate(rule: rule, app: app)
                 where seenPaths.insert(item.path).inserted {
                 remnants.append(item)
+                observer?.didEmit(ScanProgressEvent(
+                    path: item.path,
+                    outcome: .match,
+                    bytes: item.size
+                ))
             }
         }
 
         let bundle = includeAppBundle ? Self.makeAppBundleItem(for: app) : nil
+        if let bundle {
+            observer?.didEmit(ScanProgressEvent(
+                path: bundle.path,
+                outcome: .match,
+                bytes: bundle.size
+            ))
+        }
         return UninstallPlan(app: app, appBundle: bundle, remnants: remnants)
     }
 
@@ -76,20 +107,18 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
 
     // MARK: - Internal
 
-    private static func evaluate(
+    private func evaluate(
         rule: RemnantRule,
-        app: AppInfo,
-        expander: PathExpander,
-        scanRoots: [URL]
+        app: AppInfo
     ) -> [RemnantItem] {
         let fileManager = FileManager.default
         var out: [RemnantItem] = []
         var counter = 0
 
-        let expandedExcludes = rule.exclude.compactMap { expand(template: $0, for: app) }
+        let expandedExcludes = rule.exclude.compactMap { Self.expand(template: $0, for: app) }
 
         for template in rule.pathTemplates {
-            guard let expanded = expand(template: template, for: app) else { continue }
+            guard let expanded = Self.expand(template: template, for: app) else { continue }
 
             let isGlob = expanded.contains("*")
             let paths: [String]
@@ -111,8 +140,15 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
                     )
                 } else {
                     let url = URL(fileURLWithPath: path)
-                    if isExcluded(url, excludes: expandedExcludes) { continue }
-                    if let item = makeItem(rule: rule, app: app, path: path, counter: &counter) {
+                    if Self.isExcluded(url, excludes: expandedExcludes) {
+                        observer?.didEmit(ScanProgressEvent(
+                            path: path,
+                            outcome: .skipped(reason: "exclude rule")
+                        ))
+                        continue
+                    }
+                    observer?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
+                    if let item = Self.makeItem(rule: rule, app: app, path: path, counter: &counter) {
                         out.append(item)
                     }
                 }
@@ -128,7 +164,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         let excludes: [String]
     }
 
-    private static func enumerateChildren(
+    private func enumerateChildren(
         at path: String,
         context: RuleContext,
         counter: inout Int,
@@ -141,12 +177,23 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         )) ?? []
 
         for child in children {
-            if let pattern = context.rule.pattern.flatMap({ expand(template: $0, for: context.app) }),
+            if let pattern = context.rule.pattern.flatMap({ Self.expand(template: $0, for: context.app) }),
                !PathExpander.fnmatch(pattern: pattern, name: child.lastPathComponent) {
+                observer?.didEmit(ScanProgressEvent(
+                    path: child.path,
+                    outcome: .skipped(reason: "pattern miss")
+                ))
                 continue
             }
-            if isExcluded(child, excludes: context.excludes) { continue }
-            if let item = makeItem(rule: context.rule, app: context.app, path: child.path, counter: &counter) {
+            if Self.isExcluded(child, excludes: context.excludes) {
+                observer?.didEmit(ScanProgressEvent(
+                    path: child.path,
+                    outcome: .skipped(reason: "exclude rule")
+                ))
+                continue
+            }
+            observer?.didEmit(ScanProgressEvent(path: child.path, outcome: .checked))
+            if let item = Self.makeItem(rule: context.rule, app: context.app, path: child.path, counter: &counter) {
                 out.append(item)
             }
         }
