@@ -71,11 +71,17 @@ public struct DefaultProcessRunner: ProcessRunner {
         let errBuffer = DataBuffer()
 
         try process.run()
+        let pid = process.processIdentifier
 
-        // Use process group to ensure descendants are also signaled.
-        // setpgid(pid, 0) creates a new process group with pid as leader.
-        // This allows signaling the entire group with killpg().
-        setpgid(process.processIdentifier, 0)
+        // Try to move the child into its own process group so we can signal
+        // descendants together. This is inherently racy on Darwin — if the
+        // child has already exec'd or forked a descendant before this line
+        // runs, that descendant ends up in our own group rather than the
+        // child's. Proper pre-exec `posix_spawn(POSIX_SPAWN_SETPGROUP)` would
+        // close the race but isn't exposed through `Foundation.Process`.
+        // If `setpgid` fails (e.g. ESRCH/EACCES), fall back to per-PID signals
+        // with degraded descendant cleanup.
+        let hasPgid = (setpgid(pid, 0) == 0)
 
         // Drain each pipe on a dedicated background queue with a single
         // blocking readDataToEndOfFile(). This is a deliberately simpler drain
@@ -92,11 +98,20 @@ public struct DefaultProcessRunner: ProcessRunner {
         // on one stream from blocking the child while we sit on waitUntilExit.
         let drainGroup = DispatchGroup()
         let drainQueue = DispatchQueue.global(qos: .utility)
+        // Use the Swift-throwing `readToEnd()` rather than
+        // `readDataToEndOfFile()`: when the force-close path below closes the
+        // fd out from under a blocking read, the legacy API raises an
+        // NSException that crashes the process; the throwing variant returns
+        // a Swift error we can swallow.
         drainQueue.async(group: drainGroup) {
-            outBuffer.append(outHandle.readDataToEndOfFile())
+            if let data = try? outHandle.readToEnd() {
+                outBuffer.append(data)
+            }
         }
         drainQueue.async(group: drainGroup) {
-            errBuffer.append(errHandle.readDataToEndOfFile())
+            if let data = try? errHandle.readToEnd() {
+                errBuffer.append(data)
+            }
         }
 
         let coordinator = TimeoutCoordinator()
@@ -109,14 +124,27 @@ public struct DefaultProcessRunner: ProcessRunner {
                 // already marked natural completion, bail — we lost the race.
                 guard coordinator.tryArmTimeout(process: process) else { return }
 
-                // Send SIGTERM to the entire process group (process + descendants).
-                killpg(process.processIdentifier, SIGTERM)
+                // Signal the process group if we set one up; otherwise fall
+                // back to the per-PID terminate (leaves descendants alive).
+                if hasPgid {
+                    _ = killpg(pid, SIGTERM)
+                } else {
+                    process.terminate()
+                }
 
-                // Schedule SIGKILL after a grace period if the process doesn't exit.
+                // Escalate to SIGKILL after a grace period. When we have a
+                // process group we always send — the leader may already be
+                // gone while a descendant holds the pipe, and `killpg` on a
+                // fully-dead group is a harmless ESRCH. Without a group, we
+                // gate on the leader still being alive so we don't signal a
+                // recycled PID.
                 let killDeadline = DispatchTime.now() + 0.5
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: killDeadline) { [weak process] in
-                    guard let process, process.isRunning else { return }
-                    killpg(process.processIdentifier, SIGKILL)
+                    if hasPgid {
+                        _ = killpg(pid, SIGKILL)
+                    } else if let process, process.isRunning {
+                        _ = kill(pid, SIGKILL)
+                    }
                 }
             }
             watchdog = item
@@ -136,8 +164,10 @@ public struct DefaultProcessRunner: ProcessRunner {
         // wait with a grace period; if drain doesn't finish, close the pipe fds
         // directly to unblock the reads.
         let drainGracePeriod: DispatchTime = {
-            // Use 10% of remaining time (capped at 1s) for drain grace period
-            let graceSecs = timeout.map { min($0 * 0.1, 1.0) } ?? 1.0
+            // Floor at 100ms so tiny timeouts still leave room for the drain
+            // to finish; cap at 1s so a huge timeout doesn't leave us waiting
+            // forever on a genuinely stuck inherited fd.
+            let graceSecs = timeout.map { min(max($0 * 0.1, 0.1), 1.0) } ?? 1.0
             return DispatchTime.now() + graceSecs
         }()
 
