@@ -11,9 +11,22 @@ public struct EventHorizonConsoleView: View {
     let phase: SmartUninstallerPhase
     @Bindable var stream: PathStreamViewModel
 
-    @State private var spinnerFrame = 0
-    private let spinnerFrames = ["◜", "◠", "◝", "◞", "◡", "◟"]
-    private let spinnerTimer = Timer.publish(every: 0.12, on: .main, in: .common).autoconnect()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Indices of `stream.events` that have finished spaghettifying during
+    /// the current `.executing` phase and should be hidden from the list.
+    @State private var swallowedIndices: Set<Int> = []
+
+    /// Wall-clock the current phase was entered. Used to gate the
+    /// time-dilation easter egg line.
+    @State private var phaseEnteredAt: Date = .distantPast
+
+    /// Events-per-second approximation used to modulate accretion-disk speed.
+    @State private var activityRate: Double = 0
+
+    /// Whether the time-dilation line has crossed its 10-second threshold
+    /// for the current executing phase.
+    @State private var showTimeDilation = false
 
     public init(phase: SmartUninstallerPhase, stream: PathStreamViewModel) {
         self.phase = phase
@@ -26,12 +39,19 @@ public struct EventHorizonConsoleView: View {
             subtitleLine
             rollingLog
             footer
+            if showTimeDilation {
+                timeDilationLine
+                    .transition(.opacity)
+            }
         }
         .padding(GargantuaSpacing.space5)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(GargantuaColors.void_)
-        .onReceive(spinnerTimer) { _ in
-            spinnerFrame = (spinnerFrame + 1) % spinnerFrames.count
+        .onAppear { resetPhaseTracking() }
+        .onChange(of: phaseKey) { _, _ in resetPhaseTracking() }
+        .onChange(of: stream.events.count) { oldCount, newCount in
+            updateActivityRate(delta: max(newCount - oldCount, 0))
+            tripTimeDilationIfDue()
         }
     }
 
@@ -47,9 +67,7 @@ public struct EventHorizonConsoleView: View {
 
                 Spacer()
 
-                Text(spinnerFrames[spinnerFrame])
-                    .font(.system(size: 14, weight: .regular, design: .monospaced))
-                    .foregroundStyle(GargantuaColors.review)
+                AccretionDiskView(activityRate: activityRate)
             }
 
             HStack(spacing: GargantuaSpacing.space5) {
@@ -59,7 +77,7 @@ public struct EventHorizonConsoleView: View {
 
                 Text("GRAVITY WELL: \(formattedBytes(stream.totalBytes))")
                     .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.review)
+                    .foregroundStyle(GargantuaColors.accretion)
             }
 
             Text("[TARS] Humor: 60% · Honesty: 95% · Pragmatism: 100%")
@@ -72,7 +90,7 @@ public struct EventHorizonConsoleView: View {
         HStack(spacing: GargantuaSpacing.space2) {
             Text("⟳")
                 .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.review)
+                .foregroundStyle(GargantuaColors.accretion)
             Text(phaseSubtitle)
                 .font(GargantuaFonts.body.italic())
                 .foregroundStyle(GargantuaColors.ink2)
@@ -92,7 +110,7 @@ public struct EventHorizonConsoleView: View {
                             .padding(.vertical, GargantuaSpacing.space2)
                     }
                     ForEach(Array(stream.events.enumerated()), id: \.offset) { index, event in
-                        eventRow(event)
+                        eventRow(event, index: index)
                             .id(index)
                     }
                     Color.clear
@@ -116,20 +134,21 @@ public struct EventHorizonConsoleView: View {
         }
     }
 
-    private func eventRow(_ event: ScanProgressEvent) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
-            Text(displayPath(event.path))
-                .font(GargantuaFonts.monoPath)
-                .foregroundStyle(rowColor(for: event.outcome))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(badge(for: event.outcome))
-                .font(GargantuaFonts.monoPath.weight(.semibold))
-                .foregroundStyle(badgeColor(for: event.outcome))
-                .frame(width: 72, alignment: .trailing)
-        }
+    private func eventRow(_ event: ScanProgressEvent, index: Int) -> some View {
+        SpaghettifyEventRow(
+            event: event,
+            index: index,
+            isExecuting: isExecutingPhase,
+            reduceMotion: reduceMotion,
+            badge: badge(for: event.outcome),
+            badgeColor: badgeColor(for: event.outcome),
+            rowColor: rowColor(for: event.outcome),
+            displayPath: displayPath(event.path),
+            onSwallowed: { swallowedIndices.insert($0) }
+        )
+        .opacity(swallowedIndices.contains(index) ? 0 : 1)
+        .frame(maxHeight: swallowedIndices.contains(index) ? 0 : nil)
+        .clipped()
     }
 
     // MARK: - Footer
@@ -145,6 +164,62 @@ public struct EventHorizonConsoleView: View {
                 .foregroundStyle(stream.failureCount == 0 ? GargantuaColors.ink2 : GargantuaColors.protected_)
 
             Spacer()
+        }
+    }
+
+    private var timeDilationLine: some View {
+        Text("Δt: 7 minutes per second on Miller's planet")
+            .font(GargantuaFonts.caption.italic())
+            .foregroundStyle(GargantuaColors.ink3)
+    }
+
+    // MARK: - Phase / activity tracking
+
+    /// A hashable key derived from the phase enum so `onChange` fires only
+    /// when the bucket (not the associated plan) changes.
+    private var phaseKey: String {
+        switch phase {
+        case .idle: "idle"
+        case .loadingApps: "loadingApps"
+        case .pickingApp: "pickingApp"
+        case .scanning: "scanning"
+        case .reviewingPlan: "reviewingPlan"
+        case .executing: "executing"
+        case .summary: "summary"
+        case .failed: "failed"
+        }
+    }
+
+    private var isExecutingPhase: Bool {
+        if case .executing = phase { return true }
+        return false
+    }
+
+    private func resetPhaseTracking() {
+        phaseEnteredAt = Date()
+        swallowedIndices = []
+        activityRate = 0
+        if !isExecutingPhase {
+            showTimeDilation = false
+        }
+    }
+
+    private func updateActivityRate(delta: Int) {
+        guard delta > 0 else { return }
+        // Exponential moving average so the disk reacts to surges without
+        // thrashing on single events.
+        let instantaneous = Double(delta) * 10  // events arrive ~100ms apart in bursts
+        activityRate = (activityRate * 0.7) + (instantaneous * 0.3)
+    }
+
+    private func tripTimeDilationIfDue() {
+        guard isExecutingPhase, !showTimeDilation else { return }
+        let elapsed = Date().timeIntervalSince(phaseEnteredAt)
+        guard elapsed >= 10 else { return }
+        guard !SingularitySession.shared.timeDilationShown else { return }
+        SingularitySession.shared.timeDilationShown = true
+        withAnimation(.easeIn(duration: 0.8)) {
+            showTimeDilation = true
         }
     }
 
@@ -203,7 +278,7 @@ public struct EventHorizonConsoleView: View {
     private func badgeColor(for outcome: ScanProgressEvent.Outcome) -> Color {
         switch outcome {
         case .checked: return GargantuaColors.ink3
-        case .match: return GargantuaColors.review
+        case .match: return GargantuaColors.accretion
         case .skipped: return GargantuaColors.ink4
         case .failed: return GargantuaColors.protected_
         }
@@ -230,4 +305,73 @@ public struct EventHorizonConsoleView: View {
         if bytes == 0 { return "0 B" }
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
+}
+
+// MARK: - Row
+
+/// Individual log row. Factored out of `EventHorizonConsoleView.body` so it
+/// can own its own `@State` for the spaghettify progress without forcing
+/// every row into the parent's update loop.
+private struct SpaghettifyEventRow: View {
+    let event: ScanProgressEvent
+    let index: Int
+    let isExecuting: Bool
+    let reduceMotion: Bool
+    let badge: String
+    let badgeColor: Color
+    let rowColor: Color
+    let displayPath: String
+    let onSwallowed: (Int) -> Void
+
+    @State private var progress: Double = 0
+
+    private var shouldSpaghettify: Bool {
+        guard isExecuting else { return false }
+        if case .match = event.outcome { return true }
+        return false
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
+            Text(Spaghettify.text(displayPath, progress: progress))
+                .font(GargantuaFonts.monoPath)
+                .foregroundStyle(rowColor)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(badge)
+                .font(GargantuaFonts.monoPath.weight(.semibold))
+                .foregroundStyle(badgeColor)
+                .frame(width: 72, alignment: .trailing)
+        }
+        .spaghettify(progress: progress, reduceMotion: reduceMotion)
+        .task(id: index) {
+            guard shouldSpaghettify else { return }
+            try? await Task.sleep(for: .seconds(Spaghettify.dwell))
+            if reduceMotion {
+                progress = 1
+                onSwallowed(index)
+                return
+            }
+            withAnimation(.easeIn(duration: Spaghettify.duration)) {
+                progress = 1
+            }
+            try? await Task.sleep(for: .seconds(Spaghettify.duration))
+            onSwallowed(index)
+        }
+    }
+}
+
+// MARK: - Session flag
+
+/// Per-process home for the "once per session" time-dilation easter egg.
+/// A struct-level `@State` survives only a single `.executing` phase; this
+/// lives for the app's lifetime so the line fires exactly once no matter how
+/// many uninstalls the user runs.
+@MainActor
+final class SingularitySession {
+    static let shared = SingularitySession()
+    var timeDilationShown = false
+    private init() {}
 }

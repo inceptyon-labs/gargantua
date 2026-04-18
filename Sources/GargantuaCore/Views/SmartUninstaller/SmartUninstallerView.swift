@@ -73,8 +73,20 @@ public struct SmartUninstallerView: View {
     // MARK: - Phase subviews
 
     private func summaryState(result: UninstallExecutionResult) -> some View {
-        VStack {
+        VStack(spacing: GargantuaSpacing.space4) {
             Spacer()
+            VStack(spacing: GargantuaSpacing.space2) {
+                Text("SIGNAL RECOVERED")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(3)
+                    .foregroundStyle(GargantuaColors.accretion)
+
+                Text(SingularityCloseMessage.line(for: result.cleanupResult))
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 480)
+            }
             CleanupSummaryView(result: result.cleanupResult) {
                 viewModel.reset()
             }

@@ -60,6 +60,10 @@ public enum GargantuaColors {
     public static let review = hsl(38, 85, 52)
     /// Review background tint. hsla(38, 85%, 52%, 0.12)
     public static let reviewDim = review.opacity(0.12)
+    /// Accretion disc amber — alias of `review` used by the Smart Uninstaller
+    /// console where the semantic is "material being pulled into Gargantua",
+    /// not "needs review". Same pixels, different name.
+    public static let accretion = review
     /// Protected — deep red ember. hsl(0, 62%, 48%)
     public static let protected_ = hsl(0, 62, 48)
     /// Protected background tint. hsla(0, 62%, 48%, 0.12)
