@@ -58,7 +58,17 @@ public struct CleanupResult: Sendable {
 
 /// Removes files via the selected cleanup method and tracks per-item results.
 public final class CleanupEngine: Sendable {
-    public init() {}
+    /// Override the home directory used to resolve `~/.Trash`. Tests only.
+    private let homeDirectory: URL
+
+    public init() {
+        self.homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    /// Test-only initializer. Use the default `init()` in app code.
+    internal init(homeDirectoryForTesting: URL) {
+        self.homeDirectory = homeDirectoryForTesting
+    }
 
     /// Remove the given scan results with the selected cleanup method.
     ///
@@ -79,11 +89,18 @@ public final class CleanupEngine: Sendable {
 
     @MainActor
     private func cleanSingle(url: URL, item: ScanResult, method: CleanupMethod) async -> CleanupItemResult {
+        // Special case: the Trash container itself cannot be removed or
+        // recycled. Empty its contents instead so "Move to Trash" and
+        // "Delete Permanently" both do the right thing.
+        if isTrashContainer(url) {
+            return emptyTrashContainer(item: item)
+        }
+
         switch method {
         case .trash:
-            await recycleSingle(url: url, item: item)
+            return await recycleSingle(url: url, item: item)
         case .delete:
-            deleteSingle(url: url, item: item)
+            return deleteSingle(url: url, item: item)
         }
     }
 
@@ -121,5 +138,66 @@ public final class CleanupEngine: Sendable {
                 error: error.localizedDescription
             )
         }
+    }
+
+    /// Resolves to true when `url` refers to the user's Trash directory.
+    /// Both `.trash` and `.delete` operations on this URL would fail
+    /// (macOS refuses to remove the Trash container), so we intercept.
+    private func isTrashContainer(_ url: URL) -> Bool {
+        let target = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let trash = trashURL.standardizedFileURL.resolvingSymlinksInPath().path
+        return target == trash
+    }
+
+    private var trashURL: URL {
+        homeDirectory.appendingPathComponent(".Trash", isDirectory: true)
+    }
+
+    /// Empty the Trash: enumerate its top-level contents and remove each.
+    /// Reports aggregate success/failure on a single `CleanupItemResult`
+    /// keyed to the original "Trash" scan item.
+    private func emptyTrashContainer(item: ScanResult) -> CleanupItemResult {
+        let fm = FileManager.default
+        let children: [URL]
+        do {
+            children = try fm.contentsOfDirectory(
+                at: trashURL,
+                includingPropertiesForKeys: nil,
+                options: []
+            )
+        } catch {
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: "Could not read Trash contents: \(error.localizedDescription)"
+            )
+        }
+
+        if children.isEmpty {
+            return CleanupItemResult(item: item, succeeded: true)
+        }
+
+        var failures: [(name: String, message: String)] = []
+        for child in children {
+            do {
+                try fm.removeItem(at: child)
+            } catch {
+                failures.append((child.lastPathComponent, error.localizedDescription))
+            }
+        }
+
+        if failures.isEmpty {
+            return CleanupItemResult(item: item, succeeded: true)
+        }
+
+        let summary: String
+        if failures.count == 1 {
+            summary = "\(failures[0].name): \(failures[0].message)"
+        } else {
+            let preview = failures.prefix(3).map(\.name).joined(separator: ", ")
+            let more = failures.count > 3 ? " and \(failures.count - 3) more" : ""
+            summary = "\(failures.count) Trash items could not be removed (\(preview)\(more))"
+        }
+        return CleanupItemResult(item: item, succeeded: false, error: summary)
     }
 }
