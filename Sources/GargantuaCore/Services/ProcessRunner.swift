@@ -22,11 +22,14 @@ public extension ProcessRunner {
 
 public enum ProcessRunnerError: Error, LocalizedError, Sendable, Equatable {
     case timedOut(seconds: TimeInterval)
+    case spawnFailed(errno: Int32)
 
     public var errorDescription: String? {
         switch self {
         case .timedOut(let seconds):
             "Process did not finish within \(Int(seconds))s and was terminated."
+        case .spawnFailed(let errno):
+            "Failed to spawn process (errno \(errno))."
         }
     }
 }
@@ -43,7 +46,11 @@ public struct ProcessOutput: Sendable, Equatable {
     }
 }
 
-/// Default `ProcessRunner` that shells out via `Foundation.Process`.
+/// Default `ProcessRunner` that uses `posix_spawn` directly so the child is
+/// placed in its own process group *before* exec. That closes a race in the
+/// previous `Foundation.Process`-based implementation where descendants that
+/// forked before the parent's post-spawn `setpgid` call landed in the parent's
+/// group and escaped our timeout/escalation signalling.
 public struct DefaultProcessRunner: ProcessRunner {
     public init() {}
 
@@ -56,46 +63,44 @@ public struct DefaultProcessRunner: ProcessRunner {
         arguments: [String],
         timeout: TimeInterval?
     ) throws -> ProcessOutput {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-
         let outPipe = Pipe()
         let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-
         let outHandle = outPipe.fileHandleForReading
         let errHandle = errPipe.fileHandleForReading
         let outBuffer = DataBuffer()
         let errBuffer = DataBuffer()
 
-        try process.run()
-        let pid = process.processIdentifier
+        let pid: pid_t
+        do {
+            pid = try ProcessSpawner.spawnInNewProcessGroup(
+                executable: executable,
+                arguments: arguments,
+                stdoutPipe: outPipe,
+                stderrPipe: errPipe
+            )
+        } catch let ProcessSpawnerError.spawnFailed(errnoVal) {
+            throw ProcessRunnerError.spawnFailed(errno: errnoVal)
+        }
 
-        // Try to move the child into its own process group so we can signal
-        // descendants together. This is inherently racy on Darwin — if the
-        // child has already exec'd or forked a descendant before this line
-        // runs, that descendant ends up in our own group rather than the
-        // child's. Proper pre-exec `posix_spawn(POSIX_SPAWN_SETPGROUP)` would
-        // close the race but isn't exposed through `Foundation.Process`.
-        // If `setpgid` fails (e.g. ESRCH/EACCES), fall back to per-PID signals
-        // with degraded descendant cleanup.
-        let hasPgid = (setpgid(pid, 0) == 0)
+        // Close the write ends in the parent so EOF on the read ends happens
+        // when the child exits (if no descendant inherited them). Failing to
+        // close these would leave the drain reads blocked forever.
+        try? outPipe.fileHandleForWriting.close()
+        try? errPipe.fileHandleForWriting.close()
 
         // Drain each pipe on a dedicated background queue with a single
-        // blocking readDataToEndOfFile(). This is a deliberately simpler drain
-        // than a readabilityHandler + post-exit readDataToEndOfFile() pair:
-        // that approach can race because setting the handler to nil is not
+        // blocking `readToEnd()`. This is deliberately simpler than a
+        // readabilityHandler + post-exit readDataToEndOfFile pair: that
+        // approach can race because setting the handler to nil is not
         // documented to block for in-flight invocations, so a late handler
         // chunk can interleave with the final drain. Here, exactly one read
         // per pipe returns all bytes up to EOF. EOF requires every writer to
         // the pipe to close — normally just the child, but a descendant that
         // inherits and keeps the fd open could delay or prevent EOF.
-        // To harden against inherited-fd hangs, we now bound the drain wait
-        // with a grace period, closing the pipe fds if drain doesn't finish.
+        // To harden against inherited-fd hangs, we bound the drain wait with
+        // a grace period, closing the pipe fds if drain doesn't finish.
         // Draining concurrently on both pipes also prevents a full 64K buffer
-        // on one stream from blocking the child while we sit on waitUntilExit.
+        // on one stream from blocking the child while we sit on waitpid.
         let drainGroup = DispatchGroup()
         let drainQueue = DispatchQueue.global(qos: .utility)
         // Use the Swift-throwing `readToEnd()` rather than
@@ -118,39 +123,33 @@ public struct DefaultProcessRunner: ProcessRunner {
         var watchdog: DispatchWorkItem?
         if let timeout, timeout > 0 {
             let deadline = DispatchTime.now() + timeout
-            let item = DispatchWorkItem { [weak process] in
-                guard let process else { return }
+            let item = DispatchWorkItem {
                 // Atomically claim the timeout state. If the main thread has
                 // already marked natural completion, bail — we lost the race.
-                guard coordinator.tryArmTimeout(process: process) else { return }
+                guard coordinator.tryArmTimeout() else { return }
 
-                // Signal the process group if we set one up; otherwise fall
-                // back to the per-PID terminate (leaves descendants alive).
-                if hasPgid {
-                    _ = killpg(pid, SIGTERM)
-                } else {
-                    process.terminate()
-                }
+                // We always have a process group now (posix_spawn guarantees
+                // it), so killpg is always the right call. killpg on a dead
+                // group returns ESRCH, which is harmless.
+                _ = killpg(pid, SIGTERM)
 
-                // Escalate to SIGKILL after a grace period. When we have a
-                // process group we always send — the leader may already be
-                // gone while a descendant holds the pipe, and `killpg` on a
-                // fully-dead group is a harmless ESRCH. Without a group, we
-                // gate on the leader still being alive so we don't signal a
-                // recycled PID.
+                // Escalate to SIGKILL after a grace period. The group may
+                // already be gone while a descendant holds the pipe; sending
+                // killpg unconditionally is safe.
                 let killDeadline = DispatchTime.now() + 0.5
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: killDeadline) { [weak process] in
-                    if hasPgid {
-                        _ = killpg(pid, SIGKILL)
-                    } else if let process, process.isRunning {
-                        _ = kill(pid, SIGKILL)
-                    }
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: killDeadline) {
+                    _ = killpg(pid, SIGKILL)
                 }
             }
             watchdog = item
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline, execute: item)
         }
-        process.waitUntilExit()
+
+        // waitpid blocks until the child exits (or is killed). WUNTRACED/WCONTINUED
+        // are not set, so we only return for exit events.
+        var status: Int32 = 0
+        _ = waitpid(pid, &status, 0)
+
         // DispatchWorkItem.cancel() prevents a *queued* item from running but
         // does NOT interrupt one already executing. The coordinator serializes
         // "natural exit" vs "timeout fired" under a single lock to close the
@@ -159,7 +158,7 @@ public struct DefaultProcessRunner: ProcessRunner {
         watchdog?.cancel()
 
         // Pipe ends close on child exit, so the blocking reads should return
-        // shortly after waitUntilExit. However, if a descendant inherited the fd
+        // shortly after waitpid. However, if a descendant inherited the fd
         // and is still writing, the read could hang indefinitely. Use a bounded
         // wait with a grace period; if drain doesn't finish, close the pipe fds
         // directly to unblock the reads.
@@ -185,10 +184,18 @@ public struct DefaultProcessRunner: ProcessRunner {
             throw ProcessRunnerError.timedOut(seconds: timeout)
         }
 
+        // waitpid status word layout on Darwin:
+        //   low 7 bits = signal that killed the process (0 if normal exit)
+        //   next 8 bits = exit code (valid only on normal exit)
+        // This matches Foundation.Process.terminationStatus conventions:
+        // the exit code on normal exit, the signal number on signal exit.
+        let termSignal = status & 0x7F
+        let exitCode: Int32 = termSignal == 0 ? (status >> 8) & 0xFF : termSignal
+
         return ProcessOutput(
             stdout: String(data: outBuffer.snapshot(), encoding: .utf8) ?? "",
             stderr: String(data: errBuffer.snapshot(), encoding: .utf8) ?? "",
-            exitCode: process.terminationStatus
+            exitCode: exitCode
         )
     }
 
@@ -214,30 +221,27 @@ private enum TimeoutState: Sendable { case running, naturallyCompleted, timedOut
 /// Serializes the "process exited naturally" vs "watchdog fired" decision.
 ///
 /// Only one transition out of `.running` is possible; whichever thread grabs
-/// the lock first wins. The watchdog additionally re-checks `process.isRunning`
-/// under the lock so a process that just exited before the watchdog block
-/// dispatched isn't spuriously marked as timed out.
+/// the lock first wins. Unlike the previous `Process`-backed version, we do
+/// not re-check liveness from the watchdog — with a guaranteed process group
+/// from `posix_spawn`, `killpg` on a dead group is a harmless ESRCH, and the
+/// state-machine ordering is sufficient to avoid signalling a recycled pid
+/// (main thread marks natural completion before we waitpid, so any late
+/// watchdog call sees `.naturallyCompleted` and bails).
 private final class TimeoutCoordinator: @unchecked Sendable {
     private let lock = NSLock()
     private var state: TimeoutState = .running
 
     /// Called by the watchdog block. Returns true only if the timeout
-    /// transition was claimed (caller should call `terminate()`).
-    func tryArmTimeout(process: Process) -> Bool {
+    /// transition was claimed (caller should send the TERM/KILL signals).
+    func tryArmTimeout() -> Bool {
         lock.lock(); defer { lock.unlock() }
         guard state == .running else { return false }
-        // Process may have exited between the deadline firing and this block
-        // being dispatched; treat that as natural completion.
-        guard process.isRunning else {
-            state = .naturallyCompleted
-            return false
-        }
         state = .timedOut
         return true
     }
 
-    /// Called by the main thread after `waitUntilExit` returns. Records
-    /// natural completion unless the watchdog already won the race.
+    /// Called by the main thread after `waitpid` returns. Records natural
+    /// completion unless the watchdog already won the race.
     func markNaturalCompletion() -> TimeoutState {
         lock.lock(); defer { lock.unlock() }
         if state == .running {

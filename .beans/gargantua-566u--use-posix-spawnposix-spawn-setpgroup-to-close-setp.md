@@ -1,11 +1,11 @@
 ---
 # gargantua-566u
 title: Use posix_spawn(POSIX_SPAWN_SETPGROUP) to close setpgid race in DefaultProcessRunner
-status: todo
+status: in-progress
 type: task
 priority: low
 created_at: 2026-04-18T19:52:30Z
-updated_at: 2026-04-18T19:52:36Z
+updated_at: 2026-04-18T20:15:36Z
 parent: gargantua-qe4a
 ---
 
