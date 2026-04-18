@@ -3,16 +3,21 @@ import GargantuaCore
 
 // Phase 2 stdio MCP server entry point.
 //
-// This task wires JSON-RPC 2.0 framing over newline-delimited stdio. No
-// dispatch yet — every request receives a `method not found` response.
-// The follow-up task under Feature gargantua-2h06 (tools/list + tools/call)
-// replaces the default handler with real routing.
+// Framing lives in `MCPStdioTransport`; protocol dispatch lives in
+// `MCPRequestDispatcher`. This entry point wires them together and routes
+// log output to stderr (stdout is reserved for protocol traffic).
+//
+// Tool handlers are registered in follow-up Tasks under Feature gargantua-2h06.
+// Until those land, `tools/call` returns JSON-RPC internal error 'Tool not
+// implemented' for every Phase 2 tool.
+
+private let mcpServerVersion = "0.1.0"
 
 FileHandle.standardError.write(Data(
-    "Gargantua MCP server — Phase 2 (framing only)\n".utf8
+    "Gargantua MCP server — Phase 2\n".utf8
 ))
 FileHandle.standardError.write(Data(
-    "Registered tools (advertised once dispatch lands):\n".utf8
+    "Registered tools:\n".utf8
 ))
 for tool in MCPPhase2Tools.all {
     FileHandle.standardError.write(Data(
@@ -20,20 +25,21 @@ for tool in MCPPhase2Tools.all {
     ))
 }
 
+private let stderrLog: @Sendable (String) -> Void = { message in
+    FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
+}
+
+let dispatcher = MCPRequestDispatcher(
+    serverInfo: MCPServerInfo(name: "gargantua", version: mcpServerVersion),
+    tools: MCPPhase2Tools.all,
+    log: stderrLog
+)
+
 let transport = MCPStdioTransport(
     source: StandardInputMessageSource(),
     sink: StandardOutputMessageSink(),
-    handler: { request in
-        let requestID = request.id ?? .null
-        return .failure(
-            id: requestID,
-            code: MCPErrorCode.methodNotFound,
-            message: "Method not found: \(request.method)"
-        )
-    },
-    log: { message in
-        FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
-    }
+    handler: { request in dispatcher.dispatch(request) },
+    log: stderrLog
 )
 
 transport.run()
