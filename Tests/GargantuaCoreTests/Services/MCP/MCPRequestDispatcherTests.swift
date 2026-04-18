@@ -15,9 +15,10 @@ struct MCPRequestDispatcherTests {
     }()
 
     private func makeDispatcher(
-        tools: [MCPToolDescriptor] = MCPPhase2Tools.all
+        tools: [MCPToolDescriptor] = MCPPhase2Tools.all,
+        log: MCPDispatcherLog? = nil
     ) -> MCPRequestDispatcher {
-        MCPRequestDispatcher(serverInfo: Self.serverInfo, tools: tools)
+        MCPRequestDispatcher(serverInfo: Self.serverInfo, tools: tools, log: log)
     }
 
     private func request(
@@ -28,12 +29,24 @@ struct MCPRequestDispatcherTests {
         MCPRequest(id: id, method: method, params: params)
     }
 
+    /// Minimal valid `initialize` params per MCP spec (`protocolVersion` key).
+    private static let validInitializeParams: MCPJSONAny = .object([
+        "protocolVersion": .string("2024-11-05"),
+        "capabilities": .object([:]),
+        "clientInfo": .object([
+            "name": .string("test-client"),
+            "version": .string("0.0"),
+        ]),
+    ])
+
     // MARK: initialize
 
     @Test("initialize returns protocolVersion, capabilities, and serverInfo")
     func initializeShape() throws {
         let dispatcher = makeDispatcher()
-        let response = dispatcher.dispatch(request(method: "initialize"))
+        let response = dispatcher.dispatch(
+            request(method: "initialize", params: Self.validInitializeParams)
+        )
         let result = try #require(response?.result)
         guard case .object(let root) = result else {
             Issue.record("result was not an object")
@@ -58,9 +71,35 @@ struct MCPRequestDispatcherTests {
     @Test("initialize response is tagged with the request id")
     func initializeEchoesRequestID() throws {
         let dispatcher = makeDispatcher()
-        let response = dispatcher.dispatch(request(id: .string("handshake-1"), method: "initialize"))
+        let response = dispatcher.dispatch(
+            request(
+                id: .string("handshake-1"),
+                method: "initialize",
+                params: Self.validInitializeParams
+            )
+        )
         #expect(response?.id == .string("handshake-1"))
         #expect(response?.error == nil)
+    }
+
+    @Test("initialize with missing params returns invalid-params")
+    func initializeMissingParamsIsInvalid() {
+        let dispatcher = makeDispatcher()
+        let response = dispatcher.dispatch(request(method: "initialize"))
+        #expect(response?.error?.code == MCPErrorCode.invalidParams)
+    }
+
+    @Test("initialize with params missing protocolVersion returns invalid-params")
+    func initializeMissingProtocolVersionIsInvalid() {
+        let dispatcher = makeDispatcher()
+        // No protocolVersion — MCP spec requires it.
+        let params: MCPJSONAny = .object([
+            "capabilities": .object([:]),
+        ])
+        let response = dispatcher.dispatch(
+            request(method: "initialize", params: params)
+        )
+        #expect(response?.error?.code == MCPErrorCode.invalidParams)
     }
 
     // MARK: tools/list
@@ -95,8 +134,6 @@ struct MCPRequestDispatcherTests {
         #expect(entry.keys.contains("description"))
         #expect(entry.keys.contains("inputSchema"))
 
-        // Schemas should round-trip into MCPJSONSchema so downstream decoders
-        // (and clients) see the exact structure defined in MCPToolDescriptor.
         guard case .object(let inputSchema) = entry["inputSchema"] else {
             Issue.record("inputSchema missing")
             return
@@ -124,22 +161,102 @@ struct MCPRequestDispatcherTests {
             Issue.record("scan.dry_run schema missing")
             return
         }
-        // The const must be the boolean true — the PRD §7.4 dry-run guarantee.
         #expect(dryRun["const"] == .bool(true))
     }
 
-    // MARK: tools/call — dispatch
+    // MARK: tools/call — result envelope (MCP CallToolResult shape)
+
+    @Test("tools/call result wraps handler output in MCP CallToolResult envelope")
+    func toolsCallResultHasContentEnvelope() throws {
+        let dispatcher = makeDispatcher()
+        dispatcher.register(tool: .analyze) { _ in
+            .structured(.object(["health_score": .int(99)]), summary: "Healthy")
+        }
+        let params: MCPJSONAny = .object([
+            "name": .string("analyze"),
+            "arguments": .object([:]),
+        ])
+        let response = dispatcher.dispatch(request(method: "tools/call", params: params))
+        #expect(response?.error == nil)
+        guard case .object(let root) = try #require(response?.result) else {
+            Issue.record("result was not an object")
+            return
+        }
+        // `content` must be present as an array of blocks; the first block
+        // must be a text block with the summary we provided.
+        guard case .array(let content) = root["content"],
+              let firstBlock = content.first,
+              case .object(let block) = firstBlock else {
+            Issue.record("content[] missing or malformed")
+            return
+        }
+        #expect(block["type"] == .string("text"))
+        #expect(block["text"] == .string("Healthy"))
+        // The typed payload rides along under `structuredContent`.
+        guard case .object(let structured) = root["structuredContent"] else {
+            Issue.record("structuredContent missing")
+            return
+        }
+        #expect(structured["health_score"] == .int(99))
+        // Success responses do not emit isError.
+        #expect(root["isError"] == nil)
+    }
+
+    @Test("tools/call result omits structuredContent for plain-text handlers")
+    func toolsCallTextOnlyResult() throws {
+        let dispatcher = makeDispatcher()
+        dispatcher.register(tool: .status) { _ in .text("ok") }
+        let params: MCPJSONAny = .object(["name": .string("status")])
+        let response = dispatcher.dispatch(request(method: "tools/call", params: params))
+        guard case .object(let root) = try #require(response?.result) else {
+            Issue.record("result was not an object")
+            return
+        }
+        #expect(root["structuredContent"] == nil)
+        #expect(root["isError"] == nil)
+        guard case .array(let content) = root["content"], case .object(let block) = content.first else {
+            Issue.record("content missing")
+            return
+        }
+        #expect(block["type"] == .string("text"))
+        #expect(block["text"] == .string("ok"))
+    }
+
+    @Test("tool-domain failure returns isError:true success result, not a JSON-RPC error")
+    func toolsCallFailureIsReportedAsIsError() throws {
+        let dispatcher = makeDispatcher()
+        dispatcher.register(tool: .explain) { _ in .failure("item not found") }
+        let params: MCPJSONAny = .object([
+            "name": .string("explain"),
+            "arguments": .object(["path": .string("/missing")]),
+        ])
+        let response = dispatcher.dispatch(request(method: "tools/call", params: params))
+        // Tool-domain failures ride the result, not the JSON-RPC error slot.
+        #expect(response?.error == nil)
+        guard case .object(let root) = try #require(response?.result) else {
+            Issue.record("result was not an object")
+            return
+        }
+        #expect(root["isError"] == .bool(true))
+        guard case .array(let content) = root["content"], case .object(let block) = content.first else {
+            Issue.record("content missing")
+            return
+        }
+        #expect(block["text"] == .string("item not found"))
+    }
+
+    // MARK: tools/call — arguments validation
 
     @Test("tools/call invokes the registered handler with its arguments")
     func toolsCallRoutesToHandler() throws {
         let dispatcher = makeDispatcher()
         final class Capture: @unchecked Sendable {
-            var received: MCPJSONAny?
+            var received: [String: MCPJSONAny]?
         }
         let capture = Capture()
         dispatcher.register(tool: .analyze) { args in
-            capture.received = args
-            return .object(["health_score": .int(99)])
+            capture.received = args.raw
+            return .text("ok")
         }
         let params: MCPJSONAny = .object([
             "name": .string("analyze"),
@@ -147,50 +264,78 @@ struct MCPRequestDispatcherTests {
         ])
         let response = dispatcher.dispatch(request(method: "tools/call", params: params))
         #expect(response?.error == nil)
-        guard case .object(let result) = try #require(response?.result) else {
-            Issue.record("result was not an object")
-            return
-        }
-        #expect(result["health_score"] == .int(99))
-        #expect(capture.received == .object(["detail": .string("full")]))
+        #expect(capture.received == ["detail": .string("full")])
     }
 
-    @Test("tools/call with absent arguments passes nil to the handler")
-    func toolsCallAbsentArgumentsPassesNil() throws {
+    @Test("tools/call with absent arguments passes empty arguments to handler")
+    func toolsCallAbsentArgumentsPassesEmpty() throws {
         let dispatcher = makeDispatcher()
         final class Capture: @unchecked Sendable {
-            var seenNoArgs = false
+            var sawEmpty = false
         }
         let capture = Capture()
         dispatcher.register(tool: .status) { args in
-            capture.seenNoArgs = (args == nil)
-            return .object([:])
+            capture.sawEmpty = args.isEmpty
+            return .text("ok")
         }
         let params: MCPJSONAny = .object(["name": .string("status")])
         _ = dispatcher.dispatch(request(method: "tools/call", params: params))
-        #expect(capture.seenNoArgs == true)
+        #expect(capture.sawEmpty == true)
     }
 
-    @Test("tools/call preserves explicit-null arguments distinct from absent")
-    func toolsCallExplicitNullArguments() throws {
+    @Test("tools/call with explicit-null arguments is rejected as invalid-params")
+    func toolsCallExplicitNullArgumentsRejected() {
         let dispatcher = makeDispatcher()
-        final class Capture: @unchecked Sendable {
-            var received: MCPJSONAny?
-            var didRun = false
-        }
-        let capture = Capture()
-        dispatcher.register(tool: .status) { args in
-            capture.received = args
-            capture.didRun = true
-            return .object([:])
+        dispatcher.register(tool: .status) { _ in
+            Issue.record("handler must not be invoked for invalid arguments shape")
+            return .text("unreached")
         }
         let params: MCPJSONAny = .object([
             "name": .string("status"),
             "arguments": .null,
         ])
-        _ = dispatcher.dispatch(request(method: "tools/call", params: params))
-        #expect(capture.didRun)
-        #expect(capture.received == .null)
+        let response = dispatcher.dispatch(request(method: "tools/call", params: params))
+        #expect(response?.error?.code == MCPErrorCode.invalidParams)
+        #expect(response?.error?.message.contains("must be an object") == true)
+    }
+
+    @Test("tools/call with array arguments is rejected as invalid-params")
+    func toolsCallArrayArgumentsRejected() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "name": .string("status"),
+            "arguments": .array([.string("a")]),
+        ])
+        let response = dispatcher.dispatch(request(method: "tools/call", params: params))
+        #expect(response?.error?.code == MCPErrorCode.invalidParams)
+    }
+
+    @Test("tools/call with scalar arguments is rejected as invalid-params")
+    func toolsCallScalarArgumentsRejected() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "name": .string("status"),
+            "arguments": .int(42),
+        ])
+        let response = dispatcher.dispatch(request(method: "tools/call", params: params))
+        #expect(response?.error?.code == MCPErrorCode.invalidParams)
+    }
+
+    // MARK: MCPToolArguments decoding
+
+    @Test("MCPToolArguments.decode surfaces decode errors as invalidParams")
+    func toolArgumentsDecodeTypedStruct() throws {
+        struct Input: Decodable, Equatable {
+            let path: String
+        }
+        let good = MCPToolArguments(["path": .string("/tmp")])
+        let decoded = try good.decode(Input.self)
+        #expect(decoded == Input(path: "/tmp"))
+
+        let bad = MCPToolArguments(["path": .int(7)])
+        #expect(throws: MCPToolError.self) {
+            _ = try bad.decode(Input.self)
+        }
     }
 
     // MARK: tools/call — error mapping
@@ -234,7 +379,7 @@ struct MCPRequestDispatcherTests {
         #expect(response?.error?.code == MCPErrorCode.invalidParams)
     }
 
-    @Test("handler throwing MCPToolError.invalidParams yields invalid-params")
+    @Test("handler throwing MCPToolError.invalidParams yields invalid-params with handler message")
     func handlerInvalidParamsIsMapped() {
         let dispatcher = makeDispatcher()
         dispatcher.register(tool: .explain) { _ in
@@ -249,7 +394,7 @@ struct MCPRequestDispatcherTests {
         #expect(response?.error?.message.contains("path or item_id required") == true)
     }
 
-    @Test("handler throwing MCPToolError.internalError yields internal-error")
+    @Test("handler throwing MCPToolError.internalError yields internal-error with handler message")
     func handlerInternalErrorIsMapped() {
         let dispatcher = makeDispatcher()
         dispatcher.register(tool: .scan) { _ in
@@ -264,17 +409,27 @@ struct MCPRequestDispatcherTests {
         #expect(response?.error?.message.contains("scan engine unavailable") == true)
     }
 
-    @Test("handler throwing an unrelated error yields internal-error")
-    func handlerGenericErrorBecomesInternalError() {
-        struct Boom: Error {}
-        let dispatcher = makeDispatcher()
-        dispatcher.register(tool: .listProfiles) { _ in throw Boom() }
-        let params: MCPJSONAny = .object([
-            "name": .string("list_profiles"),
-        ])
+    @Test("generic handler exception is sanitised in the client response and logged")
+    func handlerGenericErrorIsSanitisedAndLogged() {
+        struct LeakyError: Error { let secret: String }
+        final class LogBox: @unchecked Sendable {
+            var entries: [String] = []
+            func append(_ s: String) { entries.append(s) }
+        }
+        let box = LogBox()
+        let dispatcher = makeDispatcher(log: { box.append($0) })
+        dispatcher.register(tool: .listProfiles) { _ in
+            throw LeakyError(secret: "/Users/alice/.ssh/id_rsa")
+        }
+        let params: MCPJSONAny = .object(["name": .string("list_profiles")])
         let response = dispatcher.dispatch(request(method: "tools/call", params: params))
         #expect(response?.error?.code == MCPErrorCode.internalError)
-        #expect(response?.error?.message.contains("list_profiles") == true)
+        // Client never sees the sensitive path.
+        #expect(response?.error?.message.contains("/Users/alice") == false)
+        #expect(response?.error?.message.contains("secret") == false)
+        #expect(response?.error?.message == "Internal error: Tool execution failed")
+        // Log sink records the detail for operators.
+        #expect(box.entries.contains { $0.contains("list_profiles") })
     }
 
     // MARK: Unknown method + notifications
@@ -303,7 +458,7 @@ struct MCPRequestDispatcherTests {
         let dispatcher = makeDispatcher()
         dispatcher.register(tool: .status) { _ in
             box.count += 1
-            return .object([:])
+            return .text("ok")
         }
         let req = MCPRequest(
             id: nil,
@@ -319,7 +474,11 @@ struct MCPRequestDispatcherTests {
     @Test("initialize result encodes to valid JSON")
     func initializeResultEncodes() throws {
         let dispatcher = makeDispatcher()
-        let response = try #require(dispatcher.dispatch(request(method: "initialize")))
+        let response = try #require(
+            dispatcher.dispatch(
+                request(method: "initialize", params: Self.validInitializeParams)
+            )
+        )
         let data = try Self.encoder.encode(response)
         let json = String(data: data, encoding: .utf8) ?? ""
         #expect(json.contains("\"jsonrpc\":\"2.0\""))
@@ -342,10 +501,16 @@ struct MCPRequestDispatcherTests {
     @Test("register(tool:handler:) replaces any previously registered handler")
     func registerReplacesHandler() throws {
         let dispatcher = makeDispatcher()
-        dispatcher.register(tool: .analyze) { _ in .string("first") }
-        dispatcher.register(tool: .analyze) { _ in .string("second") }
+        dispatcher.register(tool: .analyze) { _ in .text("first") }
+        dispatcher.register(tool: .analyze) { _ in .text("second") }
         let params: MCPJSONAny = .object(["name": .string("analyze")])
         let response = dispatcher.dispatch(request(method: "tools/call", params: params))
-        #expect(response?.result == .string("second"))
+        guard case .object(let root) = try #require(response?.result),
+              case .array(let content) = root["content"],
+              case .object(let block) = content.first else {
+            Issue.record("result shape wrong")
+            return
+        }
+        #expect(block["text"] == .string("second"))
     }
 }

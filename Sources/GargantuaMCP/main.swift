@@ -25,18 +25,21 @@ for tool in MCPPhase2Tools.all {
     ))
 }
 
+private let stderrLog: @Sendable (String) -> Void = { message in
+    FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
+}
+
 let dispatcher = MCPRequestDispatcher(
     serverInfo: MCPServerInfo(name: "gargantua", version: mcpServerVersion),
-    tools: MCPPhase2Tools.all
+    tools: MCPPhase2Tools.all,
+    log: stderrLog
 )
 
 let transport = MCPStdioTransport(
     source: StandardInputMessageSource(),
     sink: StandardOutputMessageSink(),
     handler: { request in dispatcher.dispatch(request) },
-    log: { message in
-        FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
-    }
+    log: stderrLog
 )
 
 transport.run()

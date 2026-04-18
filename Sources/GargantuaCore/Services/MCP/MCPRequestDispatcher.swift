@@ -5,20 +5,130 @@ import Foundation
 // `MCPStdioTransport`. Tool implementations register by name; the dispatcher
 // owns the routing and the JSON-RPC error mapping, tools own the work.
 
-/// Synchronous tool handler. Given the raw `arguments` payload from a
-/// `tools/call`, return the JSON value to embed in the response `result`.
-///
-/// Handlers that need to signal a client-side error should throw
-/// `MCPToolError.invalidParams(...)`; unexpected failures should throw
-/// `MCPToolError.internalError(...)`. Anything else is wrapped as an
-/// internal error by the dispatcher.
-public typealias MCPToolHandler = @Sendable (MCPJSONAny?) throws -> MCPJSONAny
-
 /// Errors a tool handler can raise to produce specific JSON-RPC error codes.
+///
+/// Use `invalidParams` for client-side mistakes (malformed arguments) and
+/// `internalError` for server-side misconfiguration. Tool-domain failures
+/// (e.g. "file not found") should be returned as
+/// `MCPToolCallResult.failure(...)` so the error surfaces in the result
+/// payload rather than as a JSON-RPC error, per MCP spec.
 public enum MCPToolError: Error, Equatable {
     case invalidParams(String)
     case internalError(String)
 }
+
+/// Content block in a `tools/call` result. MCP supports text, image, and
+/// resource content; Phase 2 only emits text (structured tool payloads ride
+/// along in `MCPToolCallResult.structuredContent`).
+public enum MCPToolContent: Sendable, Equatable {
+    case text(String)
+}
+
+extension MCPToolContent: Encodable {
+    private enum CodingKeys: String, CodingKey { case type, text }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .text(let value):
+            try c.encode("text", forKey: .type)
+            try c.encode(value, forKey: .text)
+        }
+    }
+}
+
+/// MCP `CallToolResult`. `content` is required (at least one block) so the
+/// client always has a human-readable string to display; `structuredContent`
+/// carries the tool's typed JSON payload; `isError` is `true` when the tool
+/// failed for reasons the client should surface as a tool-domain error (not
+/// a transport-level JSON-RPC error).
+public struct MCPToolCallResult: Sendable, Equatable {
+    public let content: [MCPToolContent]
+    public let structuredContent: MCPJSONAny?
+    public let isError: Bool
+
+    public init(
+        content: [MCPToolContent],
+        structuredContent: MCPJSONAny? = nil,
+        isError: Bool = false
+    ) {
+        self.content = content
+        self.structuredContent = structuredContent
+        self.isError = isError
+    }
+
+    /// Success with a single text block. Use this when the tool's output is
+    /// already a human-facing string.
+    public static func text(_ text: String) -> MCPToolCallResult {
+        .init(content: [.text(text)], structuredContent: nil, isError: false)
+    }
+
+    /// Success with a structured payload plus a short text summary. Clients
+    /// that don't inspect `structuredContent` still get something readable
+    /// in `content`.
+    public static func structured(
+        _ payload: MCPJSONAny,
+        summary: String
+    ) -> MCPToolCallResult {
+        .init(content: [.text(summary)], structuredContent: payload, isError: false)
+    }
+
+    /// Tool-domain failure: reported to the client via `isError: true`, not
+    /// as a JSON-RPC error. Use for "operation failed" cases where the
+    /// protocol call itself was well-formed.
+    public static func failure(_ message: String) -> MCPToolCallResult {
+        .init(content: [.text(message)], structuredContent: nil, isError: true)
+    }
+}
+
+extension MCPToolCallResult: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case content, structuredContent, isError
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(content, forKey: .content)
+        if let structuredContent {
+            try c.encode(structuredContent, forKey: .structuredContent)
+        }
+        // Emit `isError` only when true so success responses stay compact
+        // and match the shape MCP clients expect by default.
+        if isError {
+            try c.encode(true, forKey: .isError)
+        }
+    }
+}
+
+/// Validated `tools/call` arguments. MCP requires `arguments` to be an
+/// object when present; `raw` is an empty dictionary if the client omitted
+/// the field entirely.
+public struct MCPToolArguments: Sendable, Equatable {
+    public let raw: [String: MCPJSONAny]
+
+    public init(_ raw: [String: MCPJSONAny] = [:]) { self.raw = raw }
+
+    public var isEmpty: Bool { raw.isEmpty }
+
+    /// Decodes the arguments into a typed `Decodable` struct. Maps decode
+    /// failures to `MCPToolError.invalidParams` so the dispatcher reports
+    /// them as JSON-RPC `-32602`.
+    public func decode<T: Decodable>(_ type: T.Type) throws -> T {
+        let data = try JSONEncoder().encode(MCPJSONAny.object(raw))
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw MCPToolError.invalidParams("Invalid arguments: \(describe(error))")
+        }
+    }
+}
+
+/// Synchronous tool handler. Given the validated `arguments` payload, return
+/// an `MCPToolCallResult`.
+///
+/// Handlers should throw `MCPToolError.invalidParams(...)` for client-side
+/// mistakes (bad arguments) and return `.failure(...)` for tool-domain
+/// failures. Any other thrown error is reported to the client as a generic
+/// internal error without leaking the error's text.
+public typealias MCPToolHandler = @Sendable (MCPToolArguments) throws -> MCPToolCallResult
 
 /// Server identity returned in the `initialize` handshake.
 public struct MCPServerInfo: Sendable, Codable, Equatable {
@@ -30,6 +140,10 @@ public struct MCPServerInfo: Sendable, Codable, Equatable {
         self.version = version
     }
 }
+
+/// Optional diagnostic log sink for dispatcher-side events (unexpected
+/// handler errors, etc.). stderr-bound in production; swallowed in tests.
+public typealias MCPDispatcherLog = @Sendable (String) -> Void
 
 /// Routes decoded `MCPRequest`s to built-in MCP methods and registered tools.
 ///
@@ -46,17 +160,20 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
     private let serverInfo: MCPServerInfo
     private let protocolVersion: String
     private let tools: [MCPToolDescriptor]
+    private let log: MCPDispatcherLog?
     private let lock = NSLock()
     private var handlers: [MCPToolName: MCPToolHandler] = [:]
 
     public init(
         serverInfo: MCPServerInfo,
         protocolVersion: String = MCPRequestDispatcher.defaultProtocolVersion,
-        tools: [MCPToolDescriptor] = MCPPhase2Tools.all
+        tools: [MCPToolDescriptor] = MCPPhase2Tools.all,
+        log: MCPDispatcherLog? = nil
     ) {
         self.serverInfo = serverInfo
         self.protocolVersion = protocolVersion
         self.tools = tools
+        self.log = log
     }
 
     /// Registers (or replaces) a handler for a tool. Safe to call from any
@@ -86,10 +203,14 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         } catch let err as MCPDispatchError {
             return .failure(id: requestID, code: err.code, message: err.message)
         } catch {
+            // Defensive: any throw path we do not explicitly cover becomes a
+            // generic internal error. The error's detail is logged to stderr
+            // rather than leaked to the client.
+            log?("dispatcher caught unexpected error: \(error)")
             return .failure(
                 id: requestID,
                 code: MCPErrorCode.internalError,
-                message: "Internal error: \(error)"
+                message: "Internal error"
             )
         }
     }
@@ -99,7 +220,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
     private func handle(method: String, params: MCPJSONAny?) throws -> MCPJSONAny {
         switch method {
         case "initialize":
-            return handleInitialize()
+            return try handleInitialize(params: params)
         case "tools/list":
             return try handleToolsList()
         case "tools/call":
@@ -109,11 +230,26 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         }
     }
 
-    private func handleInitialize() -> MCPJSONAny {
-        // MCP spec §initialize: return protocolVersion, capabilities,
-        // serverInfo. We advertise `tools` with no extra flags (we do not
-        // support dynamic list-changed notifications).
-        .object([
+    private func handleInitialize(params: MCPJSONAny?) throws -> MCPJSONAny {
+        guard let params else {
+            throw MCPDispatchError.invalidParams(
+                "initialize requires params with protocolVersion"
+            )
+        }
+        // MCP `InitializeRequest` requires `protocolVersion`; `capabilities`
+        // and `clientInfo` are also mandatory in the spec but we accept them
+        // loosely so Phase 2 stays compatible with minimal clients. Strict
+        // version negotiation is deferred to a follow-up.
+        do {
+            _ = try decodeFromJSONAny(InitializeParams.self, from: params)
+        } catch {
+            throw MCPDispatchError.invalidParams(
+                "initialize params malformed: \(describe(error))"
+            )
+        }
+        // We advertise the `tools` capability with no extra flags; we do not
+        // emit list-changed notifications yet.
+        return .object([
             "protocolVersion": .string(protocolVersion),
             "capabilities": .object([
                 "tools": .object([:]),
@@ -150,6 +286,20 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         guard let toolName = MCPToolName(rawValue: call.name) else {
             throw MCPDispatchError.invalidParams("Unknown tool: \(call.name)")
         }
+        // Per MCP spec, `arguments` is optional but MUST be an object when
+        // present. Reject other shapes with -32602 so we don't route
+        // malformed payloads into handlers.
+        let arguments: MCPToolArguments
+        switch call.arguments {
+        case nil:
+            arguments = MCPToolArguments()
+        case .object(let dict)?:
+            arguments = MCPToolArguments(dict)
+        default:
+            throw MCPDispatchError.invalidParams(
+                "tools/call arguments must be an object when present"
+            )
+        }
         let handler: MCPToolHandler? = {
             lock.lock()
             defer { lock.unlock() }
@@ -160,23 +310,30 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
                 "Tool not implemented: \(toolName.rawValue)"
             )
         }
+        let toolResult: MCPToolCallResult
         do {
-            return try handler(call.arguments)
+            toolResult = try handler(arguments)
         } catch MCPToolError.invalidParams(let message) {
+            // Handler explicitly signalled a client-side error.
             throw MCPDispatchError.invalidParams(message)
         } catch MCPToolError.internalError(let message) {
+            // Handler explicitly signalled a server-side error it chose to
+            // expose. The message is considered sanitised by the handler.
             throw MCPDispatchError.internalError(message)
         } catch {
-            throw MCPDispatchError.internalError(
-                "Tool \(toolName.rawValue) failed: \(describe(error))"
-            )
+            // Unexpected exception: do not leak the error's textual
+            // description to the client (may contain paths, sensitive state).
+            // Log details to stderr and return a generic internal error.
+            log?("tool \(toolName.rawValue) threw unexpected error: \(error)")
+            throw MCPDispatchError.internalError("Tool execution failed")
         }
+        return try encodeAsJSONAny(toolResult)
     }
 }
 
 // MARK: - Internal wire shapes
 
-/// `tools/call` params per MCP spec: `{ name: string, arguments?: any }`.
+/// `tools/call` params per MCP spec: `{ name: string, arguments?: object }`.
 private struct ToolCallParams: Decodable {
     let name: String
     let arguments: MCPJSONAny?
@@ -188,15 +345,23 @@ private struct ToolCallParams: Decodable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try c.decode(String.self, forKey: .name)
-        // Preserve explicit-null arguments so handlers can distinguish
-        // `{}` (no args) from `{"arguments": null}` (explicit null) if they
-        // care; same rationale as MCPRequest.params.
+        // Preserve whatever shape the client sent so the dispatcher can
+        // validate it (object vs. null vs. array vs. scalar) and produce a
+        // precise error. Don't reject at this level — it would lose the
+        // distinction between "absent" and "explicit null" before the
+        // dispatcher sees it.
         if c.contains(.arguments) {
             self.arguments = try c.decode(MCPJSONAny.self, forKey: .arguments)
         } else {
             self.arguments = nil
         }
     }
+}
+
+/// Minimal `initialize` params: only `protocolVersion` is decoded strictly.
+/// `capabilities` and `clientInfo` are accepted as-is and ignored for now.
+private struct InitializeParams: Decodable {
+    let protocolVersion: String
 }
 
 /// Shape written into the `tools/list` response. Mirrors MCP §tools/list
@@ -259,7 +424,7 @@ private func decodeFromJSONAny<T: Decodable>(_ type: T.Type, from any: MCPJSONAn
 
 /// Produces a compact one-line description of a decoding error. Avoids the
 /// multi-line Swift error descriptions that would muddy JSON-RPC messages.
-private func describe(_ error: Error) -> String {
+fileprivate func describe(_ error: Error) -> String {
     if let decodeError = error as? DecodingError {
         switch decodeError {
         case .dataCorrupted(let ctx),
