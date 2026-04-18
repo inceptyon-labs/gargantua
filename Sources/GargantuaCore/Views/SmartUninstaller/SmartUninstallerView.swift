@@ -81,13 +81,14 @@ public struct SmartUninstallerView: View {
 
     private func summaryState(result: UninstallExecutionResult) -> some View {
         let outcome = SingularityCloseMessage.Outcome.from(result: result.cleanupResult)
-        return VStack(spacing: GargantuaSpacing.space4) {
+        let accent = outcomeAccentColor(outcome.accent)
+        return VStack(spacing: GargantuaSpacing.space2) {
             Spacer()
             VStack(spacing: GargantuaSpacing.space2) {
                 Text(SingularityCloseMessage.heading(for: result.cleanupResult))
                     .font(GargantuaFonts.sectionLabel)
                     .tracking(3)
-                    .foregroundStyle(outcome == .totalFailure ? GargantuaColors.protected_ : GargantuaColors.accretion)
+                    .foregroundStyle(accent)
 
                 Text(SingularityCloseMessage.line(for: result.cleanupResult))
                     .font(GargantuaFonts.body.italic())
@@ -95,7 +96,7 @@ public struct SmartUninstallerView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: result.cleanupResult) {
+            CleanupSummaryView(result: result.cleanupResult, outcomeAccent: accent) {
                 viewModel.reset()
             }
             Spacer()
@@ -105,20 +106,26 @@ public struct SmartUninstallerView: View {
 
     private func errorState(message: String) -> some View {
         VStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "exclamationmark.octagon.fill")
-                .font(.system(size: 32))
+            Text("SIGNAL FAILED")
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(3)
                 .foregroundStyle(GargantuaColors.protected_)
 
-            Text("Uninstall failed")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text(message)
-                .font(GargantuaFonts.body)
+            Text("Transmission aborted. The operation could not complete.")
+                .font(GargantuaFonts.body.italic())
                 .foregroundStyle(GargantuaColors.ink2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, GargantuaSpacing.space6)
+
+            Text(message)
+                .font(GargantuaFonts.monoPath)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.vertical, GargantuaSpacing.space2)
+                .background(GargantuaColors.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
 
             Button { viewModel.reset() } label: {
                 Text("Back to apps")
@@ -133,6 +140,15 @@ public struct SmartUninstallerView: View {
         }
         .frame(maxWidth: 480)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(GargantuaSpacing.space6)
+    }
+
+    private func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {
+        switch accent {
+        case .safe: return GargantuaColors.safe
+        case .accretion: return GargantuaColors.accretion
+        case .protected: return GargantuaColors.protected_
+        }
     }
 
     // MARK: - Phase animation plumbing

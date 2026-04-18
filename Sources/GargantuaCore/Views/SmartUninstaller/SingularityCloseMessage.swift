@@ -18,6 +18,24 @@ public enum SingularityCloseMessage {
             if succeeded == total { return .success }
             return .partial
         }
+
+        /// Semantic accent role for the outcome, decoupled from SwiftUI
+        /// `Color` so it can be unit-tested. View layer maps this to the
+        /// concrete token (`GargantuaColors.safe` / `.accretion` / `.protected_`).
+        public var accent: OutcomeAccent {
+            switch self {
+            case .success: return .safe
+            case .partial: return .accretion
+            case .totalFailure: return .protected
+            }
+        }
+    }
+
+    /// Semantic accent role for a cleanup outcome.
+    public enum OutcomeAccent: Equatable {
+        case safe
+        case accretion
+        case protected
     }
 
     /// All-caps heading shown above the flavor line. Keyed to the same

@@ -10,15 +10,27 @@ import SwiftUI
 /// - "Reveal Trash" undo button when applicable
 public struct CleanupSummaryView: View {
     let result: CleanupResult
+    let outcomeAccent: Color?
     let onDismiss: () -> Void
 
-    public init(result: CleanupResult, onDismiss: @escaping () -> Void) {
+    public init(
+        result: CleanupResult,
+        outcomeAccent: Color? = nil,
+        onDismiss: @escaping () -> Void
+    ) {
         self.result = result
+        self.outcomeAccent = outcomeAccent
         self.onDismiss = onDismiss
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let outcomeAccent {
+                Rectangle()
+                    .fill(outcomeAccent)
+                    .frame(height: 3)
+            }
+
             header
 
             Rectangle()

@@ -146,4 +146,13 @@ struct SingularityCloseMessageTests {
         #expect(SingularityCloseMessage.heading(for: fail) != "SIGNAL RECOVERED")
         #expect(SingularityCloseMessage.line(for: fail).contains("Signal lost"))
     }
+
+    @Test("Outcome exposes a semantic accent role keyed to the bucket")
+    func outcomeAccentMapping() {
+        // The summary banner color and the card's top-border both key off
+        // this mapping — getting it wrong shows amber on a total failure.
+        #expect(SingularityCloseMessage.Outcome.success.accent == .safe)
+        #expect(SingularityCloseMessage.Outcome.partial.accent == .accretion)
+        #expect(SingularityCloseMessage.Outcome.totalFailure.accent == .protected)
+    }
 }

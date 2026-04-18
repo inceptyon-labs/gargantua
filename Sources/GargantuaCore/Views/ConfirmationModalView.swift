@@ -127,7 +127,10 @@ struct ModalChrome<Content: View>: View {
 
 // MARK: - Shared: Action Buttons
 
-/// Cancel (ghost) + destructive confirm button pair.
+/// Cancel (ghost) + confirm button pair. Aligned with the Gargantua button
+/// system: primary (non-destructive) uses `accent`, destructive uses
+/// `protected_`, cancel uses the border-outlined ghost treatment that
+/// matches "Reveal Trash" in `CleanupSummaryView`.
 struct ConfirmationButtons: View {
     let itemCount: Int
     let totalSize: Int64
@@ -135,6 +138,20 @@ struct ConfirmationButtons: View {
     let isEnabled: Bool
     let onConfirm: () -> Void
     let onCancel: () -> Void
+
+    @FocusState private var focusedButton: FocusedButton?
+
+    private enum FocusedButton: Hashable { case cancel, confirm }
+
+    /// Primary-button background: `protected_` only for irreversible delete,
+    /// otherwise the standard `accent`. Uses the 0.4-opacity treatment when
+    /// disabled to match the rest of the app's disabled button convention.
+    private var confirmBackground: Color {
+        let base: Color = (cleanupMethod == .delete)
+            ? GargantuaColors.protected_
+            : GargantuaColors.accent
+        return isEnabled ? base : base.opacity(0.4)
+    }
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
@@ -145,16 +162,22 @@ struct ConfirmationButtons: View {
                     .foregroundStyle(GargantuaColors.ink)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, GargantuaSpacing.space2)
+                    .padding(.horizontal, GargantuaSpacing.space4)
                     .background(Color.clear)
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                     .overlay(
                         RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                            .stroke(
+                                focusedButton == .cancel ? GargantuaColors.borderFocus : GargantuaColors.borderEm,
+                                lineWidth: focusedButton == .cancel ? 2 : 1
+                            )
                     )
             }
             .buttonStyle(.plain)
+            .focusable()
+            .focused($focusedButton, equals: .cancel)
 
-            // Destructive confirm
+            // Confirm — accent for trash, protected_ for delete
             Button(action: onConfirm) {
                 let countText = itemCount == 1 ? "1 item" : "\(itemCount) items"
                 let sizeText = AlertItem.formatBytes(totalSize)
@@ -164,12 +187,20 @@ struct ConfirmationButtons: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, GargantuaSpacing.space2)
-                    .background(
-                        isEnabled ? cleanupMethod.accentColor : cleanupMethod.accentColor.opacity(0.4)
-                    )
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .background(confirmBackground)
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                            .stroke(
+                                focusedButton == .confirm ? GargantuaColors.borderFocus : Color.clear,
+                                lineWidth: 2
+                            )
+                    )
             }
             .buttonStyle(.plain)
+            .focusable(isEnabled)
+            .focused($focusedButton, equals: .confirm)
             .disabled(!isEnabled)
         }
     }
