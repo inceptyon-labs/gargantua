@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Runs an external process and returns captured stdout.
@@ -71,6 +72,11 @@ public struct DefaultProcessRunner: ProcessRunner {
 
         try process.run()
 
+        // Use process group to ensure descendants are also signaled.
+        // setpgid(pid, 0) creates a new process group with pid as leader.
+        // This allows signaling the entire group with killpg().
+        setpgid(process.processIdentifier, 0)
+
         // Drain each pipe on a dedicated background queue with a single
         // blocking readDataToEndOfFile(). This is a deliberately simpler drain
         // than a readabilityHandler + post-exit readDataToEndOfFile() pair:
@@ -79,12 +85,11 @@ public struct DefaultProcessRunner: ProcessRunner {
         // chunk can interleave with the final drain. Here, exactly one read
         // per pipe returns all bytes up to EOF. EOF requires every writer to
         // the pipe to close — normally just the child, but a descendant that
-        // inherits and keeps the fd open could delay or prevent EOF. Adapters
-        // here (czkawka_cli, fclones) don't spawn detached children, so this
-        // is safe in practice; hardening against inherited-fd hangs is
-        // tracked separately. Draining concurrently on both pipes also
-        // prevents a full 64K buffer on one stream from blocking the child
-        // while we sit on waitUntilExit.
+        // inherits and keeps the fd open could delay or prevent EOF.
+        // To harden against inherited-fd hangs, we now bound the drain wait
+        // with a grace period, closing the pipe fds if drain doesn't finish.
+        // Draining concurrently on both pipes also prevents a full 64K buffer
+        // on one stream from blocking the child while we sit on waitUntilExit.
         let drainGroup = DispatchGroup()
         let drainQueue = DispatchQueue.global(qos: .utility)
         drainQueue.async(group: drainGroup) {
@@ -103,7 +108,16 @@ public struct DefaultProcessRunner: ProcessRunner {
                 // Atomically claim the timeout state. If the main thread has
                 // already marked natural completion, bail — we lost the race.
                 guard coordinator.tryArmTimeout(process: process) else { return }
-                process.terminate()
+
+                // Send SIGTERM to the entire process group (process + descendants).
+                killpg(process.processIdentifier, SIGTERM)
+
+                // Schedule SIGKILL after a grace period if the process doesn't exit.
+                let killDeadline = DispatchTime.now() + 0.5
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: killDeadline) { [weak process] in
+                    guard let process, process.isRunning else { return }
+                    killpg(process.processIdentifier, SIGKILL)
+                }
             }
             watchdog = item
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline, execute: item)
@@ -116,10 +130,26 @@ public struct DefaultProcessRunner: ProcessRunner {
         let timedOut = coordinator.markNaturalCompletion() == .timedOut
         watchdog?.cancel()
 
-        // Pipe ends close on child exit, so the blocking reads return shortly
-        // after waitUntilExit. Join here so the buffers are fully populated
-        // before we snapshot them.
-        drainGroup.wait()
+        // Pipe ends close on child exit, so the blocking reads should return
+        // shortly after waitUntilExit. However, if a descendant inherited the fd
+        // and is still writing, the read could hang indefinitely. Use a bounded
+        // wait with a grace period; if drain doesn't finish, close the pipe fds
+        // directly to unblock the reads.
+        let drainGracePeriod: DispatchTime = {
+            // Use 10% of remaining time (capped at 1s) for drain grace period
+            let graceSecs = timeout.map { min($0 * 0.1, 1.0) } ?? 1.0
+            return DispatchTime.now() + graceSecs
+        }()
+
+        let drainResult = drainGroup.wait(timeout: drainGracePeriod)
+        if drainResult == .timedOut {
+            // Force-close the pipe file descriptors to unblock the pending reads.
+            // This prevents an indefinite hang if a descendant inherited the fds.
+            try? outHandle.close()
+            try? errHandle.close()
+            // Wait a bit longer for the drain tasks to finish after we've closed the fds.
+            _ = drainGroup.wait(timeout: DispatchTime.now() + 0.1)
+        }
 
         if timedOut, let timeout {
             throw ProcessRunnerError.timedOut(seconds: timeout)
