@@ -44,6 +44,8 @@ struct MainContentView: View {
                                 }
                             case "deepClean":
                                 DeepCleanView(profile: activeDeepCleanProfile, session: deepCleanSession)
+                            case "smartUninstaller":
+                                SmartUninstallerView()
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":

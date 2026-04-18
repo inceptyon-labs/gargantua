@@ -44,7 +44,8 @@ extension SidebarSection {
             id: "clean",
             label: "CLEAN",
             items: [
-                SidebarItem(id: "deepClean", label: "Deep Clean", icon: "bubbles.and.sparkles")
+                SidebarItem(id: "deepClean", label: "Deep Clean", icon: "bubbles.and.sparkles"),
+                SidebarItem(id: "smartUninstaller", label: "Smart Uninstaller", icon: "trash.slash"),
             ]
         ),
         SidebarSection(

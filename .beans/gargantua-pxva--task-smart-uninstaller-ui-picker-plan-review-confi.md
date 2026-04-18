@@ -1,11 +1,11 @@
 ---
 # gargantua-pxva
 title: 'Task: Smart Uninstaller UI (picker + plan review + confirmation)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-17T21:50:14Z
-updated_at: 2026-04-17T21:50:14Z
+updated_at: 2026-04-18T01:36:58Z
 parent: gargantua-j8a1
 blocked_by:
     - gargantua-9dxb
