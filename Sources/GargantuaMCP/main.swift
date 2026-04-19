@@ -145,10 +145,26 @@ private let fsExplainProvider: MCPExplainToolHandler.ExplainProvider = { input i
     let url = URL(fileURLWithPath: path)
     let name = url.lastPathComponent.isEmpty ? path : url.lastPathComponent
 
+    // Best-effort metadata enrichment. A missing or inaccessible path is
+    // treated as "no metadata" rather than an error: the shell's contract
+    // is to always return a conservative "review" classification so clients
+    // can render a response for any input. A dedicated "path not found"
+    // signal lands with the AI-backed provider that replaces this shell.
+    //
+    // `.size` returns the individual file/inode size; for directories that
+    // is not the recursive total. Size is omitted for directories rather
+    // than reporting a misleading small number.
+    //
+    // `lastAccessed` on the MCP contract maps to `.modificationDate` here:
+    // macOS's true content-access time (`URLResourceValues.contentAccessDate`)
+    // is unreliable on APFS (often disabled) and modification time is the
+    // closest always-available fallback. The AI-backed provider will use
+    // the real access time when available.
     var size: String?
     var lastAccessed: Date?
     if let attributes = try? FileManager.default.attributesOfItem(atPath: path) {
-        if let bytes = attributes[.size] as? NSNumber {
+        let isDirectory = (attributes[.type] as? FileAttributeType) == .typeDirectory
+        if !isDirectory, let bytes = attributes[.size] as? NSNumber {
             size = AlertItem.formatBytes(Int64(clamping: bytes.int64Value))
         }
         if let modified = attributes[.modificationDate] as? Date {
