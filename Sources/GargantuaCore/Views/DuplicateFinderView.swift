@@ -57,8 +57,26 @@ public struct DuplicateFinderView: View {
         }
     }
 
+    /// Selectable rows across every group, keyed by id for O(1) lookup.
+    /// Protected rows never appear here, so anything pulled through this map
+    /// is guaranteed to be a legitimate trash candidate regardless of what
+    /// the external `selectedIDs` binding carries.
+    private var selectableByID: [String: ScanResult] {
+        var map: [String: ScanResult] = [:]
+        for group in groups {
+            for file in group.files where file.safety != .protected_ {
+                map[file.id] = file
+            }
+        }
+        return map
+    }
+
+    /// Sanitized handoff for `onSendToTrash` — drops any id that isn't a
+    /// current, selectable, ungrouped-free row. Defends the Trust Layer
+    /// boundary against stale or externally mutated `selectedIDs`.
     private var selectedResults: [ScanResult] {
-        results.filter { selectedIDs.contains($0.id) }
+        let allowed = selectableByID
+        return selectedIDs.compactMap { allowed[$0] }
     }
 
     public var body: some View {
@@ -176,7 +194,12 @@ public struct DuplicateFinderView: View {
         // and cannot reuse a stale row whose isSelected it treats as
         // unchanged — same mitigation as ScanBucketView.
         Group {
-            if selected {
+            if item.safety == .protected_ {
+                // Protected duplicates are read-only: shown for context but
+                // never toggleable. Mirrors ScanBucketView.protectedRow.
+                protectedRow(item)
+                    .contextMenu { rowContextMenu(item) }
+            } else if selected {
                 DenseScanItemRow(
                     item: item,
                     isSelected: true,
@@ -197,6 +220,51 @@ public struct DuplicateFinderView: View {
             }
         }
         .id(item.id)
+    }
+
+    /// Read-only row for `.protected_` duplicates. Shown dimmed with a lock
+    /// indicator and no checkbox or tap-to-select affordance.
+    private func protectedRow(_ item: ScanResult) -> some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            ConfidenceOrbit(confidence: item.confidence, safety: item.safety)
+
+            Image(systemName: "lock.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(GargantuaColors.ink4)
+                .frame(width: 16, height: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: GargantuaSpacing.space1) {
+                    Text(item.name)
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .lineLimit(1)
+
+                    if !item.explanation.isEmpty {
+                        Text(item.explanation)
+                            .font(GargantuaFonts.body)
+                            .foregroundStyle(GargantuaColors.ink4)
+                            .lineLimit(1)
+                    }
+                }
+
+                Text(item.path)
+                    .font(GargantuaFonts.monoPath)
+                    .foregroundStyle(GargantuaColors.ink4)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            Text(AlertItem.formatBytes(item.size))
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink3)
+                .lineLimit(1)
+        }
+        .padding(.vertical, GargantuaSpacing.space2)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .background(GargantuaColors.protected_.opacity(0.06))
     }
 
     @ViewBuilder
@@ -287,10 +355,15 @@ public struct DuplicateFinderView: View {
     }
 
     private func toggleSelection(_ id: String) {
+        // Defense in depth: refuse to add ids for protected or unknown
+        // (ungrouped) rows, even if something upstream attempts to feed
+        // them through. Removal always succeeds so stale ids can be
+        // cleaned out by unchecking.
         if selectedIDs.contains(id) {
             selectedIDs.remove(id)
-        } else {
-            selectedIDs.insert(id)
+            return
         }
+        guard selectableByID[id] != nil else { return }
+        selectedIDs.insert(id)
     }
 }

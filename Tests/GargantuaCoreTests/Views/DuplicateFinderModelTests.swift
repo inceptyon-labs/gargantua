@@ -258,4 +258,56 @@ struct SelectAllButFirstTests {
         let group = DuplicateGrouper.group(results)[0]
         #expect(DuplicateFinderSelection.selectAllButFirst(in: group).isEmpty)
     }
+
+    @Test("Protected files after the first are skipped")
+    func skipsProtectedAfterFirst() {
+        // Path-ascending sort puts "a" first (kept), "b" second (protected,
+        // must be skipped), "c" third (selectable).
+        let results = [
+            makeFclonesResult(id: "a", groupID: 1, path: "/x/a", safety: .review),
+            makeFclonesResult(id: "b", groupID: 1, path: "/x/b", safety: .protected_),
+            makeFclonesResult(id: "c", groupID: 1, path: "/x/c", safety: .review),
+        ]
+        let group = DuplicateGrouper.group(results)[0]
+        let picked = DuplicateFinderSelection.selectAllButFirst(in: group)
+        #expect(picked == Set(["c"]))
+    }
+
+    @Test("Protected first entry does not block keep-one on remaining files")
+    func protectedFirstStillPicksTail() {
+        // "a" is protected but sorts first and is kept; tail "b", "c" are
+        // selectable, so both should be picked for trash.
+        let results = [
+            makeFclonesResult(id: "a", groupID: 1, path: "/x/a", safety: .protected_),
+            makeFclonesResult(id: "b", groupID: 1, path: "/x/b", safety: .review),
+            makeFclonesResult(id: "c", groupID: 1, path: "/x/c", safety: .review),
+        ]
+        let group = DuplicateGrouper.group(results)[0]
+        let picked = DuplicateFinderSelection.selectAllButFirst(in: group)
+        #expect(picked == Set(["b", "c"]))
+    }
+}
+
+// MARK: - Total Reclaimable Overflow
+
+@Suite("DuplicateFinderSelection.totalReclaimableBytes")
+struct TotalReclaimableTests {
+    @Test("Total reclaimable clamps at Int64.max across groups on overflow")
+    func totalClampsOnOverflow() {
+        // Two groups each contributing Int64.max / 2 + 100 bytes when their
+        // whole contents are selected — summed together, they overflow.
+        let huge = Int64.max / 2 + 100
+        let results = [
+            makeFclonesResult(id: "g1a", groupID: 1, path: "/x/g1a", size: huge),
+            makeFclonesResult(id: "g1b", groupID: 1, path: "/x/g1b", size: huge),
+            makeFclonesResult(id: "g2a", groupID: 2, path: "/x/g2a", size: huge),
+            makeFclonesResult(id: "g2b", groupID: 2, path: "/x/g2b", size: huge),
+        ]
+        let groups = DuplicateGrouper.group(results)
+        let total = DuplicateFinderSelection.totalReclaimableBytes(
+            groups: groups,
+            selectedIDs: ["g1a", "g1b", "g2a", "g2b"]
+        )
+        #expect(total == Int64.max)
+    }
 }

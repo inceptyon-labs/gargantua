@@ -143,9 +143,15 @@ public enum DuplicateFinderSelection {
 
     /// Deterministic "keep the first, trash the rest" selection for a single
     /// group. "First" is defined by `DuplicateGrouper`'s path-ascending sort,
-    /// so the choice is stable across runs.
+    /// so the choice is stable across runs. Protected files are never
+    /// selected for trash — they are filtered out of the candidate set.
     public static func selectAllButFirst(in group: DuplicateGroup) -> Set<String> {
         guard group.files.count >= 2 else { return [] }
-        return Set(group.files.dropFirst().map(\.id))
+        return Set(
+            group.files
+                .dropFirst()
+                .filter { $0.safety != .protected_ }
+                .map(\.id)
+        )
     }
 }
