@@ -17,6 +17,7 @@ import SwiftUI
 /// gated behind the Confirmation flow that Duplicate Finder also waits on.
 public struct FileHealthView: View {
     public let results: [ScanResult]
+    public let warnings: [String]
     public let onExplain: ((ScanResult) -> Void)?
     public let onRescan: (() -> Void)?
 
@@ -24,10 +25,12 @@ public struct FileHealthView: View {
 
     public init(
         results: [ScanResult],
+        warnings: [String] = [],
         onExplain: ((ScanResult) -> Void)? = nil,
         onRescan: (() -> Void)? = nil
     ) {
         self.results = results
+        self.warnings = warnings
         self.onExplain = onExplain
         self.onRescan = onRescan
     }
@@ -45,7 +48,10 @@ public struct FileHealthView: View {
         tabs.reduce(0) { $0 + $1.count }
     }
 
-    private var totalReclaimableBytes: Int64 {
+    /// Sum of every flagged file's size. Called "flagged" rather than
+    /// "reclaimable" because similarity groups expect the user to keep at
+    /// least one member per group — the true reclaim ceiling is lower.
+    private var totalFlaggedBytes: Int64 {
         tabs.reduce(Int64(0)) { sum, tab in
             let (next, overflow) = sum.addingReportingOverflow(tab.totalSize)
             return overflow ? Int64.max : next
@@ -55,6 +61,10 @@ public struct FileHealthView: View {
     public var body: some View {
         VStack(spacing: 0) {
             summaryBar
+
+            if !warnings.isEmpty {
+                partialFailureBanner
+            }
 
             Rectangle()
                 .fill(GargantuaColors.border)
@@ -76,6 +86,33 @@ public struct FileHealthView: View {
         }
     }
 
+    // MARK: - Partial Failure Banner
+
+    private var partialFailureBanner: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(GargantuaColors.review)
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("Scan completed with warnings")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(warnings.joined(separator: "\n"))
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.reviewDim)
+    }
+
     // MARK: - Summary Bar
 
     private var summaryBar: some View {
@@ -83,9 +120,9 @@ public struct FileHealthView: View {
             summaryLabel("\(tabs.count) categor\(tabs.count == 1 ? "y" : "ies")")
             summaryDot
             summaryLabel("\(totalFindings) item\(totalFindings == 1 ? "" : "s")")
-            if totalReclaimableBytes > 0 {
+            if totalFlaggedBytes > 0 {
                 summaryDot
-                summaryLabel(AlertItem.formatBytes(totalReclaimableBytes) + " total")
+                summaryLabel(AlertItem.formatBytes(totalFlaggedBytes) + " flagged")
             }
 
             Spacer()

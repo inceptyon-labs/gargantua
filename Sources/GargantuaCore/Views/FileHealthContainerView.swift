@@ -25,27 +25,32 @@ public struct FileHealthContainerView: View {
     public let onExplain: ((ScanResult) -> Void)?
 
     @State private var scanState: ScanState = .idle
-    @State private var scanProgress = ScanProgress()
+    @State private var scanProgress: ScanProgress = ScanProgress()
     @State private var activeScanTask: Task<Void, Never>?
     @State private var scanGeneration: Int = 0
 
     enum ScanState {
         case idle
         case scanning
-        case results([ScanResult])
+        case results([ScanResult], warnings: [String])
         case error(String)
     }
 
-    /// Derive the terminal scan state from results + adapter-recorded errors,
-    /// mirroring ``DuplicateFinderContainerView/deriveScanState``.
+    /// Derive the terminal scan state from results + adapter-recorded errors.
     ///
-    /// A silent "no findings" with errors would otherwise render as a clean
-    /// bill of health — misleading the user about a genuine scan failure.
+    /// CzkawkaAdapter runs eight independent subcommands; per-category failures
+    /// land in `errors` without blocking the scan. Three outcomes:
+    ///
+    /// - No results + errors → `.error` (every category failed, nothing to show).
+    /// - Results + errors → `.results(_, warnings:)` so the UI can surface a
+    ///   partial-failure banner; silent success would mislead the user into
+    ///   thinking an incomplete audit was clean.
+    /// - Results + no errors → plain `.results(_, warnings: [])`.
     static func deriveScanState(results: [ScanResult], errors: [String]) -> ScanState {
         if results.isEmpty, !errors.isEmpty {
             return .error(errors.joined(separator: "\n"))
         }
-        return .results(results)
+        return .results(results, warnings: errors)
     }
 
     public init(
@@ -73,9 +78,10 @@ public struct FileHealthContainerView: View {
                     idleView
                 case .scanning:
                     scanningView
-                case .results(let results):
+                case .results(let results, let warnings):
                     FileHealthView(
                         results: results,
+                        warnings: warnings,
                         onExplain: onExplain,
                         onRescan: startScan
                     )
@@ -85,6 +91,7 @@ public struct FileHealthContainerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onDisappear(perform: cancelActiveScan)
     }
 
     // MARK: - Phase views
@@ -203,13 +210,17 @@ public struct FileHealthContainerView: View {
             return
         }
 
+        // Fresh ScanProgress per attempt — a superseded scan's late error
+        // append can't mutate the next scan's progress bookkeeping.
+        let progress = ScanProgress()
+        scanProgress = progress
         scanState = .scanning
 
         activeScanTask = Task {
             let outcome: ScanState
             do {
-                let results = try await engine.scan(progress: scanProgress, observer: nil)
-                let errors = await MainActor.run { scanProgress.errors }
+                let results = try await engine.scan(progress: progress, observer: nil)
+                let errors = await MainActor.run { progress.errors }
                 outcome = Self.deriveScanState(results: results, errors: errors)
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -224,6 +235,15 @@ public struct FileHealthContainerView: View {
                 activeScanTask = nil
             }
         }
+    }
+
+    /// Cancels the in-flight scan on view teardown so czkawka subprocess work
+    /// doesn't outlive the panel. `scanGeneration` is bumped so any late
+    /// completion from the cancelled task is discarded at the generation guard.
+    private func cancelActiveScan() {
+        activeScanTask?.cancel()
+        activeScanTask = nil
+        scanGeneration &+= 1
     }
 
     private func resolvedScanRoots() -> [URL] {
