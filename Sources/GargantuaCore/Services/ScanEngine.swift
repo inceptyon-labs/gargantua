@@ -20,6 +20,18 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "ScanEngi
 /// is responsible for its own Trust Layer defaults — `ScanEngine` does not
 /// re-classify results, so duplicate review-by-default semantics from
 /// `FclonesAdapter` carry through unchanged.
+///
+/// ## Known limitation: shared `ScanProgress` across multiple adapters
+///
+/// The `ScanProgress` argument is forwarded to each child adapter as-is.
+/// Adapters currently call `progress.start()` / `progress.finish()`
+/// themselves, so with `n > 1` adapters the aggregate `fractionCompleted`
+/// and `itemsFound` values oscillate instead of rising monotonically, and
+/// `isScanning` flickers false between adapter boundaries. This is
+/// acceptable for the current single-adapter duplicate-finder pipeline;
+/// multi-adapter UIs (e.g. Deep Clean composing native + czkawka) should
+/// either pass `nil` for `progress` to each child and synthesise
+/// aggregate progress here, or give each child its own `ScanProgress`.
 public struct ScanEngine: ScanAdapter {
     private let adapters: [any ScanAdapter]
 

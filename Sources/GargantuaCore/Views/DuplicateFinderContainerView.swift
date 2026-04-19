@@ -26,12 +26,33 @@ public struct DuplicateFinderContainerView: View {
 
     @State private var scanState: ScanState = .idle
     @State private var scanProgress = ScanProgress()
+    @State private var activeScanTask: Task<Void, Never>?
+    @State private var scanGeneration: Int = 0
 
     enum ScanState {
         case idle
         case scanning
         case results([ScanResult])
         case error(String)
+    }
+
+    /// Derive the terminal scan state from a finished scan's results + the
+    /// errors an adapter recorded on `ScanProgress`.
+    ///
+    /// `FclonesAdapter` reports hard failures (timeout, non-zero exit, JSON
+    /// parse failure) by appending to `progress.errors` and returning `[]`
+    /// rather than throwing. If we don't translate that into `.error`, a
+    /// silent scan failure would render as "No duplicates found" — the
+    /// user would never know something broke.
+    ///
+    /// Partial successes (some results + some errors) still surface as
+    /// `.results` so the user isn't blocked by a non-fatal read failure on a
+    /// single subdirectory.
+    static func deriveScanState(results: [ScanResult], errors: [String]) -> ScanState {
+        if results.isEmpty, !errors.isEmpty {
+            return .error(errors.joined(separator: "\n"))
+        }
+        return .results(results)
     }
 
     public init(
@@ -171,6 +192,14 @@ public struct DuplicateFinderContainerView: View {
     // MARK: - Scan orchestration
 
     private func startScan() {
+        // Cancel any in-flight scan so its completion can't overwrite the new
+        // scan's state. The generation id below is the belt to this suspenders
+        // — cancellation is cooperative and may no-op if the task is already
+        // at an un-cancellable point.
+        activeScanTask?.cancel()
+        scanGeneration &+= 1
+        let generation = scanGeneration
+
         let roots = resolvedScanRoots()
         let engine: any ScanAdapter
         do {
@@ -186,18 +215,23 @@ public struct DuplicateFinderContainerView: View {
         selectedIDs = []
         scanState = .scanning
 
-        Task {
+        activeScanTask = Task {
+            let outcome: ScanState
             do {
                 let results = try await engine.scan(progress: scanProgress, observer: nil)
-                await MainActor.run {
-                    scanState = .results(results)
-                }
+                let errors = await MainActor.run { scanProgress.errors }
+                outcome = Self.deriveScanState(results: results, errors: errors)
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 logger.error("Duplicate scan failed: \(message, privacy: .public)")
-                await MainActor.run {
-                    scanState = .error(message)
-                }
+                outcome = .error(message)
+            }
+
+            await MainActor.run {
+                // Drop any completion that belongs to a superseded scan.
+                guard generation == scanGeneration else { return }
+                scanState = outcome
+                activeScanTask = nil
             }
         }
     }
