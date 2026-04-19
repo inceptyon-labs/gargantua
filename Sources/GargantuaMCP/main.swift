@@ -9,9 +9,8 @@ import GargantuaCore
 // the Phase 2 tool handlers.
 //
 // Currently registered: `scan` (gargantua-sbg6), `analyze` + `status`
-// (gargantua-2xod). The remaining tools (`explain`, `list_profiles`) land in
-// a follow-up Task; until then they still return JSON-RPC internal error
-// 'Tool not implemented'.
+// (gargantua-2xod), `explain` + `list_profiles` (gargantua-o4ef). All five
+// Phase 2 tools advertised in `MCPPhase2Tools.all` are now live.
 
 private let mcpServerVersion = "0.1.0"
 
@@ -120,6 +119,36 @@ let statusHandler = MCPStatusToolHandler(
     log: stderrLog
 )
 dispatcher.register(tool: .status, handler: statusHandler.toolHandler)
+
+// MARK: - explain
+
+// Default explain provider: AI-free shell backed by filesystem metadata.
+// The provider lives in `GargantuaCore` (see
+// `MCPExplainToolHandler.defaultFilesystemProvider`) so its behavior has
+// direct test coverage and the boundary for swapping to an AI-backed
+// source (`AIInferenceEngine`) is a single factory call.
+let explainHandler = MCPExplainToolHandler(
+    explainProvider: MCPExplainToolHandler.defaultFilesystemProvider(),
+    log: stderrLog
+)
+dispatcher.register(tool: .explain, handler: explainHandler.toolHandler)
+
+// MARK: - list_profiles
+
+// Default profiles provider: the three built-in profiles, with `active`
+// pinned to "light" (same safest built-in the scan handler falls back to
+// when no profile is requested). Persisted user profiles and the app's
+// real active-profile selection land with the persisted-profile bridge
+// in a follow-up.
+private let builtInProfilesProvider: MCPListProfilesToolHandler.ProfilesProvider = {
+    ProfilesSnapshot(profiles: CleanupProfile.builtIn, active: "light")
+}
+
+let listProfilesHandler = MCPListProfilesToolHandler(
+    profilesProvider: builtInProfilesProvider,
+    log: stderrLog
+)
+dispatcher.register(tool: .listProfiles, handler: listProfilesHandler.toolHandler)
 
 // MARK: - Transport
 
