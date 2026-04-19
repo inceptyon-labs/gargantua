@@ -47,6 +47,7 @@ extension SidebarSection {
                 SidebarItem(id: "deepClean", label: "Deep Clean", icon: "bubbles.and.sparkles"),
                 SidebarItem(id: "smartUninstaller", label: "Smart Uninstaller", icon: "trash.slash"),
                 SidebarItem(id: "duplicateFinder", label: "Duplicate Finder", icon: "doc.on.doc"),
+                SidebarItem(id: "fileHealth", label: "File Health", icon: "stethoscope"),
             ]
         ),
         SidebarSection(

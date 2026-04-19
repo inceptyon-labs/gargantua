@@ -56,6 +56,10 @@ struct MainContentView: View {
                                     scanRoots: resolvedScanRoots,
                                     selectedIDs: $duplicateFinderSelection
                                 )
+                            case "fileHealth":
+                                FileHealthContainerView(
+                                    scanRoots: resolvedScanRoots
+                                )
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":
