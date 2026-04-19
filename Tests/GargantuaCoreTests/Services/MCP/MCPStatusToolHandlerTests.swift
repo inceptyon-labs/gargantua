@@ -163,6 +163,61 @@ struct MCPStatusToolHandlerTests {
         #expect(formatted == "0m")
     }
 
+    @Test("NaN uptime falls back to 0m instead of trapping")
+    func uptimeNaN() {
+        let formatted = MCPStatusToolHandler.formatUptime(.nan)
+        #expect(formatted == "0m")
+    }
+
+    @Test("infinite uptime falls back to 0m instead of trapping")
+    func uptimeInfinite() {
+        #expect(MCPStatusToolHandler.formatUptime(.infinity) == "0m")
+        #expect(MCPStatusToolHandler.formatUptime(-.infinity) == "0m")
+    }
+
+    @Test("uptime larger than Int.max saturates instead of trapping")
+    func uptimeBeyondIntMax() {
+        // 1e20 seconds is far beyond Int64.max; must not trap on Int(_:).
+        let formatted = MCPStatusToolHandler.formatUptime(1e20)
+        // Expect some days-formatted value (non-empty, non-"0m" — saturation
+        // lands us at Int.max seconds which is ~106 quadrillion days).
+        #expect(formatted.hasSuffix("h"))
+        #expect(!formatted.isEmpty)
+    }
+
+    // MARK: Robustness
+
+    @Test("non-finite metrics do not crash the handler")
+    func nonFiniteMetricsDoNotCrash() throws {
+        // Production collector always returns finite values, but the
+        // provider surface is public and a misbehaving injection must not
+        // be able to crash the MCP server via SystemMetrics.healthScore's
+        // `Int(_.rounded())` cast or via `formatUptime`.
+        let subject = handler(snapshot: {
+            Self.makeSnapshot(
+                cpuUsage: .nan,
+                memoryPressure: .infinity,
+                diskUsage: -.infinity,
+                uptime: .nan
+            )
+        })
+        let result = try subject.handle(Self.emptyArguments)
+        #expect(result.isError == false)
+        let output = try Self.decodeOutput(result)
+        #expect(output.uptime == "0m")
+        #expect(output.healthScore >= 0 && output.healthScore <= 100)
+    }
+
+    @Test("extra unknown fields on status arguments are ignored")
+    func extraFieldsIgnored() throws {
+        let subject = handler(snapshot: { Self.makeSnapshot() })
+        let result = try subject.handle(MCPToolArguments([
+            "foo": .string("bar"),
+            "nested": .object(["a": .int(1)]),
+        ]))
+        #expect(result.isError == false)
+    }
+
     // MARK: Provider errors
 
     @Test("provider throwing a LocalizedError surfaces description in .failure")

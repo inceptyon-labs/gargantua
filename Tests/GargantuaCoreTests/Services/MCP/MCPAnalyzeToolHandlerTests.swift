@@ -166,6 +166,56 @@ struct MCPAnalyzeToolHandlerTests {
         #expect(output.recommendations.isEmpty)
     }
 
+    @Test("disk usage at exactly 0.85 triggers the recommendation (>= threshold)")
+    func diskAtExactThreshold() throws {
+        let subject = handler(metrics: {
+            Self.makeMetrics(diskUsage: 0.85)
+        })
+        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        #expect(output.recommendations.contains { $0.lowercased().contains("disk") })
+    }
+
+    @Test("disk usage just below 0.85 does NOT trigger (< threshold)")
+    func diskJustBelowThreshold() throws {
+        let subject = handler(metrics: {
+            Self.makeMetrics(diskUsage: 0.849)
+        })
+        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        #expect(output.recommendations.isEmpty)
+    }
+
+    // MARK: Robustness
+
+    @Test("non-finite metrics do not crash the handler (healthScore trap guard)")
+    func nonFiniteMetricsDoNotCrash() throws {
+        // Production collector always returns finite values, but the
+        // provider surface is public and a misbehaving injection must not
+        // be able to crash the MCP server via SystemMetrics.healthScore's
+        // `Int(_.rounded())` cast.
+        let metrics = Self.makeMetrics(
+            cpuUsage: .nan,
+            memoryPressure: .infinity,
+            diskUsage: -.infinity
+        )
+        let subject = handler(metrics: { metrics })
+        let result = try subject.handle(Self.emptyArguments)
+        #expect(result.isError == false)
+        let output = try Self.decodeOutput(result)
+        // Sanitized fractions all become 0, so healthScore falls out of
+        // the weighted composite at a deterministic value.
+        #expect(output.healthScore >= 0 && output.healthScore <= 100)
+    }
+
+    @Test("extra unknown fields on analyze arguments are ignored")
+    func extraFieldsIgnored() throws {
+        let subject = handler(metrics: { Self.makeMetrics() })
+        let result = try subject.handle(MCPToolArguments([
+            "foo": .string("bar"),
+            "nested": .object(["a": .int(1)]),
+        ]))
+        #expect(result.isError == false)
+    }
+
     // MARK: Provider errors
 
     @Test("provider throwing a LocalizedError surfaces description in .failure")

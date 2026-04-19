@@ -118,7 +118,16 @@ public struct MCPStatusToolHandler: Sendable {
     /// `"Mm"` for sub-hour uptimes so very short uptimes still round-trip
     /// something useful (tests, CI).
     static func formatUptime(_ seconds: TimeInterval) -> String {
-        let total = max(Int(seconds), 0)
+        // `Int(_:)` traps on `NaN` / `±infinity` / out-of-range. A misbehaving
+        // snapshot source must not be able to crash the MCP server with a
+        // single bad value, so fall back to `"0m"` for non-finite input and
+        // saturate absurdly large values at `Int.max` seconds before cast.
+        guard seconds.isFinite else { return "0m" }
+        // `Double(Int.max)` rounds up past `Int.max` in IEEE 754, so
+        // `Int(Double(Int.max))` still traps. `.nextDown` gives the largest
+        // Double that is guaranteed to round-trip into Int safely.
+        let clamped = min(max(seconds, 0), Double(Int.max).nextDown)
+        let total = Int(clamped)
         let days = total / 86_400
         let hours = (total % 86_400) / 3_600
         let minutes = (total % 3_600) / 60

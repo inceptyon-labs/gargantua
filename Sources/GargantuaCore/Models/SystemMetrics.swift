@@ -92,16 +92,25 @@ public struct SystemMetrics: Sendable, Equatable {
         thermalLevel: ThermalLevel,
         timestamp: Date = Date()
     ) {
-        self.cpuUsage = min(max(cpuUsage, 0), 1)
-        self.memoryPressure = min(max(memoryPressure, 0), 1)
+        self.cpuUsage = Self.sanitizedFraction(cpuUsage)
+        self.memoryPressure = Self.sanitizedFraction(memoryPressure)
         self.memoryTotal = memoryTotal
         self.memoryUsed = memoryUsed
-        self.diskUsage = min(max(diskUsage, 0), 1)
+        self.diskUsage = Self.sanitizedFraction(diskUsage)
         self.diskTotal = diskTotal
         self.diskUsed = diskUsed
         self.diskFree = diskFree
         self.thermalLevel = thermalLevel
         self.timestamp = timestamp
+    }
+
+    /// Clamps a fraction to `[0, 1]`, treating non-finite inputs (`NaN`,
+    /// `±infinity`) as `0`. Guards against downstream traps in `healthScore`
+    /// (which calls `Int(_.rounded())`) when a misbehaving metrics source
+    /// emits a division-by-zero or similar artefact.
+    private static func sanitizedFraction(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        return min(max(value, 0), 1)
     }
 
     // MARK: - Health Score
