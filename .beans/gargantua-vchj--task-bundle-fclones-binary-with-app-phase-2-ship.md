@@ -1,11 +1,11 @@
 ---
 # gargantua-vchj
 title: 'Task: Bundle fclones binary with app (Phase 2 ship)'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-19T02:57:42Z
-updated_at: 2026-04-19T03:27:18Z
+updated_at: 2026-04-19T03:31:44Z
 parent: gargantua-4nb9
 blocking:
     - gargantua-4nb9
@@ -41,3 +41,20 @@ PRD §8.3 (Bundle Size Budget) explicitly calls for bundling at ~5 MB. PRD §9 (
 - Options for arch handling: ship one universal binary (larger), or ship two and pick at runtime in the resolver (more code)
 - Signing approach: re-sign as part of CI release pipeline rather than storing a pre-signed binary in the repo (keeps repo clean of large blobs and matches team-id requirement)
 - `czkawka_cli` (also cited in PRD §8.3 at ~10 MB) will need the same treatment — consider factoring a generic "vendored CLI" Package.swift pattern that both can use.
+
+
+## Summary of Changes
+
+- `Scripts/fetch-fclones.sh` builds pinned fclones 0.35.0 from crates.io via `cargo install --locked`, strips, and drops the result at `Sources/GargantuaCore/Resources/bin/fclones`.
+- `Package.swift` exposes `Resources/bin` as a `.copy` resource under GargantuaCore; SPM preserves the exec bit into `Gargantua_GargantuaCore.bundle/bin/fclones`.
+- `FclonesBinaryResolver` now computes its default `bundledURL` from `Bundle.module` (+ a `resourceURL.appendingPathComponent("bin/fclones")` fallback). Previous default used `Bundle.main`, which could never succeed for a resource placed in an SPM module bundle — so the bundled-fallback rung of the resolution ladder was dead code before this change.
+- Two new resolver tests prove the vendored binary is discoverable via `Bundle.module` and resolves through the full `resolve()` path when no system `fclones` is present.
+
+## Scope Deferred → Follow-up bean `gargantua-vzuz`
+
+Tracked separately:
+- Universal / Intel coverage
+- Team-ID code-signing of the bundled binary
+- SHA-256 integrity pinning on the upstream source
+- Fresh-macOS smoke test (no brew, no env var)
+- Reusable pattern extended to `czkawka_cli`
