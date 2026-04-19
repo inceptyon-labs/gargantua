@@ -71,3 +71,78 @@ public struct MCPExplainToolHandler: Sendable {
             + output.explanation
     }
 }
+
+// MARK: - Default filesystem-backed provider
+
+public extension MCPExplainToolHandler {
+    /// Default AI-free `ExplainProvider` backed by filesystem metadata.
+    ///
+    /// Behavior:
+    /// - `item_id` inputs throw `MCPToolError.invalidParams` (lookup not yet
+    ///   supported; a persisted scan-result bridge replaces this later).
+    /// - Missing, empty, or non-absolute `path` inputs throw
+    ///   `MCPToolError.invalidParams`. Absolute-only is enforced because
+    ///   `MCPPhase2Tools.explain` advertises `path` as an "Absolute filesystem
+    ///   path"; accepting relative paths would resolve against the MCP
+    ///   process's current working directory and produce surprising results
+    ///   depending on launch context.
+    /// - Missing or inaccessible paths (file not found, permission denied)
+    ///   return a shell response with no `size`/`lastAccessed` rather than
+    ///   erroring. The shell's contract is to always render a conservative
+    ///   `"review"` classification for any accepted input; the AI-backed
+    ///   provider that replaces this shell will distinguish "unknown
+    ///   metadata" from "path not found" explicitly.
+    /// - Size is omitted for directories (`.size` returns the inode size, not
+    ///   the recursive total) to avoid reporting a misleading small number.
+    /// - `lastAccessed` maps to `.modificationDate`: APFS often disables the
+    ///   true content-access time, and modification time is the closest
+    ///   always-available fallback.
+    ///
+    /// Uses `FileManager.default` directly because `FileManager` is not
+    /// `Sendable` and this closure is `@Sendable`. Tests exercise it with
+    /// real temporary files.
+    static func defaultFilesystemProvider() -> ExplainProvider {
+        return { input in
+            if input.itemId != nil {
+                throw MCPToolError.invalidParams(
+                    "item_id lookup is not yet supported via MCP; supply an absolute filesystem path instead."
+                )
+            }
+            guard let path = input.path, !path.isEmpty else {
+                // `MCPExplainInput` already enforces path-xor-item_id at
+                // decode, so this branch is defensive against a future
+                // input-shape change that might let both be nil through.
+                throw MCPToolError.invalidParams("explain requires a non-empty path.")
+            }
+            guard path.hasPrefix("/") else {
+                throw MCPToolError.invalidParams(
+                    "explain requires an absolute filesystem path (starting with '/')."
+                )
+            }
+
+            let url = URL(fileURLWithPath: path)
+            let name = url.lastPathComponent.isEmpty ? path : url.lastPathComponent
+
+            var size: String?
+            var lastAccessed: Date?
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: path) {
+                let isDirectory = (attributes[.type] as? FileAttributeType) == .typeDirectory
+                if !isDirectory, let bytes = attributes[.size] as? NSNumber {
+                    size = AlertItem.formatBytes(Int64(clamping: bytes.int64Value))
+                }
+                if let modified = attributes[.modificationDate] as? Date {
+                    lastAccessed = modified
+                }
+            }
+
+            return MCPExplainOutput(
+                name: name,
+                safety: "review",
+                confidence: 50,
+                explanation: "AI-backed analysis is not yet wired; this item is flagged 'review' by default. Inspect before cleanup.",
+                size: size,
+                lastAccessed: lastAccessed
+            )
+        }
+    }
+}

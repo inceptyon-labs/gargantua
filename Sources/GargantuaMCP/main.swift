@@ -123,67 +123,12 @@ dispatcher.register(tool: .status, handler: statusHandler.toolHandler)
 // MARK: - explain
 
 // Default explain provider: AI-free shell backed by filesystem metadata.
-// `item_id` lookups are rejected as unsupported until the scan-result
-// persistence bridge lands — clients get a precise `-32602 invalidParams`
-// message rather than a silent empty-shell explanation. Real AI-backed
-// explanations (via `AIInferenceEngine`) swap in at this provider boundary
-// without touching the handler. The default explanation is deliberately
-// conservative: safety="review", confidence=50.
-private let fsExplainProvider: MCPExplainToolHandler.ExplainProvider = { input in
-    if input.itemId != nil {
-        throw MCPToolError.invalidParams(
-            "item_id lookup is not yet supported via MCP; supply a filesystem path instead."
-        )
-    }
-    guard let path = input.path, !path.isEmpty else {
-        // `MCPExplainInput` already enforces path-xor-item_id at decode, so
-        // this branch is defensive against a future input-shape change that
-        // might let both be nil through.
-        throw MCPToolError.invalidParams("explain requires a non-empty path.")
-    }
-
-    let url = URL(fileURLWithPath: path)
-    let name = url.lastPathComponent.isEmpty ? path : url.lastPathComponent
-
-    // Best-effort metadata enrichment. A missing or inaccessible path is
-    // treated as "no metadata" rather than an error: the shell's contract
-    // is to always return a conservative "review" classification so clients
-    // can render a response for any input. A dedicated "path not found"
-    // signal lands with the AI-backed provider that replaces this shell.
-    //
-    // `.size` returns the individual file/inode size; for directories that
-    // is not the recursive total. Size is omitted for directories rather
-    // than reporting a misleading small number.
-    //
-    // `lastAccessed` on the MCP contract maps to `.modificationDate` here:
-    // macOS's true content-access time (`URLResourceValues.contentAccessDate`)
-    // is unreliable on APFS (often disabled) and modification time is the
-    // closest always-available fallback. The AI-backed provider will use
-    // the real access time when available.
-    var size: String?
-    var lastAccessed: Date?
-    if let attributes = try? FileManager.default.attributesOfItem(atPath: path) {
-        let isDirectory = (attributes[.type] as? FileAttributeType) == .typeDirectory
-        if !isDirectory, let bytes = attributes[.size] as? NSNumber {
-            size = AlertItem.formatBytes(Int64(clamping: bytes.int64Value))
-        }
-        if let modified = attributes[.modificationDate] as? Date {
-            lastAccessed = modified
-        }
-    }
-
-    return MCPExplainOutput(
-        name: name,
-        safety: "review",
-        confidence: 50,
-        explanation: "AI-backed analysis is not yet wired; this item is flagged 'review' by default. Inspect before cleanup.",
-        size: size,
-        lastAccessed: lastAccessed
-    )
-}
-
+// The provider lives in `GargantuaCore` (see
+// `MCPExplainToolHandler.defaultFilesystemProvider`) so its behavior has
+// direct test coverage and the boundary for swapping to an AI-backed
+// source (`AIInferenceEngine`) is a single factory call.
 let explainHandler = MCPExplainToolHandler(
-    explainProvider: fsExplainProvider,
+    explainProvider: MCPExplainToolHandler.defaultFilesystemProvider(),
     log: stderrLog
 )
 dispatcher.register(tool: .explain, handler: explainHandler.toolHandler)
