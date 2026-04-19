@@ -282,10 +282,12 @@ public struct DuplicateFinderView: View {
             Label("Copy Path", systemImage: "doc.on.doc")
         }
     }
+}
 
-    // MARK: - Action Bar
+// MARK: - Action Bar
 
-    private var actionBar: some View {
+extension DuplicateFinderView {
+    var actionBar: some View {
         HStack {
             Text("\(selectedIDs.count) selected")
                 .font(GargantuaFonts.caption)
@@ -323,15 +325,17 @@ public struct DuplicateFinderView: View {
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
     }
+}
 
-    // MARK: - Actions
+// MARK: - Actions
 
-    private func triggerTrash() {
+extension DuplicateFinderView {
+    func triggerTrash() {
         guard !selectedIDs.isEmpty else { return }
         onSendToTrash?(selectedResults)
     }
 
-    private func toggleGroup(_ id: String) {
+    func toggleGroup(_ id: String) {
         if expandedGroupIDs.contains(id) {
             expandedGroupIDs.remove(id)
         } else {
@@ -339,7 +343,7 @@ public struct DuplicateFinderView: View {
         }
     }
 
-    private func toggleGroupSelection(_ group: DuplicateGroup) {
+    func toggleGroupSelection(_ group: DuplicateGroup) {
         let ids = group.selectableIDs
         guard !ids.isEmpty else { return }
         if ids.allSatisfy(selectedIDs.contains) {
@@ -349,12 +353,12 @@ public struct DuplicateFinderView: View {
         }
     }
 
-    private func selectAllButFirst(in group: DuplicateGroup) {
+    func selectAllButFirst(in group: DuplicateGroup) {
         selectedIDs.subtract(group.files.map(\.id))
         selectedIDs.formUnion(DuplicateFinderSelection.selectAllButFirst(in: group))
     }
 
-    private func toggleSelection(_ id: String) {
+    func toggleSelection(_ id: String) {
         // Defense in depth: refuse to add ids for protected or unknown
         // (ungrouped) rows, even if something upstream attempts to feed
         // them through. Removal always succeeds so stale ids can be
