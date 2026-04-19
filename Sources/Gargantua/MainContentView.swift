@@ -12,6 +12,7 @@ struct MainContentView: View {
     @State private var persistence: PersistenceController?
     @State private var deepCleanSession = DeepCleanSessionState()
     @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
+    @State private var duplicateFinderSelection: Set<String> = []
 
     var body: some View {
         ZStack {
@@ -47,6 +48,15 @@ struct MainContentView: View {
                                 DeepCleanView(profile: activeDeepCleanProfile, session: deepCleanSession)
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
+                            case "duplicateFinder":
+                                // Results source will be wired through ScanEngine in a
+                                // follow-up Task. Trash callback is intentionally left
+                                // nil until the Trust Layer / ConfirmationModalView flow
+                                // for destructive duplicate-removal is in place.
+                                DuplicateFinderView(
+                                    results: [],
+                                    selectedIDs: $duplicateFinderSelection
+                                )
                             case "diskExplorer":
                                 DiskExplorerView()
                             case "rules":

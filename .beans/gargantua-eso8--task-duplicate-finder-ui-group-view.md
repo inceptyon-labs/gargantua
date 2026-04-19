@@ -1,11 +1,11 @@
 ---
 # gargantua-eso8
 title: 'Task: Duplicate Finder UI (group view)'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-18T22:18:18Z
-updated_at: 2026-04-18T22:18:18Z
+updated_at: 2026-04-19T02:12:38Z
 parent: gargantua-4nb9
 ---
 

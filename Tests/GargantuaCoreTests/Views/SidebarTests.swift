@@ -34,6 +34,7 @@ struct SidebarSectionTests {
         let allIDs = SidebarSection.defaultSections.flatMap { $0.items.map(\.id) }
         #expect(allIDs.contains("dashboard"))
         #expect(allIDs.contains("deepClean"))
+        #expect(allIDs.contains("duplicateFinder"))
         #expect(allIDs.contains("diskExplorer"))
         #expect(allIDs.contains("devPurge"))
         #expect(allIDs.contains("settings"))
