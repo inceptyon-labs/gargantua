@@ -5,7 +5,9 @@ import Foundation
 /// Resolution order:
 /// 1. `GARGANTUA_FCLONES_BIN` environment variable (explicit override)
 /// 2. Any of the common install locations on `PATH`
-/// 3. A binary bundled alongside the app under `Contents/Resources/fclones`
+/// 3. A binary bundled inside the GargantuaCore SPM resource bundle
+///    (`Bundle.module/bin/fclones`). For a shipped `.app`, this lives
+///    under `Contents/Resources/Gargantua_GargantuaCore.bundle/Contents/Resources/bin/fclones`.
 public struct FclonesBinaryResolver: Sendable {
     public enum ResolutionError: Error, LocalizedError, Sendable, Equatable {
         case notFound
@@ -36,10 +38,25 @@ public struct FclonesBinaryResolver: Sendable {
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        bundledURL: URL? = Bundle.main.url(forResource: "fclones", withExtension: nil)
+        bundledURL: URL? = Self.defaultBundledURL()
     ) {
         self.environment = environment
         self.bundledURL = bundledURL
+    }
+
+    /// Resolves the URL of the fclones binary vendored into the
+    /// GargantuaCore module resource bundle, if present.
+    public static func defaultBundledURL() -> URL? {
+        if let url = Bundle.module.url(forResource: "fclones", withExtension: nil, subdirectory: "bin") {
+            return url
+        }
+        if let resourceURL = Bundle.module.resourceURL {
+            let candidate = resourceURL.appendingPathComponent("bin/fclones")
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     /// Resolve the path to fclones, or throw `.notFound`.

@@ -32,7 +32,8 @@ let package = Package(
             path: "Sources/GargantuaCore",
             resources: [
                 .copy("Resources/cleanup_rules"),
-                .copy("Resources/uninstall_rules")
+                .copy("Resources/uninstall_rules"),
+                .copy("Resources/bin")
             ]
         ),
         .testTarget(

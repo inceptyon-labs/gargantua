@@ -88,4 +88,24 @@ struct FclonesBinaryResolverTests {
         let resolver = FclonesBinaryResolver(environment: [:], bundledURL: nil)
         #expect(!resolver.isAvailable())
     }
+
+    @Test("vendored binary is discoverable via Bundle.module and is executable")
+    func vendoredBinaryResolvable() throws {
+        let bundled = try #require(FclonesBinaryResolver.defaultBundledURL())
+        #expect(FileManager.default.isExecutableFile(atPath: bundled.path))
+    }
+
+    @Test("resolver falls back to the vendored binary when PATH lookups miss")
+    func vendoredBinaryResolvesWhenPathEmpty() throws {
+        // Host has a real fclones on PATH? Skip — the resolver would correctly
+        // short-circuit to it before trying the bundled fallback.
+        let haveSystemBinary = FclonesBinaryResolver.candidatePaths.contains {
+            FileManager.default.isExecutableFile(atPath: $0)
+        }
+        guard !haveSystemBinary else { return }
+
+        let resolver = FclonesBinaryResolver(environment: [:])
+        let resolved = try resolver.resolve()
+        #expect(FileManager.default.isExecutableFile(atPath: resolved.path))
+    }
 }

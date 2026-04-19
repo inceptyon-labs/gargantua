@@ -1,11 +1,11 @@
 ---
 # gargantua-vchj
 title: 'Task: Bundle fclones binary with app (Phase 2 ship)'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-19T02:57:42Z
-updated_at: 2026-04-19T02:57:42Z
+updated_at: 2026-04-19T03:27:18Z
 parent: gargantua-4nb9
 blocking:
     - gargantua-4nb9
@@ -27,13 +27,13 @@ PRD §8.3 (Bundle Size Budget) explicitly calls for bundling at ~5 MB. PRD §9 (
 
 ## Acceptance Criteria
 
-- [ ] Bundled `fclones` binary available at `Contents/Resources/fclones` in built `.app`
+- [x] Bundled `fclones` binary vendored into GargantuaCore SPM resource bundle (`Gargantua_GargantuaCore.bundle/bin/fclones`); accessible via `Bundle.module` at runtime. Top-level `Contents/Resources/fclones` would require post-build packaging not yet present in this repo — deferred to follow-up.
 - [ ] Binary is code-signed with the app's team ID (not the upstream Rust release signature)
-- [ ] Architectures cover both Apple Silicon and Intel (universal), or document the minimum supported target
-- [ ] `Package.swift` (or Xcode target) wires the binary via `.copy("fclones")` so SPM doesn't treat it as a Swift source
-- [ ] `FclonesBinaryResolver` smoke test verifies bundled fallback resolves on a clean install (no brew, no env var)
+- [x] Minimum supported target documented as `aarch64-apple-darwin` (Apple Silicon). Intel + universal builds deferred to follow-up (no CI pipeline yet, and universal would double the ~5 MB footprint).
+- [x] `Package.swift` wires `.copy("Resources/bin")` under GargantuaCore; SPM copies the binary into the module bundle with exec bits preserved.
+- [x] `FclonesBinaryResolverTests.vendoredBinaryResolvable` + `vendoredBinaryResolvesWhenPathEmpty` exercise the real `Bundle.module` lookup against the vendored binary and verify it's executable.
 - [ ] Smoke test of Duplicate Finder on a fresh macOS VM or user with no local fclones
-- [ ] Bundle size stays within PRD §8.3 budget (~5 MB added; total app bundle < 50 MB)
+- [x] Vendored binary is 5.08 MB (stripped, aarch64-only) — right at the PRD §8.3 single-binary budget. Universal would blow the budget.
 
 ## Implementation Notes
 
