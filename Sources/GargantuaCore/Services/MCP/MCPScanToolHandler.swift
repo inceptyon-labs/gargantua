@@ -31,10 +31,16 @@ public struct MCPScanToolHandler: Sendable {
 
     private let scanner: Scanner
     private let profileResolver: ProfileResolver
+    private let log: MCPDispatcherLog?
 
-    public init(scanner: @escaping Scanner, profileResolver: @escaping ProfileResolver) {
+    public init(
+        scanner: @escaping Scanner,
+        profileResolver: @escaping ProfileResolver,
+        log: MCPDispatcherLog? = nil
+    ) {
         self.scanner = scanner
         self.profileResolver = profileResolver
+        self.log = log
     }
 
     /// Bridges this handler to the `MCPToolHandler` shape the dispatcher
@@ -81,7 +87,13 @@ public struct MCPScanToolHandler: Sendable {
             // itself was well-formed but execution failed. MCP spec
             // requires this to surface as `isError: true` in the result,
             // not as a JSON-RPC error.
-            return .failure("Scan failed: \(Self.describe(error))")
+            //
+            // Only `LocalizedError.errorDescription` values are forwarded
+            // to the client — plain `Error` reflections can expose paths
+            // or internal state. Unknown errors get a generic message and
+            // the raw detail goes to stderr via the log hook.
+            log?("scan handler error: \(error)")
+            return .failure("Scan failed: \(Self.clientFacingMessage(for: error))")
         }
 
         let output = Self.makeOutput(from: results)
@@ -167,22 +179,30 @@ public struct MCPScanToolHandler: Sendable {
             + "\(output.totalReclaimable) reclaimable."
     }
 
-    /// One-line description of an error. `LocalizedError`'s user-facing
-    /// `errorDescription` is preferred; Swift's default `localizedDescription`
-    /// falls back to verbose multi-line reflections for plain `Error` values,
-    /// which would muddy the JSON-RPC message.
-    private static func describe(_ error: Error) -> String {
+    /// Client-safe message for an error. Only `LocalizedError.errorDescription`
+    /// values cross the MCP boundary; unknown errors get a generic message
+    /// so plain `Error` reflections (which can include paths or internal
+    /// state via NSError userInfo) never leak to clients.
+    private static func clientFacingMessage(for error: Error) -> String {
         if let localized = (error as? LocalizedError)?.errorDescription,
            !localized.isEmpty {
             return localized
         }
-        return "\(error)"
+        return "internal error"
     }
 
     /// Round-trips an `Encodable` through JSON into the untyped `MCPJSONAny`
     /// shape the dispatcher embeds in a `tools/call` result.
+    ///
+    /// Dates are encoded as ISO-8601 strings so the MCP wire shape matches
+    /// the PRD §7.3 example (e.g. `"last_accessed": "2026-04-11T14:30:00Z"`)
+    /// rather than the `JSONEncoder` default (numeric seconds since a
+    /// Foundation reference date) which a generic MCP client wouldn't parse
+    /// as a timestamp.
     private static func encodeAsJSONAny<T: Encodable>(_ value: T) throws -> MCPJSONAny {
-        let data = try JSONEncoder().encode(value)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(value)
         return try JSONDecoder().decode(MCPJSONAny.self, from: data)
     }
 }

@@ -58,7 +58,11 @@ struct MCPScanToolHandlerTests {
     private static func decodeOutput(_ result: MCPToolCallResult) throws -> MCPScanOutput {
         let payload = try #require(result.structuredContent, "structured content missing")
         let data = try JSONEncoder().encode(payload)
-        return try JSONDecoder().decode(MCPScanOutput.self, from: data)
+        let decoder = JSONDecoder()
+        // Handler encodes Dates as ISO-8601 strings; mirror that on decode so
+        // `lastAccessed` round-trips cleanly.
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(MCPScanOutput.self, from: data)
     }
 
     // MARK: Handler: happy path
@@ -136,6 +140,59 @@ struct MCPScanToolHandlerTests {
         #expect(output.summary.safeCount == 0)
         #expect(output.summary.reviewCount == 0)
         #expect(output.summary.protectedCount == 0)
+    }
+
+    @Test("last_accessed is encoded as ISO-8601 on the MCP wire, not numeric")
+    func lastAccessedWireIsISO8601() throws {
+        // 2026-04-11T14:30:00Z — matches the PRD §7.3 example payload.
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 4
+        components.day = 11
+        components.hour = 14
+        components.minute = 30
+        components.second = 0
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        let date = try #require(Calendar(identifier: .gregorian).date(from: components))
+
+        let results = [
+            Self.makeResult(id: "a", size: 1_024, safety: .safe, lastAccessed: date),
+        ]
+        let subject = handler(scanner: { _ in results })
+        let toolResult = try subject.handle(Self.minimalArguments)
+        let payload = try #require(toolResult.structuredContent)
+        guard case .object(let root) = payload,
+              case .array(let items) = root["items"],
+              case .object(let firstItem) = items.first,
+              case .string(let wireDate) = firstItem["last_accessed"] else {
+            Issue.record("items[0].last_accessed should be a string on the wire")
+            return
+        }
+        #expect(wireDate == "2026-04-11T14:30:00Z")
+    }
+
+    @Test("wire envelope contains snake_case keys matching the PRD contract")
+    func wireKeysAreSnakeCase() throws {
+        let results = [Self.makeResult(id: "a", size: 1_024, safety: .safe)]
+        let subject = handler(scanner: { _ in results })
+        let toolResult = try subject.handle(Self.minimalArguments)
+        let payload = try #require(toolResult.structuredContent)
+        guard case .object(let root) = payload else {
+            Issue.record("payload should be an object")
+            return
+        }
+        #expect(root["total_reclaimable"] != nil)
+        #expect(root["items"] != nil)
+        #expect(root["summary"] != nil)
+        guard case .object(let summary) = root["summary"] else {
+            Issue.record("summary should be an object")
+            return
+        }
+        #expect(summary["safe_count"] != nil)
+        #expect(summary["safe_size"] != nil)
+        #expect(summary["review_count"] != nil)
+        #expect(summary["review_size"] != nil)
+        #expect(summary["protected_count"] != nil)
     }
 
     @Test("result is .structured with non-empty text summary")
@@ -301,8 +358,8 @@ struct MCPScanToolHandlerTests {
 
     // MARK: Scanner errors
 
-    @Test("scanner throwing a generic error produces a tool-domain .failure")
-    func scannerErrorSurfacesAsToolFailure() throws {
+    @Test("scanner throwing a LocalizedError surfaces the localized description in .failure")
+    func scannerLocalizedErrorExposedVerbatim() throws {
         struct Boom: Error, LocalizedError {
             var errorDescription: String? { "boom happened" }
         }
@@ -315,6 +372,31 @@ struct MCPScanToolHandlerTests {
         }
         #expect(message.contains("Scan failed"))
         #expect(message.contains("boom happened"))
+    }
+
+    @Test("scanner throwing a plain Error does not leak its reflection to the client")
+    func scannerGenericErrorIsSanitized() throws {
+        struct SecretPathLeak: Error {
+            let path = "/Users/victim/Library/Secrets"
+        }
+        let captured = CapturedLog()
+        let subject = MCPScanToolHandler(
+            scanner: { _ in throw SecretPathLeak() },
+            profileResolver: { _ in .light },
+            log: { captured.append($0) }
+        )
+        let result = try subject.handle(Self.minimalArguments)
+        #expect(result.isError == true)
+        guard case .text(let message) = result.content.first else {
+            Issue.record("expected text content")
+            return
+        }
+        // Client never sees the reflection of a non-LocalizedError error.
+        #expect(!message.contains("SecretPathLeak"))
+        #expect(!message.contains("/Users/victim"))
+        #expect(message.contains("internal error"))
+        // But the raw detail IS logged to stderr for operators.
+        #expect(captured.joined.contains("SecretPathLeak"))
     }
 
     @Test("scanner throwing MCPToolError.invalidParams rethrows for dispatcher")
@@ -482,4 +564,21 @@ private final class CapturedCategories: @unchecked Sendable {
 
 private final class CapturedProfile: @unchecked Sendable {
     var value: CleanupProfile?
+}
+
+private final class CapturedLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String] = []
+
+    func append(_ entry: String) {
+        lock.lock()
+        entries.append(entry)
+        lock.unlock()
+    }
+
+    var joined: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries.joined(separator: "\n")
+    }
 }

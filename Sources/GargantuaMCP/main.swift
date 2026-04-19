@@ -40,9 +40,10 @@ let dispatcher = MCPRequestDispatcher(
 
 // The Phase 2 MCP server is a standalone CLI; it doesn't have access to the
 // app's persisted "active profile" yet. Default to `.light` (the safest
-// built-in) when no profile is requested. Profiles advertised in the schema
-// `enum` that we can't honor today (`custom`) also fall back to `.light`
-// rather than erroring, so a client using the schema verbatim still works.
+// built-in) when no profile is requested. "custom" is advertised by the
+// schema (PRD §7.3) but has no wiring yet — reject it explicitly so clients
+// can't get a silent profile downgrade; support will arrive with the
+// persisted-profile bridge in a follow-up.
 //
 // Unknown profile names get rejected with `-32602 invalidParams`.
 private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requested in
@@ -55,10 +56,9 @@ private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requeste
     case "deep":
         return .deep
     case "custom":
-        // Phase 2 has no persisted custom profile surface; fall back to the
-        // safest default and log for operators.
-        stderrLog("scan: 'custom' profile requested but not yet supported; using 'light'")
-        return .light
+        throw MCPToolError.invalidParams(
+            "'custom' profile is not yet supported via MCP; use 'developer', 'light', or 'deep'."
+        )
     default:
         throw MCPToolError.invalidParams(
             "Unknown profile '\(name)'. Expected one of: developer, light, deep, custom."
@@ -83,7 +83,8 @@ private let scanRunner: MCPScanToolHandler.Scanner = { profile in
 
 let scanHandler = MCPScanToolHandler(
     scanner: scanRunner,
-    profileResolver: scanProfileResolver
+    profileResolver: scanProfileResolver,
+    log: stderrLog
 )
 dispatcher.register(tool: .scan, handler: scanHandler.toolHandler)
 
