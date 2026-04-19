@@ -8,9 +8,10 @@ import GargantuaCore
 // output to stderr (stdout is reserved for protocol traffic), and registers
 // the Phase 2 tool handlers.
 //
-// Currently registered: `scan` (gargantua-sbg6). The remaining tools
-// (`analyze`, `explain`, `list_profiles`, `status`) land in follow-up Tasks;
-// until then they still return JSON-RPC internal error 'Tool not implemented'.
+// Currently registered: `scan` (gargantua-sbg6), `analyze` + `status`
+// (gargantua-2xod). The remaining tools (`explain`, `list_profiles`) land in
+// a follow-up Task; until then they still return JSON-RPC internal error
+// 'Tool not implemented'.
 
 private let mcpServerVersion = "0.1.0"
 
@@ -87,6 +88,38 @@ let scanHandler = MCPScanToolHandler(
     log: stderrLog
 )
 dispatcher.register(tool: .scan, handler: scanHandler.toolHandler)
+
+// MARK: - analyze + status
+
+// One shared collector for both tools; it is a value type with no state and
+// cheap to call. `collect()` is async, so bridge to sync at each handler's
+// provider closure via the same `runBlocking` helper the scan runner uses.
+private let systemMetricCollector = SystemMetricCollector()
+
+private let analyzeMetricsProvider: MCPAnalyzeToolHandler.MetricsProvider = {
+    try runBlocking { await systemMetricCollector.collect() }
+}
+
+let analyzeHandler = MCPAnalyzeToolHandler(
+    metricsProvider: analyzeMetricsProvider,
+    log: stderrLog
+)
+dispatcher.register(tool: .analyze, handler: analyzeHandler.toolHandler)
+
+private let statusSnapshotProvider: MCPStatusToolHandler.SnapshotProvider = {
+    let metrics = try runBlocking { await systemMetricCollector.collect() }
+    return SystemStatusSnapshot(
+        metrics: metrics,
+        uptime: ProcessInfo.processInfo.systemUptime,
+        coreCount: ProcessInfo.processInfo.activeProcessorCount
+    )
+}
+
+let statusHandler = MCPStatusToolHandler(
+    snapshotProvider: statusSnapshotProvider,
+    log: stderrLog
+)
+dispatcher.register(tool: .status, handler: statusHandler.toolHandler)
 
 // MARK: - Transport
 
