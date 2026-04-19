@@ -1,11 +1,11 @@
 ---
 # gargantua-sbg6
 title: 'Task: MCP scan tool handler (dry-run enforced)'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-18T22:18:37Z
-updated_at: 2026-04-18T22:18:37Z
+updated_at: 2026-04-19T00:05:20Z
 parent: gargantua-2h06
 blocked_by:
     - gargantua-xc7m
