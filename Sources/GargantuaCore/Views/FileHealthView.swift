@@ -126,12 +126,17 @@ public struct FileHealthView: View {
     // MARK: - Tab Strip
 
     private var tabStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        // Derive the highlighted chip from `selectedTab` (which gracefully
+        // falls back to tabs.first when selectedTabID points at a now-gone
+        // tab), so a stale id from the previous scan can't silently leave
+        // every chip visually unselected.
+        let activeID = selectedTab?.id
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: GargantuaSpacing.space1) {
                 ForEach(tabs) { tab in
                     FileHealthTabChip(
                         tab: tab,
-                        isSelected: tab.id == (selectedTabID ?? tabs.first?.id),
+                        isSelected: tab.id == activeID,
                         onSelect: { selectedTabID = tab.id }
                     )
                 }
