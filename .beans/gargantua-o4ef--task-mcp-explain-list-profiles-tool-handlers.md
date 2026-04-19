@@ -1,11 +1,11 @@
 ---
 # gargantua-o4ef
 title: 'Task: MCP explain + list_profiles tool handlers'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-18T22:18:43Z
-updated_at: 2026-04-18T22:18:43Z
+updated_at: 2026-04-19T01:40:14Z
 parent: gargantua-2h06
 blocked_by:
     - gargantua-xc7m

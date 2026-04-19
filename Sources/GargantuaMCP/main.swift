@@ -9,9 +9,8 @@ import GargantuaCore
 // the Phase 2 tool handlers.
 //
 // Currently registered: `scan` (gargantua-sbg6), `analyze` + `status`
-// (gargantua-2xod). The remaining tools (`explain`, `list_profiles`) land in
-// a follow-up Task; until then they still return JSON-RPC internal error
-// 'Tool not implemented'.
+// (gargantua-2xod), `explain` + `list_profiles` (gargantua-o4ef). All five
+// Phase 2 tools advertised in `MCPPhase2Tools.all` are now live.
 
 private let mcpServerVersion = "0.1.0"
 
@@ -120,6 +119,75 @@ let statusHandler = MCPStatusToolHandler(
     log: stderrLog
 )
 dispatcher.register(tool: .status, handler: statusHandler.toolHandler)
+
+// MARK: - explain
+
+// Default explain provider: AI-free shell backed by filesystem metadata.
+// `item_id` lookups are rejected as unsupported until the scan-result
+// persistence bridge lands — clients get a precise `-32602 invalidParams`
+// message rather than a silent empty-shell explanation. Real AI-backed
+// explanations (via `AIInferenceEngine`) swap in at this provider boundary
+// without touching the handler. The default explanation is deliberately
+// conservative: safety="review", confidence=50.
+private let fsExplainProvider: MCPExplainToolHandler.ExplainProvider = { input in
+    if input.itemId != nil {
+        throw MCPToolError.invalidParams(
+            "item_id lookup is not yet supported via MCP; supply a filesystem path instead."
+        )
+    }
+    guard let path = input.path, !path.isEmpty else {
+        // `MCPExplainInput` already enforces path-xor-item_id at decode, so
+        // this branch is defensive against a future input-shape change that
+        // might let both be nil through.
+        throw MCPToolError.invalidParams("explain requires a non-empty path.")
+    }
+
+    let url = URL(fileURLWithPath: path)
+    let name = url.lastPathComponent.isEmpty ? path : url.lastPathComponent
+
+    var size: String?
+    var lastAccessed: Date?
+    if let attributes = try? FileManager.default.attributesOfItem(atPath: path) {
+        if let bytes = attributes[.size] as? NSNumber {
+            size = AlertItem.formatBytes(Int64(clamping: bytes.int64Value))
+        }
+        if let modified = attributes[.modificationDate] as? Date {
+            lastAccessed = modified
+        }
+    }
+
+    return MCPExplainOutput(
+        name: name,
+        safety: "review",
+        confidence: 50,
+        explanation: "AI-backed analysis is not yet wired; this item is flagged 'review' by default. Inspect before cleanup.",
+        size: size,
+        lastAccessed: lastAccessed
+    )
+}
+
+let explainHandler = MCPExplainToolHandler(
+    explainProvider: fsExplainProvider,
+    log: stderrLog
+)
+dispatcher.register(tool: .explain, handler: explainHandler.toolHandler)
+
+// MARK: - list_profiles
+
+// Default profiles provider: the three built-in profiles, with `active`
+// pinned to "light" (same safest built-in the scan handler falls back to
+// when no profile is requested). Persisted user profiles and the app's
+// real active-profile selection land with the persisted-profile bridge
+// in a follow-up.
+private let builtInProfilesProvider: MCPListProfilesToolHandler.ProfilesProvider = {
+    ProfilesSnapshot(profiles: CleanupProfile.builtIn, active: "light")
+}
+
+let listProfilesHandler = MCPListProfilesToolHandler(
+    profilesProvider: builtInProfilesProvider,
+    log: stderrLog
+)
+dispatcher.register(tool: .listProfiles, handler: listProfilesHandler.toolHandler)
 
 // MARK: - Transport
 
