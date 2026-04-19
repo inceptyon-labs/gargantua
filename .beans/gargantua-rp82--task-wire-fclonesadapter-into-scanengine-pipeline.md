@@ -1,11 +1,11 @@
 ---
 # gargantua-rp82
 title: 'Task: Wire FclonesAdapter into ScanEngine pipeline'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-18T22:18:15Z
-updated_at: 2026-04-18T22:18:15Z
+updated_at: 2026-04-19T02:37:38Z
 parent: gargantua-4nb9
 blocked_by:
     - gargantua-i1ii

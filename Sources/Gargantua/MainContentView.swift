@@ -49,12 +49,11 @@ struct MainContentView: View {
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
                             case "duplicateFinder":
-                                // Results source will be wired through ScanEngine in a
-                                // follow-up Task. Trash callback is intentionally left
-                                // nil until the Trust Layer / ConfirmationModalView flow
-                                // for destructive duplicate-removal is in place.
-                                DuplicateFinderView(
-                                    results: [],
+                                // Trash callback is intentionally left nil until the
+                                // Trust Layer / ConfirmationModalView flow for
+                                // destructive duplicate-removal is in place.
+                                DuplicateFinderContainerView(
+                                    scanRoots: resolvedScanRoots,
                                     selectedIDs: $duplicateFinderSelection
                                 )
                             case "diskExplorer":
