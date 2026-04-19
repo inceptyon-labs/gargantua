@@ -93,11 +93,11 @@ public struct MCPScanToolHandler: Sendable {
             // or internal state. Unknown errors get a generic message and
             // the raw detail goes to stderr via the log hook.
             log?("scan handler error: \(error)")
-            return .failure("Scan failed: \(Self.clientFacingMessage(for: error))")
+            return .failure("Scan failed: \(MCPEncoding.clientFacingMessage(for: error))")
         }
 
         let output = Self.makeOutput(from: results)
-        let payload = try Self.encodeAsJSONAny(output)
+        let payload = try MCPEncoding.encodeAsJSONAny(output)
         return .structured(payload, summary: Self.summary(for: output))
     }
 
@@ -177,32 +177,5 @@ public struct MCPScanToolHandler: Sendable {
             + "\(output.summary.protectedCount) protected"
         return "Scan found \(output.items.count) items (\(tierSummary)); "
             + "\(output.totalReclaimable) reclaimable."
-    }
-
-    /// Client-safe message for an error. Only `LocalizedError.errorDescription`
-    /// values cross the MCP boundary; unknown errors get a generic message
-    /// so plain `Error` reflections (which can include paths or internal
-    /// state via NSError userInfo) never leak to clients.
-    private static func clientFacingMessage(for error: Error) -> String {
-        if let localized = (error as? LocalizedError)?.errorDescription,
-           !localized.isEmpty {
-            return localized
-        }
-        return "internal error"
-    }
-
-    /// Round-trips an `Encodable` through JSON into the untyped `MCPJSONAny`
-    /// shape the dispatcher embeds in a `tools/call` result.
-    ///
-    /// Dates are encoded as ISO-8601 strings so the MCP wire shape matches
-    /// the PRD §7.3 example (e.g. `"last_accessed": "2026-04-11T14:30:00Z"`)
-    /// rather than the `JSONEncoder` default (numeric seconds since a
-    /// Foundation reference date) which a generic MCP client wouldn't parse
-    /// as a timestamp.
-    private static func encodeAsJSONAny<T: Encodable>(_ value: T) throws -> MCPJSONAny {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(value)
-        return try JSONDecoder().decode(MCPJSONAny.self, from: data)
     }
 }
