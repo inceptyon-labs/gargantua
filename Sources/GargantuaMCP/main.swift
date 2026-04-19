@@ -70,18 +70,14 @@ private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requeste
 // contract. The transport processes one request at a time, so blocking the
 // transport thread during a scan is acceptable; the semaphore wait parks
 // this thread while the detached Task runs on the cooperative pool.
+//
+// Errors from `loadDefaults` (rules directory missing) and `scan()` (IO
+// failures) are let bubble up as plain errors so the handler wraps them in
+// a tool-domain `.failure(...)` result, not a JSON-RPC error. The call
+// itself was well-formed; execution failed. `ScanAdapterError` already
+// conforms to `LocalizedError` with a user-facing message.
 private let scanRunner: MCPScanToolHandler.Scanner = { profile in
-    let adapter: NativeScanAdapter
-    do {
-        adapter = try NativeScanAdapter.loadDefaults(profile: profile)
-    } catch {
-        // Rule-directory misconfiguration is a server problem, not a client
-        // mistake. Expose it as an internal error so the client sees a
-        // sanitized message (detail is logged to stderr by the dispatcher).
-        throw MCPToolError.internalError(
-            "Failed to load scan rules: \(error.localizedDescription)"
-        )
-    }
+    let adapter = try NativeScanAdapter.loadDefaults(profile: profile)
     return try runBlocking { try await adapter.scan() }
 }
 
