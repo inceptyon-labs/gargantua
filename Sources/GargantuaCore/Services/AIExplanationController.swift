@@ -2,7 +2,24 @@ import Foundation
 
 /// Presentation state for the AI explanation sheet. Owned by
 /// `AIExplanationController`; consumed by `AIExplanationSheet`.
-public enum AIExplanationPresentation: Sendable, Identifiable {
+public enum AIExplanationPresentation: Sendable, Identifiable, Equatable {
+    /// Identity-based equality: state transitions (loading→loaded, etc.)
+    /// and result-id changes count as changes; the payload's full contents
+    /// don't need to be compared. This is what `onChange(of:)` in
+    /// `AIExplanationSheet` cares about — does the kind or result differ.
+    public static func == (lhs: AIExplanationPresentation, rhs: AIExplanationPresentation) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading(let l), .loading(let r)):
+            return l.id == r.id
+        case (.loaded(let lr, _), .loaded(let rr, _)):
+            return lr.id == rr.id
+        case (.failed(let lr, let lm), .failed(let rr, let rm)):
+            return lr.id == rr.id && lm == rm
+        default:
+            return false
+        }
+    }
+
     /// Request in flight — show a spinner and a cancel button.
     case loading(ScanResult)
     /// Model returned an explanation (either AI-generated or YAML fallback).

@@ -14,12 +14,14 @@ public struct AIAdvisorySheet: View {
     public let onOpenSettings: (() -> Void)?
 
     /// Mirror of `controller.presentation` retained across the sheet's
-    /// fade-out animation. Without this, the moment the user taps Close,
-    /// `controller.presentation` flips to `nil` and the body renders empty
-    /// — SwiftUI plays the dismiss animation on an empty view, producing a
-    /// visible collapse-to-dot ("a circle in the middle") before the sheet
-    /// fully leaves the screen. Holding the last value here keeps the sheet
-    /// rendering its prior content until dismissal completes.
+    /// dismiss animation. The moment the user taps Close, `controller.dismiss`
+    /// flips `presentation` to `nil`. A `Group { if let … }` body then
+    /// evaluates to an empty view, and macOS shrinks the sheet content to
+    /// its minimum (visible as a rounded-square "squircle" mid-animation)
+    /// before the sheet actually leaves the screen. Caching the last
+    /// non-nil presentation AND backing the sheet with a fixed-size
+    /// background `Color` keeps the sheet holding its shape through the
+    /// animation even if SwiftUI re-renders the body mid-tear-down.
     @State private var lastPresentation: AIAdvisoryPresentation?
 
     public init(
@@ -31,21 +33,24 @@ public struct AIAdvisorySheet: View {
     }
 
     public var body: some View {
-        Group {
+        ZStack {
+            // Always-present background sized by the outer frame. Without
+            // this, when the conditional content below collapses to empty
+            // during dismissal, there's no sized view for the sheet host
+            // to animate — it shrinks to a squircle before vanishing.
+            GargantuaColors.surface1
+
             if let presentation = controller.presentation ?? lastPresentation {
                 content(for: presentation)
-                    .frame(minWidth: 520, maxWidth: 640, minHeight: 320, maxHeight: 600)
-                    .background(GargantuaColors.surface1)
             }
         }
+        .frame(minWidth: 520, maxWidth: 640, minHeight: 320, maxHeight: 600)
         .onChange(of: controller.presentation) { _, new in
             if let new {
                 lastPresentation = new
             }
             // When `new` is nil (controller dismissing), keep `lastPresentation`
-            // so the fade-out animation has something to render. The sheet
-            // item binding in MainContentView flips the item to nil and
-            // SwiftUI tears the sheet down; next open re-seeds from controller.
+            // so the fade-out animation has something meaningful to render.
         }
     }
 

@@ -9,6 +9,14 @@ public struct AIExplanationSheet: View {
     /// `MainContentView` uses this to switch sidebar selection to settings.
     public let onOpenSettings: (() -> Void)?
 
+    /// Mirror of `controller.presentation` retained across the sheet's
+    /// dismiss animation. Without this (and the `ZStack`/background pattern
+    /// below), `controller.dismiss` flips `presentation` to `nil`, the body
+    /// evaluates to empty, and macOS shrinks the sheet content to a
+    /// rounded-square "squircle" mid-animation before the sheet actually
+    /// leaves the screen.
+    @State private var lastPresentation: AIExplanationPresentation?
+
     public init(
         controller: AIExplanationController,
         onOpenSettings: (() -> Void)? = nil
@@ -18,10 +26,21 @@ public struct AIExplanationSheet: View {
     }
 
     public var body: some View {
-        if let presentation = controller.presentation {
-            content(for: presentation)
-                .frame(minWidth: 480, maxWidth: 560, minHeight: 280, maxHeight: 500)
-                .background(GargantuaColors.surface1)
+        ZStack {
+            // Always-present background sized by the outer frame so the
+            // sheet keeps its shape through the dismiss animation even when
+            // the conditional content below has gone empty.
+            GargantuaColors.surface1
+
+            if let presentation = controller.presentation ?? lastPresentation {
+                content(for: presentation)
+            }
+        }
+        .frame(minWidth: 480, maxWidth: 560, minHeight: 280, maxHeight: 500)
+        .onChange(of: controller.presentation) { _, new in
+            if let new {
+                lastPresentation = new
+            }
         }
     }
 
