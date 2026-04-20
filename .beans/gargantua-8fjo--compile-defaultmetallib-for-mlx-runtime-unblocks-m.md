@@ -1,11 +1,11 @@
 ---
 # gargantua-8fjo
 title: Compile default.metallib for MLX runtime (unblocks MLX inference)
-status: completed
+status: todo
 type: task
 priority: high
 created_at: 2026-04-20T16:17:01Z
-updated_at: 2026-04-20T17:20:45Z
+updated_at: 2026-04-20T16:17:01Z
 blocking:
     - gargantua-mgqr
 ---
@@ -45,41 +45,11 @@ Recommend option 1 — one script, repeatable, doesn't hide failures.
 
 ## Acceptance
 
-- [x] Release pipeline produces `mlx.metallib` and colocates it with the executable at `Contents/MacOS/mlx.metallib` (first search path in `load_default_library`). Wired into `Scripts/release/assemble-app.sh`.
-- [x] Standalone MLX smoke (tiny Swift package importing MLX, running an MLXArray op) succeeds with the colocated metallib present; fails with the "Failed to load the default metallib" error without it. End-to-end `.app` verification with a real model is deferred to `gargantua-7k2r` (the MLX latency/memory smoke-test bean) — that bean will exercise the full `Gargantua.app` inference path.
-- [x] `Scripts/test.sh` wrapper stages `mlx.metallib` into the test bundle's `Contents/MacOS/` and delegates to `swift test`. Works on the `gargantua-mgqr` branch where MLX is actually exercised (validated after merge; this bean's branch passes 731/731 without touching MLX runtime). Shape documented in `docs/designs/2026-04-20-mlx-backend.md` (Risks + mitigations section).
-- [x] Follow-up noted in `Scripts/build-metallib.sh` header + design doc: when bumping `mlx-swift-lm`, diff `mlx/backend/metal/kernels/CMakeLists.txt`'s `build_kernel(...)` calls against the `SHADERS` array and update.
+- [ ] `Scripts/release/build.sh` produces `default.metallib` and places it so `load_default_library` finds it.
+- [ ] The signed/notarized `.app` runs an MLX op without the "Failed to load the default metallib" error (smoke test: `GARGANTUA_MLX_MODEL_DIR` + one `explain` call through the CLI).
+- [ ] `swift test` — or a `scripts/run-tests.sh` wrapper that callers use in its place — works end-to-end on a branch that exercises MLX. Document the chosen shape in the design doc `docs/designs/2026-04-20-mlx-backend.md` or its successor.
+- [ ] Follow-up plan noted for mlx-swift version bumps (how to regenerate when upstream shader list changes).
 
 ## Blocks
 
 `gargantua-mgqr` — MLXInferenceEngine implementation can't satisfy its happy-path acceptance (load + generate returning non-empty text) until this lands.
-
-## Summary of Changes
-
-Produced `mlx.metallib` at release + test time so MLX runtime ops actually work. mlx-swift via SPM CLI does not emit a default metallib (Xcode owns `.metal` compilation), and it was never caught in `gargantua-xuz6` because nothing exercised MLX at runtime. `gargantua-mgqr`'s tests hit it first.
-
-### Files
-
-- `Scripts/build-metallib.sh` (new) — runs `xcrun metal` on the 9 shaders in mlx's `kernels/CMakeLists.txt` and links them into the caller-specified output path. Preflights the Metal Toolchain install and surfaces a clear hint if missing.
-- `Scripts/test.sh` (new) — `swift test` wrapper that stages `mlx.metallib` into the test bundle's `Contents/MacOS/`. Use instead of `swift test` when touching MLX runtime.
-- `Scripts/release/assemble-app.sh` — calls `build-metallib.sh` after copying the executable, writing `mlx.metallib` next to `Gargantua` so `load_default_library`'s first-path search (`current_binary_dir() / "mlx.metallib"`) picks it up.
-- `docs/designs/2026-04-20-mlx-backend.md` — appended the metallib-runtime risk + mitigation, and a follow-up-on-mlx-bump note.
-
-### Decisions
-
-- **Colocated `mlx.metallib` over SWIFTPM_BUNDLE.** MLX's load order is: colocated `mlx.metallib` → `Resources/mlx` → `mlx-swift_Cmlx.bundle/default.metallib` → `Resources/default` → `default.metallib` in cwd. Colocation is the shortest path and works identically in test and release layouts (both put the binary in a `Contents/MacOS/` directory).
-- **Hardcoded shader list.** The list mirrors mlx's CMakeLists exactly. Dynamic discovery (glob `*.metal`) would incorrectly include `steel/attn/kernels/steel_attention.metal` twice (once via its dependencies) and would silently start shipping new shaders on upstream adds without review. Static list with a "diff CMakeLists on version bump" doc note is more auditable.
-- **Metal Toolchain is now a developer prerequisite.** Documented in `build-metallib.sh` and enforced by a preflight check. Not worth vendoring — the toolchain is Apple-distributed and multi-GB.
-- **Smoke test tiers.** This bean's acceptance validated via an in-repo `Scripts/build-metallib.sh` smoke (produces 3.14 MB metallib) + an out-of-repo minimal Swift package that runs `MLXArray([1,2,3,4]) + 1` and prints the result. End-to-end `.app`-with-real-model verification is explicitly owned by `gargantua-7k2r` (MLX latency/memory smoke tests); out of scope here.
-
-### Verification
-
-- `Scripts/build-metallib.sh --output /tmp/...` produces `mlx.metallib` (3,135,866 bytes) from a fresh `.build/checkouts/mlx-swift`.
-- Standalone smoke without the metallib: MLX emits "Failed to load the default metallib" and aborts.
-- Standalone smoke with the metallib colocated: `[2.0, 3.0, 4.0, 5.0]` returned, `activeMemory` reports 36 bytes post-eval, `SMOKE_OK` printed.
-- `Scripts/test.sh` on this branch: 731/731 tests pass (main's code doesn't exercise MLX runtime; real validation happens when mgqr's code lands on main).
-- `swift build -c release` green.
-
-### Unblocks
-
-- `gargantua-mgqr` — MLX inference implementation can now run its env-gated integration test end-to-end against a real model directory.
