@@ -119,7 +119,9 @@ if [ "$DRY_RUN" != "1" ]; then
     [ -n "${NOTARY_PROFILE:-}" ] \
         || die "NOTARY_PROFILE not set. See .env.release.example for setup."
 
-    if ! security find-identity -v -p codesigning | grep -qF "$SIGNING_IDENTITY"; then
+    # Anchor on the surrounding double-quotes that `security find-identity`
+    # prints to avoid accepting a substring of another identity.
+    if ! security find-identity -v -p codesigning | grep -qF "\"$SIGNING_IDENTITY\""; then
         die "SIGNING_IDENTITY not found in keychain: $SIGNING_IDENTITY
 
 Available codesigning identities:
@@ -148,14 +150,29 @@ fi
 run mkdir -p "$DIST_DIR"
 
 # ----- Pipeline -------------------------------------------------------------
+#
+# Two notarizations: once for the .app (so the extracted bundle is offline-
+# verifiable) and once for the DMG (so the downloaded artifact itself is
+# Gatekeeper-clean). Apple's notary caches by hash, so the second submission
+# of the same app inside a DMG is typically fast.
 
 "$RELEASE_SCRIPTS_DIR/build.sh"
 "$RELEASE_SCRIPTS_DIR/assemble-app.sh"
 "$RELEASE_SCRIPTS_DIR/sign.sh"
-"$RELEASE_SCRIPTS_DIR/notarize.sh"
+"$RELEASE_SCRIPTS_DIR/notarize.sh" "$APP_BUNDLE"
 "$RELEASE_SCRIPTS_DIR/dmg.sh"
+"$RELEASE_SCRIPTS_DIR/notarize.sh" "$DMG_PATH"
 
-DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}.dmg"
+# ----- Final Gatekeeper assessment ------------------------------------------
+# spctl --type execute validates the app (what users launch).
+# spctl --type open validates the DMG (what users download).
+if [ "$DRY_RUN" != "1" ]; then
+    log "Final Gatekeeper assessment..."
+    spctl --assess --type execute --verbose=2 "$APP_BUNDLE" \
+        || die "spctl rejected $APP_BUNDLE"
+    spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH" \
+        || die "spctl rejected $DMG_PATH"
+fi
 
 log ""
 log "Release complete."

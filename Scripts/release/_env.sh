@@ -33,6 +33,7 @@ export APPSHELL_DIR="$REPO_ROOT/AppShell"
 export DIST_DIR="$REPO_ROOT/dist"
 export APP_NAME="Gargantua"
 export APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
+# DMG_PATH depends on VERSION which is resolved below; re-export after.
 
 # ----- Logging helpers ------------------------------------------------------
 
@@ -57,6 +58,19 @@ run() {
 # Real env vars take precedence, so CI can override without touching the file.
 
 if [ -f "$REPO_ROOT/.env.release" ]; then
+    # .env.release is sourced as shell code (supports substitutions, comments,
+    # etc.). Enforce 0600 so a shared checkout doesn't become a code-exec
+    # vector via someone else writing the file.
+    _env_perms="$(stat -f '%A' "$REPO_ROOT/.env.release" 2>/dev/null || echo "")"
+    case "$_env_perms" in
+        600|400) : ;;
+        "") : ;;  # stat unavailable; skip check rather than blocking the build
+        *)
+            printf 'error: .env.release must be mode 0600 (is %s). Run: chmod 600 .env.release\n' "$_env_perms" >&2
+            exit 1
+            ;;
+    esac
+    unset _env_perms
     # shellcheck disable=SC1091
     set -a
     . "$REPO_ROOT/.env.release"
@@ -105,6 +119,10 @@ _resolve_build_sha() {
 _resolve_build_sha
 _resolve_version
 _resolve_build
+
+# DMG_PATH is derived from the resolved VERSION; export once so all scripts
+# agree on the name.
+export DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}.dmg"
 
 # ----- Bundle identity defaults ---------------------------------------------
 

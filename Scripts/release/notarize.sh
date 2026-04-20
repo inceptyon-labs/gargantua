@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
-# notarize.sh — submit the signed app to Apple's notary service and staple.
+# notarize.sh <target> — submit a target to Apple's notary service and staple.
 #
-# Flow:
-#   1. ditto-zip the .app (preserving the bundle structure).
-#   2. xcrun notarytool submit --wait: blocks until Apple's service returns a
-#      verdict (usually 2-10 min; can be 30+).
-#   3. On "Accepted", xcrun stapler staple the ticket into the .app.
-#   4. xcrun stapler validate as a local confidence check.
+# Target is either Gargantua.app or Gargantua-<version>.dmg. notarytool
+# accepts both; only zipping differs:
 #
-# On failure, keeps the submission zip in dist/ for re-submission, prints
-# the submission ID, and tells the user how to fetch the full Apple log.
+#   .app → ditto-zip → submit the zip → staple the .app.
+#   .dmg → submit the DMG directly → staple the DMG.
 #
-# Notarization is idempotent on Apple's side: re-submitting the same hash
-# returns the previous verdict, so `release.sh` can be safely re-run after a
-# network hiccup.
+# Stapling a container requires a prior notarization submission for THAT
+# container. So a properly distributable pipeline notarizes both the .app
+# and the DMG — the .app so it remains offline-verifiable once extracted to
+# /Applications, the DMG so the downloaded artifact itself carries its
+# ticket.
+#
+# Uses `--output-format json` so status / submission-ID parsing isn't
+# fragile against whitespace or Apple's log tweaks.
+#
+# Idempotent at Apple's side: re-submitting the same hash returns the
+# previous verdict, so release.sh can be safely re-run after a hiccup.
 
 set -euo pipefail
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./_env.sh
 . "$_SCRIPT_DIR/_env.sh"
+
+TARGET="${1:-$APP_BUNDLE}"
+
+case "$TARGET" in
+    *.app) NOTARIZE_KIND="app" ;;
+    *.dmg) NOTARIZE_KIND="dmg" ;;
+    *) die "unsupported notarize target (expected .app or .dmg): $TARGET" ;;
+esac
 
 [ -n "${NOTARY_PROFILE:-}" ] \
     || die "NOTARY_PROFILE not set. Create one with:
@@ -28,62 +40,80 @@ _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     --team-id \$TEAM_ID \\
     --password <app-specific-password>"
 
-if [ "${DRY_RUN:-0}" != "1" ] && [ ! -d "$APP_BUNDLE" ]; then
-    die "no app to notarize at $APP_BUNDLE"
+if [ "${DRY_RUN:-0}" != "1" ]; then
+    case "$NOTARIZE_KIND" in
+        app) [ -d "$TARGET" ] || die "no app to notarize at $TARGET" ;;
+        dmg) [ -f "$TARGET" ] || die "no dmg to notarize at $TARGET" ;;
+    esac
 fi
 
 command -v xcrun >/dev/null 2>&1 \
     || die "xcrun not found; install Xcode Command Line Tools"
 
-ZIP="$DIST_DIR/${APP_NAME}-notarize.zip"
-SUBMIT_LOG="$DIST_DIR/notarize-submit.log"
+# ----- Prepare submit artifact ----------------------------------------------
+SUBMIT_PATH=""
+SUBMIT_CLEANUP=""
+case "$NOTARIZE_KIND" in
+    app)
+        SUBMIT_PATH="$DIST_DIR/$(basename "$TARGET" .app)-notarize.zip"
+        SUBMIT_CLEANUP="$SUBMIT_PATH"
+        log "Zipping $TARGET -> $SUBMIT_PATH (ditto, preserves bundle)..."
+        run rm -f "$SUBMIT_PATH"
+        run ditto -c -k --keepParent "$TARGET" "$SUBMIT_PATH"
+        ;;
+    dmg)
+        SUBMIT_PATH="$TARGET"
+        ;;
+esac
 
-log "Zipping $APP_BUNDLE -> $ZIP (ditto, preserves bundle)..."
-run rm -f "$ZIP"
-run ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP"
+SUBMIT_LOG="$DIST_DIR/notarize-$(basename "$TARGET").json"
 
-log "Submitting to notarytool (profile: $NOTARY_PROFILE, timeout: 30m)..."
+log "Submitting $(basename "$TARGET") to notarytool (profile: $NOTARY_PROFILE, timeout: 30m)..."
 log "This typically takes 2-10 minutes but can be longer under load."
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
-    log "DRY-RUN: xcrun notarytool submit \"$ZIP\" --keychain-profile \"$NOTARY_PROFILE\" --wait --timeout 30m"
+    log "DRY-RUN: xcrun notarytool submit \"$SUBMIT_PATH\" --keychain-profile \"$NOTARY_PROFILE\" --wait --timeout 30m --output-format json"
 else
-    # `pipefail` (set in _env.sh) means `if !` correctly captures
-    # notarytool's exit status across the tee.
-    if ! xcrun notarytool submit "$ZIP" \
+    if ! xcrun notarytool submit "$SUBMIT_PATH" \
         --keychain-profile "$NOTARY_PROFILE" \
         --wait \
         --timeout 30m \
-        2>&1 | tee "$SUBMIT_LOG"; then
+        --output-format json \
+        > "$SUBMIT_LOG" 2>&1; then
 
-        SUB_ID="$(awk '/^  id: / { print $2; exit }' "$SUBMIT_LOG" || true)"
+        # JSON output is strict; grep can extract "id" reliably.
+        SUB_ID="$(sed -nE 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$SUBMIT_LOG" | head -1)"
         warn "notarization failed or timed out."
         if [ -n "$SUB_ID" ]; then
             warn "Submission ID: $SUB_ID"
             warn "Fetch detailed Apple log with:"
             warn "  xcrun notarytool log \"$SUB_ID\" --keychain-profile \"$NOTARY_PROFILE\""
         fi
-        die "notarization did not succeed; $ZIP retained for re-submission"
+        warn "Submission output saved at: $SUBMIT_LOG"
+        [ -n "$SUBMIT_CLEANUP" ] && warn "Submission artifact retained: $SUBMIT_CLEANUP"
+        die "notarization did not succeed"
     fi
 
-    # notarytool can exit 0 with a non-"Accepted" status in some edge cases
-    # (e.g. Invalid with submission-level errors). Double-check.
-    if ! grep -qE '^[[:space:]]*status:[[:space:]]*Accepted' "$SUBMIT_LOG"; then
-        warn "notarytool returned success but no 'status: Accepted' in output."
-        warn "Check $SUBMIT_LOG for details."
+    # Status in JSON: "status": "Accepted" | "Invalid" | "Rejected".
+    if ! grep -qE '"status"[[:space:]]*:[[:space:]]*"Accepted"' "$SUBMIT_LOG"; then
+        STATUS="$(sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$SUBMIT_LOG" | head -1)"
+        warn "notarytool returned success but verdict was: ${STATUS:-unknown}"
+        warn "See $SUBMIT_LOG for details."
         die "notarization completed but verdict was not Accepted"
     fi
 fi
 
-log "Stapling ticket to $APP_BUNDLE..."
-run xcrun stapler staple "$APP_BUNDLE"
+log "Stapling ticket to $TARGET..."
+run xcrun stapler staple "$TARGET"
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
-    xcrun stapler validate "$APP_BUNDLE" \
-        || die "stapler validate failed; the ticket did not attach"
+    xcrun stapler validate "$TARGET" \
+        || die "stapler validate failed on $TARGET"
 fi
 
-# Only remove the submission zip on success — on die(), we already exited.
-run rm -f "$ZIP"
+# Clean up the submission zip (only relevant for .app).
+if [ -n "$SUBMIT_CLEANUP" ]; then
+    run rm -f "$SUBMIT_CLEANUP"
+fi
 
-log "Notarization complete."
+log "Notarization of $(basename "$TARGET") complete."

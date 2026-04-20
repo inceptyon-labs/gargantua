@@ -25,12 +25,15 @@ SPM sources. Canonical entry point is `Scripts/release.sh`. Full design:
    ```
    Generate the app-specific password at <https://appleid.apple.com/>.
 
-3. **Create `.env.release`** from the template:
+3. **Create `.env.release`** from the template and lock it down:
    ```sh
    cp .env.release.example .env.release
+   chmod 600 .env.release
    # Edit: TEAM_ID, SIGNING_IDENTITY, NOTARY_PROFILE
    ```
-   `.env.release` is gitignored.
+   The pipeline refuses to source `.env.release` unless it's mode `0600`
+   (sourced as shell code; 0644 would let any local user run arbitrary
+   commands in your release shell). `.env.release` is gitignored.
 
 4. **Optional: install create-dmg** for a polished drag-to-Applications layout:
    ```sh
@@ -85,14 +88,24 @@ cert.
 Each stage is a separate script under `Scripts/release/` and can be run
 standalone for debugging (after the preceding stages have succeeded):
 
-| Stage           | Script                  | What it does                                        |
-|-----------------|-------------------------|-----------------------------------------------------|
-| Environment     | `_env.sh`               | Resolves VERSION, paths, identities; sourced.       |
-| Build           | `build.sh`              | `swift build -c release --arch arm64`.              |
-| Assemble        | `assemble-app.sh`       | Lays out `dist/Gargantua.app`; renders Info.plist.  |
-| Sign            | `sign.sh`               | Inside-out codesign + post-sign assertions.         |
-| Notarize        | `notarize.sh`           | ditto-zip → notarytool submit --wait → staple.      |
-| DMG             | `dmg.sh`                | create-dmg (or hdiutil) → staple DMG.               |
+| Stage           | Script                       | What it does                                        |
+|-----------------|------------------------------|-----------------------------------------------------|
+| Environment     | `_env.sh`                    | Resolves VERSION, paths, identities; sourced.       |
+| Build           | `build.sh`                   | `swift build -c release --arch arm64`.              |
+| Assemble        | `assemble-app.sh`            | Lays out `dist/Gargantua.app`; renders Info.plist.  |
+| Sign            | `sign.sh`                    | Inside-out codesign + post-sign assertions.         |
+| Notarize (app)  | `notarize.sh $APP_BUNDLE`    | ditto-zip → notarytool submit --wait → staple app.  |
+| DMG build       | `dmg.sh`                     | create-dmg (or hdiutil), via staging directory.     |
+| Notarize (DMG)  | `notarize.sh $DMG_PATH`      | notarytool submit --wait → staple DMG.              |
+| Verify          | (inline in `release.sh`)     | `spctl --assess` on both app and DMG.               |
+
+**Why two notarizations?** The `.app` gets its own ticket so it stays
+Gatekeeper-clean once extracted to `/Applications` — including offline.
+The DMG gets its own ticket so the *downloaded artifact* is also
+verifiable (stapling only works on the specific thing that was submitted;
+a notarized `.app` inside a fresh DMG doesn't make the DMG notarized).
+Apple's notary caches by hash, so the second submission is typically
+fast.
 
 ## Troubleshooting
 

@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# dmg.sh — package the notarized, stapled app into a DMG and staple the DMG.
+# dmg.sh — build a DMG from the signed + notarized .app.
 #
-# Prefers `create-dmg` (Homebrew) for a polished drag-to-Applications layout;
-# falls back to plain `hdiutil` if not installed.
+# Responsibilities:
+#   - Always stage the .app into a temp directory (create-dmg puts folder
+#     *contents* at the DMG root, so passing the .app bundle directly would
+#     unpack Contents/MacOS/ etc. at root).
+#   - Produce $DMG_PATH from $APP_BUNDLE.
 #
-# Run strictly AFTER notarize.sh — the DMG stapling ticket is pulled from
-# the already-stapled .app, so if the app isn't stapled, the DMG won't be
-# either. We double-check with stapler validate on the DMG.
+# NOT this script's job:
+#   - Notarizing the DMG (done by a subsequent `notarize.sh $DMG_PATH` call
+#     from release.sh).
+#   - Stapling the DMG (same — stapler requires a prior submission for THAT
+#     DMG, so stapling must follow notarization).
+#
+# Prefers `create-dmg` (Homebrew) for the polished drag-to-Applications
+# layout; falls back to `hdiutil` if not installed.
 
 set -euo pipefail
 
@@ -18,12 +26,23 @@ if [ "${DRY_RUN:-0}" != "1" ] && [ ! -d "$APP_BUNDLE" ]; then
     die "no app to package at $APP_BUNDLE"
 fi
 
-DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}.dmg"
-
 run rm -f "$DMG_PATH"
+
+STAGING="$(mktemp -d -t gargantua-dmg-staging-XXXXXX)"
+trap 'rm -rf "$STAGING"' EXIT
+
+# Stage the signed/notarized .app bundle so create-dmg and hdiutil both see a
+# DMG root containing Gargantua.app (not Contents/ at root).
+if [ "${DRY_RUN:-0}" != "1" ]; then
+    ditto "$APP_BUNDLE" "$STAGING/${APP_NAME}.app"
+else
+    log "DRY-RUN: ditto $APP_BUNDLE -> $STAGING/${APP_NAME}.app"
+fi
 
 if command -v create-dmg >/dev/null 2>&1; then
     log "Packaging $DMG_PATH via create-dmg..."
+    # create-dmg adds its own /Applications symlink via --app-drop-link, so
+    # we do NOT pre-stage one here.
     run create-dmg \
         --volname "$APP_NAME $VERSION" \
         --window-pos 200 120 \
@@ -34,19 +53,16 @@ if command -v create-dmg >/dev/null 2>&1; then
         --hide-extension "${APP_NAME}.app" \
         --no-internet-enable \
         "$DMG_PATH" \
-        "$APP_BUNDLE"
+        "$STAGING"
 else
     warn "create-dmg not installed; falling back to hdiutil (functional, not polished)."
     warn "Install with: brew install create-dmg"
 
-    STAGING="$(mktemp -d -t gargantua-dmg-staging-XXXXXX)"
-    trap 'rm -rf "$STAGING"' EXIT
-
+    # hdiutil doesn't offer an --app-drop-link; stage /Applications manually.
     if [ "${DRY_RUN:-0}" != "1" ]; then
-        ditto "$APP_BUNDLE" "$STAGING/${APP_NAME}.app"
         ln -s /Applications "$STAGING/Applications"
     else
-        log "DRY-RUN: stage $APP_BUNDLE and /Applications symlink under $STAGING"
+        log "DRY-RUN: ln -s /Applications $STAGING/Applications"
     fi
 
     run hdiutil create \
@@ -57,24 +73,4 @@ else
         "$DMG_PATH"
 fi
 
-log "Stapling ticket to $DMG_PATH..."
-run xcrun stapler staple "$DMG_PATH"
-
-if [ "${DRY_RUN:-0}" != "1" ]; then
-    xcrun stapler validate "$DMG_PATH" \
-        || die "stapler validate failed on DMG"
-fi
-
-# Final Gatekeeper assessment on the .app (the payload users will launch).
-if [ "${DRY_RUN:-0}" != "1" ]; then
-    log "Running spctl Gatekeeper assessment on $APP_BUNDLE..."
-    if ! spctl --assess --type execute --verbose=2 "$APP_BUNDLE"; then
-        warn "spctl rejected the app. This usually means notarization didn't"
-        warn "complete or the ticket didn't staple. Inspect:"
-        warn "  codesign -dv --verbose=4 \"$APP_BUNDLE\""
-        warn "  xcrun stapler validate \"$APP_BUNDLE\""
-        die "Gatekeeper assessment failed"
-    fi
-fi
-
-log "DMG ready: $DMG_PATH"
+log "DMG built: $DMG_PATH"

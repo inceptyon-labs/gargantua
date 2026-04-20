@@ -32,7 +32,10 @@ fi
 # Verify identity is present in the keychain (skipped under dry-run so the
 # smoke flow works on a machine without a real Developer ID cert).
 if [ "${DRY_RUN:-0}" != "1" ]; then
-    if ! security find-identity -v -p codesigning | grep -qF "$SIGNING_IDENTITY"; then
+    # security find-identity prints each identity wrapped in double-quotes;
+    # anchor the match on the quotes to avoid accepting a substring of a
+    # different identity.
+    if ! security find-identity -v -p codesigning | grep -qF "\"$SIGNING_IDENTITY\""; then
         die "signing identity not found in keychain: $SIGNING_IDENTITY
 
 Run: security find-identity -v -p codesigning
