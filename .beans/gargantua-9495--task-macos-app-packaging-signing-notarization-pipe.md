@@ -1,11 +1,11 @@
 ---
 # gargantua-9495
 title: 'Task: macOS app packaging + signing + notarization pipeline'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-20T01:47:17Z
-updated_at: 2026-04-20T02:28:13Z
+updated_at: 2026-04-20T02:28:37Z
 ---
 
 Establish the release infrastructure required to ship Gargantua as a signed, notarized macOS app. This is a prerequisite for any bean that needs team-ID signing, Gatekeeper/TCC inheritance, or a reproducible `.app` artifact.
