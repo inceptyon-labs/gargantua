@@ -5,12 +5,13 @@ status: draft
 type: task
 priority: normal
 created_at: 2026-04-19T03:31:22Z
-updated_at: 2026-04-19T03:31:29Z
+updated_at: 2026-04-20T01:47:21Z
 parent: gargantua-4nb9
 blocking:
     - gargantua-4nb9
 blocked_by:
     - gargantua-vchj
+    - gargantua-9495
 ---
 
 Follow-up to `gargantua-vchj` (which vendored aarch64-only fclones 0.35.0 into `Sources/GargantuaCore/Resources/bin/`). Scope here covers everything deferred from that bean so the Duplicate Finder is shippable to the full macOS user base, not just Apple Silicon.
