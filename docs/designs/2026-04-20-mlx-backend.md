@@ -87,6 +87,8 @@ Per PRD §6.2: 4-bit Llama 3.2 1B. Target `mlx-community/Llama-3.2-1B-Instruct-4
 - **swift-syntax transitive.** `mlx-swift-lm` pulls `swift-syntax` (used by their macros). `swift-syntax` is heavyweight to compile but shipped by Apple; acceptable.
 - **Binary symbol name collisions.** `MLX`-prefixed; no conflict with `GargantuaCore` types.
 - **Metal availability on notarization CI.** Release build does not need to run Metal — it only needs to link against the MLX Swift frameworks. CI on Apple Silicon is fine.
+- **`default.metallib` not produced by `swift build` CLI.** mlx-swift's `.metal` shader sources are not compiled by SwiftPM — only Xcode's build system knows how to emit `.air`/`.metallib` artifacts. Discovered during `gargantua-mgqr` when tests first exercised MLX. Mitigation landed in `gargantua-8fjo`: `Scripts/build-metallib.sh` calls `xcrun metal` on the 9 shaders listed in mlx's `kernels/CMakeLists.txt` and links `mlx.metallib` into `Gargantua.app/Contents/MacOS/` (colocated with the executable, MLX's first search path). Same pattern for test runs via `Scripts/test.sh`. Requires the Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`).
+- **Shader list drift on mlx-swift version bumps.** `Scripts/build-metallib.sh` hardcodes the shader list from `mlx/backend/metal/kernels/CMakeLists.txt`. When bumping `mlx-swift-lm`'s pin, diff the CMakeLists' `build_kernel(...)` invocations and update the `SHADERS` array.
 
 ## Build-size measurement
 
