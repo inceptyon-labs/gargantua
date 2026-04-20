@@ -113,6 +113,14 @@ Stripped keeps us within a few MB of the upper 50 MB PRD bound. Release pipeline
 
 (Optional further wins: drop `MLXLLM` if we later decide the architecture set is too heavy and only ship `MLXLMCommon` + a single hand-ported model arch. Deferred; not needed for `mgqr`.)
 
+## Model staging (post-`gargantua-lyc1`)
+
+`ModelDownloadManager` stages a full HF-layout directory, not a single opaque blob. `ModelInfo` carries an array of `ModelFile { name, url, sha256, size }`; `startDownload` fetches each file sequentially, SHA-256 verifies against the pinned manifest (via `CryptoKit`), and moves it into `~/Library/Application Support/Gargantua/models/<model-id>/`. Any SHA mismatch or transport error rolls the directory back and surfaces `.failed(message:)`.
+
+The pinned default model is `mlx-community/Llama-3.2-1B-Instruct-4bit` (~680 MB: `config.json`, `tokenizer_config.json`, `special_tokens_map.json`, `tokenizer.json`, `model.safetensors`). LFS-stored files (safetensors + tokenizer.json) take their SHA-256 pin directly from the HF LFS pointer; small JSON files are hashed from bytes. `Scripts/pin-model.sh` emits the Swift `ModelFile(...)` snippet to re-pin when bumping the upstream repo — same "fetch, verify, pin in code" pattern as `Scripts/vendored-bins.lock`.
+
+`LocalAIService.explain` passes `state.path` (now a directory) straight through to `MLXInferenceEngine.load`. The engine's `resolveModelDirectory` already accepts a directory; no engine changes were needed.
+
 ## Acceptance
 
 - [ ] This design doc captures the chosen backend + reasoning.
