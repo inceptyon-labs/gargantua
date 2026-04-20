@@ -23,6 +23,7 @@ struct MainContentView: View {
     @StateObject private var downloadManager: ModelDownloadManager
     @StateObject private var aiService: LocalAIService
     @StateObject private var aiExplanation: AIExplanationController
+    @StateObject private var aiAdvisory: AIAdvisoryController
 
     init() {
         let manager = ModelDownloadManager()
@@ -30,6 +31,7 @@ struct MainContentView: View {
         _downloadManager = StateObject(wrappedValue: manager)
         _aiService = StateObject(wrappedValue: service)
         _aiExplanation = StateObject(wrappedValue: AIExplanationController(service: service))
+        _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(service: service))
     }
 
     var body: some View {
@@ -66,7 +68,8 @@ struct MainContentView: View {
                                 DeepCleanView(
                                     profile: activeDeepCleanProfile,
                                     session: deepCleanSession,
-                                    onExplain: explainHandler
+                                    onExplain: explainHandler,
+                                    onAdvisory: advisoryHandler
                                 )
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
@@ -134,6 +137,15 @@ struct MainContentView: View {
                         onOpenSettings: { sidebarSelection = "settings" }
                     )
                 }
+                .sheet(item: Binding(
+                    get: { aiAdvisory.presentation },
+                    set: { if $0 == nil { aiAdvisory.dismiss() } }
+                )) { _ in
+                    AIAdvisorySheet(
+                        controller: aiAdvisory,
+                        onOpenSettings: { sidebarSelection = "settings" }
+                    )
+                }
             }
         }
     }
@@ -142,6 +154,12 @@ struct MainContentView: View {
     /// off an explanation without knowing about the controller.
     private var explainHandler: (ScanResult) -> Void {
         { result in aiExplanation.explain(result) }
+    }
+
+    /// Closure handed to scan views so their Review-Advisories toolbar
+    /// button can fire a batch advisory without knowing the controller.
+    private var advisoryHandler: ([ScanResult]) -> Void {
+        { results in aiAdvisory.request(for: results) }
     }
 
     /// Resolve the cleanup profile to use for Deep Clean.

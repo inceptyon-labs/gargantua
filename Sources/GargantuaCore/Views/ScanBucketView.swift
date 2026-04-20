@@ -79,6 +79,7 @@ public struct ScanBucketListView: View {
     public let onCancel: (() -> Void)?
     public let onAddToWhitelist: ((ScanResult) -> Void)?
     public let onViewRule: ((ScanResult) -> Void)?
+    public let onAdvisoryForReview: (() -> Void)?
 
     @State private var groupingMode: ScanGroupingMode = .safety
     @State private var expandedGroupIDs: Set<String>
@@ -92,7 +93,8 @@ public struct ScanBucketListView: View {
         onClean: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
         onAddToWhitelist: ((ScanResult) -> Void)? = nil,
-        onViewRule: ((ScanResult) -> Void)? = nil
+        onViewRule: ((ScanResult) -> Void)? = nil,
+        onAdvisoryForReview: (() -> Void)? = nil
     ) {
         self.results = results
         self.scanDuration = scanDuration
@@ -102,6 +104,7 @@ public struct ScanBucketListView: View {
         self.onCancel = onCancel
         self.onAddToWhitelist = onAddToWhitelist
         self.onViewRule = onViewRule
+        self.onAdvisoryForReview = onAdvisoryForReview
         // Start with every safety group expanded so the list doesn't flash
         // collapsed on mount.
         let initialGroups = ScanGrouper.group(results, mode: .safety)
@@ -144,6 +147,19 @@ public struct ScanBucketListView: View {
                         focusedItemID = nil
                     }
                 Spacer()
+                if let onAdvisoryForReview, results.contains(where: { $0.safety == .review }) {
+                    Button(action: onAdvisoryForReview) {
+                        HStack(spacing: GargantuaSpacing.space1) {
+                            Image(systemName: "sparkles.rectangle.stack")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Review Advisories")
+                                .font(GargantuaFonts.label)
+                        }
+                        .foregroundStyle(GargantuaColors.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Ask the AI to advise on review-tier items")
+                }
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space2)

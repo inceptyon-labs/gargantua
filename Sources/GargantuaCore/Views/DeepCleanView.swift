@@ -14,22 +14,25 @@ public struct DeepCleanView: View {
     private let adapterOverride: (any ScanAdapter)?
     private let session: DeepCleanSessionState
     private let onExplain: ((ScanResult) -> Void)?
+    private let onAdvisory: (([ScanResult]) -> Void)?
 
     public init(
         profile: CleanupProfile = .deep,
         adapter: (any ScanAdapter)? = nil,
         session: DeepCleanSessionState,
-        onExplain: ((ScanResult) -> Void)? = nil
+        onExplain: ((ScanResult) -> Void)? = nil,
+        onAdvisory: (([ScanResult]) -> Void)? = nil
     ) {
         self.profile = profile
         self.adapterOverride = adapter
         self.session = session
         self.onExplain = onExplain
+        self.onAdvisory = onAdvisory
     }
 
     @MainActor
     public init(profile: CleanupProfile = .deep, adapter: (any ScanAdapter)? = nil) {
-        self.init(profile: profile, adapter: adapter, session: DeepCleanSessionState(), onExplain: nil)
+        self.init(profile: profile, adapter: adapter, session: DeepCleanSessionState(), onExplain: nil, onAdvisory: nil)
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -266,7 +269,10 @@ public struct DeepCleanView: View {
                 ),
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
-                onCancel: { session.clearResults() }
+                onCancel: { session.clearResults() },
+                onAdvisoryForReview: onAdvisory.map { handler in
+                    { handler(results) }
+                }
             )
         }
     }
