@@ -273,7 +273,20 @@ public struct CzkawkaAdapter: ScanAdapter {
         // Without a profile, czkawka findings keep their base Trust Layer
         // defaults (Phase 2 back-compat). With a profile, route through the
         // same classifier NativeScanAdapter uses so age-based overrides apply.
+        //
+        // Gate profile-level overrides by `profile.categories` to match
+        // NativeScanAdapter semantics: a rule whose category isn't in the
+        // profile doesn't run there at all, so its findings never get
+        // reclassified. Here the categories are always scanned (File Health
+        // shows them all), but we skip the classifier for results outside the
+        // profile's scope so e.g. the developer profile's "age > 30d → safe"
+        // doesn't silently downgrade user-owned big_files that the profile
+        // wouldn't otherwise touch. Empty profile categories keeps the classic
+        // "match everything" semantics.
         guard let profile else { return base }
+        let categoryInScope = profile.categories.isEmpty
+            || profile.categories.contains(category.resultCategory)
+        guard categoryInScope else { return base }
 
         let classified = classifier.classify(result: base, profile: profile)
         return ScanResult(
