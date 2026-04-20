@@ -241,12 +241,14 @@ public struct DeveloperToolsView: View {
 
     private func load() async {
         let availabilities = availabilityProvider()
+        if Task.isCancelled { return }
         let initial = Self.deriveInitialPhase(availabilities: availabilities)
         await MainActor.run { phase = initial }
 
         guard case .ready = initial else { return }
         let installed = availabilities.filter(\.isInstalled).map(\.tool)
         for tool in installed {
+            if Task.isCancelled { return }
             await loadPreview(for: tool)
         }
     }
@@ -257,7 +259,7 @@ public struct DeveloperToolsView: View {
             let preview = try previewProvider(tool)
             result = .success(preview)
         } catch {
-            logger.error("Preview for \(tool.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("Preview for \(tool.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .private)")
             result = .failure(error)
         }
         await MainActor.run {
