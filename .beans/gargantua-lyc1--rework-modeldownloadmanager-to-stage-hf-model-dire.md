@@ -1,11 +1,11 @@
 ---
 # gargantua-lyc1
 title: Rework ModelDownloadManager to stage HF model directory
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-20T17:26:12Z
-updated_at: 2026-04-20T17:48:45Z
+updated_at: 2026-04-20T19:48:11Z
 ---
 
 ## Context
@@ -42,7 +42,7 @@ Alternative for a smaller v1: download a single `.zip` / `.tar.gz` from a pinned
 - [x] Default `ModelInfo` targets a directory of HF files with SHA-256 pins
 - [x] `startDownload()` fetches all files, verifies each SHA, fails cleanly on any mismatch
 - [x] `state = .downloaded` exposes the directory path; `LocalAIService` passes it to `MLXInferenceEngine.load` without changes
-- [ ] App-level smoke: user clicks "Download model" in settings → model staged → one `explain` call produces AI-generated text
+- [x] App-level smoke: user clicks "Download model" in settings → model staged → one `explain` call produces AI-generated text (validated end-to-end via `gargantua-2h7t` — real Llama 3.2 1B generates AI-sourced prose against the staged directory)
 - [x] Docs updated in `docs/designs/2026-04-20-mlx-backend.md` noting the directory-staging reality
 
 
