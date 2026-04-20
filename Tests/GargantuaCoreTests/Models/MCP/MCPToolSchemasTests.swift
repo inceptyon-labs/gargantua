@@ -195,6 +195,56 @@ struct MCPToolSchemasTests {
         #expect(decoded == output)
     }
 
+    // MARK: explain schema oneOf advertising
+
+    @Test("explain schema advertises oneOf for path/item_id mutual exclusion")
+    func explainSchemaAdvertisesOneOf() {
+        let oneOf = MCPPhase2Tools.explain.inputSchema.oneOf
+        #expect(oneOf?.count == 2)
+        #expect(oneOf?[0].required == ["path"])
+        #expect(oneOf?[1].required == ["item_id"])
+        #expect(oneOf?[0].type == .object)
+        #expect(oneOf?[1].type == .object)
+    }
+
+    @Test("explain descriptor JSON exposes oneOf branches for schema-driven clients")
+    func explainDescriptorOneOfJSON() throws {
+        let data = try JSONEncoder().encode(MCPPhase2Tools.explain)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let schema = obj?["inputSchema"] as? [String: Any]
+        let oneOf = schema?["oneOf"] as? [[String: Any]]
+        #expect(oneOf?.count == 2)
+        let requiredSets = Set(oneOf?.compactMap { $0["required"] as? [String] } ?? [])
+        #expect(requiredSets == [["path"], ["item_id"]])
+    }
+
+    @Test("MCPJSONSchema round-trips a schema carrying oneOf")
+    func oneOfRoundTrip() throws {
+        let original = MCPJSONSchema(
+            type: .object,
+            properties: [
+                "a": MCPJSONSchema(type: .string),
+                "b": MCPJSONSchema(type: .string),
+            ],
+            required: [],
+            oneOf: [
+                MCPJSONSchema(type: .object, required: ["a"]),
+                MCPJSONSchema(type: .object, required: ["b"]),
+            ]
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(MCPJSONSchema.self, from: data)
+        #expect(decoded == original)
+    }
+
+    @Test("MCPJSONSchema omits oneOf when not provided")
+    func oneOfOmittedWhenNil() throws {
+        let schema = MCPJSONSchema(type: .string, description: "x")
+        let data = try JSONEncoder().encode(schema)
+        let s = String(data: data, encoding: .utf8) ?? ""
+        #expect(!s.contains("oneOf"))
+    }
+
     // MARK: tool descriptor JSON shape
 
     @Test("Tool descriptor encodes inputSchema alongside name and description")

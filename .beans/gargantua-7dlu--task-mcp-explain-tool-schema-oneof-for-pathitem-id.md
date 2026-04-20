@@ -1,11 +1,11 @@
 ---
 # gargantua-7dlu
 title: 'Task: MCP explain tool schema oneOf for path/item_id mutual exclusion'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-19T02:05:59Z
-updated_at: 2026-04-19T02:05:59Z
+updated_at: 2026-04-20T00:55:09Z
 parent: gargantua-qe4a
 ---
 

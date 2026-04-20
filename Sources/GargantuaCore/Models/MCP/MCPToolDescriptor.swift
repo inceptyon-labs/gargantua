@@ -66,6 +66,13 @@ public struct MCPJSONSchema: Codable, Sendable, Equatable {
     /// For `array` types: item schema.
     public let items: Box<MCPJSONSchema>?
 
+    /// For schemas that must satisfy exactly one of several sub-schemas.
+    ///
+    /// Used on `explain` to advertise that exactly one of `path` or
+    /// `item_id` must be provided — a constraint that plain optional
+    /// properties cannot express to schema-driven MCP clients.
+    public let oneOf: [MCPJSONSchema]?
+
     public init(
         type: SchemaType,
         description: String? = nil,
@@ -73,7 +80,8 @@ public struct MCPJSONSchema: Codable, Sendable, Equatable {
         required: [String]? = nil,
         enumValues: [String]? = nil,
         const: MCPJSONValue? = nil,
-        items: MCPJSONSchema? = nil
+        items: MCPJSONSchema? = nil,
+        oneOf: [MCPJSONSchema]? = nil
     ) {
         self.type = type
         self.description = description
@@ -82,10 +90,11 @@ public struct MCPJSONSchema: Codable, Sendable, Equatable {
         self.enumValues = enumValues
         self.const = const
         self.items = items.map(Box.init)
+        self.oneOf = oneOf
     }
 
     enum CodingKeys: String, CodingKey {
-        case type, description, properties, required, items, const
+        case type, description, properties, required, items, const, oneOf
         case enumValues = "enum"
     }
 }
@@ -213,7 +222,11 @@ public enum MCPPhase2Tools {
                     description: "Item id from a prior scan result. Mutually exclusive with path."
                 ),
             ],
-            required: []
+            required: [],
+            oneOf: [
+                MCPJSONSchema(type: .object, required: ["path"]),
+                MCPJSONSchema(type: .object, required: ["item_id"]),
+            ]
         )
     )
 
