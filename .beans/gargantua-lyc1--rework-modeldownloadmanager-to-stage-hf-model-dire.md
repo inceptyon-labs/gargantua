@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T17:26:12Z
-updated_at: 2026-04-20T17:28:40Z
+updated_at: 2026-04-20T17:46:09Z
 ---
 
 ## Context
@@ -39,8 +39,8 @@ Alternative for a smaller v1: download a single `.zip` / `.tar.gz` from a pinned
 
 ## Acceptance
 
-- [ ] Default `ModelInfo` targets a directory of HF files with SHA-256 pins
-- [ ] `startDownload()` fetches all files, verifies each SHA, fails cleanly on any mismatch
-- [ ] `state = .downloaded` exposes the directory path; `LocalAIService` passes it to `MLXInferenceEngine.load` without changes
+- [x] Default `ModelInfo` targets a directory of HF files with SHA-256 pins
+- [x] `startDownload()` fetches all files, verifies each SHA, fails cleanly on any mismatch
+- [x] `state = .downloaded` exposes the directory path; `LocalAIService` passes it to `MLXInferenceEngine.load` without changes
 - [ ] App-level smoke: user clicks "Download model" in settings → model staged → one `explain` call produces AI-generated text
-- [ ] Docs updated in `docs/designs/2026-04-20-mlx-backend.md` noting the directory-staging reality
+- [x] Docs updated in `docs/designs/2026-04-20-mlx-backend.md` noting the directory-staging reality
