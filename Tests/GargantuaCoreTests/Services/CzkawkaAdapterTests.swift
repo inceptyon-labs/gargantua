@@ -209,6 +209,37 @@ struct CzkawkaAdapterTests {
         #expect(results.first?.category == "empty_files")
     }
 
+    @Test("truncated output trims final partial line and records a warning")
+    @MainActor
+    func truncatedOutputTrimsPartialLine() async throws {
+        let target = try Self.makeTempFile()
+        defer { try? FileManager.default.removeItem(at: target.deletingLastPathComponent()) }
+
+        // Third line is a deliberate mid-line slice: an absolute-looking
+        // prefix of a path that does not exist. Without trimming, the parser
+        // would accept it as a finding.
+        let stdout =
+            "Found 2 empty files.\n\(target.path)\n/tmp/partial-slice-that-does-not-exist-abc"
+        let runner = StubRunner(outputs: [
+            "empty-files": ProcessOutput(
+                stdout: stdout, stderr: "", exitCode: 0, stdoutTruncated: true
+            ),
+        ])
+        let progress = ScanProgress()
+        let adapter = CzkawkaAdapter(
+            binary: URL(fileURLWithPath: "/bin/czkawka"),
+            categories: [.emptyFiles],
+            scanRoots: [target.deletingLastPathComponent()],
+            runner: runner
+        )
+
+        let results = try await adapter.scan(progress: progress)
+
+        #expect(results.count == 1, "sliced trailing line must not be parsed as a finding")
+        #expect(results.first?.path == target.path)
+        #expect(progress.errors.contains { $0.contains("exceeded") && $0.contains("cap") })
+    }
+
     @Test("non-zero exit code is reported but does not abort sibling categories")
     @MainActor
     func continuesAfterSubcommandFailure() async throws {

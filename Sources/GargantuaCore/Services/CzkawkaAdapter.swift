@@ -204,14 +204,20 @@ public struct CzkawkaAdapter: ScanAdapter {
             // czkawka_cli output is line-oriented; truncation drops trailing
             // findings but leaves the prefix parseable. Surface it as a
             // non-fatal warning so operators know results may be incomplete
-            // without failing the whole scan.
+            // without failing the whole scan. Trim the final unterminated
+            // line so a mid-line slice can't masquerade as a real absolute
+            // path and fabricate a false finding.
+            let parseInput: String
             if output.stdoutTruncated {
                 await progress?.recordError(
                     "czkawka_cli \(category.subcommand) output exceeded \(Self.scanCaptureLimit / (1024 * 1024)) MiB cap; results may be incomplete"
                 )
+                parseInput = Self.trimTrailingPartialLine(output.stdout)
+            } else {
+                parseInput = output.stdout
             }
 
-            let findings = parser.parse(output.stdout, category: category)
+            let findings = parser.parse(parseInput, category: category)
             logger.info(
                 "Czkawka \(category.subcommand, privacy: .public): \(findings.count) findings"
             )
@@ -235,6 +241,18 @@ public struct CzkawkaAdapter: ScanAdapter {
     }
 
     // MARK: - Private
+
+    /// Drops any trailing text after the last newline. Used when capture hit
+    /// the byte cap mid-line: without trimming, a sliced path could parse as
+    /// a real absolute path and fabricate a finding.
+    private static func trimTrailingPartialLine(_ output: String) -> String {
+        guard let lastNewline = output.lastIndex(of: "\n") else {
+            // No newline at all means the whole output is a single partial
+            // line — drop it rather than risk a fabricated finding.
+            return ""
+        }
+        return String(output[...lastNewline])
+    }
 
     private func arguments(for category: CzkawkaCategory) -> [String] {
         // czkawka_cli takes roots via `-d`, one flag per directory.
