@@ -252,18 +252,21 @@ struct LocalAIServiceTests {
         #expect(service.lifecycleState == .unloaded)
     }
 
-    @Test("MLXInferenceEngine.load throws notImplemented")
-    func mlxEngineLoadThrows() async {
+    @Test("MLXInferenceEngine.load rejects non-existent path")
+    func mlxEngineLoadRejectsMissingPath() async {
         let engine = MLXInferenceEngine()
-        await #expect(throws: AIInferenceEngineError.self) {
-            try await engine.load(modelPath: "/tmp/x", modelSize: 1)
+        await #expect(throws: MLXInferenceError.self) {
+            try await engine.load(
+                modelPath: "/tmp/gargantua-no-such-model-\(UUID().uuidString)",
+                modelSize: 1
+            )
         }
     }
 
-    @Test("MLXInferenceEngine.generate throws notImplemented")
-    func mlxEngineGenerateThrows() async {
+    @Test("MLXInferenceEngine.generate before load throws notLoaded")
+    func mlxEngineGenerateBeforeLoadThrows() async {
         let engine = MLXInferenceEngine()
-        await #expect(throws: AIInferenceEngineError.self) {
+        await #expect(throws: MLXInferenceError.self) {
             _ = try await engine.generate(for: makeResult(), rule: makeRule())
         }
     }
