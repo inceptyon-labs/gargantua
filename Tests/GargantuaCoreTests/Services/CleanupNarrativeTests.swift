@@ -119,6 +119,26 @@ struct CleanupNarrativeTemplateTests {
         #expect(narrative.contains("Xcode DerivedData"))
     }
 
+    @Test("Singleton groups never appear as narrative callouts (PII tightening)")
+    func singletonGroupsSuppressed() {
+        let result = CleanupResult(itemResults: [
+            makeItem(id: "s1", name: "MyPrivateProject", size: 1_000, succeeded: true),
+            makeItem(id: "s2", name: "SecretApp-Cache", size: 2_000, succeeded: true),
+            makeItem(id: "s3", name: "Other-Thing", size: 3_000, succeeded: true),
+        ])
+
+        let narrative = CleanupNarrativeTemplate.text(for: result)
+
+        // Each item has a unique name (count == 1). The narrative should
+        // summarize the aggregate only — never surface singleton item names,
+        // even though they are technically present in CleanupResult.
+        #expect(!narrative.contains("MyPrivateProject"))
+        #expect(!narrative.contains("SecretApp-Cache"))
+        #expect(!narrative.contains("Other-Thing"))
+        // Sanity: aggregate headline is still present.
+        #expect(narrative.contains("3"))
+    }
+
     // MARK: - PII safety
 
     @Test("Narrative contains no substring outside the fields on CleanupResult")
@@ -294,6 +314,57 @@ struct LocalAIServiceNarrateTests {
 
         #expect(narrative.source == .ai)
         #expect(narrative.text == "Cleaned 3 MB — mostly cache.")
+    }
+
+    @Test("Empty engine output falls back to template so the UI never renders an empty block")
+    func emptyEngineOutputFallsBack() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = NarrateFakeEngine(output: "")
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let narrative = await service.narrate(cleanup: makeResult())
+
+        #expect(narrative.source == .rule)
+        #expect(narrative.text == CleanupNarrativeTemplate.text(for: makeResult()))
+    }
+
+    @Test("Whitespace-only engine output falls back to template")
+    func whitespaceEngineOutputFallsBack() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = NarrateFakeEngine(output: "   \n  \t")
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let narrative = await service.narrate(cleanup: makeResult())
+
+        #expect(narrative.source == .rule)
+        #expect(narrative.text == CleanupNarrativeTemplate.text(for: makeResult()))
+    }
+
+    @Test("Engine text is trimmed of surrounding whitespace when accepted")
+    func engineOutputTrimmed() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let engine = NarrateFakeEngine(output: "  Cleaned a lot.  \n")
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let narrative = await service.narrate(cleanup: makeResult())
+
+        #expect(narrative.source == .ai)
+        #expect(narrative.text == "Cleaned a lot.")
     }
 }
 

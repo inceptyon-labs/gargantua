@@ -147,7 +147,12 @@ public struct CleanupSummaryView: View {
         .frame(maxWidth: 480)
         .task(id: result.completedAt) {
             guard let narrator = cleanupNarrator else { return }
-            narrative = await narrator(result)
+            // Clear any prior-cleanup narrative before awaiting, and gate the
+            // assignment on `Task.isCancelled` so a late response from a
+            // cancelled task can never overwrite the next result's prose.
+            narrative = nil
+            let value = await narrator(result)
+            if !Task.isCancelled { narrative = value }
         }
     }
 

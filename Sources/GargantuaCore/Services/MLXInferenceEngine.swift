@@ -185,6 +185,31 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         return lines.joined(separator: "\n")
     }
 
+    /// Max characters kept when interpolating a scan-result name into the
+    /// cleanup-narrative prompt. Longer names are truncated with an ellipsis.
+    static let maxPromptNameLength = 64
+
+    /// Collapse whitespace/control characters and truncate to
+    /// `maxPromptNameLength`. Defends against filenames containing newlines
+    /// or instruction-like text that would otherwise hijack the model prompt.
+    static func sanitizeForPrompt(_ input: String) -> String {
+        let collapsed = input
+            .unicodeScalars
+            .map { scalar -> Character in
+                if scalar.properties.generalCategory == .control || scalar == "\n" || scalar == "\r" {
+                    return " "
+                }
+                return Character(scalar)
+            }
+        var s = String(collapsed)
+        while s.contains("  ") { s = s.replacingOccurrences(of: "  ", with: " ") }
+        s = s.trimmingCharacters(in: .whitespaces)
+        if s.count > maxPromptNameLength {
+            s = String(s.prefix(maxPromptNameLength)) + "…"
+        }
+        return s
+    }
+
     /// Build the cleanup-narrative prompt from aggregated `CleanupResult`
     /// fields only. Individual item paths are intentionally omitted — the
     /// model sees item *names* (already in the result, already shown in the
@@ -204,7 +229,12 @@ public final class MLXInferenceEngine: AIInferenceEngine {
             lines.append("Top groups cleaned:")
             for group in groups.prefix(5) {
                 let bytes = ByteCountFormatter.string(fromByteCount: group.bytes, countStyle: .file)
-                lines.append("- \(group.name): \(group.count) items, \(bytes)")
+                // Names come from YAML-rule matches but can technically be any
+                // string — collapse control characters and cap length so a
+                // hostile filename can't inject extra prompt bullets or new
+                // instructions.
+                let safeName = sanitizeForPrompt(group.name)
+                lines.append("- \(safeName): \(group.count) items, \(bytes)")
             }
         }
 

@@ -210,7 +210,13 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
         do {
             let text = try await engine.narrate(cleanup: result)
-            return CleanupNarrative(text: text, source: .ai)
+            // Empty or whitespace-only engine output is treated as failure —
+            // the summary must never render an empty "AI summary" block.
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                return fallback
+            }
+            return CleanupNarrative(text: trimmed, source: .ai)
         } catch {
             return fallback
         }

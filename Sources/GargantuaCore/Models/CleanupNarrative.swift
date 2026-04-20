@@ -95,24 +95,19 @@ public enum CleanupNarrativeTemplate {
         var bytes: Int64
     }
 
-    /// Group the succeeded items by `ScanResult.name` (already user-facing,
-    /// already in the result) and format the top `limit` groups as
-    /// "Name (N items)" or "Name (formatted bytes)" when a single item
-    /// dominates. Returns an empty array when there's only one group with
-    /// one item — no group call-out needed.
+    /// Format the top `limit` groups (count > 1) as "Name (N items)".
+    ///
+    /// Singleton groups — a single cleaned item sharing a unique name — are
+    /// intentionally excluded. Only *repeated* names have useful aggregate
+    /// meaning, and skipping singletons keeps the narrative from surfacing
+    /// individual file names any more than the structured card already does.
+    /// Returns an empty array when no group has more than one item.
     private static func topGroups(in result: CleanupResult, limit: Int) -> [String] {
-        let groups = groupSucceededItems(in: result)
-
-        if groups.count == 1 && groups[0].count == 1 {
-            return []
-        }
-
-        return groups.prefix(limit).map { group in
-            if group.count == 1 {
-                return "\(group.name) (\(AlertItem.formatBytes(group.bytes)))"
-            }
-            return "\(group.name) (\(group.count) items)"
-        }
+        groupSucceededItems(in: result)
+            .lazy
+            .filter { $0.count > 1 }
+            .prefix(limit)
+            .map { "\($0.name) (\($0.count) items)" }
     }
 
     static func groupSucceededItems(in result: CleanupResult) -> [Group] {
