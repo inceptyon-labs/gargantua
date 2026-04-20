@@ -30,4 +30,8 @@ Package.resolved
 # Environment
 .env
 .env.local
+.env.release
 test_output.log
+
+# Release artifacts
+/dist/

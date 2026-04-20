@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for Gargantua.app.
+
+  Hardened runtime is enabled via `codesign --options runtime` (not via an
+  entitlement), so this file only needs to carry explicit deviations.
+
+  Intentionally NOT set:
+    - com.apple.security.app-sandbox: Duplicate Finder needs broad, user-
+      granted filesystem access across Desktop / Documents / Downloads /
+      external volumes, which sandbox + power-of-attorney TCC prompts makes
+      painful. Shipping outside the App Store (Developer ID) is compatible
+      with no-sandbox + hardened runtime + notarization.
+    - com.apple.security.get-task-allow: must be absent/false for Developer
+      ID distribution; codesign will strip a stale `true` anyway.
+-->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>

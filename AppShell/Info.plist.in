@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist template for Gargantua.app. Scripts/release/assemble-app.sh
+  substitutes @VERSION@, @BUILD@, @BUNDLE_ID@, and @MACOS_MIN_VERSION@.
+
+  The TCC usage strings below are mandatory: macOS will deny Full Disk Access
+  style prompts without them, and the Duplicate Finder / Big Files scans
+  need to traverse user-scoped directories.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Gargantua</string>
+    <key>CFBundleExecutable</key>
+    <string>Gargantua</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>@BUNDLE_ID@</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Gargantua</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@BUILD@</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>@MACOS_MIN_VERSION@</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © Gargantua contributors. MIT licensed.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Gargantua scans your Desktop folder to find duplicate, unused, and large files you may want to clean up.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Gargantua scans your Documents folder to find duplicate, unused, and large files you may want to clean up.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Gargantua scans your Downloads folder to find duplicate, unused, and large files you may want to clean up.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Gargantua scans connected external drives to find duplicate, unused, and large files when you explicitly select them.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>Gargantua scans mounted network volumes to find duplicate, unused, and large files when you explicitly select them.</string>
+</dict>
+</plist>
