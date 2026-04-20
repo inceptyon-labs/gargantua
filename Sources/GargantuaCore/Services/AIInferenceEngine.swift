@@ -35,6 +35,32 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
     /// Engines that don't need weights (e.g., deterministic templates)
     /// may generate without being loaded.
     func generate(for result: ScanResult, rule: ScanRule) async throws -> String
+
+    /// Produce a structured advisory for a review-tier scan result.
+    ///
+    /// The default implementation wraps `generate(for:rule:)` and carries
+    /// the result's existing safety through as the suggestion, which suits
+    /// engines that don't yet reason about alternative classifications
+    /// (e.g., `TemplateInferenceEngine`). Real model backends can override
+    /// to parse a structured response from the model and surface an actual
+    /// alternative `SafetyLevel`.
+    ///
+    /// `LocalAIService.advisory(for:rules:)` is responsible for the safety
+    /// invariant — the engine never mutates `ScanResult.safety`. The
+    /// `suggestedSafety` field is advisory-only.
+    func advisory(for result: ScanResult, rule: ScanRule) async throws -> ScanResultAdvisory
+}
+
+public extension AIInferenceEngine {
+    func advisory(for result: ScanResult, rule: ScanRule) async throws -> ScanResultAdvisory {
+        let text = try await generate(for: result, rule: rule)
+        return ScanResultAdvisory(
+            resultId: result.id,
+            rationale: text,
+            suggestedSafety: result.safety,
+            source: .ai
+        )
+    }
 }
 
 /// Errors specific to inference engines. `LocalAIService` wraps these in

@@ -1,11 +1,11 @@
 ---
 # gargantua-7sge
 title: Classification Advisory surface (flag items; never rewrite safety)
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T14:06:22Z
-updated_at: 2026-04-20T14:06:22Z
+updated_at: 2026-04-20T21:40:14Z
 parent: gargantua-8igf
 ---
 

@@ -98,6 +98,84 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
     }
 
+    /// Produce advisories for review-tier scan results.
+    ///
+    /// Iterates `results`, filters to `.review`-tier items (v1 scope — PRD
+    /// §2.5 / §6.2 advisory pass targets the ambiguous tier), and asks the
+    /// inference engine for a structured suggestion per item. On engine
+    /// failure for any item, falls back to a YAML-sourced advisory rather
+    /// than throwing — same "always return something" shape as `explain`.
+    ///
+    /// The safety invariant is owned here: advisories describe what the AI
+    /// *thinks* the classification could be (`suggestedSafety`), but this
+    /// method never writes back to `ScanResult.safety`. Input `results` are
+    /// passed by value (structs are copied) and the caller's array is not
+    /// touched.
+    ///
+    /// - Parameters:
+    ///   - results: Scan results to consider. Non-review items are ignored.
+    ///   - rules: Map from `ScanResult.id` to the matching `ScanRule`. Items
+    ///     without a matching rule are skipped (no YAML fallback text to
+    ///     surface).
+    /// - Returns: An advisory per eligible review-tier result; empty array
+    ///   if nothing qualifies.
+    public func advisory(
+        for results: [ScanResult],
+        rules: [String: ScanRule]
+    ) async throws -> [ScanResultAdvisory] {
+        let reviewOnly = results.filter { $0.safety == .review }
+        guard !reviewOnly.isEmpty else { return [] }
+
+        func yamlFallback(for result: ScanResult) -> ScanResultAdvisory? {
+            guard let rule = rules[result.id] else { return nil }
+            return ScanResultAdvisory(
+                resultId: result.id,
+                rationale: rule.explanation,
+                suggestedSafety: result.safety,
+                source: .rule
+            )
+        }
+
+        guard isModelAvailable else {
+            return reviewOnly.compactMap(yamlFallback)
+        }
+
+        if lifecycleState == .unloaded {
+            try await loadModel()
+        }
+
+        guard lifecycleState == .ready else {
+            return reviewOnly.compactMap(yamlFallback)
+        }
+
+        // Suspend idle timer for the whole batch so a slow engine generating
+        // advisories for multiple items can't be unloaded mid-batch. Same
+        // pattern as `explain`.
+        idleTask?.cancel()
+        idleTask = nil
+        activeInferenceCount += 1
+        defer {
+            activeInferenceCount -= 1
+            if activeInferenceCount == 0 && lifecycleState == .ready {
+                resetIdleTimer()
+            }
+        }
+
+        var advisories: [ScanResultAdvisory] = []
+        for result in reviewOnly {
+            guard let rule = rules[result.id] else { continue }
+            do {
+                let advisory = try await engine.advisory(for: result, rule: rule)
+                advisories.append(advisory)
+            } catch {
+                if let fallback = yamlFallback(for: result) {
+                    advisories.append(fallback)
+                }
+            }
+        }
+        return advisories
+    }
+
     public func unloadModel() {
         idleTask?.cancel()
         idleTask = nil
