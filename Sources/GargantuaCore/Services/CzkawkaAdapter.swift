@@ -103,6 +103,15 @@ public struct CzkawkaAdapter: ScanAdapter {
         }
     }
 
+    /// Byte cap for captured czkawka_cli text output. Each subcommand
+    /// enumerates candidate paths; a deep similar-image scan against a
+    /// messy Photos library can easily produce megabytes of line-oriented
+    /// output. 64 MiB keeps us well clear of pathological counts while
+    /// bounding memory against a runaway subprocess. If this cap is hit
+    /// the parser will operate on a truncated prefix and callers will be
+    /// told via `ProcessOutput.stdoutTruncated`.
+    static let scanCaptureLimit: Int = 64 * 1024 * 1024
+
     private let binary: URL
     private let categories: [CzkawkaCategory]
     private let scanRoots: [URL]
@@ -174,7 +183,9 @@ public struct CzkawkaAdapter: ScanAdapter {
             do {
                 output = try runner.run(
                     executable: binary,
-                    arguments: arguments(for: category)
+                    arguments: arguments(for: category),
+                    timeout: nil,
+                    maxCapturedBytes: Self.scanCaptureLimit
                 )
             } catch {
                 await progress?.recordError(

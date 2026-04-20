@@ -159,7 +159,8 @@ public struct DeveloperToolBinaryResolver: Sendable {
         let version = try? runner.run(
             executable: executable,
             arguments: Self.versionArguments(for: tool),
-            timeout: 5
+            timeout: 5,
+            maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
         )
 
         return DeveloperToolAvailability(
@@ -236,7 +237,12 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         }
 
         let arguments = Self.previewArguments(for: tool)
-        let output = try runner.run(executable: executable, arguments: arguments, timeout: timeout)
+        let output = try runner.run(
+            executable: executable,
+            arguments: arguments,
+            timeout: timeout,
+            maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
+        )
         guard output.exitCode == 0 else {
             throw DeveloperToolPreviewError.commandFailed(
                 tool: tool,

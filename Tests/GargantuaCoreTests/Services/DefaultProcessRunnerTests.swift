@@ -120,4 +120,62 @@ struct DefaultProcessRunnerTests {
         #expect(output.exitCode == 42)
         #expect(output.stdout.contains("hello"))
     }
+
+    @Test("Stdout past maxCapturedBytes is truncated and flagged without deadlock")
+    func stdoutTruncatedAtCap() throws {
+        let runner = DefaultProcessRunner()
+        let cap = 4096
+        let emitted = cap * 4
+        let start = Date()
+        let output = try runner.run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "yes | head -c \(emitted)"],
+            timeout: 10,
+            maxCapturedBytes: cap
+        )
+        let elapsed = Date().timeIntervalSince(start)
+
+        #expect(output.exitCode == 0)
+        #expect(output.stdoutTruncated)
+        #expect(!output.stderrTruncated)
+        #expect(output.stdout.utf8.count == cap)
+        // Child must still finish promptly — if the drain stops pulling past
+        // the cap the pipe fills and the child blocks until we time out.
+        #expect(elapsed < 5.0, "truncation path took \(elapsed)s — pipe likely stalled")
+    }
+
+    @Test("Stderr past maxCapturedBytes is truncated and flagged independently of stdout")
+    func stderrTruncatedAtCap() throws {
+        let runner = DefaultProcessRunner()
+        let cap = 4096
+        let emitted = cap * 4
+        let output = try runner.run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "yes | head -c \(emitted) 1>&2; echo done"],
+            timeout: 10,
+            maxCapturedBytes: cap
+        )
+
+        #expect(output.exitCode == 0)
+        #expect(output.stderrTruncated)
+        #expect(!output.stdoutTruncated)
+        #expect(output.stderr.utf8.count == cap)
+        #expect(output.stdout.contains("done"))
+    }
+
+    @Test("Output within cap is not flagged as truncated")
+    func notTruncatedWhenUnderCap() throws {
+        let runner = DefaultProcessRunner()
+        let output = try runner.run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "echo hello"],
+            timeout: 5.0,
+            maxCapturedBytes: 1024
+        )
+
+        #expect(output.exitCode == 0)
+        #expect(!output.stdoutTruncated)
+        #expect(!output.stderrTruncated)
+        #expect(output.stdout == "hello\n")
+    }
 }

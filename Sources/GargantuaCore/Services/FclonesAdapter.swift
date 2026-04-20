@@ -58,6 +58,16 @@ public struct FclonesAdapter: ScanAdapter {
     /// a while; anything longer than this usually signals a hung process.
     public static let defaultTimeout: TimeInterval = 600
 
+    /// Byte cap for captured fclones JSON output. fclones emits one object
+    /// per duplicate group, so output scales with the number of duplicates,
+    /// not the size of scanned data. 64 MiB headroom keeps us memory-safe
+    /// against a runaway process while comfortably covering a messy home
+    /// directory with hundreds of thousands of duplicate groups. If this
+    /// cap is hit the JSON will be malformed and the parser will surface
+    /// a scan error — which is the right outcome, since partial output
+    /// would silently mis-report duplicate sets.
+    static let scanCaptureLimit: Int = 64 * 1024 * 1024
+
     private let binary: URL
     private let scanRoots: [URL]
     private let runner: ProcessRunner
@@ -117,7 +127,8 @@ public struct FclonesAdapter: ScanAdapter {
             output = try runner.run(
                 executable: binary,
                 arguments: arguments(),
-                timeout: timeout
+                timeout: timeout,
+                maxCapturedBytes: Self.scanCaptureLimit
             )
         } catch {
             await progress?.recordError(
