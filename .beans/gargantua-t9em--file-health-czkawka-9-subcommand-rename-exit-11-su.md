@@ -1,11 +1,11 @@
 ---
 # gargantua-t9em
 title: 'File Health: czkawka 9+ subcommand rename + exit-11 success code'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-04-20T22:47:04Z
-updated_at: 2026-04-20T22:47:04Z
+updated_at: 2026-04-20T22:47:41Z
 ---
 
 File Health scan surfaces "czkawka_cli <command> exit 11" for every subcommand and "unrecognized subcommand 'temporary'" for the temp-files column. Two root causes:
@@ -33,3 +33,12 @@ File Health scan surfaces "czkawka_cli <command> exit 11" for every subcommand a
 - [x] `temp` subcommand is used on czkawka 9+
 - [x] Exit 11 is treated as success; output is parsed
 - [x] Regression test covers exit-11 success path
+
+
+
+## Completed
+
+Fixed in commit 659e81d
+
+---
+*Closed by PASIV beans-ops*
