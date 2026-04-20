@@ -1,11 +1,11 @@
 ---
 # gargantua-7sge
 title: Classification Advisory surface (flag items; never rewrite safety)
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-20T14:06:22Z
-updated_at: 2026-04-20T21:58:55Z
+updated_at: 2026-04-20T22:09:46Z
 parent: gargantua-8igf
 ---
 
@@ -70,3 +70,12 @@ API: LocalAIService.advisory(for:rules:) where rules is keyed by ScanResult.id. 
 
 
 **Merged in commit:** ffcd90d
+
+
+
+## Completed
+
+UI stub landed in 96f3540 + 6f12835; closes visible-caller gap
+
+---
+*Closed by PASIV beans-ops*
