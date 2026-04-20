@@ -165,6 +165,156 @@ struct ModelDownloadManagerTests {
         #expect(!ModelDownloadManager.isModelDirectoryComplete(dir, files: files))
     }
 
+    // MARK: - Manifest validation (path traversal etc.)
+
+    @Test("validateManifest rejects path separators in id")
+    func rejectsSlashInID() {
+        let info = ModelInfo(
+            id: "../evil",
+            name: "x",
+            files: [ModelFile(name: "a", url: URL(string: "https://x/a")!, sha256: "0", size: 1)]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(info)
+        }
+    }
+
+    @Test("validateManifest rejects dot-dot filenames")
+    func rejectsDotDotFileName() {
+        let info = ModelInfo(
+            id: "m",
+            name: "x",
+            files: [ModelFile(name: "..", url: URL(string: "https://x/a")!, sha256: "0", size: 1)]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(info)
+        }
+    }
+
+    @Test("validateManifest rejects slash in filename")
+    func rejectsSlashInFileName() {
+        let info = ModelInfo(
+            id: "m",
+            name: "x",
+            files: [ModelFile(name: "sub/file.bin", url: URL(string: "https://x/a")!, sha256: "0", size: 1)]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(info)
+        }
+    }
+
+    @Test("validateManifest rejects empty id and empty filename")
+    func rejectsEmptyComponents() {
+        let emptyID = ModelInfo(
+            id: "",
+            name: "x",
+            files: [ModelFile(name: "a", url: URL(string: "https://x/a")!, sha256: "0", size: 1)]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(emptyID)
+        }
+
+        let emptyName = ModelInfo(
+            id: "m",
+            name: "x",
+            files: [ModelFile(name: "", url: URL(string: "https://x/a")!, sha256: "0", size: 1)]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(emptyName)
+        }
+    }
+
+    @Test("validateManifest rejects leading-dot names")
+    func rejectsLeadingDot() {
+        let info = ModelInfo(
+            id: "m",
+            name: "x",
+            files: [ModelFile(name: ".hidden", url: URL(string: "https://x/a")!, sha256: "0", size: 1)]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(info)
+        }
+    }
+
+    @Test("validateManifest rejects duplicate filenames")
+    func rejectsDuplicateFileNames() {
+        let info = ModelInfo(
+            id: "m",
+            name: "x",
+            files: [
+                ModelFile(name: "a.bin", url: URL(string: "https://x/a")!, sha256: "0", size: 1),
+                ModelFile(name: "a.bin", url: URL(string: "https://x/b")!, sha256: "1", size: 2),
+            ]
+        )
+        #expect(throws: ModelManifestError.self) {
+            try ModelDownloadManager.validateManifest(info)
+        }
+    }
+
+    @Test("validateManifest accepts the pinned default model")
+    func acceptsDefaultModel() throws {
+        try ModelDownloadManager.validateManifest(ModelDownloadManager.defaultModel)
+    }
+
+    // MARK: - Verified marker
+
+    @Test("checkExistingModel ignores a sized-but-unverified directory")
+    func existingDirectoryNeedsMarker() throws {
+        let files = [
+            ModelFile(name: "a.json", url: URL(string: "https://x/a")!, sha256: "00", size: 3),
+        ]
+        let info = ModelInfo(id: "marker-test-\(UUID().uuidString)", name: "X", files: files)
+
+        // Seed the exact directory the manager would use, but *without* the marker.
+        let dir = ModelDownloadManager.modelsDirectory.appendingPathComponent(info.id, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("abc".utf8).write(to: dir.appendingPathComponent("a.json"))
+
+        let manager = ModelDownloadManager(modelInfo: info)
+        #expect(manager.state == .notDownloaded, "Missing marker → not trusted")
+    }
+
+    @Test("checkExistingModel trusts a directory with a matching marker")
+    func existingDirectoryWithMarker() throws {
+        let files = [
+            ModelFile(name: "a.json", url: URL(string: "https://x/a")!, sha256: "00", size: 3),
+        ]
+        let info = ModelInfo(id: "marker-test-\(UUID().uuidString)", name: "X", files: files)
+
+        let dir = ModelDownloadManager.modelsDirectory.appendingPathComponent(info.id, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("abc".utf8).write(to: dir.appendingPathComponent("a.json"))
+        try Data(ModelDownloadManager.buildVerifiedMarker(for: info).utf8)
+            .write(to: dir.appendingPathComponent(ModelDownloadManager.verifiedMarkerName))
+
+        let manager = ModelDownloadManager(modelInfo: info)
+        #expect(manager.state == .downloaded(path: dir.path, size: info.expectedSize))
+    }
+
+    @Test("checkExistingModel rejects a stale marker from a prior manifest")
+    func existingDirectoryStaleMarker() throws {
+        let files = [
+            ModelFile(name: "a.json", url: URL(string: "https://x/a")!, sha256: "00", size: 3),
+        ]
+        let staleFiles = [
+            ModelFile(name: "a.json", url: URL(string: "https://x/a")!, sha256: "ff", size: 3),
+        ]
+        let info = ModelInfo(id: "marker-test-\(UUID().uuidString)", name: "X", files: files)
+        let staleInfo = ModelInfo(id: info.id, name: "X", files: staleFiles)
+
+        let dir = ModelDownloadManager.modelsDirectory.appendingPathComponent(info.id, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("abc".utf8).write(to: dir.appendingPathComponent("a.json"))
+        try Data(ModelDownloadManager.buildVerifiedMarker(for: staleInfo).utf8)
+            .write(to: dir.appendingPathComponent(ModelDownloadManager.verifiedMarkerName))
+
+        let manager = ModelDownloadManager(modelInfo: info)
+        #expect(manager.state == .notDownloaded, "Marker SHAs differ → not trusted")
+    }
+
     // MARK: - Test helpers
 
     private func writeTempFile(bytes: Data) throws -> URL {

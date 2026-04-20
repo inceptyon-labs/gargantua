@@ -60,6 +60,26 @@ public enum ModelState: Equatable {
     case failed(message: String)
 }
 
+/// Errors raised when a `ModelInfo` cannot be used safely — e.g., a manifest
+/// whose `id` or file names would escape the models directory, or contain
+/// path separators.
+public enum ModelManifestError: Error, LocalizedError, Equatable {
+    case invalidModelID(String)
+    case invalidFileName(String)
+    case duplicateFileName(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidModelID(let id):
+            return "Invalid ModelInfo.id '\(id)': must be a single path component with no slashes or '..'."
+        case .invalidFileName(let name):
+            return "Invalid ModelFile.name '\(name)': must be a single filename with no slashes or '..'."
+        case .duplicateFileName(let name):
+            return "Duplicate ModelFile.name '\(name)' in manifest."
+        }
+    }
+}
+
 /// Manages downloading, verifying, and staging HF-layout model directories.
 ///
 /// Models are stored at `~/Library/Application Support/Gargantua/models/<id>/`.
@@ -132,10 +152,51 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         ]
     )
 
+    /// Constructs a manager. Traps on a manifest that can't be safely staged
+    /// (path-traversal in `id`/`name`, duplicate filenames). The default model
+    /// is vetted, so production callers can rely on the default argument.
     public init(modelInfo: ModelInfo = ModelDownloadManager.defaultModel) {
+        do {
+            try Self.validateManifest(modelInfo)
+        } catch {
+            preconditionFailure("Invalid ModelInfo: \(error.localizedDescription)")
+        }
         self.modelInfo = modelInfo
         super.init()
         checkExistingModel()
+    }
+
+    /// Validates that `modelInfo.id` and every `files[i].name` is a single
+    /// path component (no slashes, no '..', non-empty, no leading dot-dot).
+    /// Throws rather than trapping so tests can exercise the failure path.
+    static func validateManifest(_ modelInfo: ModelInfo) throws {
+        try validatePathComponent(modelInfo.id, kind: .id)
+        var seen = Set<String>()
+        for file in modelInfo.files {
+            try validatePathComponent(file.name, kind: .fileName)
+            if !seen.insert(file.name).inserted {
+                throw ModelManifestError.duplicateFileName(file.name)
+            }
+        }
+    }
+
+    private enum PathComponentKind { case id, fileName }
+
+    private static func validatePathComponent(_ component: String, kind: PathComponentKind) throws {
+        let invalid: Bool = {
+            if component.isEmpty { return true }
+            if component == "." || component == ".." { return true }
+            if component.contains("/") || component.contains("\\") { return true }
+            if component.hasPrefix(".") { return true }
+            // Path APIs treat embedded NUL as end-of-string — reject defensively.
+            if component.contains("\0") { return true }
+            return false
+        }()
+        guard !invalid else {
+            throw kind == .id
+                ? ModelManifestError.invalidModelID(component)
+                : ModelManifestError.invalidFileName(component)
+        }
     }
 
     // MARK: - Public API
@@ -202,8 +263,9 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
     }
 
     /// Returns the SHA-256 of the bytes at `url`, hex-encoded lowercase.
-    /// Streams the file so large safetensors don't sit in RAM.
-    static func sha256Hex(of url: URL) throws -> String {
+    /// Streams the file so large safetensors don't sit in RAM. `nonisolated`
+    /// so the detached hashing task can call it off the main actor.
+    nonisolated static func sha256Hex(of url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
 
@@ -240,12 +302,32 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
 
     // MARK: - Private
 
+    /// Marker file dropped into the model directory after every file's SHA
+    /// has been verified. Its contents are the manifest pins; `checkExistingModel`
+    /// only trusts the directory if this marker matches the current manifest.
+    /// Without the marker, the directory is treated as not-downloaded — a
+    /// prior corruption, tampering, or abort path gets a clean retry instead
+    /// of silently loading unverified bytes.
+    static let verifiedMarkerName = ".gargantua-verified"
+
+    static func buildVerifiedMarker(for modelInfo: ModelInfo) -> String {
+        modelInfo.files
+            .map { "\($0.name)\t\($0.sha256)" }
+            .joined(separator: "\n") + "\n"
+    }
+
     private func checkExistingModel() {
         // Empty manifest is a misconfiguration, not a downloaded model —
         // `startDownload` will surface it.
         guard !modelInfo.files.isEmpty else { return }
         let directory = modelDirectory
         guard Self.isModelDirectoryComplete(directory, files: modelInfo.files) else {
+            return
+        }
+        let markerURL = directory.appendingPathComponent(Self.verifiedMarkerName)
+        guard let markerData = try? Data(contentsOf: markerURL),
+              let markerText = String(data: markerData, encoding: .utf8),
+              markerText == Self.buildVerifiedMarker(for: modelInfo) else {
             return
         }
         state = .downloaded(path: directory.path, size: modelInfo.expectedSize)
@@ -280,12 +362,32 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         session?.finishTasksAndInvalidate()
         session = nil
 
+        // Drop the verified-marker last. `checkExistingModel` refuses to
+        // trust a directory without it, so a partial/interrupted staging
+        // cannot masquerade as a complete download on the next launch.
+        let markerURL = modelDirectory.appendingPathComponent(Self.verifiedMarkerName)
+        let markerData = Data(Self.buildVerifiedMarker(for: modelInfo).utf8)
+        do {
+            try markerData.write(to: markerURL, options: .atomic)
+        } catch {
+            removeModelDirectory()
+            state = .failed(message: "Failed to write verification marker: \(error.localizedDescription)")
+            return
+        }
+
         // Use the manifest's expected size as the staged size: every file was
         // SHA-verified, so the directory content is exactly what we pinned.
         state = .downloaded(path: modelDirectory.path, size: modelInfo.expectedSize)
     }
 
     private func failDownload(_ message: String) {
+        // Swallow failure callbacks that arrive after the user cancelled —
+        // cancel already set `.notDownloaded` and wiped the directory.
+        guard !didCancel else {
+            activeTask = nil
+            session = nil
+            return
+        }
         activeTask = nil
         session?.invalidateAndCancel()
         session = nil
@@ -361,27 +463,59 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
     }
 
     private func handleDownloadedFile(at scratch: URL) {
+        guard !didCancel else {
+            try? FileManager.default.removeItem(at: scratch)
+            return
+        }
+        guard currentFileIndex < modelInfo.files.count else {
+            try? FileManager.default.removeItem(at: scratch)
+            return
+        }
+        let file = modelInfo.files[currentFileIndex]
+        let indexAtDispatch = currentFileIndex
+
+        // Hashing a ~700 MB safetensors on the main actor freezes the UI
+        // and blocks cancellation for seconds. Offload to a detached task;
+        // the hash function is static and touches no actor state.
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result: Result<String, Error> = Result {
+                try Self.sha256Hex(of: scratch)
+            }
+            await self?.completeFileVerification(
+                scratch: scratch,
+                dispatchedIndex: indexAtDispatch,
+                expectedFile: file,
+                hashResult: result
+            )
+        }
+    }
+
+    private func completeFileVerification(
+        scratch: URL,
+        dispatchedIndex: Int,
+        expectedFile: ModelFile,
+        hashResult: Result<String, Error>
+    ) {
         defer { try? FileManager.default.removeItem(at: scratch) }
 
-        guard !didCancel else { return }
-        guard currentFileIndex < modelInfo.files.count else { return }
-        let file = modelInfo.files[currentFileIndex]
+        // Cancel, or a new download run started while we were hashing —
+        // drop this work on the floor instead of mutating state.
+        guard !didCancel, dispatchedIndex == currentFileIndex else { return }
 
-        // SHA-256 verify
         let actualSha: String
-        do {
-            actualSha = try Self.sha256Hex(of: scratch)
-        } catch {
-            failDownload("Failed to hash \(file.name): \(error.localizedDescription)")
+        switch hashResult {
+        case .success(let sha):
+            actualSha = sha
+        case .failure(let error):
+            failDownload("Failed to hash \(expectedFile.name): \(error.localizedDescription)")
             return
         }
-        guard actualSha == file.sha256 else {
-            failDownload("Checksum mismatch for \(file.name): expected \(file.sha256), got \(actualSha).")
+        guard actualSha == expectedFile.sha256 else {
+            failDownload("Checksum mismatch for \(expectedFile.name): expected \(expectedFile.sha256), got \(actualSha).")
             return
         }
 
-        // Move into staged directory (overwriting a stale copy from a partial run).
-        let destination = modelDirectory.appendingPathComponent(file.name)
+        let destination = modelDirectory.appendingPathComponent(expectedFile.name)
         do {
             let fm = FileManager.default
             if fm.fileExists(atPath: destination.path) {
@@ -389,11 +523,11 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
             }
             try fm.moveItem(at: scratch, to: destination)
         } catch {
-            failDownload("Failed to stage \(file.name): \(error.localizedDescription)")
+            failDownload("Failed to stage \(expectedFile.name): \(error.localizedDescription)")
             return
         }
 
-        completedBytes += file.size
+        completedBytes += expectedFile.size
         currentFileIndex += 1
         startNextFileDownload()
     }
