@@ -1,11 +1,11 @@
 ---
 # gargantua-xuz6
 title: Evaluate and add MLX backend dependency
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T14:05:34Z
-updated_at: 2026-04-20T14:05:34Z
+updated_at: 2026-04-20T14:51:00Z
 parent: gargantua-ddaa
 ---
 
@@ -45,6 +45,6 @@ Once picked:
 
 ## Acceptance
 
-- [ ] `docs/designs/…-mlx-backend.md` captures the chosen backend + reasoning
-- [ ] Build graph includes the dependency; `swift build` release is green
-- [ ] App bundle size delta measured and recorded in the design doc
+- [x] `docs/designs/2026-04-20-mlx-backend.md` captures the chosen backend + reasoning
+- [x] Build graph includes the dependency; `swift build` release is green
+- [x] App bundle size delta measured and recorded in the design doc
