@@ -31,6 +31,24 @@ public struct CleanupSummaryView: View {
         }
     }
 
+    /// Outcome classification used to pick the header treatment and decide
+    /// whether the success section is meaningful.
+    enum SummaryOutcome: Sendable {
+        case complete       // all items succeeded
+        case partial        // some succeeded, some failed
+        case failed         // zero succeeded, >0 failed
+    }
+
+    /// Classify a result for header presentation. A result with no items at
+    /// all is treated as `.complete` to preserve the "nothing failed" framing
+    /// the view showed historically.
+    static func outcome(for result: CleanupResult) -> SummaryOutcome {
+        if result.failedItems.isEmpty {
+            return .complete
+        }
+        return result.succeededItems.isEmpty ? .failed : .partial
+    }
+
     public init(
         result: CleanupResult,
         outcomeAccent: Color? = nil,
@@ -85,11 +103,15 @@ public struct CleanupSummaryView: View {
 
             header
 
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+            let outcome = Self.outcome(for: result)
 
-            successSection
+            if outcome != .failed {
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
+
+                successSection
+            }
 
             if !result.failedItems.isEmpty {
                 Rectangle()
@@ -117,19 +139,40 @@ public struct CleanupSummaryView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            Image(systemName: result.allSucceeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+        let outcome = Self.outcome(for: result)
+        let icon: String
+        let iconColor: Color
+        let title: String
+        switch outcome {
+        case .complete:
+            icon = "checkmark.circle.fill"
+            iconColor = GargantuaColors.safe
+            title = "Cleanup Complete"
+        case .partial:
+            icon = "exclamationmark.triangle.fill"
+            iconColor = GargantuaColors.review
+            title = "Cleanup Partially Complete"
+        case .failed:
+            icon = "xmark.octagon.fill"
+            iconColor = GargantuaColors.protected_
+            title = "Cleanup Failed"
+        }
+
+        return HStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: icon)
                 .font(.system(size: 18))
-                .foregroundStyle(result.allSucceeded ? GargantuaColors.safe : GargantuaColors.review)
+                .foregroundStyle(iconColor)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.allSucceeded ? "Cleanup Complete" : "Cleanup Partially Complete")
+                Text(title)
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("\(AlertItem.formatBytes(result.totalFreed)) freed")
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.safe)
+                if outcome != .failed {
+                    Text("\(AlertItem.formatBytes(result.totalFreed)) freed")
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.safe)
+                }
             }
 
             Spacer()
