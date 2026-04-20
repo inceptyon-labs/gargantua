@@ -1,11 +1,11 @@
 ---
 # gargantua-1vbh
 title: Bound captured stdout/stderr in DefaultProcessRunner
-status: in-progress
+status: completed
 type: task
 priority: low
 created_at: 2026-04-20T01:24:49Z
-updated_at: 2026-04-20T01:40:10Z
+updated_at: 2026-04-20T01:40:32Z
 parent: gargantua-qe4a
 ---
 
