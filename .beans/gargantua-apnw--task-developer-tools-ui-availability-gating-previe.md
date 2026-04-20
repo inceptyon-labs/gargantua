@@ -1,11 +1,11 @@
 ---
 # gargantua-apnw
 title: 'Task: Developer Tools UI (availability gating + preview panes)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-18T22:18:47Z
-updated_at: 2026-04-20T01:21:16Z
+updated_at: 2026-04-20T01:23:10Z
 parent: gargantua-7hdn
 ---
 
