@@ -76,6 +76,18 @@ fi
 run cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 run chmod 0755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
+# ----- MLX Metal library ----------------------------------------------------
+# mlx-swift via SPM CLI does not produce default.metallib — Xcode's build
+# system owns .metal compilation. We produce `mlx.metallib` ourselves and
+# colocate it with the executable so MLX's load_default_library picks it up
+# via its first search path (see mlx/backend/metal/device.cpp).
+#
+# Requires the Metal Toolchain
+# (`xcodebuild -downloadComponent MetalToolchain`). build-metallib.sh fails
+# with a clear install hint if it's missing.
+run "$SCRIPTS_DIR/build-metallib.sh" \
+    --output "$APP_BUNDLE/Contents/MacOS/mlx.metallib"
+
 # ----- Resource bundle from GargantuaCore -----------------------------------
 CORE_BUNDLE_SRC="$SWIFT_BIN_DIR/Gargantua_GargantuaCore.bundle"
 if [ "${DRY_RUN:-0}" != "1" ] && [ ! -d "$CORE_BUNDLE_SRC" ]; then
