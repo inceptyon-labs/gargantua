@@ -5,7 +5,7 @@ status: in-progress
 type: bug
 priority: low
 created_at: 2026-04-18T20:10:16Z
-updated_at: 2026-04-20T01:02:31Z
+updated_at: 2026-04-20T01:06:38Z
 parent: gargantua-qe4a
 ---
 
@@ -47,12 +47,12 @@ For `timeout: 5.0`, `graceSecs` = 0.5s. Under parallel load, the `.utility` QoS 
 
 ## Acceptance Criteria
 
-- [ ] Remove the `.serialized` trait from `DefaultProcessRunnerIntegrationTests` and confirm the full suite passes deterministically across 5 consecutive runs
-- [ ] Pick one (or combine) of these fixes:
+- [x] Remove the `.serialized` trait from `DefaultProcessRunnerIntegrationTests` and confirm the full suite passes deterministically across 5 consecutive runs
+- [x] Pick one (or combine) of these fixes (combined options 1 + 2 — QoS bump to `.userInitiated` + fixed 1s drain grace):
   - Bump drain queue QoS from `.utility` to `.userInitiated` so drain tasks aren't starved by other utility work
   - Raise the drain-grace floor (e.g. minimum 1.0s) since stdout is bounded and the child has already exited
   - Skip the force-close path entirely when `coordinator.markNaturalCompletion()` returned `.naturallyCompleted` — the process is gone, the pipe writer is closed, `readToEnd()` will return promptly once scheduled
-- [ ] Keep existing `timeoutCleansDescendantAfterLeaderExits` and `descendantInheritedFdHandling` tests green (force-close must still fire when a descendant holds the fd)
+- [x] Keep existing `timeoutCleansDescendantAfterLeaderExits` and `descendantInheritedFdHandling` tests green (force-close must still fire when a descendant holds the fd)
 
 ## Context
 
