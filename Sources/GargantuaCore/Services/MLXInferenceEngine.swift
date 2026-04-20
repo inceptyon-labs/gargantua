@@ -71,7 +71,7 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         self.instructions = instructions
     }
 
-    public static let defaultInstructions = """
+    public nonisolated static let defaultInstructions = """
         You are a helpful assistant that explains macOS cleanup items to end users. \
         Given a scanned item's metadata, explain in plain English what it is, whether \
         it is safe to delete, and any caveats. Be concise — 2 to 4 short sentences. \
