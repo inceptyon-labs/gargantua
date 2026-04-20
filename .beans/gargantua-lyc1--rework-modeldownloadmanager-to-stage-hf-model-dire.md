@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T17:26:12Z
-updated_at: 2026-04-20T17:46:09Z
+updated_at: 2026-04-20T17:48:45Z
 ---
 
 ## Context
@@ -44,3 +44,19 @@ Alternative for a smaller v1: download a single `.zip` / `.tar.gz` from a pinned
 - [x] `state = .downloaded` exposes the directory path; `LocalAIService` passes it to `MLXInferenceEngine.load` without changes
 - [ ] App-level smoke: user clicks "Download model" in settings → model staged → one `explain` call produces AI-generated text
 - [x] Docs updated in `docs/designs/2026-04-20-mlx-backend.md` noting the directory-staging reality
+
+
+## Summary of Changes
+
+- `ModelInfo` + new `ModelFile` carry a multi-file manifest (name / HF URL / SHA-256 / size). `defaultModel` now pins `mlx-community/Llama-3.2-1B-Instruct-4bit` (~680 MB across five files) with SHAs lifted from HF LFS pointers and direct content hashes.
+- `ModelDownloadManager.startDownload` fetches files sequentially through a `URLSession` delegate, SHA-256 verifies each via `CryptoKit` (streamed in 1 MB chunks off the main actor), and moves them into `~/Library/Application Support/Gargantua/models/<id>/`. Any hash mismatch or transport error rolls the whole directory back.
+- `state = .downloaded(path:…)` reports the staged directory. `LocalAIService.explain` already passes `state.path` through to `MLXInferenceEngine.load`, which already accepts a directory — no engine or service changes needed.
+- A `.gargantua-verified` marker file is written atomically after every SHA passes; `checkExistingModel` refuses to trust a directory without a marker whose contents match the current manifest, so a partial or tampered run can't masquerade as `.downloaded` on the next launch.
+- `validateManifest` (called from init) rejects path-traversal in `id`/`name`, empty/`.`/`..`/leading-dot/NUL/slash components, and duplicate filenames. Surfaced as an independent Codex finding in pass-2 review.
+- `Scripts/pin-model.sh` regenerates the `ModelFile(...)` Swift snippet from HF's API (LFS oid for large files, download-and-hash for small JSON) — the mechanism for bumping the pinned model.
+- Docs updated in `docs/designs/2026-04-20-mlx-backend.md` noting the directory-staging reality.
+- 20 new unit tests added; 766 total pass. Debug and release builds green.
+
+## Manual Verification Left Open
+
+The one unchecked acceptance criterion — "user clicks Download model → model staged → one `explain` call produces AI-generated text" — requires a live ~680 MB fetch from huggingface.co and on-device Metal inference, so it's the user's to run. After a successful manual smoke, check the last box and mark this bean completed.
