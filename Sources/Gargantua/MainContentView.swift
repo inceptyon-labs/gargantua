@@ -58,7 +58,8 @@ struct MainContentView: View {
                                 )
                             case "fileHealth":
                                 FileHealthContainerView(
-                                    scanRoots: resolvedScanRoots
+                                    scanRoots: resolvedScanRoots,
+                                    profile: activeDeepCleanProfile
                                 )
                             case "diskExplorer":
                                 DiskExplorerView()

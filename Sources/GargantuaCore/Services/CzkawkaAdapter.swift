@@ -110,6 +110,8 @@ public struct CzkawkaAdapter: ScanAdapter {
     private let parser: CzkawkaOutputParser
     private let trustDefaults: CzkawkaTrustDefaults
     private let sourceAttribution: SourceAttribution
+    private let profile: CleanupProfile?
+    private let classifier: SafetyClassifier
 
     public init(
         binary: URL,
@@ -118,7 +120,9 @@ public struct CzkawkaAdapter: ScanAdapter {
         runner: ProcessRunner = DefaultProcessRunner(),
         parser: CzkawkaOutputParser = CzkawkaOutputParser(),
         trustDefaults: CzkawkaTrustDefaults = .builtIn,
-        sourceAttribution: SourceAttribution = SourceAttribution(name: "Czkawka")
+        sourceAttribution: SourceAttribution = SourceAttribution(name: "Czkawka"),
+        profile: CleanupProfile? = nil,
+        classifier: SafetyClassifier = SafetyClassifier()
     ) {
         self.binary = binary
         self.categories = categories
@@ -127,6 +131,8 @@ public struct CzkawkaAdapter: ScanAdapter {
         self.parser = parser
         self.trustDefaults = trustDefaults
         self.sourceAttribution = sourceAttribution
+        self.profile = profile
+        self.classifier = classifier
     }
 
     /// Convenience factory: resolve the binary via `CzkawkaBinaryResolver` and
@@ -134,10 +140,18 @@ public struct CzkawkaAdapter: ScanAdapter {
     public static func autoDetect(
         categories: [CzkawkaCategory] = CzkawkaCategory.allCases,
         scanRoots: [URL],
-        resolver: CzkawkaBinaryResolver = CzkawkaBinaryResolver()
+        resolver: CzkawkaBinaryResolver = CzkawkaBinaryResolver(),
+        profile: CleanupProfile? = nil,
+        classifier: SafetyClassifier = SafetyClassifier()
     ) throws -> CzkawkaAdapter {
         let binary = try resolver.resolve()
-        return CzkawkaAdapter(binary: binary, categories: categories, scanRoots: scanRoots)
+        return CzkawkaAdapter(
+            binary: binary,
+            categories: categories,
+            scanRoots: scanRoots,
+            profile: profile,
+            classifier: classifier
+        )
     }
 
     public func scan(progress: ScanProgress?) async throws -> [ScanResult] {
@@ -240,7 +254,7 @@ public struct CzkawkaAdapter: ScanAdapter {
         let entry = trustDefaults.entry(for: category)
         let tags = finding.groupID.map { ["czkawka_group_\($0)"] } ?? []
 
-        return ScanResult(
+        let base = ScanResult(
             id: "czkawka-\(category.rawValue)-\(counter)",
             name: finding.path.split(separator: "/").last.map(String.init) ?? finding.path,
             path: finding.path,
@@ -254,6 +268,28 @@ public struct CzkawkaAdapter: ScanAdapter {
             tags: tags,
             regenerates: false,
             regenerateCommand: nil
+        )
+
+        // Without a profile, czkawka findings keep their base Trust Layer
+        // defaults (Phase 2 back-compat). With a profile, route through the
+        // same classifier NativeScanAdapter uses so age-based overrides apply.
+        guard let profile else { return base }
+
+        let classified = classifier.classify(result: base, profile: profile)
+        return ScanResult(
+            id: base.id,
+            name: base.name,
+            path: base.path,
+            size: base.size,
+            safety: classified.safety,
+            confidence: classified.confidence,
+            explanation: classified.explanation,
+            source: base.source,
+            lastAccessed: base.lastAccessed,
+            category: base.category,
+            tags: base.tags,
+            regenerates: base.regenerates,
+            regenerateCommand: base.regenerateCommand
         )
     }
 

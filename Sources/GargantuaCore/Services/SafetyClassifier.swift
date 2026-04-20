@@ -71,6 +71,48 @@ public struct SafetyClassifier: Sendable {
     ) -> [ClassifiedResult] {
         results.map { classify(result: $0.result, rule: $0.rule, profile: profile, now: now) }
     }
+
+    /// Classify a scan result that has no backing `ScanRule`.
+    ///
+    /// Adapters whose categories live outside the YAML rule layer
+    /// (`CzkawkaAdapter`, `FclonesAdapter`, etc.) carry their Trust Layer
+    /// defaults in code rather than in a rule file. This overload applies the
+    /// same override precedence — rule-level first, then profile-level — so
+    /// those adapters can participate in profile-aware reclassification
+    /// (age-based overrides, etc.) without fabricating a synthetic rule.
+    ///
+    /// - Parameters:
+    ///   - result: The scan result to classify. Its `safety`, `confidence`,
+    ///     and `explanation` are treated as the base values.
+    ///   - ruleOverrides: Adapter-level overrides evaluated before the
+    ///     profile's overrides. Pass `[]` when the adapter has none.
+    ///   - profile: The active cleanup profile whose overrides can reclassify
+    ///     the result.
+    ///   - now: Reference date for age calculations (defaults to current date).
+    public func classify(
+        result: ScanResult,
+        ruleOverrides: [SafetyOverride] = [],
+        profile: CleanupProfile,
+        now: Date = Date()
+    ) -> ClassifiedResult {
+        let allOverrides = ruleOverrides + profile.safetyOverrides
+        if let matched = allOverrides.first(where: {
+            matches(override: $0, profileID: profile.id, lastAccessed: result.lastAccessed, now: now)
+        }) {
+            return applyOverride(
+                matched,
+                baseSafety: result.safety,
+                baseConfidence: result.confidence,
+                baseExplanation: result.explanation
+            )
+        }
+
+        return ClassifiedResult(
+            safety: result.safety,
+            confidence: result.confidence,
+            explanation: result.explanation
+        )
+    }
 }
 
 // MARK: - Private

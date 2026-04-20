@@ -21,7 +21,8 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "FileHeal
 /// Finder will.
 public struct FileHealthContainerView: View {
     public let scanRoots: [URL]?
-    public let engineFactory: (_ scanRoots: [URL]) throws -> any ScanAdapter
+    public let profile: CleanupProfile
+    public let engineFactory: (_ scanRoots: [URL], _ profile: CleanupProfile) throws -> any ScanAdapter
     public let onExplain: ((ScanResult) -> Void)?
 
     @State private var scanState: ScanState = .idle
@@ -55,13 +56,15 @@ public struct FileHealthContainerView: View {
 
     public init(
         scanRoots: [URL]? = nil,
+        profile: CleanupProfile = .deep,
         engine: (any ScanAdapter)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil
     ) {
         self.scanRoots = scanRoots
+        self.profile = profile
         self.onExplain = onExplain
         if let engine {
-            self.engineFactory = { _ in engine }
+            self.engineFactory = { _, _ in engine }
         } else {
             self.engineFactory = Self.defaultEngine
         }
@@ -202,7 +205,7 @@ public struct FileHealthContainerView: View {
         let roots = resolvedScanRoots()
         let engine: any ScanAdapter
         do {
-            engine = try engineFactory(roots)
+            engine = try engineFactory(roots, profile)
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             logger.error("Failed to build file-health engine: \(message, privacy: .public)")
@@ -256,8 +259,19 @@ public struct FileHealthContainerView: View {
     // MARK: - Default engine factory
 
     /// Build the default pipeline: a ``ScanEngine`` wrapping ``CzkawkaAdapter``.
-    private static func defaultEngine(scanRoots: [URL]) throws -> any ScanAdapter {
-        let czkawka = try CzkawkaAdapter.autoDetect(scanRoots: scanRoots)
+    ///
+    /// The active profile is passed into the adapter so czkawka findings pass
+    /// through `SafetyClassifier` — profile-level age overrides (e.g.
+    /// developer's `age > 30d → safe`) now apply to File Health results the
+    /// same way they apply to YAML-driven rules.
+    private static func defaultEngine(
+        scanRoots: [URL],
+        profile: CleanupProfile
+    ) throws -> any ScanAdapter {
+        let czkawka = try CzkawkaAdapter.autoDetect(
+            scanRoots: scanRoots,
+            profile: profile
+        )
         return ScanEngine(adapters: [czkawka])
     }
 }
