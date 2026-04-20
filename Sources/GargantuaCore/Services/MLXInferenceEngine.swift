@@ -133,6 +133,31 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         return try await session.respond(to: prompt)
     }
 
+    public func narrate(cleanup result: CleanupResult) async throws -> String {
+        guard let modelContainer else {
+            throw MLXInferenceError.notLoaded
+        }
+
+        let prompt = Self.buildCleanupPrompt(for: result)
+        let session = ChatSession(
+            modelContainer,
+            instructions: Self.cleanupNarrativeInstructions,
+            generateParameters: GenerateParameters(
+                maxTokens: 120,
+                temperature: temperature
+            )
+        )
+        return try await session.respond(to: prompt)
+    }
+
+    public nonisolated static let cleanupNarrativeInstructions = """
+        You are a helpful assistant that summarizes a completed macOS cleanup \
+        in 1 to 2 short sentences. Describe what was cleaned and any notable \
+        groupings. Plain English only — no bullet lists, no code fences, no \
+        markdown headers. Do not invent items, paths, or numbers that are \
+        not in the provided summary.
+        """
+
     // MARK: - Prompt
 
     /// Builds the user-turn content for `generate`. Pulled out so tests can
@@ -157,6 +182,37 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         lines.append("Rule explanation (canonical, do not contradict): \(rule.explanation)")
         lines.append("")
         lines.append("Explain what this item is and whether it is safe to delete.")
+        return lines.joined(separator: "\n")
+    }
+
+    /// Build the cleanup-narrative prompt from aggregated `CleanupResult`
+    /// fields only. Individual item paths are intentionally omitted — the
+    /// model sees item *names* (already in the result, already shown in the
+    /// summary card), counts, and byte totals. This keeps the narrative from
+    /// surfacing PII beyond what the user can already see in the card.
+    static func buildCleanupPrompt(for result: CleanupResult) -> String {
+        var lines: [String] = []
+        let methodLabel = result.cleanupMethod == .trash ? "moved to Trash" : "permanently deleted"
+        lines.append("Cleanup method: \(methodLabel)")
+        lines.append("Items succeeded: \(result.succeededItems.count)")
+        lines.append("Items failed: \(result.failedItems.count)")
+        let freed = ByteCountFormatter.string(fromByteCount: result.totalFreed, countStyle: .file)
+        lines.append("Total freed: \(freed)")
+
+        let groups = CleanupNarrativeTemplate.groupSucceededItems(in: result)
+        if !groups.isEmpty {
+            lines.append("Top groups cleaned:")
+            for group in groups.prefix(5) {
+                let bytes = ByteCountFormatter.string(fromByteCount: group.bytes, countStyle: .file)
+                lines.append("- \(group.name): \(group.count) items, \(bytes)")
+            }
+        }
+
+        lines.append("")
+        lines.append(
+            "Write 1 to 2 short sentences describing what was cleaned. " +
+            "Use only the numbers above; do not invent item names, paths, or sizes."
+        )
         return lines.joined(separator: "\n")
     }
 

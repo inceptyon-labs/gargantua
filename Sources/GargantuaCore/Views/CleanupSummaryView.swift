@@ -5,6 +5,7 @@ import SwiftUI
 ///
 /// Displayed after a cleanup operation completes. Shows:
 /// - Total items cleaned and bytes freed
+/// - Optional AI-attributed narrative (via `\.cleanupNarrator`)
 /// - Failed items (if partial failure)
 /// - "Open Audit Trail" link
 /// - "Reveal Trash" undo button when applicable
@@ -17,7 +18,9 @@ public struct CleanupSummaryView: View {
     // Expanded by default so the list + sort picker are immediately visible.
     // Users can collapse to the compact card if they want.
     @State private var succeededExpanded: Bool = true
+    @State private var narrative: CleanupNarrative?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.cleanupNarrator) private var cleanupNarrator
 
     /// Sort options for the cleaned-item lists in the summary.
     public enum SummarySort: String, CaseIterable, Sendable {
@@ -105,6 +108,14 @@ public struct CleanupSummaryView: View {
 
             let outcome = Self.outcome(for: result)
 
+            if cleanupNarrator != nil, let narrative {
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
+
+                CleanupNarrativeSection(narrative: narrative)
+            }
+
             if outcome != .failed {
                 Rectangle()
                     .fill(GargantuaColors.border)
@@ -134,6 +145,11 @@ public struct CleanupSummaryView: View {
                 .stroke(GargantuaColors.border, lineWidth: 1)
         )
         .frame(maxWidth: 480)
+        .task(id: result.completedAt) {
+            guard let narrator = cleanupNarrator, narrative == nil else { return }
+            let value = await narrator(result)
+            narrative = value
+        }
     }
 
     // MARK: - Header

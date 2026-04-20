@@ -49,6 +49,17 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
     /// invariant — the engine never mutates `ScanResult.safety`. The
     /// `suggestedSafety` field is advisory-only.
     func advisory(for result: ScanResult, rule: ScanRule) async throws -> ScanResultAdvisory
+
+    /// Generate a short (1–2 sentence) post-cleanup narrative summarizing what
+    /// was cleaned. Display-only; the narrative is not persisted to the audit
+    /// record.
+    ///
+    /// The default implementation returns a deterministic template derived
+    /// from `CleanupResult` fields; model-backed engines override this to
+    /// produce natural-language prose from an aggregated prompt. Inputs to the
+    /// engine are limited to what `CleanupResult` already carries, so the
+    /// narrative cannot surface PII beyond the caller's own data.
+    func narrate(cleanup result: CleanupResult) async throws -> String
 }
 
 public extension AIInferenceEngine {
@@ -60,6 +71,10 @@ public extension AIInferenceEngine {
             suggestedSafety: result.safety,
             source: .ai
         )
+    }
+
+    func narrate(cleanup result: CleanupResult) async throws -> String {
+        CleanupNarrativeTemplate.text(for: result)
     }
 }
 

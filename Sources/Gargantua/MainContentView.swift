@@ -122,6 +122,7 @@ struct MainContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                .environment(\.cleanupNarrator, narrateHandler)
                 .onAppear {
                     if persistence == nil {
                         persistence = try? PersistenceController()
@@ -160,6 +161,14 @@ struct MainContentView: View {
     /// button can fire a batch advisory without knowing the controller.
     private var advisoryHandler: ([ScanResult]) -> Void {
         { results in aiAdvisory.request(for: results) }
+    }
+
+    /// Build the narrator closure injected via the `\.cleanupNarrator`
+    /// environment value so every `CleanupSummaryView` in the tree can request
+    /// an AI narrative without threading `LocalAIService` through each
+    /// scan-view signature.
+    private var narrateHandler: CleanupNarrator {
+        { result in await aiService.narrate(cleanup: result) }
     }
 
     /// Resolve the cleanup profile to use for Deep Clean.

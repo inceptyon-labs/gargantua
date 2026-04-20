@@ -60,6 +60,16 @@ public protocol AIServiceProtocol: AnyObject, Sendable {
     /// - Returns: An explanation with source metadata.
     func explain(result: ScanResult, rule: ScanRule) async throws -> AIExplanation
 
+    /// Produce a short post-cleanup narrative (1–2 sentences) for display in
+    /// `CleanupSummaryView`.
+    ///
+    /// Non-throwing: always returns a usable `CleanupNarrative`. When no model
+    /// is available on disk, the engine fails to load, or the engine throws
+    /// during generation, falls back to a deterministic template narrative
+    /// derived from the `CleanupResult`'s own fields. Display-only — the
+    /// narrative is not persisted to the audit record.
+    func narrate(cleanup result: CleanupResult) async -> CleanupNarrative
+
     /// Explicitly unload the model from memory.
     func unloadModel()
 }

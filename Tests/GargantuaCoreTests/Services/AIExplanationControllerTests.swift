@@ -182,5 +182,12 @@ private final class StubAIService: AIServiceProtocol {
         }
     }
 
+    func narrate(cleanup result: CleanupResult) async -> CleanupNarrative {
+        CleanupNarrative(
+            text: CleanupNarrativeTemplate.text(for: result),
+            source: .rule
+        )
+    }
+
     func unloadModel() {}
 }

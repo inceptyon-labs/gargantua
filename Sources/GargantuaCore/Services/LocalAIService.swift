@@ -176,6 +176,46 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         return advisories
     }
 
+    /// Produce a post-cleanup narrative (see `AIServiceProtocol.narrate`).
+    /// Non-throwing: any model-availability, load, or engine failure falls
+    /// back to the deterministic template so the summary view never has to
+    /// render an empty block or an error banner.
+    public func narrate(cleanup result: CleanupResult) async -> CleanupNarrative {
+        let fallback = CleanupNarrative(
+            text: CleanupNarrativeTemplate.text(for: result),
+            source: .rule
+        )
+
+        guard isModelAvailable else { return fallback }
+
+        if lifecycleState == .unloaded {
+            do {
+                try await loadModel()
+            } catch {
+                return fallback
+            }
+        }
+
+        guard lifecycleState == .ready else { return fallback }
+
+        idleTask?.cancel()
+        idleTask = nil
+        activeInferenceCount += 1
+        defer {
+            activeInferenceCount -= 1
+            if activeInferenceCount == 0 && lifecycleState == .ready {
+                resetIdleTimer()
+            }
+        }
+
+        do {
+            let text = try await engine.narrate(cleanup: result)
+            return CleanupNarrative(text: text, source: .ai)
+        } catch {
+            return fallback
+        }
+    }
+
     public func unloadModel() {
         idleTask?.cancel()
         idleTask = nil

@@ -1,11 +1,11 @@
 ---
 # gargantua-2xt6
 title: Cleanup Summary narrative via AI (YAML fallback)
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T14:06:36Z
-updated_at: 2026-04-20T14:06:36Z
+updated_at: 2026-04-20T23:26:14Z
 parent: gargantua-8igf
 ---
 
