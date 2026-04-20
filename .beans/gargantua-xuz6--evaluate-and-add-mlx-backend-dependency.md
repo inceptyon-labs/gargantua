@@ -1,11 +1,11 @@
 ---
 # gargantua-xuz6
 title: Evaluate and add MLX backend dependency
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-20T14:05:34Z
-updated_at: 2026-04-20T14:05:34Z
+updated_at: 2026-04-20T14:53:13Z
 parent: gargantua-ddaa
 ---
 
@@ -45,6 +45,39 @@ Once picked:
 
 ## Acceptance
 
-- [ ] `docs/designs/…-mlx-backend.md` captures the chosen backend + reasoning
-- [ ] Build graph includes the dependency; `swift build` release is green
-- [ ] App bundle size delta measured and recorded in the design doc
+- [x] `docs/designs/2026-04-20-mlx-backend.md` captures the chosen backend + reasoning
+- [x] Build graph includes the dependency; `swift build` release is green
+- [x] App bundle size delta measured and recorded in the design doc
+
+## Summary of Changes
+
+Picked MLX Swift (in-process SPM) over `mlx-lm` (Python subprocess) as the production inference backend behind `MLXInferenceEngine`. Wired `ml-explore/mlx-swift-lm` 3.31.3 into `Package.swift` and linked `MLXLLM` + `MLXLMCommon` into `GargantuaCore`. No `load`/`generate` body changes in this bean — that's `gargantua-mgqr`.
+
+### Files
+
+- `docs/designs/2026-04-20-mlx-backend.md` (new) — trade-off table, decision rationale, build-size measurements, intended model pin (`mlx-community/Llama-3.2-1B-Instruct-4bit`), risks + mitigations.
+- `Package.swift` — added `mlx-swift-lm` dependency; linked `MLXLLM` + `MLXLMCommon` products into the `GargantuaCore` target.
+
+### Decisions
+
+- **MLX Swift over `mlx-lm` subprocess.** Driven by install UX (no user-side Python), PRD §7 bundle budget (vendoring CPython would add 50–100 MB+), API fit with the `@MainActor` `AIInferenceEngine` protocol, and toolchain consistency (SPM-only project, existing fclones/czkawka vendoring pattern is Rust-binary-shaped, not Python-ecosystem-shaped).
+- **`mlx-swift-lm` over older `mlx-swift-examples`.** `mlx-swift-lm` 3.31.3 is the current canonical SPM home for `MLXLLM` / `MLXLMCommon`; `mlx-swift-examples` was for app-shaped example projects.
+- **Link both `MLXLLM` and `MLXLMCommon` now.** Could have deferred `MLXLLM` to `mgqr`, but linking both here lets the design doc report honest post-implementation build-size numbers in a single place.
+- **Pin via `from: "3.31.3"` (`.upToNextMajor`).** Ordinary default. If upstream churn bites during `mgqr`, tighten to `.exact`.
+
+### Verification
+
+- `swift build -c debug`: green (~47 s cold).
+- `swift build -c release`: green (~141–170 s cold).
+- `swift build -c debug -Xswiftc -warnings-as-errors`: clean.
+- `swift test -c debug --parallel`: 731/731 passing (no regressions).
+- SwiftLint: clean on touched files.
+- Measured release exec: 9.31 MB → 40.25 MB unstripped; 3.60 MB → 20.65 MB stripped. App bundle with vendored helpers projects to ~54 MB stripped, a few MB over PRD §7's upper bound — filed `gargantua-5vv2` to add a strip step to `Scripts/release/*.sh`.
+
+### Follow-ups filed
+
+- `gargantua-5vv2` — Strip release binaries before codesign (prerequisite for staying under PRD §7 50 MB when shipping MLX).
+
+### Next
+
+- `gargantua-mgqr` — Implement `MLXInferenceEngine.load(modelPath:modelSize:)` / `generate(for:rule:)` against `MLXLMCommon` + `MLXLLM`. Now unblocked by this bean.
