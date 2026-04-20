@@ -1,11 +1,11 @@
 ---
 # gargantua-7dlu
 title: 'Task: MCP explain tool schema oneOf for path/item_id mutual exclusion'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-19T02:05:59Z
-updated_at: 2026-04-20T00:55:09Z
+updated_at: 2026-04-20T00:58:31Z
 parent: gargantua-qe4a
 ---
 
@@ -36,10 +36,10 @@ Extend `Sources/GargantuaCore/Models/MCP/MCPToolDescriptor.swift::MCPJSONSchema`
 
 ## Acceptance Criteria
 
-- [ ] `MCPJSONSchema` supports a `oneOf: [MCPJSONSchema]?` field (or equivalent) that encodes/decodes cleanly via `JSONEncoder`/`JSONDecoder`.
-- [ ] `MCPPhase2Tools.explain.inputSchema` advertises `oneOf: [{ required: ["path"] }, { required: ["item_id"] }]` (or equivalent shape that forbids both-nil and both-present).
-- [ ] New schema test asserts the `tools/list` output for `explain` includes the constraint and rejects both the neither and the both cases at the schema level.
-- [ ] Existing `MCPExplainInput` decode tests still pass (runtime validation remains the authoritative gate; schema is advertising).
+- [x] `MCPJSONSchema` supports a `oneOf: [MCPJSONSchema]?` field (or equivalent) that encodes/decodes cleanly via `JSONEncoder`/`JSONDecoder`.
+- [x] `MCPPhase2Tools.explain.inputSchema` advertises `oneOf: [{ required: ["path"] }, { required: ["item_id"] }]` (or equivalent shape that forbids both-nil and both-present).
+- [x] New schema test asserts the `tools/list` output for `explain` includes the constraint and rejects both the neither and the both cases at the schema level.
+- [x] Existing `MCPExplainInput` decode tests still pass (runtime validation remains the authoritative gate; schema is advertising).
 
 ## Non-goals
 
