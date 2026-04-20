@@ -201,6 +201,16 @@ public struct CzkawkaAdapter: ScanAdapter {
                 continue
             }
 
+            // czkawka_cli output is line-oriented; truncation drops trailing
+            // findings but leaves the prefix parseable. Surface it as a
+            // non-fatal warning so operators know results may be incomplete
+            // without failing the whole scan.
+            if output.stdoutTruncated {
+                await progress?.recordError(
+                    "czkawka_cli \(category.subcommand) output exceeded \(Self.scanCaptureLimit / (1024 * 1024)) MiB cap; results may be incomplete"
+                )
+            }
+
             let findings = parser.parse(output.stdout, category: category)
             logger.info(
                 "Czkawka \(category.subcommand, privacy: .public): \(findings.count) findings"

@@ -146,6 +146,18 @@ public struct FclonesAdapter: ScanAdapter {
             return []
         }
 
+        // fclones emits a single JSON document; truncation would leave it
+        // unbalanced and give the parser a misleading error. Surface the
+        // real cause distinctly so operators know to narrow scan roots or
+        // raise the cap, rather than chase a phantom parser bug.
+        if output.stdoutTruncated {
+            await progress?.recordError(
+                "fclones output exceeded \(Self.scanCaptureLimit / (1024 * 1024)) MiB capture cap; narrow scan roots and retry"
+            )
+            await progress?.finish(itemsFound: 0)
+            return []
+        }
+
         let groups: [FclonesDuplicateGroup]
         do {
             groups = try parser.parse(output.stdout)

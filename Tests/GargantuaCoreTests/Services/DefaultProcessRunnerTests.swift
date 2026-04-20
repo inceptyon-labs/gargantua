@@ -163,6 +163,46 @@ struct DefaultProcessRunnerTests {
         #expect(output.stdout.contains("done"))
     }
 
+    @Test("Both stdout and stderr truncate simultaneously with independent flags")
+    func bothStreamsTruncateSimultaneously() throws {
+        let runner = DefaultProcessRunner()
+        let cap = 4096
+        let emitted = cap * 4
+        let output = try runner.run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "yes | head -c \(emitted) & yes | head -c \(emitted) 1>&2; wait"],
+            timeout: 10,
+            maxCapturedBytes: cap
+        )
+
+        #expect(output.exitCode == 0)
+        #expect(output.stdoutTruncated)
+        #expect(output.stderrTruncated)
+        #expect(output.stdout.utf8.count == cap)
+        #expect(output.stderr.utf8.count == cap)
+    }
+
+    @Test("Truncation at a multi-byte UTF-8 codepoint preserves the prefix")
+    func truncationAtMultibyteBoundaryPreservesPrefix() throws {
+        let runner = DefaultProcessRunner()
+        // "💣" (U+1F4A3) is 4 bytes in UTF-8. Emit 4 of them (16 bytes) with
+        // a cap of 9 — truncation lands mid-codepoint. The lossy decoder
+        // must keep the leading 2 valid glyphs + a replacement char, not
+        // drop everything to "".
+        let cap = 9
+        let output = try runner.run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf '💣💣💣💣'"],
+            timeout: 5.0,
+            maxCapturedBytes: cap
+        )
+
+        #expect(output.exitCode == 0)
+        #expect(output.stdoutTruncated)
+        #expect(!output.stdout.isEmpty, "lossy decode must not throw away the prefix")
+        #expect(output.stdout.contains("💣"))
+    }
+
     @Test("Output within cap is not flagged as truncated")
     func notTruncatedWhenUnderCap() throws {
         let runner = DefaultProcessRunner()

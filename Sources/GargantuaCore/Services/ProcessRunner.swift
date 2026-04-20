@@ -282,9 +282,14 @@ public struct DefaultProcessRunner: ProcessRunner {
         let termSignal = status & 0x7F
         let exitCode: Int32 = termSignal == 0 ? (status >> 8) & 0xFF : termSignal
 
+        // Use lossy UTF-8 decode: truncation at the cap can slice a multi-byte
+        // codepoint, and `String(data:, encoding: .utf8)` returns nil in that
+        // case — the `?? ""` fallback would throw away the entire (otherwise
+        // useful) prefix. `String(decoding:as:)` substitutes U+FFFD for the
+        // partial sequence and preserves the rest.
         return ProcessOutput(
-            stdout: String(data: outBuffer.snapshot(), encoding: .utf8) ?? "",
-            stderr: String(data: errBuffer.snapshot(), encoding: .utf8) ?? "",
+            stdout: String(decoding: outBuffer.snapshot(), as: UTF8.self),
+            stderr: String(decoding: errBuffer.snapshot(), as: UTF8.self),
             exitCode: exitCode,
             stdoutTruncated: outBuffer.wasTruncated(),
             stderrTruncated: errBuffer.wasTruncated()
