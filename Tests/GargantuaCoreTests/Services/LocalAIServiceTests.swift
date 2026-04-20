@@ -42,12 +42,31 @@ struct LocalAIServiceTests {
         )
     }
 
+    /// Returns a `ModelDownloadManager` whose manifest points at a unique,
+    /// never-staged directory. Prevents collisions with a real `defaultModel`
+    /// directory a developer may have downloaded on this machine, which would
+    /// otherwise flip these tests from `.notDownloaded` to `.downloaded`.
+    private func makeNeverDownloadedManager() -> ModelDownloadManager {
+        let info = ModelInfo(
+            id: "test-never-\(UUID().uuidString)",
+            name: "Unstaged test model",
+            files: [
+                ModelFile(
+                    name: "placeholder",
+                    url: URL(string: "https://example.invalid/x")!,
+                    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+                    size: 1
+                ),
+            ]
+        )
+        return ModelDownloadManager(modelInfo: info)
+    }
+
     // MARK: - Fallback to YAML
 
     @Test("Returns YAML rule explanation when no model downloaded")
     func fallbackWhenNoModel() async throws {
-        let manager = ModelDownloadManager()
-        // Default state is .notDownloaded — no model on disk
+        let manager = makeNeverDownloadedManager()
         let service = LocalAIService(downloadManager: manager)
 
         let rule = makeRule(explanation: "Browser cache — safe to remove.")
@@ -61,7 +80,7 @@ struct LocalAIServiceTests {
 
     @Test("isModelAvailable is false when no model downloaded")
     func modelNotAvailable() {
-        let manager = ModelDownloadManager()
+        let manager = makeNeverDownloadedManager()
         let service = LocalAIService(downloadManager: manager)
 
         #expect(!service.isModelAvailable)
