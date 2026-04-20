@@ -86,8 +86,14 @@ public struct DeveloperToolPreview: Equatable, Sendable {
         self.error = error
     }
 
+    /// Sum of per-item reclaimable bytes. Saturates at `Int64.max` on
+    /// overflow rather than trapping; the number is only ever surfaced as
+    /// a display string, so a capped "a lot" is preferable to a crash.
     public var reclaimableBytes: Int64 {
-        items.compactMap(\.reclaimableBytes).reduce(0, +)
+        items.compactMap(\.reclaimableBytes).reduce(Int64(0)) { acc, next in
+            let (sum, overflow) = acc.addingReportingOverflow(next)
+            return overflow ? .max : sum
+        }
     }
 }
 
@@ -331,12 +337,12 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         }
     }
 
-    private static func parseDockerReclaimable(_ token: String) -> Int64? {
+    static func parseDockerReclaimable(_ token: String) -> Int64? {
         let sizePart = token.split(separator: "(").first.map(String.init) ?? token
         return parseSize(sizePart)
     }
 
-    private static func parseFirstSize(in line: String) -> Int64? {
+    static func parseFirstSize(in line: String) -> Int64? {
         let pattern = #"(?i)(\d+(?:\.\d+)?)\s*([KMGT]?B)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let range = NSRange(line.startIndex..<line.endIndex, in: line)
@@ -349,7 +355,7 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         return parseSize("\(line[valueRange])\(line[unitRange])")
     }
 
-    private static func parseSize(_ token: String) -> Int64? {
+    static func parseSize(_ token: String) -> Int64? {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = #"(?i)^(\d+(?:\.\d+)?)\s*([KMGT]?B)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
@@ -370,6 +376,14 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         case "TB": 1_000_000_000_000
         default: 1
         }
-        return Int64(value * multiplier)
+
+        // Guard the Int64 cast: reject non-finite, negative, or out-of-range
+        // products instead of trapping. `Double(Int64.max)` rounds up, so `<`
+        // is conservative and keeps the cast safe.
+        let product = value * multiplier
+        guard product.isFinite, product >= 0, product < Double(Int64.max) else {
+            return nil
+        }
+        return Int64(product)
     }
 }
