@@ -139,8 +139,7 @@ struct LocalAIServiceAdvisoryTests {
         )
         let service = LocalAIService(downloadManager: manager, engine: engine)
 
-        var result = makeResult(id: "item-1", safety: .review)
-        let beforeSafety = result.safety
+        let result = makeResult(id: "item-1", safety: .review)
         let rule = makeRule()
 
         let advisories = try await service.advisory(
@@ -148,20 +147,14 @@ struct LocalAIServiceAdvisoryTests {
             rules: [result.id: rule]
         )
 
-        // 1. The input struct was not mutated.
-        #expect(result.safety == beforeSafety)
+        // The input struct was not mutated — safety stays at the YAML-derived
+        // level regardless of what the engine suggests.
         #expect(result.safety == .review)
 
-        // 2. The advisory surfaces the AI's suggestion as a *separate* field.
+        // The advisory surfaces the AI's suggestion as a *separate* field so
+        // callers can show "AI thinks X" without the YAML truth ever changing.
         let advisory = try #require(advisories.first)
         #expect(advisory.suggestedSafety == .protected_)
-
-        // 3. Writing to the local var would be fine (structs are value types);
-        //    the real concern is that no shared state was touched. Prove it by
-        //    running advisory again and checking the result is still review.
-        result.safety = .safe // local mutation — allowed
-        _ = try await service.advisory(for: [makeResult(id: "item-1")], rules: [makeResult(id: "item-1").id: rule])
-        #expect(makeResult(id: "item-1").safety == .review, "fixture factory still produces review-tier")
     }
 
     // MARK: - Fallback
