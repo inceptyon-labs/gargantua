@@ -75,6 +75,8 @@ struct MainContentView: View {
                                     profile: .devPurge,
                                     scanRoots: resolvedScanRoots
                                 )
+                            case "devTools":
+                                DeveloperToolsView()
                             case "settings":
                                 if let persistence {
                                     SettingsView(persistence: persistence)
