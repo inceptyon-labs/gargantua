@@ -70,12 +70,8 @@ struct CzkawkaBinaryResolverTests {
             bundledURL: binary
         )
 
-        // NOTE: If a real czkawka_cli is installed at one of the candidate
-        // paths, resolve() will short-circuit to it before reaching the bundle.
-        // That's still correct behavior; we just accept whichever executable
-        // the resolver hands back.
         let resolved = try resolver.resolve()
-        #expect(FileManager.default.isExecutableFile(atPath: resolved.path))
+        #expect(resolved.path == binary.path)
     }
 
     @Test("empty env and no bundled URL yields notFound when no system binary present")
@@ -88,5 +84,18 @@ struct CzkawkaBinaryResolverTests {
 
         let resolver = CzkawkaBinaryResolver(environment: [:], bundledURL: nil)
         #expect(!resolver.isAvailable())
+    }
+
+    @Test("vendored binary is discoverable via Bundle.module and is executable")
+    func vendoredBinaryResolvable() throws {
+        let bundled = try #require(CzkawkaBinaryResolver.defaultBundledURL())
+        #expect(FileManager.default.isExecutableFile(atPath: bundled.path))
+    }
+
+    @Test("resolver falls back to the vendored binary when PATH lookups miss")
+    func vendoredBinaryResolvesWhenPathEmpty() throws {
+        let resolver = CzkawkaBinaryResolver(environment: [:])
+        let resolved = try resolver.resolve()
+        #expect(resolved.path == CzkawkaBinaryResolver.defaultBundledURL()?.path)
     }
 }

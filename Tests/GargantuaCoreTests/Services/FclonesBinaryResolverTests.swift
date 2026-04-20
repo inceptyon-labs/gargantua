@@ -70,11 +70,8 @@ struct FclonesBinaryResolverTests {
             bundledURL: binary
         )
 
-        // NOTE: If a real fclones is installed at one of the candidate paths,
-        // resolve() will short-circuit to it before reaching the bundle. That's
-        // still correct behavior; accept whichever executable we get back.
         let resolved = try resolver.resolve()
-        #expect(FileManager.default.isExecutableFile(atPath: resolved.path))
+        #expect(resolved.path == binary.path)
     }
 
     @Test("empty env and no bundled URL yields notFound when no system binary present")
@@ -97,15 +94,8 @@ struct FclonesBinaryResolverTests {
 
     @Test("resolver falls back to the vendored binary when PATH lookups miss")
     func vendoredBinaryResolvesWhenPathEmpty() throws {
-        // Host has a real fclones on PATH? Skip — the resolver would correctly
-        // short-circuit to it before trying the bundled fallback.
-        let haveSystemBinary = FclonesBinaryResolver.candidatePaths.contains {
-            FileManager.default.isExecutableFile(atPath: $0)
-        }
-        guard !haveSystemBinary else { return }
-
         let resolver = FclonesBinaryResolver(environment: [:])
         let resolved = try resolver.resolve()
-        #expect(FileManager.default.isExecutableFile(atPath: resolved.path))
+        #expect(resolved.path == FclonesBinaryResolver.defaultBundledURL()?.path)
     }
 }

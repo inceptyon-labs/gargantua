@@ -4,10 +4,10 @@ import Foundation
 ///
 /// Resolution order:
 /// 1. `GARGANTUA_FCLONES_BIN` environment variable (explicit override)
-/// 2. Any of the common install locations on `PATH`
-/// 3. A binary bundled inside the GargantuaCore SPM resource bundle
+/// 2. A binary bundled inside the GargantuaCore SPM resource bundle
 ///    (`Bundle.module/bin/fclones`). For a shipped `.app`, this lives
-///    under `Contents/Resources/Gargantua_GargantuaCore.bundle/Contents/Resources/bin/fclones`.
+///    under `Contents/Resources/Gargantua_GargantuaCore.bundle/bin/fclones`.
+/// 3. Any of the common install locations on `PATH`
 public struct FclonesBinaryResolver: Sendable {
     public enum ResolutionError: Error, LocalizedError, Sendable, Equatable {
         case notFound
@@ -74,13 +74,13 @@ public struct FclonesBinaryResolver: Sendable {
             return url
         }
 
+        if let bundled = bundledURL, fileManager.isExecutableFile(atPath: bundled.path) {
+            return bundled
+        }
+
         for candidate in Self.candidatePaths
         where fileManager.isExecutableFile(atPath: candidate) {
             return URL(fileURLWithPath: candidate)
-        }
-
-        if let bundled = bundledURL, fileManager.isExecutableFile(atPath: bundled.path) {
-            return bundled
         }
 
         throw ResolutionError.notFound

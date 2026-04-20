@@ -4,8 +4,10 @@ import Foundation
 ///
 /// Resolution order:
 /// 1. `GARGANTUA_CZKAWKA_BIN` environment variable (explicit override)
-/// 2. Any of the common install locations on `PATH`
-/// 3. A binary bundled alongside the app under `Contents/Resources/czkawka_cli`
+/// 2. A binary bundled inside the GargantuaCore SPM resource bundle
+///    (`Bundle.module/bin/czkawka_cli`). For a shipped `.app`, this lives
+///    under `Contents/Resources/Gargantua_GargantuaCore.bundle/bin/czkawka_cli`.
+/// 3. Any of the common install locations on `PATH`
 public struct CzkawkaBinaryResolver: Sendable {
     public enum ResolutionError: Error, LocalizedError, Sendable, Equatable {
         case notFound
@@ -36,10 +38,25 @@ public struct CzkawkaBinaryResolver: Sendable {
 
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        bundledURL: URL? = Bundle.main.url(forResource: "czkawka_cli", withExtension: nil)
+        bundledURL: URL? = Self.defaultBundledURL()
     ) {
         self.environment = environment
         self.bundledURL = bundledURL
+    }
+
+    /// Resolves the URL of the czkawka_cli binary vendored into the
+    /// GargantuaCore module resource bundle, if present.
+    public static func defaultBundledURL() -> URL? {
+        if let url = Bundle.module.url(forResource: "czkawka_cli", withExtension: nil, subdirectory: "bin") {
+            return url
+        }
+        if let resourceURL = Bundle.module.resourceURL {
+            let candidate = resourceURL.appendingPathComponent("bin/czkawka_cli")
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     /// Resolve the path to czkawka_cli, or throw `.notFound`.
@@ -57,13 +74,13 @@ public struct CzkawkaBinaryResolver: Sendable {
             return url
         }
 
+        if let bundled = bundledURL, fileManager.isExecutableFile(atPath: bundled.path) {
+            return bundled
+        }
+
         for candidate in Self.candidatePaths
         where fileManager.isExecutableFile(atPath: candidate) {
             return URL(fileURLWithPath: candidate)
-        }
-
-        if let bundled = bundledURL, fileManager.isExecutableFile(atPath: bundled.path) {
-            return bundled
         }
 
         throw ResolutionError.notFound

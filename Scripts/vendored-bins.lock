@@ -1,0 +1,8 @@
+# Pinned crates.io source checksums for checked-in helper binaries.
+# Bump a version and checksum together, then run Scripts/fetch-vendored-bins.sh.
+
+FCLONES_VERSION=0.35.0
+FCLONES_SHA256=07c8826d548405e2704714794a9d4d556f6b07e90bab233e2f2bd06375a056b5
+
+CZKAWKA_CLI_VERSION=11.0.1
+CZKAWKA_CLI_SHA256=106f72cdd20ba65a642dec0579b75edff751d754148df762c2f4a7a8487624f7

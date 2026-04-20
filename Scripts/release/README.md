@@ -134,16 +134,22 @@ xcrun stapler validate dist/Gargantua.app
 
 ## Fresh-install smoke (user-performed)
 
-Automated verification reaches as far as `spctl --assess`. The final
-"does a real user on a clean machine see a clean launch?" smoke is
-manual:
+Automated verification reaches as far as `spctl --assess`. After dragging
+the app into `/Applications`, verify embedded helper selection and signing:
 
-1. Fresh user account or VM with no Homebrew, no Gargantua history.
+```sh
+Scripts/smoke/verify-vendored-bins.sh /Applications/Gargantua.app
+```
+
+Then finish the user-facing smoke manually:
+
+1. Fresh user account or VM with no Gargantua history.
 2. Transfer `Gargantua-<version>.dmg` via Finder / browser download.
 3. Mount; drag `Gargantua.app` to `/Applications`.
-4. Launch. Expect no quarantine prompt and no "unidentified developer"
+4. Run the vendored helper smoke script above.
+5. Launch. Expect no quarantine prompt and no "unidentified developer"
    dialog.
-5. Trigger a Duplicate Finder scan on `~/Downloads` — macOS should
+6. Trigger a Duplicate Finder scan on `~/Downloads` — macOS should
    prompt for Downloads access (via TCC) using our `NSDownloadsFolder…`
    string from `Info.plist`, then scan without further prompts.
 

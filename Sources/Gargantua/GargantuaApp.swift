@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import GargantuaCore
 import SwiftUI
 
@@ -6,12 +7,30 @@ import SwiftUI
 struct GargantuaApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
+    init() {
+        if CommandLine.arguments.contains("--selfcheck-binaries") {
+            Self.runBinarySelfCheck()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             MainContentView()
                 .frame(minWidth: 700, minHeight: 500)
         }
         .defaultSize(width: 900, height: 600)
+    }
+
+    private static func runBinarySelfCheck() -> Never {
+        do {
+            for line in try VendoredBinarySelfCheck.resolveLines() {
+                print(line)
+            }
+            exit(EXIT_SUCCESS)
+        } catch {
+            fputs("selfcheck-binaries failed: \(error.localizedDescription)\n", stderr)
+            exit(EXIT_FAILURE)
+        }
     }
 }
 

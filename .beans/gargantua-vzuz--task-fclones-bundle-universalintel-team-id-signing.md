@@ -1,11 +1,11 @@
 ---
 # gargantua-vzuz
 title: 'Task: fclones bundle — universal/Intel, team-ID signing, fresh-install smoke'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-19T03:31:22Z
-updated_at: 2026-04-20T12:29:09Z
+updated_at: 2026-04-20T12:40:15Z
 parent: gargantua-4nb9
 blocking:
     - gargantua-4nb9
@@ -42,14 +42,14 @@ Decisions resolved in brainstorm:
 
 ## Acceptance Criteria
 
-- [ ] `Scripts/vendored-bins.lock` committed with version + SHA-256 stanzas for `fclones` and `czkawka_cli`.
-- [ ] `Scripts/fetch-vendored-bins.sh` committed (replaces `fetch-fclones.sh`): downloads `.crate` from crates.io, verifies SHA-256 against lockfile, `cargo install --locked`, strips, writes to `Sources/GargantuaCore/Resources/bin/<name>`.
-- [ ] `Sources/GargantuaCore/Resources/bin/czkawka_cli` committed as a freshly-fetched, stripped aarch64 binary.
-- [ ] `CzkawkaBinaryResolver.swift` updated: `Bundle.main` → `Bundle.module.url(forResource: "bin/czkawka_cli", withExtension: nil) ?? Bundle.module.resourceURL?.appendingPathComponent("bin/czkawka_cli")`.
-- [ ] `CzkawkaBinaryResolverTests` adds `vendoredBinaryResolvable` + `vendoredBinaryResolvesWhenPathEmpty`, mirroring the fclones fixes from `gargantua-vchj`.
-- [ ] `Gargantua --selfcheck-binaries` CLI flag wired: prints resolved paths for both helpers and exits 0.
-- [ ] `Scripts/smoke/verify-vendored-bins.sh` committed: asserts both helpers live in the installed `.app`, are team-ID-signed, and win over brew under a neutralized PATH.
-- [ ] `Scripts/release/README.md` "Fresh-install smoke" section updated to reference the new smoke script.
+- [x] `Scripts/vendored-bins.lock` committed with version + SHA-256 stanzas for `fclones` and `czkawka_cli`.
+- [x] `Scripts/fetch-vendored-bins.sh` committed (replaces `fetch-fclones.sh`): downloads `.crate` from crates.io, verifies SHA-256 against lockfile, `cargo install --locked`, strips, writes to `Sources/GargantuaCore/Resources/bin/<name>`.
+- [x] `Sources/GargantuaCore/Resources/bin/czkawka_cli` committed as a freshly-fetched, stripped aarch64 binary.
+- [x] `CzkawkaBinaryResolver.swift` updated: `Bundle.main` → `Bundle.module.url(forResource: "bin/czkawka_cli", withExtension: nil) ?? Bundle.module.resourceURL?.appendingPathComponent("bin/czkawka_cli")`.
+- [x] `CzkawkaBinaryResolverTests` adds `vendoredBinaryResolvable` + `vendoredBinaryResolvesWhenPathEmpty`, mirroring the fclones fixes from `gargantua-vchj`.
+- [x] `Gargantua --selfcheck-binaries` CLI flag wired: prints resolved paths for both helpers and exits 0.
+- [x] `Scripts/smoke/verify-vendored-bins.sh` committed: asserts both helpers live in the installed `.app`, are team-ID-signed, and win over brew under a neutralized PATH.
+- [x] `Scripts/release/README.md` "Fresh-install smoke" section updated to reference the new smoke script.
 - [x] Follow-up bean filed for Intel / universal coverage of both helpers (`gargantua-qyqd`).
 
 ## Implementation Notes

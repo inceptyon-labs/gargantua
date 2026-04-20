@@ -11,6 +11,7 @@
 #         AppIcon.icns          (compiled from AppShell/AppIcon.iconset)
 #         Gargantua_GargantuaCore.bundle/
 #           bin/fclones         (vendored helper, signing happens later)
+#           bin/czkawka_cli     (vendored helper, signing happens later)
 #           cleanup_rules/
 #           uninstall_rules/
 #
