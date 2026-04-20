@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: high
 created_at: 2026-04-20T01:47:17Z
-updated_at: 2026-04-20T02:03:16Z
+updated_at: 2026-04-20T02:25:41Z
 ---
 
 Establish the release infrastructure required to ship Gargantua as a signed, notarized macOS app. This is a prerequisite for any bean that needs team-ID signing, Gatekeeper/TCC inheritance, or a reproducible `.app` artifact.
@@ -24,14 +24,14 @@ End state: a reproducible pipeline that takes the SPM sources + vendored resourc
 
 ## Acceptance Criteria
 
-- [ ] Decide on app shell approach: Xcode project checked in, vs SPM + `Scripts/package-app.sh` that assembles `.app` from swift-build output. Document the choice in `docs/designs/` with rationale.
-- [ ] `Gargantua.app` bundle is produced with correct `Info.plist`, `Contents/MacOS/Gargantua`, and `Contents/Resources/` (including the GargantuaCore SPM resource bundle with its `bin/fclones`)
-- [ ] Release script / workflow signs the app **and any embedded helper binaries** with the team-ID Developer ID Application certificate (`codesign --force --options runtime --sign "$TEAM_ID"`)
-- [ ] Notarization submission via `xcrun notarytool submit --wait`, then `xcrun stapler staple`
-- [ ] Gatekeeper check on a fresh VM / clean user account: `spctl --assess --type execute Gargantua.app` passes; app launches without quarantine prompt
-- [ ] Secrets (Apple ID, team ID, app-specific password, notarization keychain profile) documented — where they live (local keychain vs CI secrets), how to rotate
-- [ ] A runnable invocation: either `./Scripts/release.sh` locally or a `.github/workflows/release.yml` that a human can dispatch
-- [ ] Follow-up beans updated to unblock once this lands: `gargantua-vzuz` (fclones signing), and anything else that pops out of the design doc
+- [x] Decide on app shell approach: Xcode project checked in, vs SPM + `Scripts/package-app.sh` that assembles `.app` from swift-build output. Document the choice in `docs/designs/` with rationale.
+- [x] `Gargantua.app` bundle is produced with correct `Info.plist`, `Contents/MacOS/Gargantua`, and `Contents/Resources/` (including the GargantuaCore SPM resource bundle with its `bin/fclones`)
+- [x] Release script / workflow signs the app **and any embedded helper binaries** with the team-ID Developer ID Application certificate (`codesign --force --options runtime --sign "$TEAM_ID"`)
+- [x] Notarization submission via `xcrun notarytool submit --wait`, then `xcrun stapler staple`
+- [x] Gatekeeper check on a fresh VM / clean user account: `spctl --assess --type execute Gargantua.app` passes; app launches without quarantine prompt
+- [x] Secrets (Apple ID, team ID, app-specific password, notarization keychain profile) documented — where they live (local keychain vs CI secrets), how to rotate
+- [x] A runnable invocation: either `./Scripts/release.sh` locally or a `.github/workflows/release.yml` that a human can dispatch
+- [x] Follow-up beans updated to unblock once this lands: `gargantua-vzuz` (fclones signing), and anything else that pops out of the design doc
 
 ## Design
 
