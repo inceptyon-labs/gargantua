@@ -7,11 +7,28 @@ import SwiftUI
 public struct SettingsView: View {
     let persistence: PersistenceController
 
-    @StateObject private var downloadManager = ModelDownloadManager()
+    /// App-shared download manager. When `init(persistence:)` is used without
+    /// an explicit manager, the view owns its own `@StateObject` so standalone
+    /// previews still work; when `MainContentView` injects one, the view
+    /// observes the app-level instance and download state flows through to
+    /// every other scan view that also observes it.
+    @StateObject private var ownedManager: ModelDownloadManager
+    @ObservedObject private var downloadManager: ModelDownloadManager
     @State private var settings: PersistedSettings?
 
     public init(persistence: PersistenceController) {
+        let manager = ModelDownloadManager()
         self.persistence = persistence
+        self._ownedManager = StateObject(wrappedValue: manager)
+        self._downloadManager = ObservedObject(wrappedValue: manager)
+    }
+
+    public init(persistence: PersistenceController, downloadManager: ModelDownloadManager) {
+        self.persistence = persistence
+        // `@StateObject` still needs a default; unused when the caller injects,
+        // but it has to exist for the property wrapper to initialize cleanly.
+        self._ownedManager = StateObject(wrappedValue: downloadManager)
+        self._downloadManager = ObservedObject(wrappedValue: downloadManager)
     }
 
     public var body: some View {

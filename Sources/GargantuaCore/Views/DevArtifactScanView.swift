@@ -62,14 +62,18 @@ public struct DevArtifactScanView: View {
     @State private var pathStream = PathStreamViewModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private let onExplain: ((ScanResult) -> Void)?
+
     public init(
         profile: CleanupProfile = .developer,
         scanRoots: [URL]? = nil,
-        adapter: (any ScanAdapter)? = nil
+        adapter: (any ScanAdapter)? = nil,
+        onExplain: ((ScanResult) -> Void)? = nil
     ) {
         self.profile = profile
         self.scanRoots = scanRoots
         self.adapterOverride = adapter
+        self.onExplain = onExplain
     }
 
     public var body: some View {
@@ -422,6 +426,7 @@ public struct DevArtifactScanView: View {
                 results: results,
                 scanDuration: scanDuration,
                 selectedIDs: $selectedResultIDs,
+                onExplain: onExplain,
                 onClean: { showConfirmation = true },
                 onCancel: {
                     scanResults = nil

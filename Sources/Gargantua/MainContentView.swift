@@ -14,6 +14,24 @@ struct MainContentView: View {
     @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
     @State private var duplicateFinderSelection: Set<String> = []
 
+    // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
+    // button + every scan view's "model available?" check observe the same
+    // state; one `LocalAIService` so the engine lazy-load / 60-s idle-unload
+    // lifecycle doesn't reset between screens; one `AIExplanationController`
+    // so the presentation sheet can render at this top level regardless of
+    // which scan view fired `onExplain`.
+    @StateObject private var downloadManager: ModelDownloadManager
+    @StateObject private var aiService: LocalAIService
+    @StateObject private var aiExplanation: AIExplanationController
+
+    init() {
+        let manager = ModelDownloadManager()
+        let service = LocalAIService(downloadManager: manager, engine: MLXInferenceEngine())
+        _downloadManager = StateObject(wrappedValue: manager)
+        _aiService = StateObject(wrappedValue: service)
+        _aiExplanation = StateObject(wrappedValue: AIExplanationController(service: service))
+    }
+
     var body: some View {
         ZStack {
             GargantuaColors.void_
@@ -45,7 +63,11 @@ struct MainContentView: View {
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
                             case "deepClean":
-                                DeepCleanView(profile: activeDeepCleanProfile, session: deepCleanSession)
+                                DeepCleanView(
+                                    profile: activeDeepCleanProfile,
+                                    session: deepCleanSession,
+                                    onExplain: explainHandler
+                                )
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
                             case "duplicateFinder":
@@ -54,12 +76,14 @@ struct MainContentView: View {
                                 // destructive duplicate-removal is in place.
                                 DuplicateFinderContainerView(
                                     scanRoots: resolvedScanRoots,
-                                    selectedIDs: $duplicateFinderSelection
+                                    selectedIDs: $duplicateFinderSelection,
+                                    onExplain: explainHandler
                                 )
                             case "fileHealth":
                                 FileHealthContainerView(
                                     scanRoots: resolvedScanRoots,
-                                    profile: activeDeepCleanProfile
+                                    profile: activeDeepCleanProfile,
+                                    onExplain: explainHandler
                                 )
                             case "diskExplorer":
                                 DiskExplorerView()
@@ -73,13 +97,17 @@ struct MainContentView: View {
                             case "devPurge":
                                 DevArtifactScanView(
                                     profile: .devPurge,
-                                    scanRoots: resolvedScanRoots
+                                    scanRoots: resolvedScanRoots,
+                                    onExplain: explainHandler
                                 )
                             case "devTools":
                                 DeveloperToolsView()
                             case "settings":
                                 if let persistence {
-                                    SettingsView(persistence: persistence)
+                                    SettingsView(
+                                        persistence: persistence,
+                                        downloadManager: downloadManager
+                                    )
                                 } else {
                                     ProgressView()
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -97,8 +125,23 @@ struct MainContentView: View {
                         try? persistence?.bootstrap()
                     }
                 }
+                .sheet(item: Binding(
+                    get: { aiExplanation.presentation },
+                    set: { if $0 == nil { aiExplanation.dismiss() } }
+                )) { _ in
+                    AIExplanationSheet(
+                        controller: aiExplanation,
+                        onOpenSettings: { sidebarSelection = "settings" }
+                    )
+                }
             }
         }
+    }
+
+    /// Closure handed to scan views so their per-row Explain button can kick
+    /// off an explanation without knowing about the controller.
+    private var explainHandler: (ScanResult) -> Void {
+        { result in aiExplanation.explain(result) }
     }
 
     /// Resolve the cleanup profile to use for Deep Clean.
