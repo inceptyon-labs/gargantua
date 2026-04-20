@@ -32,6 +32,14 @@ public final class AIAdvisoryController: ObservableObject {
     private let service: LocalAIService
     private var activeTask: Task<Void, Never>?
     private var lastRequestedResults: [ScanResult] = []
+    private var lastRequestedResultsById: [String: ScanResult] = [:]
+
+    /// Look up the original `ScanResult` behind a given advisory by id.
+    /// Lets the sheet render the item's human name and path without the
+    /// advisory needing to carry them as redundant string copies.
+    public func result(for advisoryId: String) -> ScanResult? {
+        lastRequestedResultsById[advisoryId]
+    }
 
     public init(service: LocalAIService) {
         self.service = service
@@ -56,6 +64,10 @@ public final class AIAdvisoryController: ObservableObject {
         activeTask?.cancel()
         presentation = .loading
         lastRequestedResults = results
+        // Tolerant of duplicate ids: last-wins. ScanResult.id should be
+        // unique per scan, but we don't want a UI lookup to crash if it
+        // isn't — the sheet fails soft instead.
+        lastRequestedResultsById = results.reduce(into: [:]) { $0[$1.id] = $1 }
         let rules = Self.derivedRules(for: results)
         let service = self.service
         activeTask = Task { [weak self] in

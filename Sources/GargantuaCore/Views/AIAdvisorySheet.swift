@@ -113,15 +113,24 @@ public struct AIAdvisorySheet: View {
     }
 
     private func advisoryRow(_ advisory: ScanResultAdvisory) -> some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+        let result = controller.result(for: advisory.resultId)
+        return VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
             HStack(spacing: GargantuaSpacing.space2) {
-                Text(advisory.resultId)
+                Text(result?.name ?? advisory.resultId)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
                 sourceBadge(advisory.source)
+            }
+
+            if let path = result?.path {
+                Text(path)
+                    .font(GargantuaFonts.monoPath)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Text(advisory.rationale)

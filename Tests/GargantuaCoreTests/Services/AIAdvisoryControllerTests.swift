@@ -115,7 +115,7 @@ struct AIAdvisoryControllerTests {
         let service = LocalAIService(downloadManager: manager)
         let controller = AIAdvisoryController(service: service)
 
-        var results = [makeResult(id: "r1", safety: .review)]
+        let results = [makeResult(id: "r1", safety: .review)]
         let snapshot = results[0].safety
         controller.request(for: results)
 
@@ -166,19 +166,43 @@ struct AIAdvisoryControllerTests {
         #expect(advisories.map(\.resultId) == ["second"])
     }
 
+    // MARK: - Result lookup for UI
+
+    @Test("result(for:) returns the ScanResult behind an advisory id")
+    func resultLookup() async throws {
+        let manager = makeNeverDownloadedManager()
+        let service = LocalAIService(downloadManager: manager)
+        let controller = AIAdvisoryController(service: service)
+
+        let target = makeResult(id: "review-1")
+        controller.request(for: [target, makeResult(id: "safe-1", safety: .safe)])
+
+        try await Self.waitForPresentation(controller, timeout: .seconds(1)) {
+            if case .loaded = $0 { return true }
+            return false
+        }
+
+        // Both results (including the safe one that was filtered out of the
+        // advisory) should still be reachable by id — the sheet needs to
+        // look up by resultId from the loaded advisories regardless of tier.
+        #expect(controller.result(for: "review-1")?.name == target.name)
+        #expect(controller.result(for: "safe-1") != nil)
+        #expect(controller.result(for: "absent") == nil)
+    }
+
     // MARK: - Derived rule helper
 
     @Test("derivedRules maps every result id to a rule carrying the result's fields")
-    func derivedRulesContainExpectedFields() {
+    func derivedRulesContainExpectedFields() throws {
         let result = makeResult(id: "r1", explanation: "Original explanation.")
         let rules = AIAdvisoryController.derivedRules(for: [result])
 
-        let rule = try? #require(rules["r1"])
-        #expect(rule?.explanation == "Original explanation.")
-        #expect(rule?.safety == .review)
-        #expect(rule?.name == result.name)
-        #expect(rule?.category == result.category)
-        #expect(rule?.paths == [result.path])
+        let rule = try #require(rules["r1"])
+        #expect(rule.explanation == "Original explanation.")
+        #expect(rule.safety == .review)
+        #expect(rule.name == result.name)
+        #expect(rule.category == result.category)
+        #expect(rule.paths == [result.path])
     }
 
     @Test("derivedRules keyed by result id even for duplicate categories")
