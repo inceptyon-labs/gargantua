@@ -1,11 +1,11 @@
 ---
 # gargantua-2xt6
 title: Cleanup Summary narrative via AI (YAML fallback)
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-20T14:06:36Z
-updated_at: 2026-04-20T23:26:14Z
+updated_at: 2026-04-20T23:48:59Z
 parent: gargantua-8igf
 ---
 
@@ -32,8 +32,8 @@ card data.
 
 ## Acceptance
 
-- [ ] AI narrative renders when a model is available and engine succeeds
-- [ ] Template/YAML-style narrative renders when not (no empty block,
+- [x] AI narrative renders when a model is available and engine succeeds
+- [x] Template/YAML-style narrative renders when not (no empty block,
       no error banner)
-- [ ] Test: narrative never contains PII beyond what `CleanupResult`
+- [x] Test: narrative never contains PII beyond what `CleanupResult`
       already exposes (e.g., no raw file contents)
