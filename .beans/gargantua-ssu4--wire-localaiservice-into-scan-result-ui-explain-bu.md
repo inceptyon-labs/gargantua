@@ -1,11 +1,11 @@
 ---
 # gargantua-ssu4
 title: Wire LocalAIService into scan result UI (Explain button)
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-04-20T19:42:51Z
-updated_at: 2026-04-20T20:05:38Z
+updated_at: 2026-04-20T20:05:55Z
 ---
 
 ## Context
