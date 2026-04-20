@@ -61,7 +61,8 @@ extension SidebarSection {
             id: "tools",
             label: "TOOLS",
             items: [
-                SidebarItem(id: "devPurge", label: "Dev Artifact Purge", icon: "hammer")
+                SidebarItem(id: "devPurge", label: "Dev Artifact Purge", icon: "hammer"),
+                SidebarItem(id: "devTools", label: "Developer Tools", icon: "wrench.and.screwdriver"),
             ]
         ),
         SidebarSection(
