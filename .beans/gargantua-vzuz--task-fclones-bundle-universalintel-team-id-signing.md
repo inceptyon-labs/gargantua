@@ -1,11 +1,11 @@
 ---
 # gargantua-vzuz
 title: 'Task: fclones bundle — universal/Intel, team-ID signing, fresh-install smoke'
-status: draft
+status: todo
 type: task
 priority: normal
 created_at: 2026-04-19T03:31:22Z
-updated_at: 2026-04-20T02:28:37Z
+updated_at: 2026-04-20T12:29:09Z
 parent: gargantua-4nb9
 blocking:
     - gargantua-4nb9
@@ -26,23 +26,34 @@ Follow-up to `gargantua-vchj` (which vendored aarch64-only fclones 0.35.0 into `
 
 `czkawka_cli` (PRD §8.3, ~10 MB) needs the same treatment — factor a shared "vendored CLI" script/pattern if the signing approach lands here.
 
+## Design
+
+Validated design: `docs/designs/2026-04-20-vendored-helper-binaries.md`
+
+Scope was recalibrated in the 2026-04-20 brainstorm after `gargantua-9495` landed the release pipeline. Team-ID signing and notarization of embedded helpers are now handled infrastructurally by `Scripts/release/sign.sh` (inside-out codesign) and `Scripts/release/notarize.sh` (two-stage: .app then DMG) — no per-binary work required. Intel / universal coverage is deferred to its own follow-up bean.
+
+Decisions resolved in brainstorm:
+- **Intel coverage:** deferred to follow-up bean (no CI yet, no real users yet).
+- **SHA-256 pin:** stored in a single lockfile (`Scripts/vendored-bins.lock`) covering all vendored binaries.
+- **Fetch script:** generalized from `fetch-fclones.sh` to `fetch-vendored-bins.sh`; iterates fclones + czkawka_cli from the lockfile.
+- **Smoke:** lightweight bash script (`Scripts/smoke/verify-vendored-bins.sh`) + README checklist. No VM automation.
+- **czkawka_cli:** same bean — vendor binary, fix resolver (`Bundle.main` → `Bundle.module` + `bin/`), add mirror tests.
+- **Binary storage:** stays checked-in (lockfile is audit receipt, not a download trigger).
+
 ## Acceptance Criteria
 
-- [ ] `Scripts/fetch-fclones.sh` produces a universal binary (`lipo`-merged aarch64 + x86_64) OR two arch-specific binaries with resolver runtime selection
-- [ ] Script pins a SHA-256 of the fclones source crate / prebuilt input and verifies before use
-- [ ] Binary is re-signed with the app's team ID as part of the release pipeline (`codesign --force --sign <team-id>`)
-- [ ] Notarization + stapling story documented for the bundled binary (Gatekeeper unquarantine on first launch)
-- [ ] Smoke test on a fresh macOS install (VM or clean user account) verifying Duplicate Finder runs with no brew/no env override
-- [ ] If universal: bundle still fits within PRD §8.3 budget (~10 MB allowance for fclones alone)
-- [ ] Same script/pattern reusable for `czkawka_cli` follow-up
-
-## Blockers / prerequisites
-
-- No Xcode project or CI release pipeline exists in this repo yet. Signing + notarization presume that infrastructure lands first (either via a separate "app packaging" bean or alongside this one).
-- Intel cross-compilation needs either `rustup target add x86_64-apple-darwin` with a rustup-managed toolchain (current host has Homebrew-managed rustc which doesn't take target add), or building on a CI runner that has both targets.
+- [ ] `Scripts/vendored-bins.lock` committed with version + SHA-256 stanzas for `fclones` and `czkawka_cli`.
+- [ ] `Scripts/fetch-vendored-bins.sh` committed (replaces `fetch-fclones.sh`): downloads `.crate` from crates.io, verifies SHA-256 against lockfile, `cargo install --locked`, strips, writes to `Sources/GargantuaCore/Resources/bin/<name>`.
+- [ ] `Sources/GargantuaCore/Resources/bin/czkawka_cli` committed as a freshly-fetched, stripped aarch64 binary.
+- [ ] `CzkawkaBinaryResolver.swift` updated: `Bundle.main` → `Bundle.module.url(forResource: "bin/czkawka_cli", withExtension: nil) ?? Bundle.module.resourceURL?.appendingPathComponent("bin/czkawka_cli")`.
+- [ ] `CzkawkaBinaryResolverTests` adds `vendoredBinaryResolvable` + `vendoredBinaryResolvesWhenPathEmpty`, mirroring the fclones fixes from `gargantua-vchj`.
+- [ ] `Gargantua --selfcheck-binaries` CLI flag wired: prints resolved paths for both helpers and exits 0.
+- [ ] `Scripts/smoke/verify-vendored-bins.sh` committed: asserts both helpers live in the installed `.app`, are team-ID-signed, and win over brew under a neutralized PATH.
+- [ ] `Scripts/release/README.md` "Fresh-install smoke" section updated to reference the new smoke script.
+- [x] Follow-up bean filed for Intel / universal coverage of both helpers (`gargantua-qyqd`).
 
 ## Implementation Notes
 
-- Team-ID signing approach: sign the embedded binary at release-pipeline time (`codesign --force --options runtime --sign "$TEAM_ID" Gargantua_GargantuaCore.bundle/Contents/Resources/bin/fclones`) before notarizing the parent app
-- Consider whether to flip the vendored binary from a checked-in blob to a release-pipeline artifact (smaller repo, higher CI coupling) — worth deciding once CI exists
-- MIT license of fclones permits redistribution; keep attribution in `Credits` / About screen when that UI lands
+- MIT license of fclones and czkawka permits redistribution; keep attribution in Credits / About screen when that UI lands.
+- `cargo install --locked` already verifies crate SHAs against the crates.io index; the lockfile adds a repo-owned receipt that catches local-cache tampering and serves as reproducibility evidence.
+- If czkawka's `cargo install czkawka_cli --locked` misbehaves on certain versions (pkg-config / gtk deps historically), pin to the last-known-good version rather than fighting the build.
