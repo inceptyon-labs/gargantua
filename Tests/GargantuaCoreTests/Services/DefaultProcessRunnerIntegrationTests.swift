@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
-@Suite("DefaultProcessRunner integration", .serialized)
+@Suite("DefaultProcessRunner integration")
 struct DefaultProcessRunnerIntegrationTests {
 
     @Test("/bin/sleep with short timeout throws timedOut")

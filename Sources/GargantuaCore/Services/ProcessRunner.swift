@@ -105,7 +105,13 @@ public struct DefaultProcessRunner: ProcessRunner {
         // Draining concurrently on both pipes also prevents a full 64K buffer
         // on one stream from blocking the child while we sit on waitpid.
         let drainGroup = DispatchGroup()
-        let drainQueue = DispatchQueue.global(qos: .utility)
+        // `.userInitiated` rather than `.utility`: the drain reads are on the
+        // critical path of returning correct stdout to the caller. Under heavy
+        // parallel subprocess load (10+ concurrent runners), `.utility` tasks
+        // could be starved long enough for the grace-period force-close below
+        // to fire before `readToEnd()` was ever scheduled, returning empty
+        // output for a child that had cleanly produced bytes.
+        let drainQueue = DispatchQueue.global(qos: .userInitiated)
         // Use the Swift-throwing `readToEnd()` rather than
         // `readDataToEndOfFile()`: when the force-close path below closes the
         // fd out from under a blocking read, the legacy API raises an
@@ -184,18 +190,16 @@ public struct DefaultProcessRunner: ProcessRunner {
 
         // Pipe ends close on child exit, so the blocking reads should return
         // shortly after waitpid. However, if a descendant inherited the fd
-        // and is still writing, the read could hang indefinitely. Use a bounded
-        // wait with a grace period; if drain doesn't finish, close the pipe fds
-        // directly to unblock the reads.
-        let drainGracePeriod: DispatchTime = {
-            // Floor at 100ms so tiny timeouts still leave room for the drain
-            // to finish; cap at 1s so a huge timeout doesn't leave us waiting
-            // forever on a genuinely stuck inherited fd.
-            let graceSecs = timeout.map { min(max($0 * 0.1, 0.1), 1.0) } ?? 1.0
-            return DispatchTime.now() + graceSecs
-        }()
-
-        let drainResult = drainGroup.wait(timeout: drainGracePeriod)
+        // and is still writing, the read could hang indefinitely. Use a fixed
+        // 1s grace: the child has already exited, so drain budget has no
+        // relationship to the original wall-clock timeout. Previous
+        // `timeout * 0.1` scaling gave 0.5s for a 5s timeout which, under
+        // heavy parallel load, wasn't enough for the `.userInitiated` drain
+        // tasks to even schedule before the force-close fired. 1s is long
+        // enough to drain bounded kernel pipe buffers under load, short
+        // enough to keep run() bounded when a descendant genuinely holds
+        // the inherited fd.
+        let drainResult = drainGroup.wait(timeout: DispatchTime.now() + 1.0)
         if drainResult == .timedOut {
             // Force-close the pipe file descriptors to unblock the pending reads.
             // This prevents an indefinite hang if a descendant inherited the fds.

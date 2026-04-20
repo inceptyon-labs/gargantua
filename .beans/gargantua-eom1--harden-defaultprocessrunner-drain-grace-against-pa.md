@@ -1,11 +1,11 @@
 ---
 # gargantua-eom1
 title: Harden DefaultProcessRunner drain-grace against parallel subprocess scheduling starvation
-status: todo
+status: in-progress
 type: bug
 priority: low
 created_at: 2026-04-18T20:10:16Z
-updated_at: 2026-04-18T20:10:16Z
+updated_at: 2026-04-20T01:02:31Z
 parent: gargantua-qe4a
 ---
 
