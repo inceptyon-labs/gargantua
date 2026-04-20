@@ -194,7 +194,12 @@ public struct CzkawkaAdapter: ScanAdapter {
                 continue
             }
 
-            guard output.exitCode == 0 else {
+            // czkawka_cli 9+ exit codes:
+            //   0  → scan completed, no findings
+            //   11 → scan completed, findings produced (NOT an error)
+            //   any other non-zero → arg parse failure / real crash
+            // Treat 0 and 11 as success; forward everything else as an error.
+            guard output.exitCode == 0 || output.exitCode == 11 else {
                 await progress?.recordError(
                     "czkawka_cli \(category.subcommand) exit \(output.exitCode): \(output.stderr)"
                 )

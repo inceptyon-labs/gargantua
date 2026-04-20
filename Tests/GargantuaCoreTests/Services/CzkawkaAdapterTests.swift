@@ -192,7 +192,7 @@ struct CzkawkaAdapterTests {
         let stdout = "Found 1 file.\n\(target.path)"
         let runner = StubRunner(outputs: [
             "empty-files": ProcessOutput(stdout: stdout, stderr: "", exitCode: 0),
-            "temporary": ProcessOutput(stdout: stdout, stderr: "", exitCode: 0),
+            "temp": ProcessOutput(stdout: stdout, stderr: "", exitCode: 0),
         ])
         let adapter = CzkawkaAdapter(
             binary: URL(fileURLWithPath: "/bin/czkawka"),
@@ -267,6 +267,34 @@ struct CzkawkaAdapterTests {
         #expect(results.count == 1)
         #expect(results.first?.category == "empty_files")
         #expect(progress.errors.contains { $0.contains("symlinks") && $0.contains("exit 7") })
+    }
+
+    @Test("exit 11 is treated as success (czkawka 9+ reports findings via exit 11)")
+    @MainActor
+    func exitElevenIsSuccess() async throws {
+        let target = try Self.makeTempFile()
+        defer { try? FileManager.default.removeItem(at: target.deletingLastPathComponent()) }
+
+        let runner = StubRunner(outputs: [
+            "empty-files": ProcessOutput(
+                stdout: "Found 1 empty files.\n\(target.path)",
+                stderr: "",
+                exitCode: 11
+            ),
+        ])
+        let progress = ScanProgress()
+        let adapter = CzkawkaAdapter(
+            binary: URL(fileURLWithPath: "/bin/czkawka"),
+            categories: [.emptyFiles],
+            scanRoots: [target.deletingLastPathComponent()],
+            runner: runner
+        )
+
+        let results = try await adapter.scan(progress: progress)
+
+        #expect(results.count == 1, "exit 11 should parse output, not discard it")
+        #expect(results.first?.path == target.path)
+        #expect(progress.errors.isEmpty, "exit 11 should not be recorded as an error")
     }
 
     // MARK: - Trust defaults

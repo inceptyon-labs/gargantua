@@ -20,7 +20,7 @@ public enum CzkawkaCategory: String, Sendable, CaseIterable {
         case .emptyFiles: "empty-files"
         case .emptyFolders: "empty-folders"
         case .brokenSymlinks: "symlinks"
-        case .temporaryFiles: "temporary"
+        case .temporaryFiles: "temp"
         case .bigFiles: "big"
         case .similarImages: "image"
         case .similarVideos: "video"
