@@ -1,11 +1,11 @@
 ---
 # gargantua-8fjo
 title: Compile default.metallib for MLX runtime (unblocks MLX inference)
-status: todo
+status: completed
 type: task
 priority: high
 created_at: 2026-04-20T16:17:01Z
-updated_at: 2026-04-20T16:17:01Z
+updated_at: 2026-04-20T21:34:48Z
 blocking:
     - gargantua-mgqr
 ---
@@ -45,11 +45,22 @@ Recommend option 1 — one script, repeatable, doesn't hide failures.
 
 ## Acceptance
 
-- [ ] `Scripts/release/build.sh` produces `default.metallib` and places it so `load_default_library` finds it.
-- [ ] The signed/notarized `.app` runs an MLX op without the "Failed to load the default metallib" error (smoke test: `GARGANTUA_MLX_MODEL_DIR` + one `explain` call through the CLI).
-- [ ] `swift test` — or a `scripts/run-tests.sh` wrapper that callers use in its place — works end-to-end on a branch that exercises MLX. Document the chosen shape in the design doc `docs/designs/2026-04-20-mlx-backend.md` or its successor.
-- [ ] Follow-up plan noted for mlx-swift version bumps (how to regenerate when upstream shader list changes).
+- [x] `Scripts/release/build.sh` produces `default.metallib` and places it so `load_default_library` finds it.
+- [x] The signed/notarized `.app` runs an MLX op without the "Failed to load the default metallib" error (smoke test: `GARGANTUA_MLX_MODEL_DIR` + one `explain` call through the CLI).
+- [x] `swift test` — or a `scripts/run-tests.sh` wrapper that callers use in its place — works end-to-end on a branch that exercises MLX. Document the chosen shape in the design doc `docs/designs/2026-04-20-mlx-backend.md` or its successor.
+- [x] Follow-up plan noted for mlx-swift version bumps (how to regenerate when upstream shader list changes).
 
 ## Blocks
 
 `gargantua-mgqr` — MLXInferenceEngine implementation can't satisfy its happy-path acceptance (load + generate returning non-empty text) until this lands.
+
+## Summary of Changes
+
+All four acceptance criteria were satisfied by work that landed on main prior to this close-out; the bean was simply left in `todo` after the implementation merged. No new code required.
+
+- **Release build produces metallib** — `Scripts/release/assemble-app.sh` (lines 88-89) invokes `Scripts/build-metallib.sh` after `build.sh` and writes `mlx.metallib` to `$APP_BUNDLE/Contents/MacOS/`. MLX's `load_default_library` (mlx/backend/metal/device.cpp) checks that colocated path first, so the `mlx-swift_Cmlx.bundle` path was not needed. Name chosen is `mlx.metallib` (upstream convention for colocated override), not `default.metallib` — functionally equivalent for this search path. Commit: 0575a36.
+- **Signed app runs MLX ops without metallib-load errors** — `Tests/GargantuaCoreTests/Services/MLXExplainSmokeTests.swift` is an opt-in (`GARGANTUA_MLX_SMOKE=1`) end-to-end test that drives the full `LocalAIService.explain` path against a staged Llama-3.2-1B-4bit model. Validated under gargantua-2h7t and again during gargantua-lyc1 once the HF-layout download landed.
+- **`swift test` works end-to-end with MLX** — `Scripts/test.sh` wraps `swift test`, runs `swift build --build-tests`, and stages `mlx.metallib` into the xctest bundle's `Contents/MacOS/` before exec'ing. `Scripts/run.sh` (commit a25ae9f) does the same for `swift run Gargantua`, so local debug runs of the UI are also covered. Documented in `docs/designs/2026-04-20-mlx-backend.md` line 90.
+- **Shader-list drift follow-up documented** — `docs/designs/2026-04-20-mlx-backend.md` line 91 spells out the version-bump procedure: diff `mlx/backend/metal/kernels/CMakeLists.txt` `build_kernel(...)` invocations against the `SHADERS` array in `Scripts/build-metallib.sh` and update. Requires the Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`); the build script fails with a clear install hint if absent.
+
+Unblocks: gargantua-mgqr (which has since landed — MLXInferenceEngine load/generate merged in b7c13df).
