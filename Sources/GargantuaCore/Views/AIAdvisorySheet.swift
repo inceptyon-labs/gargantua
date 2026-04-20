@@ -13,6 +13,15 @@ public struct AIAdvisorySheet: View {
     /// footer. `MainContentView` uses this to switch sidebar to settings.
     public let onOpenSettings: (() -> Void)?
 
+    /// Mirror of `controller.presentation` retained across the sheet's
+    /// fade-out animation. Without this, the moment the user taps Close,
+    /// `controller.presentation` flips to `nil` and the body renders empty
+    /// — SwiftUI plays the dismiss animation on an empty view, producing a
+    /// visible collapse-to-dot ("a circle in the middle") before the sheet
+    /// fully leaves the screen. Holding the last value here keeps the sheet
+    /// rendering its prior content until dismissal completes.
+    @State private var lastPresentation: AIAdvisoryPresentation?
+
     public init(
         controller: AIAdvisoryController,
         onOpenSettings: (() -> Void)? = nil
@@ -22,10 +31,21 @@ public struct AIAdvisorySheet: View {
     }
 
     public var body: some View {
-        if let presentation = controller.presentation {
-            content(for: presentation)
-                .frame(minWidth: 520, maxWidth: 640, minHeight: 320, maxHeight: 600)
-                .background(GargantuaColors.surface1)
+        Group {
+            if let presentation = controller.presentation ?? lastPresentation {
+                content(for: presentation)
+                    .frame(minWidth: 520, maxWidth: 640, minHeight: 320, maxHeight: 600)
+                    .background(GargantuaColors.surface1)
+            }
+        }
+        .onChange(of: controller.presentation) { _, new in
+            if let new {
+                lastPresentation = new
+            }
+            // When `new` is nil (controller dismissing), keep `lastPresentation`
+            // so the fade-out animation has something to render. The sheet
+            // item binding in MainContentView flips the item to nil and
+            // SwiftUI tears the sheet down; next open re-seeds from controller.
         }
     }
 
