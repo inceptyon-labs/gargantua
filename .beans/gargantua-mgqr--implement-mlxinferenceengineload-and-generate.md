@@ -1,14 +1,15 @@
 ---
 # gargantua-mgqr
 title: Implement MLXInferenceEngine.load and generate
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T14:05:44Z
-updated_at: 2026-04-20T14:06:00Z
+updated_at: 2026-04-20T16:17:36Z
 parent: gargantua-ddaa
 blocked_by:
     - gargantua-xuz6
+    - gargantua-8fjo
 ---
 
 Replace the `.notImplemented` stubs in `MLXInferenceEngine.swift` with real
@@ -46,3 +47,13 @@ preceding Task (see parent Feature `gargantua-ddaa`).
 - [ ] Existing `LocalAIServiceTests` still pass; new tests cover the
       load-succeeds-and-generate-returns-text happy path and the
       resident-memory-guard trip
+
+## WIP checkpoint (2026-04-20)
+
+Load/generate/unload wired against `LLMModelFactory.shared.loadContainer(from: URL, using: SwiftTransformersTokenizerLoader)`. Added `swift-transformers` 1.3.0 dep and a local `SwiftTransformersTokenizerLoader` that wraps `Tokenizers.AutoTokenizer.from(modelFolder:)` — cleaner than pulling `MLXHuggingFace`, which requires the macro package. Memory accounting uses `MLX.Memory.activeMemory` delta across load.
+
+14 unit tests (prompt builder, path/directory validation, lifecycle) plus one env-gated integration test at `GARGANTUA_MLX_MODEL_DIR`. All non-integration tests pass.
+
+Discovered during implementation that `swift build` CLI does not compile `.metal` files, so the resulting binary fails at runtime with "Failed to load the default metallib". Filed `gargantua-8fjo` as a blocker — once that lands, this bean can close by running the integration test against a real model directory.
+
+Code on branch `gargantua-mgqr`; do not merge until 8fjo is on main.
