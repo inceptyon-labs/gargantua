@@ -63,7 +63,8 @@ if [ "${DRY_RUN:-0}" != "1" ]; then
         -e "s|@MACOS_MIN_VERSION@|${MACOS_MIN_VERSION}|g" \
         "$PLIST_SRC" > "$PLIST_DST"
     # Sanity check: no unsubstituted tokens should remain.
-    if grep -q '@[A-Z_]\+@' "$PLIST_DST"; then
+    # ERE because BSD grep's BRE does not treat \+ as repetition.
+    if grep -qE '@[A-Z_]+@' "$PLIST_DST"; then
         die "Info.plist still has unsubstituted tokens; check $PLIST_DST"
     fi
 else

@@ -78,9 +78,7 @@ _resolve_version() {
         VERSION="$(git -C "$REPO_ROOT" describe --tags --exact-match HEAD)"
         VERSION="${VERSION#v}"
     elif [ "${SNAPSHOT:-0}" = "1" ]; then
-        local sha
-        sha="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-        VERSION="0.0.0-${sha}"
+        VERSION="0.0.0-${BUILD_SHA}"
     else
         die "HEAD is not on a tag. Use --snapshot for dev builds or git tag vX.Y.Z first."
     fi
@@ -91,10 +89,20 @@ _resolve_build() {
     if [ -n "${BUILD:-}" ]; then
         return 0
     fi
-    BUILD="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    # CFBundleVersion must be dotted-numeric (Apple notary validates).
+    # Use commit count since the root; monotonically increasing.
+    BUILD="$(git -C "$REPO_ROOT" rev-list --count HEAD 2>/dev/null || echo "0")"
     export BUILD
 }
 
+_resolve_build_sha() {
+    # Short SHA for diagnostics / log paths / snapshot VERSION suffixes.
+    # NOT used for CFBundleVersion (non-numeric).
+    BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+    export BUILD_SHA
+}
+
+_resolve_build_sha
 _resolve_version
 _resolve_build
 
