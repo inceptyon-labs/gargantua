@@ -1,11 +1,11 @@
 ---
 # gargantua-lyc1
 title: Rework ModelDownloadManager to stage HF model directory
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T17:26:12Z
-updated_at: 2026-04-20T17:26:12Z
+updated_at: 2026-04-20T17:28:40Z
 ---
 
 ## Context
