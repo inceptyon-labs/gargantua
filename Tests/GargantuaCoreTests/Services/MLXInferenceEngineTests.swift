@@ -92,6 +92,77 @@ struct MLXInferenceEngineTests {
         #expect(prompt.contains("xcodebuild -scheme MyApp build"))
     }
 
+    // MARK: - Cleanup prompt builder
+
+    private func makeCleanupItem(name: String, size: Int64, succeeded: Bool) -> CleanupItemResult {
+        CleanupItemResult(
+            item: ScanResult(
+                id: "id-\(UUID().uuidString.prefix(6))",
+                name: name,
+                path: "/Users/test/Library/Caches/\(name)",
+                size: size,
+                safety: .safe,
+                confidence: 95,
+                explanation: "Test item",
+                source: SourceAttribution(name: "Test"),
+                category: "test"
+            ),
+            succeeded: succeeded,
+            trashURL: succeeded ? URL(fileURLWithPath: "/tmp/fake") : nil,
+            error: succeeded ? nil : "boom"
+        )
+    }
+
+    @Test("Cleanup prompt reflects counts, method, and total freed bytes")
+    func cleanupPromptAggregates() {
+        let result = CleanupResult(
+            itemResults: [
+                makeCleanupItem(name: "Chrome Cache", size: 1_000_000, succeeded: true),
+                makeCleanupItem(name: "Chrome Cache", size: 2_000_000, succeeded: true),
+                makeCleanupItem(name: "Locked File", size: 100, succeeded: false),
+            ],
+            cleanupMethod: .trash
+        )
+
+        let prompt = MLXInferenceEngine.buildCleanupPrompt(for: result)
+
+        #expect(prompt.contains("moved to Trash"))
+        #expect(prompt.contains("Items succeeded: 2"))
+        #expect(prompt.contains("Items failed: 1"))
+        #expect(prompt.contains("Chrome Cache"))
+    }
+
+    @Test("Cleanup prompt never includes per-item paths or error strings")
+    func cleanupPromptOmitsPII() {
+        let result = CleanupResult(
+            itemResults: [
+                makeCleanupItem(name: "Chrome Cache", size: 1_000, succeeded: true),
+                makeCleanupItem(name: "Locked File", size: 50, succeeded: false),
+            ]
+        )
+
+        let prompt = MLXInferenceEngine.buildCleanupPrompt(for: result)
+
+        // Paths and error strings are intentionally omitted — the model
+        // operates on aggregated name/count/bytes only.
+        #expect(!prompt.contains("/Users/"))
+        #expect(!prompt.contains("/tmp/"))
+        #expect(!prompt.contains("boom"))
+    }
+
+    @Test("Cleanup prompt uses 'permanently deleted' for .delete method")
+    func cleanupPromptDeleteMethod() {
+        let result = CleanupResult(
+            itemResults: [makeCleanupItem(name: "Log", size: 1, succeeded: true)],
+            cleanupMethod: .delete
+        )
+
+        let prompt = MLXInferenceEngine.buildCleanupPrompt(for: result)
+
+        #expect(prompt.contains("permanently deleted"))
+        #expect(!prompt.contains("moved to Trash"))
+    }
+
     // MARK: - Path resolution
 
     @Test("resolveModelDirectory returns a directory URL as-is")

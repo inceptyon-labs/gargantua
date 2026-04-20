@@ -146,9 +146,8 @@ public struct CleanupSummaryView: View {
         )
         .frame(maxWidth: 480)
         .task(id: result.completedAt) {
-            guard let narrator = cleanupNarrator, narrative == nil else { return }
-            let value = await narrator(result)
-            narrative = value
+            guard let narrator = cleanupNarrator else { return }
+            narrative = await narrator(result)
         }
     }
 
