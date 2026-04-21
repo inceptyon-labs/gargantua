@@ -1,11 +1,11 @@
 ---
 # gargantua-m9y3
 title: 'File Health: per-item selection (checkboxes)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-20T23:00:08Z
-updated_at: 2026-04-21T00:48:24Z
+updated_at: 2026-04-21T18:13:14Z
 parent: gargantua-qe4a
 ---
 
@@ -27,8 +27,27 @@ Defer/follow-on work noted in `gargantua-0q30` summary; never got filed as its o
 
 ## Acceptance
 
-- [ ] Checkbox per row in every File Health category tab
-- [ ] Selection state defaults follow Trust Layer safety tiers
-- [ ] Per-tab selected-count and reclaimable-bytes visible in tab header
-- [ ] Selection persists across tab switches within a single scan session
-- [ ] Tests cover default-selection policy and cross-tab selection persistence
+- [x] Checkbox per row in every File Health category tab
+- [x] Selection state defaults follow Trust Layer safety tiers
+- [x] Per-tab selected-count and reclaimable-bytes visible in tab header
+- [x] Selection persists across tab switches within a single scan session
+- [x] Tests cover default-selection policy and cross-tab selection persistence
+
+## Completed
+
+**Files changed:**
+- `Sources/GargantuaCore/Views/FileHealthView.swift`
+
+**Key decisions:**
+- Kept the existing session-state model and checkbox row wiring intact; this task already had model tests and per-row selection hooks in place.
+- Added selected-byte display to each category chip when that tab has selected findings, so users can see both selected count and selected bytes before switching tabs.
+- Preserved design-system tokens: 4px/8px spacing, 4px chip radius, border-only depth, and Trust Layer tint colors for the selection badge.
+
+**Verification:**
+- `swift test --filter FileHealth` passed: 19 tests.
+- `swift test` passed: 837 tests in 104 suites.
+- `swiftlint lint Sources/GargantuaCore/Views/FileHealthView.swift` passed with 0 violations.
+- Repository-wide `swiftlint` still fails on pre-existing unrelated violations in MCP, MLX smoke, Smart Uninstaller, Dev Artifact, and other files.
+
+**Notes for next task:**
+- The follow-on Send-to-Trash task can consume `FileHealthSessionState.selectedResultIDs` to build the `ConfirmationModalView` payload.
