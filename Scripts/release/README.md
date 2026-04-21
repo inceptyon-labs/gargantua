@@ -93,7 +93,7 @@ standalone for debugging (after the preceding stages have succeeded):
 | Environment     | `_env.sh`                    | Resolves VERSION, paths, identities; sourced.       |
 | Build           | `build.sh`                   | `swift build -c release --arch arm64`.              |
 | Assemble        | `assemble-app.sh`            | Lays out `dist/Gargantua.app`; renders Info.plist.  |
-| Sign            | `sign.sh`                    | Inside-out codesign + post-sign assertions.         |
+| Sign            | `sign.sh`                    | Strip shipped Mach-O executables, then codesign.    |
 | Notarize (app)  | `notarize.sh $APP_BUNDLE`    | ditto-zip → notarytool submit --wait → staple app.  |
 | DMG build       | `dmg.sh`                     | create-dmg (or hdiutil), via staging directory.     |
 | Notarize (DMG)  | `notarize.sh $DMG_PATH`      | notarytool submit --wait → staple DMG.              |

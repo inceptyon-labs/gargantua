@@ -84,6 +84,8 @@ _need() {
 }
 
 _need swift "Swift toolchain"
+_need file "macOS system tool"
+_need strip "Xcode CLT"
 _need codesign "Xcode CLT"
 _need xcrun "Xcode CLT"
 _need ditto "macOS system tool"

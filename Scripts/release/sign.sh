@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# sign.sh — codesign the app bundle inside-out.
+# sign.sh - strip and codesign the app bundle inside-out.
 #
 # Signing order (mandatory; Apple rejects "signed app wrapping unsigned
 # helper" at notarization time):
 #
+#   0. Strip shipped Mach-O executables before anything is signed.
 #   1. Every executable file in Contents/Resources/ (e.g. bin/fclones).
 #   2. Every nested *.bundle, deepest first (the GargantuaCore resource
 #      bundle today, plus anything future code adds).
@@ -51,6 +52,8 @@ _sign() {
         --options runtime \
         "$@"
 }
+
+"$RELEASE_SCRIPTS_DIR/strip-binaries.sh"
 
 # ----- Phase 1: embedded helper binaries ------------------------------------
 log "Phase 1/3: signing embedded helper binaries..."
