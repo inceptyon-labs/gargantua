@@ -30,6 +30,7 @@ REPO_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
 log()  { printf '==> %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+SWIFT_TEST_ARGS=("$@")
 CONFIG="debug"
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -63,5 +64,5 @@ fi
 
 "$_SCRIPT_DIR/build-metallib.sh" --output "$TEST_BUNDLE_MACOS/mlx.metallib"
 
-log "Running swift test $*..."
-exec swift test "$@"
+log "Running swift test ${SWIFT_TEST_ARGS[*]}..."
+exec swift test "${SWIFT_TEST_ARGS[@]}"

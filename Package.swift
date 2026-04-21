@@ -45,7 +45,10 @@ let package = Package(
         ),
         .testTarget(
             name: "GargantuaCoreTests",
-            dependencies: ["GargantuaCore"],
+            dependencies: [
+                "GargantuaCore",
+                .product(name: "Tokenizers", package: "swift-transformers")
+            ],
             path: "Tests/GargantuaCoreTests"
         )
     ]
