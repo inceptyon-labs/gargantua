@@ -89,6 +89,7 @@ public struct ScanBucketListView: View {
     @State private var activeFilter: ScanFilterSet?
     @State private var filterStatus: String?
     @State private var isResolvingFilter = false
+    @FocusState private var isSearchFocused: Bool
 
     public init(
         results: [ScanResult],
@@ -157,9 +158,6 @@ public struct ScanBucketListView: View {
                         expandedGroupIDs = Set(groups.map(\.id))
                         focusedItemID = nil
                     }
-                if onResolveNaturalLanguageFilter != nil {
-                    filterField
-                }
                 Spacer()
                 if let onAdvisoryForReview, displayedResults.contains(where: { $0.safety == .review }) {
                     Button { onAdvisoryForReview(displayedResults) } label: {
@@ -179,20 +177,17 @@ public struct ScanBucketListView: View {
             .padding(.vertical, GargantuaSpacing.space2)
             .background(GargantuaColors.surface2)
 
-            if let filterStatus {
+            if onResolveNaturalLanguageFilter != nil {
                 Rectangle()
                     .fill(GargantuaColors.border)
                     .frame(height: 1)
 
                 HStack(spacing: GargantuaSpacing.space2) {
-                    Image(systemName: activeFilter == nil ? "exclamationmark.triangle" : "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(activeFilter == nil ? GargantuaColors.review : GargantuaColors.accent)
-                    Text(filterStatus)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .lineLimit(1)
-                    Spacer()
+                    filterField
+                    Spacer(minLength: GargantuaSpacing.space3)
+                    if let filterStatus {
+                        filterStatusView(filterStatus)
+                    }
                 }
                 .padding(.horizontal, GargantuaSpacing.space4)
                 .padding(.vertical, GargantuaSpacing.space2)
@@ -228,13 +223,14 @@ public struct ScanBucketListView: View {
         }
         .focusable()
         .focusEffectDisabled()
-        .onKeyPress(.upArrow) { moveFocus(direction: -1); return .handled }
-        .onKeyPress(.downArrow) { moveFocus(direction: 1); return .handled }
-        .onKeyPress(.space) { toggleFocusedSelection(); return .handled }
-        .onKeyPress(.return) { triggerClean(); return .handled }
-        .onKeyPress(.escape) { handleEscape(); return .handled }
-        .onKeyPress(.tab) { jumpToNextGroup(); return .handled }
+        .onKeyPress(.upArrow) { guard !isSearchFocused else { return .ignored }; moveFocus(direction: -1); return .handled }
+        .onKeyPress(.downArrow) { guard !isSearchFocused else { return .ignored }; moveFocus(direction: 1); return .handled }
+        .onKeyPress(.space) { guard !isSearchFocused else { return .ignored }; toggleFocusedSelection(); return .handled }
+        .onKeyPress(.return) { guard !isSearchFocused else { return .ignored }; triggerClean(); return .handled }
+        .onKeyPress(.escape) { guard !isSearchFocused else { return .ignored }; handleEscape(); return .handled }
+        .onKeyPress(.tab) { guard !isSearchFocused else { return .ignored }; jumpToNextGroup(); return .handled }
         .onKeyPress(characters: .init(charactersIn: "a")) { keyPress in
+            guard !isSearchFocused else { return .ignored }
             guard keyPress.modifiers == .command else { return .ignored }
             selectAllSafe()
             return .handled
@@ -257,7 +253,8 @@ public struct ScanBucketListView: View {
                 .foregroundStyle(GargantuaColors.ink)
                 .textFieldStyle(.plain)
                 .lineLimit(1)
-                .frame(width: 220)
+                .focused($isSearchFocused)
+                .frame(minWidth: 240, maxWidth: 420)
                 .onSubmit(resolveNaturalLanguageFilter)
 
             if isResolvingFilter {
@@ -298,6 +295,18 @@ public struct ScanBucketListView: View {
             RoundedRectangle(cornerRadius: GargantuaRadius.small)
                 .stroke(GargantuaColors.borderSoft, lineWidth: 1)
         )
+    }
+
+    private func filterStatusView(_ status: String) -> some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: activeFilter == nil ? "exclamationmark.triangle" : "line.3.horizontal.decrease.circle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(activeFilter == nil ? GargantuaColors.review : GargantuaColors.accent)
+            Text(status)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .lineLimit(1)
+        }
     }
 
     private var actionBar: some View {
