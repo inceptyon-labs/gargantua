@@ -15,19 +15,22 @@ public struct DeepCleanView: View {
     private let session: DeepCleanSessionState
     private let onExplain: ((ScanResult) -> Void)?
     private let onAdvisory: (([ScanResult]) -> Void)?
+    private let onResolveFilter: ((String) async -> ScanFilterSet?)?
 
     public init(
         profile: CleanupProfile = .deep,
         adapter: (any ScanAdapter)? = nil,
         session: DeepCleanSessionState,
         onExplain: ((ScanResult) -> Void)? = nil,
-        onAdvisory: (([ScanResult]) -> Void)? = nil
+        onAdvisory: (([ScanResult]) -> Void)? = nil,
+        onResolveFilter: ((String) async -> ScanFilterSet?)? = nil
     ) {
         self.profile = profile
         self.adapterOverride = adapter
         self.session = session
         self.onExplain = onExplain
         self.onAdvisory = onAdvisory
+        self.onResolveFilter = onResolveFilter
     }
 
     @MainActor
@@ -270,9 +273,8 @@ public struct DeepCleanView: View {
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
                 onCancel: { session.clearResults() },
-                onAdvisoryForReview: onAdvisory.map { handler in
-                    { handler(results) }
-                }
+                onAdvisoryForReview: onAdvisory,
+                onResolveNaturalLanguageFilter: onResolveFilter
             )
         }
     }

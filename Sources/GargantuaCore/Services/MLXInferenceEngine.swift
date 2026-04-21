@@ -150,12 +150,38 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         return try await session.respond(to: prompt)
     }
 
+    public func scanFilter(for query: String) async throws -> ScanFilterSet? {
+        guard let modelContainer else {
+            throw MLXInferenceError.notLoaded
+        }
+
+        let session = ChatSession(
+            modelContainer,
+            instructions: Self.scanFilterInstructions,
+            generateParameters: GenerateParameters(
+                maxTokens: 160,
+                temperature: 0.1
+            )
+        )
+        let response = try await session.respond(to: Self.buildScanFilterPrompt(for: query))
+        return ScanFilterSet.decodeAllowListed(from: response)
+    }
+
     public nonisolated static let cleanupNarrativeInstructions = """
         You are a helpful assistant that summarizes a completed macOS cleanup \
         in 1 to 2 short sentences. Describe what was cleaned and any notable \
         groupings. Plain English only — no bullet lists, no code fences, no \
         markdown headers. Do not invent items, paths, or numbers that are \
         not in the provided summary.
+        """
+
+    public nonisolated static let scanFilterInstructions = """
+        You translate one user query into a strict JSON object for filtering \
+        macOS cleanup scan results. Output JSON only. Allowed keys are: \
+        bundle_ids (array of strings), path_globs (array of glob strings), \
+        categories (array of strings), min_size (integer bytes), max_size \
+        (integer bytes), safety (array containing safe, review, or protected). \
+        Do not emit any other keys.
         """
 
     // MARK: - Prompt
@@ -183,6 +209,18 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         lines.append("")
         lines.append("Explain what this item is and whether it is safe to delete.")
         return lines.joined(separator: "\n")
+    }
+
+    static func buildScanFilterPrompt(for query: String) -> String {
+        let sanitized = sanitizeForPrompt(query)
+        return """
+            Query: \(sanitized)
+
+            Return the smallest filter that matches the query. Use known \
+            categories such as dev_artifacts, docker, homebrew, browser_cache, \
+            system_logs, system_temp, installers, duplicate_files, and \
+            big_files when applicable. If no safe filter is implied, return {}.
+            """
     }
 
     /// Max characters kept when interpolating a scan-result name into the

@@ -63,17 +63,20 @@ public struct DevArtifactScanView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let onExplain: ((ScanResult) -> Void)?
+    private let onResolveFilter: ((String) async -> ScanFilterSet?)?
 
     public init(
         profile: CleanupProfile = .developer,
         scanRoots: [URL]? = nil,
         adapter: (any ScanAdapter)? = nil,
-        onExplain: ((ScanResult) -> Void)? = nil
+        onExplain: ((ScanResult) -> Void)? = nil,
+        onResolveFilter: ((String) async -> ScanFilterSet?)? = nil
     ) {
         self.profile = profile
         self.scanRoots = scanRoots
         self.adapterOverride = adapter
         self.onExplain = onExplain
+        self.onResolveFilter = onResolveFilter
     }
 
     public var body: some View {
@@ -432,7 +435,8 @@ public struct DevArtifactScanView: View {
                     scanResults = nil
                     pathStream.clear()
                     phase = .idle
-                }
+                },
+                onResolveNaturalLanguageFilter: onResolveFilter
             )
         }
     }

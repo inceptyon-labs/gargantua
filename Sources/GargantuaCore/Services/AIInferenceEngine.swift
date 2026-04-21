@@ -60,6 +60,11 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
     /// engine are limited to what `CleanupResult` already carries, so the
     /// narrative cannot surface PII beyond the caller's own data.
     func narrate(cleanup result: CleanupResult) async throws -> String
+
+    /// Translate a single natural-language query into the allow-listed scan
+    /// filter DSL. Returning `nil` means the query could not be understood
+    /// well enough to produce a safe filter.
+    func scanFilter(for query: String) async throws -> ScanFilterSet?
 }
 
 public extension AIInferenceEngine {
@@ -75,6 +80,10 @@ public extension AIInferenceEngine {
 
     func narrate(cleanup result: CleanupResult) async throws -> String {
         CleanupNarrativeTemplate.text(for: result)
+    }
+
+    func scanFilter(for query: String) async throws -> ScanFilterSet? {
+        ScanFilterTemplate.filter(for: query)
     }
 }
 
