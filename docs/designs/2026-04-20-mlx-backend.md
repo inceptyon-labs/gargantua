@@ -121,10 +121,62 @@ The pinned default model is `mlx-community/Llama-3.2-1B-Instruct-4bit` (~680 MB:
 
 `LocalAIService.explain` passes `state.path` (now a directory) straight through to `MLXInferenceEngine.load`. The engine's `resolveModelDirectory` already accepts a directory; no engine changes were needed.
 
+## Latency and memory smoke measurements
+
+Measured for `gargantua-7k2r` on 2026-04-20 against the pinned default model staged at:
+
+```
+~/Library/Application Support/Gargantua/models/Llama-3.2-1B-Instruct-4bit
+```
+
+The reproducible smoke lives in `Tests/GargantuaCoreTests/Services/MLXBackendPerformanceSmokeTests.swift` and is disabled by default. It loads the real `MLXInferenceEngine`, uses six representative `ScanResult` inputs from the bundled rule domains, runs three warm generations per input, counts output tokens with the staged model tokenizer, and prints `MLX_PERF_*` lines for doc updates.
+
+Run:
+
+```
+GARGANTUA_MLX_PERF_SMOKE=1 GARGANTUA_MLX_PERF_RUNS=3 Scripts/test.sh --filter recordsBackendEnvelope
+```
+
+Use `GARGANTUA_MLX_PERF_MODEL_DIR` to point at another HF-layout model directory, or `GARGANTUA_MLX_PERF_MAX_TOKENS` to test a different output cap. Default max output is 180 new tokens, matching `MLXInferenceEngine`.
+
+### Results
+
+| Metric | Result |
+|---|---:|
+| Model | `mlx-community/Llama-3.2-1B-Instruct-4bit` |
+| Smoke cases | 6 |
+| Warm runs per case | 3 |
+| Cold `load` time | 2.174 s |
+| Resident memory after load | 695,246,624 B / 663.0 MiB |
+| Warm `generate` p50 | 1.312 s |
+| Warm `generate` p95 | 1.626 s |
+| LocalAIService RAM guard | 3,000,000,000 B / 2.79 GiB |
+| Idle unload timer | 60 s |
+
+| Input | Category | Safety | p50 | p95 | Output tokens |
+|---|---|---|---:|---:|---|
+| Chrome Browser Cache | `browser_cache` | safe | 1.559 s | 1.626 s | 180, 140, 176 |
+| Chrome Local Storage | `browser_data` | review | 0.818 s | 1.566 s | 180, 68, 86 |
+| Xcode Derived Data | `dev_artifacts` | safe | 1.591 s | 1.600 s | 180, 180, 180 |
+| Docker Application Data | `docker` | review | 1.011 s | 1.580 s | 100, 109, 180 |
+| System Log Files | `system_logs` | safe | 1.574 s | 1.594 s | 180, 180, 101 |
+| Application Support folder | `support_files` | review | 1.237 s | 1.312 s | 142, 134, 89 |
+
+### Verdict
+
+The pinned model and MLX Swift backend are usable under the current lifecycle policy:
+
+- The 663 MiB post-load memory envelope is well below the 3 GB `LocalAIService` RAM guard; no guard adjustment is needed.
+- Warm p95 of 1.626 s is short enough for the explain-button path. The current UI should treat AI explanation as an asynchronous response, but the backend does not require a different interaction model.
+- Cold load of 2.174 s is acceptable for lazy first use, and the 60-second idle-unload timer remains conservative: it amortizes load cost across bursts while still releasing the model quickly.
+- Several outputs hit the 180-token cap, but latency remains under 2 s. No follow-up bean is needed unless product wants shorter explanations for copy quality rather than performance.
+
 ## Acceptance
 
-- [ ] This design doc captures the chosen backend + reasoning.
-- [ ] `Package.swift` lists `mlx-swift-lm` and links `MLXLLM` + `MLXLMCommon` into `GargantuaCore`.
-- [ ] `swift build -c debug` and `swift build -c release` succeed on the branch.
-- [ ] `swift test` passing count stays ≥ the pre-change baseline (no regressions).
-- [ ] Bundle-size delta measured and recorded in the table above.
+- [x] This design doc captures the chosen backend + reasoning.
+- [x] `Package.swift` lists `mlx-swift-lm` and links `MLXLLM` + `MLXLMCommon` into `GargantuaCore`.
+- [x] `swift build -c debug` and `swift build -c release` succeed on the branch.
+- [x] `swift test` passing count stays >= the pre-change baseline (no regressions).
+- [x] Bundle-size delta measured and recorded in the table above.
+- [x] `gargantua-7k2r` latency, memory, and output-token smoke measurements are recorded above.
+- [x] `gargantua-7k2r` verdict is documented against the 60-second idle timeout and 3 GB RAM guard.
