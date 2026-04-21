@@ -97,8 +97,10 @@ run cp -R "$CORE_BUNDLE_SRC" "$APP_BUNDLE/Contents/Resources/"
 
 # ----- App icon -------------------------------------------------------------
 ICONSET_SRC="$APPSHELL_DIR/AppIcon.iconset"
-ICONSET_BUILD="$(mktemp -d -t gargantua-iconset-XXXXXX)"
-trap 'rm -rf "$ICONSET_BUILD"' EXIT
+ICONSET_BUILD_PARENT="$(mktemp -d -t gargantua-iconset-XXXXXX)"
+ICONSET_BUILD="$ICONSET_BUILD_PARENT/AppIcon.iconset"
+run mkdir -p "$ICONSET_BUILD"
+trap 'rm -rf "$ICONSET_BUILD_PARENT"' EXIT
 
 REQUIRED_SIZES=(
     "16:icon_16x16.png"
