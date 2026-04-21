@@ -99,7 +99,7 @@ public protocol UninstallRemoving: AnyObject, Sendable {
 public protocol PrivilegedUninstallHelping: AnyObject, Sendable {
     @MainActor
     func movePrivilegedItemsToTrash(
-        _ items: [ScanResult],
+        _ request: PrivilegedUninstallRequest,
         authorization: UninstallAuthorization
     ) async -> [CleanupItemResult]
 }
@@ -136,19 +136,25 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
     private let processTerminator: any RunningApplicationTerminating
     private let auditRecorder: any UninstallAuditRecording
     private let observer: (any ScanProgressObserving)?
+    private let pathExists: @Sendable (String) -> Bool
+    private let isWritablePath: @Sendable (String) -> Bool
 
     public init(
         remover: any UninstallRemoving = WorkspaceUninstallRemover(),
         privilegedHelper: (any PrivilegedUninstallHelping)? = nil,
         processTerminator: any RunningApplicationTerminating = WorkspaceRunningApplicationTerminator(),
         auditRecorder: any UninstallAuditRecording = AuditWriter(),
-        observer: (any ScanProgressObserving)? = nil
+        observer: (any ScanProgressObserving)? = nil,
+        pathExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        isWritablePath: @escaping @Sendable (String) -> Bool = { FileManager.default.isWritableFile(atPath: $0) }
     ) {
         self.remover = remover
         self.privilegedHelper = privilegedHelper
         self.processTerminator = processTerminator
         self.auditRecorder = auditRecorder
         self.observer = observer
+        self.pathExists = pathExists
+        self.isWritablePath = isWritablePath
     }
 
     /// Return a copy with a progress observer attached.
@@ -158,7 +164,9 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
             privilegedHelper: privilegedHelper,
             processTerminator: processTerminator,
             auditRecorder: auditRecorder,
-            observer: observer
+            observer: observer,
+            pathExists: pathExists,
+            isWritablePath: isWritablePath
         )
     }
 
@@ -186,8 +194,8 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
             )
         }
 
-        let privileged = scanItems.filter(Self.requiresPrivilegedHelper)
-        let ordinary = scanItems.filter { !Self.requiresPrivilegedHelper($0) }
+        let privileged = scanItems.filter(requiresPrivilegedHelper)
+        let ordinary = scanItems.filter { !requiresPrivilegedHelper($0) }
         let authorizedHelper = try preflightPrivilegedHelper(for: privileged, options: options)
 
         var itemResults: [CleanupItemResult] = []
@@ -198,8 +206,9 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         }
 
         if let authorizedHelper {
+            let request = PrivilegedUninstallRequest(planID: plan.id, scanResults: privileged)
             let privilegedResults = await authorizedHelper.helper.movePrivilegedItemsToTrash(
-                privileged,
+                request,
                 authorization: authorizedHelper.authorization
             )
             for (item, result) in zip(privileged, privilegedResults) {
@@ -250,7 +259,7 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         return UninstallExecutionResult(
             cleanupResult: CleanupResult(itemResults: itemResults, cleanupMethod: .trash),
             dryRun: true,
-            privilegedItems: items.filter(Self.requiresPrivilegedHelper),
+            privilegedItems: items.filter(requiresPrivilegedHelper),
             auditWritten: false
         )
     }
@@ -283,11 +292,19 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         }
     }
 
-    private static func requiresPrivilegedHelper(_ item: ScanResult) -> Bool {
+    private func requiresPrivilegedHelper(_ item: ScanResult) -> Bool {
         item.category == RemnantCategory.launchDaemons.rawValue
             || item.category == RemnantCategory.helpers.rawValue
             || item.path.hasPrefix("/Library/LaunchDaemons/")
             || item.path.hasPrefix("/Library/PrivilegedHelperTools/")
+            || isNonWritableApplicationsBundle(item)
+    }
+
+    private func isNonWritableApplicationsBundle(_ item: ScanResult) -> Bool {
+        item.path.hasPrefix("/Applications/")
+            && item.path.hasSuffix(".app")
+            && pathExists(item.path)
+            && !isWritablePath(item.path)
     }
 
     private func emit(result: CleanupItemResult, item: ScanResult) {

@@ -109,8 +109,103 @@ struct UninstallExecutorTests {
         )
 
         #expect(helper.removedPaths == [item.path])
+        #expect(helper.requests.map { $0.items.map(\.path) } == [[item.path]])
         #expect(result.privilegedItems.map(\.path) == [item.path])
         #expect(result.cleanupResult.allSucceeded)
+    }
+
+    @Test("non-writable Applications app bundles are routed through privileged helper")
+    @MainActor
+    func nonWritableApplicationsBundleUsesPrivilegedHelper() async throws {
+        let helper = SpyPrivilegedUninstallHelper()
+        let app = makeApp()
+        let bundle = makeRemnant(
+            id: "bundle",
+            category: .other,
+            path: app.bundlePath,
+            safety: .review,
+            tags: ["app_bundle"]
+        )
+        let executor = UninstallExecutor(
+            remover: SpyUninstallRemover(),
+            privilegedHelper: helper,
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: SpyUninstallAuditRecorder(),
+            pathExists: { path in path == app.bundlePath },
+            isWritablePath: { path in path != app.bundlePath }
+        )
+
+        let result = try await executor.execute(
+            UninstallPlan(app: app, appBundle: bundle),
+            options: UninstallExecutionOptions(
+                confirmationMethod: .summaryDialog,
+                authorization: .authorizedForTesting
+            )
+        )
+
+        #expect(helper.removedPaths == [app.bundlePath])
+        #expect(helper.requests.count == 1)
+        #expect(helper.requests[0].items.map(\.path) == [app.bundlePath])
+        #expect(helper.requests[0].items.map(\.operation) == [.moveToTrash])
+        #expect(result.privilegedItems.map(\.path) == [app.bundlePath])
+    }
+
+    @Test("writable Applications app bundles stay on ordinary trash path")
+    @MainActor
+    func writableApplicationsBundleUsesWorkspaceTrash() async throws {
+        let remover = SpyUninstallRemover()
+        let helper = SpyPrivilegedUninstallHelper()
+        let app = makeApp()
+        let bundle = makeRemnant(
+            id: "bundle",
+            category: .other,
+            path: app.bundlePath,
+            safety: .review,
+            tags: ["app_bundle"]
+        )
+        let executor = UninstallExecutor(
+            remover: remover,
+            privilegedHelper: helper,
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: SpyUninstallAuditRecorder(),
+            pathExists: { path in path == app.bundlePath },
+            isWritablePath: { _ in true }
+        )
+
+        let result = try await executor.execute(
+            UninstallPlan(app: app, appBundle: bundle),
+            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+        )
+
+        #expect(remover.removedPaths == [app.bundlePath])
+        #expect(helper.removedPaths.isEmpty)
+        #expect(result.privilegedItems.isEmpty)
+    }
+
+    @Test("missing authorization for non-writable app bundle prevents ordinary remnants from being trashed")
+    @MainActor
+    func nonWritableBundlePreflightPreventsPartialRemoval() async throws {
+        let remover = SpyUninstallRemover()
+        let app = makeApp()
+        let bundle = makeRemnant(id: "bundle", category: .other, path: app.bundlePath, safety: .review)
+        let ordinary = makeRemnant(id: "cache", path: "/tmp/cache", safety: .safe)
+        let executor = UninstallExecutor(
+            remover: remover,
+            privilegedHelper: SpyPrivilegedUninstallHelper(),
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: SpyUninstallAuditRecorder(),
+            pathExists: { path in path == app.bundlePath },
+            isWritablePath: { path in path != app.bundlePath }
+        )
+
+        await #expect(throws: UninstallExecutionError.authorizationRequired) {
+            _ = try await executor.execute(
+                UninstallPlan(app: app, appBundle: bundle, remnants: [ordinary]),
+                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+            )
+        }
+
+        #expect(remover.removedPaths.isEmpty)
     }
 
     @Test("missing admin authorization is checked before ordinary items are trashed")
@@ -224,15 +319,28 @@ private final class SpyUninstallRemover: UninstallRemoving {
 @MainActor
 private final class SpyPrivilegedUninstallHelper: PrivilegedUninstallHelping {
     private(set) var removedPaths: [String] = []
+    private(set) var requests: [PrivilegedUninstallRequest] = []
 
     func movePrivilegedItemsToTrash(
-        _ items: [ScanResult],
+        _ request: PrivilegedUninstallRequest,
         authorization: UninstallAuthorization
     ) async -> [CleanupItemResult] {
-        removedPaths.append(contentsOf: items.map(\.path))
-        return items.map { item in
-            CleanupItemResult(
-                item: item,
+        requests.append(request)
+        removedPaths.append(contentsOf: request.items.map(\.path))
+        return request.items.map { item in
+            let scanResult = ScanResult(
+                id: item.id,
+                name: URL(fileURLWithPath: item.path).lastPathComponent,
+                path: item.path,
+                size: item.size,
+                safety: .review,
+                confidence: 100,
+                explanation: "Privileged test result",
+                source: SourceAttribution(name: "Demo", bundleID: "com.example.Demo"),
+                category: item.category
+            )
+            return CleanupItemResult(
+                item: scanResult,
                 succeeded: true,
                 trashURL: URL(fileURLWithPath: "/Users/test/.Trash/\(item.id)")
             )
