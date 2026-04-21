@@ -26,11 +26,12 @@ public struct ConfirmationModalView: View {
     let onConfirm: (CleanupMethod) -> Void
     let onCancel: () -> Void
 
-    @State private var cleanupMethod: CleanupMethod = .trash
+    @State private var cleanupMethod: CleanupMethod
 
     public init(
         items: [ScanResult],
         allowsPermanentDelete: Bool = true,
+        initialCleanupMethod: CleanupMethod = .trash,
         onConfirm: @escaping (CleanupMethod) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -38,6 +39,7 @@ public struct ConfirmationModalView: View {
         self.allowsPermanentDelete = allowsPermanentDelete
         self.onConfirm = onConfirm
         self.onCancel = onCancel
+        self._cleanupMethod = State(initialValue: initialCleanupMethod)
     }
 
     private var tier: ConfirmationTier {

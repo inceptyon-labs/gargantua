@@ -125,6 +125,45 @@ struct DeveloperToolsViewApplyResultTests {
         #expect(previews[.docker] == .loading, "other tool should be unaffected")
     }
 
+    @Test("Post-run preview refresh replaces old reclaimable numbers")
+    func postRunPreviewRefreshReplacesLoadedPreview() {
+        let before = preview(tool: .docker, items: [
+            DeveloperToolPreviewItem(
+                id: "docker-images",
+                tool: .docker,
+                title: "Images",
+                reclaimableBytes: 2_000_000_000,
+                commandPreview: ["docker", "system", "df"]
+            ),
+        ])
+        let after = preview(tool: .docker, items: [
+            DeveloperToolPreviewItem(
+                id: "docker-images",
+                tool: .docker,
+                title: "Images",
+                reclaimableBytes: 200_000_000,
+                commandPreview: ["docker", "system", "df"]
+            ),
+        ])
+        let initial: DeveloperToolsView.Phase = .ready(
+            availabilities: [availability(.docker, installed: true)],
+            previews: [.docker: .loaded(before)]
+        )
+
+        let next = DeveloperToolsView.applyPreviewResult(
+            tool: .docker,
+            result: .success(after),
+            to: initial
+        )
+
+        guard case .ready(_, let previews) = next,
+              case .loaded(let loaded) = previews[.docker] else {
+            Issue.record("expected refreshed loaded preview, got \(next)")
+            return
+        }
+        #expect(loaded.reclaimableBytes == 200_000_000)
+    }
+
     @Test("Failure result carries a human-readable message")
     func failureCarriesMessage() {
         let initial = DeveloperToolsView.deriveInitialPhase(availabilities: [
@@ -206,6 +245,75 @@ struct DeveloperToolsViewApplyResultTests {
             return
         }
         #expect(loaded.items.first?.title == "Build Cache")
+    }
+}
+
+// MARK: - execution operations
+
+@Suite("DeveloperToolsView execution flow helpers")
+struct DeveloperToolsViewExecutionFlowTests {
+
+    @Test("operations are gated by loaded preview applicability")
+    func operationsArePreviewGated() {
+        let docker = preview(tool: .docker, items: [
+            DeveloperToolPreviewItem(
+                id: "docker-images",
+                tool: .docker,
+                title: "Images",
+                reclaimableBytes: 10,
+                commandPreview: ["docker", "system", "df"]
+            ),
+            DeveloperToolPreviewItem(
+                id: "docker-build-cache",
+                tool: .docker,
+                title: "Build Cache",
+                reclaimableBytes: 0,
+                commandPreview: ["docker", "system", "df"]
+            ),
+        ])
+
+        let operations = DeveloperToolsView.operations(for: docker)
+
+        #expect(operations.contains(.dockerImagePrune))
+        #expect(operations.contains(.dockerSystemPrune))
+        #expect(!operations.contains(.dockerBuilderPrune))
+        #expect(!operations.contains(.homebrewCleanup))
+    }
+
+    @Test("confirmation item tier matches operation safety")
+    func confirmationItemTierMatchesSafety() {
+        let docker = preview(tool: .docker, items: [
+            DeveloperToolPreviewItem(
+                id: "docker-volumes",
+                tool: .docker,
+                title: "Local Volumes",
+                reclaimableBytes: 100,
+                commandPreview: ["docker", "system", "df"]
+            ),
+        ])
+        let protectedRequest = DeveloperToolsView.ExecutionRequest(
+            operation: .dockerVolumePrune,
+            preview: docker
+        )
+        let reviewRequest = DeveloperToolsView.ExecutionRequest(
+            operation: .dockerImagePrune,
+            preview: docker
+        )
+
+        #expect(confirmationTier(for: [DeveloperToolsView.confirmationItem(for: protectedRequest)]) == .fullModal)
+        #expect(confirmationTier(for: [DeveloperToolsView.confirmationItem(for: reviewRequest)]) == .summaryDialog)
+    }
+
+    @Test("success message reports post-run preview delta")
+    func successMessageReportsDelta() {
+        let message = DeveloperToolsView.successMessage(
+            operation: .dockerImagePrune,
+            beforeBytes: 2_000_000_000,
+            afterBytes: 500_000_000
+        )
+
+        #expect(message.contains("Prune dangling images completed"))
+        #expect(message.contains("1.5 GB"))
     }
 }
 

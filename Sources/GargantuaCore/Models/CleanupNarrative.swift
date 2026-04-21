@@ -71,6 +71,8 @@ public enum CleanupNarrativeTemplate {
             lead = "Moved \(succeeded) \(itemWord(succeeded)) to Trash, freeing \(freed)"
         case .delete:
             lead = "Deleted \(succeeded) \(itemWord(succeeded)), freeing \(freed)"
+        case .toolNative:
+            lead = "Cleaned \(succeeded) \(itemWord(succeeded)) with the tool, freeing \(freed)"
         }
 
         var sentence = lead

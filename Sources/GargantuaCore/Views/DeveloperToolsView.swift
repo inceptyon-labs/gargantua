@@ -1,8 +1,5 @@
 import Foundation
-import OSLog
 import SwiftUI
-
-private let logger = Logger(subsystem: "com.gargantua.core", category: "DeveloperToolsView")
 
 // MARK: - Container
 
@@ -19,11 +16,20 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "Develope
 public struct DeveloperToolsView: View {
     public typealias AvailabilityProvider = @Sendable () -> [DeveloperToolAvailability]
     public typealias PreviewProvider = @Sendable (DeveloperTool) throws -> DeveloperToolPreview
+    public typealias ExecutionProvider = @Sendable (
+        DeveloperToolCleanupOperation,
+        DeveloperToolPreview,
+        ConfirmationTier
+    ) throws -> DeveloperToolExecutionResult
 
-    private let availabilityProvider: AvailabilityProvider
-    private let previewProvider: PreviewProvider
+    let availabilityProvider: AvailabilityProvider
+    let previewProvider: PreviewProvider
+    let executionProvider: ExecutionProvider
 
-    @State private var phase: Phase = .loading
+    @State var phase: Phase = .loading
+    @State var pendingExecution: ExecutionRequest?
+    @State var executingOperationID: DeveloperToolCleanupOperation.ID?
+    @State var executionNotices: [DeveloperToolCleanupOperation.ID: ExecutionNotice] = [:]
 
     public enum Phase: Equatable {
         case loading
@@ -37,75 +43,64 @@ public struct DeveloperToolsView: View {
         case failed(String)
     }
 
+    struct ExecutionRequest: Equatable, Identifiable {
+        let operation: DeveloperToolCleanupOperation
+        let preview: DeveloperToolPreview
+
+        var id: String { operation.id }
+    }
+
+    enum ExecutionNotice: Equatable {
+        case success(String)
+        case failure(String)
+    }
+
     public init(
         availabilityProvider: @escaping AvailabilityProvider = { DeveloperToolPreviewAdapter().availability() },
-        previewProvider: @escaping PreviewProvider = { try DeveloperToolPreviewAdapter().preview($0) }
+        previewProvider: @escaping PreviewProvider = { try DeveloperToolPreviewAdapter().preview($0) },
+        executionProvider: @escaping ExecutionProvider = {
+            try DeveloperToolExecutionAdapter().execute($0, preview: $1, confirmationMethod: $2)
+        }
     ) {
         self.availabilityProvider = availabilityProvider
         self.previewProvider = previewProvider
-    }
-
-    /// Build the initial phase from availability results, seeding installed tools
-    /// with `.loading` so the UI can show spinners while previews resolve.
-    ///
-    /// When no tools report installed, short-circuit to `.empty` so the UI can
-    /// render the "nothing detected" state without ever entering the results
-    /// layout.
-    static func deriveInitialPhase(availabilities: [DeveloperToolAvailability]) -> Phase {
-        let installed = availabilities.filter(\.isInstalled)
-        if installed.isEmpty {
-            return .empty(availabilities: availabilities)
-        }
-        var previews: [DeveloperTool: PreviewState] = [:]
-        for item in installed {
-            previews[item.tool] = .loading
-        }
-        return .ready(availabilities: availabilities, previews: previews)
-    }
-
-    /// Fold a new per-tool preview result into the phase.
-    ///
-    /// A preview completion on an `.empty` or `.loading` phase is ignored — the
-    /// view has moved on (empty state) or hasn't resolved availabilities yet and
-    /// the completion doesn't fit either model.
-    static func applyPreviewResult(
-        tool: DeveloperTool,
-        result: Result<DeveloperToolPreview, Error>,
-        to phase: Phase
-    ) -> Phase {
-        guard case .ready(let availabilities, var previews) = phase else {
-            return phase
-        }
-        switch result {
-        case .success(let preview):
-            previews[tool] = .loaded(preview)
-        case .failure(let error):
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            previews[tool] = .failed(message)
-        }
-        return .ready(availabilities: availabilities, previews: previews)
+        self.executionProvider = executionProvider
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            header
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
 
-            Group {
-                switch phase {
-                case .loading:
-                    loadingView
-                case .empty(let availabilities):
-                    emptyView(availabilities: availabilities)
-                case .ready(let availabilities, let previews):
-                    resultsView(availabilities: availabilities, previews: previews)
+                Group {
+                    switch phase {
+                    case .loading:
+                        loadingView
+                    case .empty(let availabilities):
+                        emptyView(availabilities: availabilities)
+                    case .ready(let availabilities, let previews):
+                        resultsView(availabilities: availabilities, previews: previews)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(GargantuaColors.void_)
+
+            if let pendingExecution {
+                ConfirmationModalView(
+                    items: [Self.confirmationItem(for: pendingExecution)],
+                    allowsPermanentDelete: false,
+                    initialCleanupMethod: .toolNative,
+                    onConfirm: { _ in confirmExecution(pendingExecution) },
+                    onCancel: { self.pendingExecution = nil }
+                )
+                .transition(.opacity)
+            }
         }
-        .background(GargantuaColors.void_)
+        .animation(.easeOut(duration: 0.15), value: pendingExecution)
         .task(id: "developer-tools-load") {
             await load()
         }
@@ -190,8 +185,16 @@ public struct DeveloperToolsView: View {
                     DeveloperToolPanel(
                         availability: availability,
                         preview: previews[availability.tool] ?? .loading,
+                        executingOperationID: executingOperationID,
+                        executionNotices: executionNotices,
                         onRetry: {
                             Task { await reloadPreview(for: availability.tool) }
+                        },
+                        onRun: { operation, preview in
+                            pendingExecution = ExecutionRequest(operation: operation, preview: preview)
+                        },
+                        onRetryOperation: { operation, preview in
+                            pendingExecution = ExecutionRequest(operation: operation, preview: preview)
                         }
                     )
                 }
@@ -235,45 +238,5 @@ public struct DeveloperToolsView: View {
             RoundedRectangle(cornerRadius: GargantuaRadius.medium)
                 .stroke(GargantuaColors.borderSoft, lineWidth: 1)
         )
-    }
-
-    // MARK: Orchestration
-
-    private func load() async {
-        let availabilities = availabilityProvider()
-        if Task.isCancelled { return }
-        let initial = Self.deriveInitialPhase(availabilities: availabilities)
-        await MainActor.run { phase = initial }
-
-        guard case .ready = initial else { return }
-        let installed = availabilities.filter(\.isInstalled).map(\.tool)
-        for tool in installed {
-            if Task.isCancelled { return }
-            await loadPreview(for: tool)
-        }
-    }
-
-    private func loadPreview(for tool: DeveloperTool) async {
-        let result: Result<DeveloperToolPreview, Error>
-        do {
-            let preview = try previewProvider(tool)
-            result = .success(preview)
-        } catch {
-            logger.error("Preview for \(tool.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .private)")
-            result = .failure(error)
-        }
-        await MainActor.run {
-            phase = Self.applyPreviewResult(tool: tool, result: result, to: phase)
-        }
-    }
-
-    private func reloadPreview(for tool: DeveloperTool) async {
-        await MainActor.run {
-            if case .ready(let availabilities, var previews) = phase {
-                previews[tool] = .loading
-                phase = .ready(availabilities: availabilities, previews: previews)
-            }
-        }
-        await loadPreview(for: tool)
     }
 }

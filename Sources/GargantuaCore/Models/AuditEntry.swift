@@ -73,4 +73,6 @@ public enum CleanupMethod: String, Codable, Sendable {
     case trash
     /// Permanently deleted (irreversible).
     case delete
+    /// Cleaned by an external tool's native cleanup command.
+    case toolNative = "tool_native"
 }

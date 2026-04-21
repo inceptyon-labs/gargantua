@@ -1,11 +1,11 @@
 ---
 # gargantua-199w
 title: 'Developer Tools: wire brew cleanup / docker prune execution behind ConfirmationModalView'
-status: todo
+status: completed
 type: feature
 priority: normal
 created_at: 2026-04-20T23:20:12Z
-updated_at: 2026-04-20T23:20:12Z
+updated_at: 2026-04-21T18:57:30Z
 parent: gargantua-qe4a
 ---
 
@@ -44,10 +44,24 @@ Both should exist. Neither subsumes the other.
 
 ## Acceptance
 
-- [ ] `DeveloperToolExecutionAdapter` runs the defined commands through `DefaultProcessRunner` with timeout, audit entry, and stderr capture
-- [ ] `DeveloperToolsView` renders a "Run" button per operation, gated on the tool being installed and the operation being applicable
-- [ ] Clicking "Run" opens `ConfirmationModalView` at the tier matching the operation's `SafetyLevel`
-- [ ] On confirm, command runs; on complete, UI refreshes dry-run preview and shows the delta
-- [ ] Audit log entry written per operation via `AuditWriter`
-- [ ] Failure path surfaces stderr and offers retry
-- [ ] Tests cover: adapter command construction, tier-matching, post-run preview refresh, audit entry shape, failure path
+- [x] `DeveloperToolExecutionAdapter` runs the defined commands through `DefaultProcessRunner` with timeout, audit entry, and stderr capture
+- [x] `DeveloperToolsView` renders a "Run" button per operation, gated on the tool being installed and the operation being applicable
+- [x] Clicking "Run" opens `ConfirmationModalView` at the tier matching the operation's `SafetyLevel`
+- [x] On confirm, command runs; on complete, UI refreshes dry-run preview and shows the delta
+- [x] Audit log entry written per operation via `AuditWriter`
+- [x] Failure path surfaces stderr and offers retry
+- [x] Tests cover: adapter command construction, tier-matching, post-run preview refresh, audit entry shape, failure path
+
+## Completed
+
+- Added fixed Homebrew and Docker cleanup operation definitions with safety levels, command previews, applicability checks, and reclaim estimates.
+- Wired Developer Tools operation rows to the Trust Layer through `ConfirmationModalView`, then into `DeveloperToolExecutionAdapter`.
+- Added post-run preview refresh, success delta messaging, stderr-backed failure notices, and retry.
+- Added `tool_native` cleanup method presentation/audit support without routing tool commands through `CleanupEngine`.
+
+## Verification
+
+- `swiftlint lint --strict -- Sources/GargantuaCore/Models/AuditEntry.swift Sources/GargantuaCore/Models/CleanupNarrative.swift Sources/GargantuaCore/Services/CleanupEngine.swift Sources/GargantuaCore/Services/DeveloperToolExecutionAdapter.swift Sources/GargantuaCore/Services/MLXInferenceEngine.swift Sources/GargantuaCore/Views/CleanupMethodPresentation.swift Sources/GargantuaCore/Views/ConfirmationModalView.swift Sources/GargantuaCore/Views/DeveloperToolPanel.swift Sources/GargantuaCore/Views/DeveloperToolPanelOperations.swift Sources/GargantuaCore/Views/DeveloperToolsExecutionFlow.swift Sources/GargantuaCore/Views/DeveloperToolsView.swift Tests/GargantuaCoreTests/Services/DeveloperToolExecutionAdapterTests.swift Tests/GargantuaCoreTests/Views/DeveloperToolsViewStateTests.swift`
+- `git diff --check`
+- `swift test --filter DeveloperTool`
+- `swift test`

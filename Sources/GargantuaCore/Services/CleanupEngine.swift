@@ -127,6 +127,12 @@ public final class CleanupEngine: Sendable {
             return await recycleSingle(url: url, item: item)
         case .delete:
             return deleteSingle(url: url, item: item)
+        case .toolNative:
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: "Tool-native cleanup is not supported by CleanupEngine."
+            )
         }
     }
 

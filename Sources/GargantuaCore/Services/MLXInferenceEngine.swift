@@ -255,7 +255,11 @@ public final class MLXInferenceEngine: AIInferenceEngine {
     /// surfacing PII beyond what the user can already see in the card.
     static func buildCleanupPrompt(for result: CleanupResult) -> String {
         var lines: [String] = []
-        let methodLabel = result.cleanupMethod == .trash ? "moved to Trash" : "permanently deleted"
+        let methodLabel = switch result.cleanupMethod {
+        case .trash: "moved to Trash"
+        case .delete: "permanently deleted"
+        case .toolNative: "cleaned by tool"
+        }
         lines.append("Cleanup method: \(methodLabel)")
         lines.append("Items succeeded: \(result.succeededItems.count)")
         lines.append("Items failed: \(result.failedItems.count)")

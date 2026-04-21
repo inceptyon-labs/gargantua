@@ -5,6 +5,7 @@ extension CleanupMethod {
         switch self {
         case .trash: "Move to Trash"
         case .delete: "Delete Permanently"
+        case .toolNative: "Run Tool Cleanup"
         }
     }
 
@@ -12,6 +13,7 @@ extension CleanupMethod {
         switch self {
         case .trash: "Reversible from macOS Trash."
         case .delete: "Irreversible. Files are removed immediately."
+        case .toolNative: "Runs the tool's own cleanup command."
         }
     }
 
@@ -19,6 +21,7 @@ extension CleanupMethod {
         switch self {
         case .trash: "trash"
         case .delete: "xmark.bin.fill"
+        case .toolNative: "terminal"
         }
     }
 
@@ -26,6 +29,7 @@ extension CleanupMethod {
         switch self {
         case .trash: "Move to Trash"
         case .delete: "Delete Permanently"
+        case .toolNative: "Run Cleanup"
         }
     }
 
@@ -33,6 +37,7 @@ extension CleanupMethod {
         switch self {
         case .trash: "Moving items to Trash..."
         case .delete: "Deleting items permanently..."
+        case .toolNative: "Running tool cleanup..."
         }
     }
 
@@ -40,6 +45,7 @@ extension CleanupMethod {
         switch self {
         case .trash: "moved to Trash"
         case .delete: "deleted permanently"
+        case .toolNative: "cleaned by tool"
         }
     }
 
@@ -47,6 +53,7 @@ extension CleanupMethod {
         switch self {
         case .trash: GargantuaColors.safe
         case .delete: GargantuaColors.protected_
+        case .toolNative: GargantuaColors.accent
         }
     }
 }

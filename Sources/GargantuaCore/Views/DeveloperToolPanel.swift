@@ -11,7 +11,11 @@ import SwiftUI
 struct DeveloperToolPanel: View {
     let availability: DeveloperToolAvailability
     let preview: DeveloperToolsView.PreviewState
+    let executingOperationID: DeveloperToolCleanupOperation.ID?
+    let executionNotices: [DeveloperToolCleanupOperation.ID: DeveloperToolsView.ExecutionNotice]
     let onRetry: () -> Void
+    let onRun: (DeveloperToolCleanupOperation, DeveloperToolPreview) -> Void
+    let onRetryOperation: (DeveloperToolCleanupOperation, DeveloperToolPreview) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
@@ -72,6 +76,7 @@ struct DeveloperToolPanel: View {
     private func previewBody(_ preview: DeveloperToolPreview) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             commandRow(preview.commandPreview)
+            let operations = DeveloperToolsView.operations(for: preview)
 
             if preview.items.isEmpty {
                 Text("Nothing to clean up.")
@@ -96,6 +101,10 @@ struct DeveloperToolPanel: View {
                     RoundedRectangle(cornerRadius: GargantuaRadius.small)
                         .stroke(GargantuaColors.borderSoft, lineWidth: 1)
                 )
+            }
+
+            if !operations.isEmpty {
+                operationList(operations, preview: preview)
             }
         }
     }
