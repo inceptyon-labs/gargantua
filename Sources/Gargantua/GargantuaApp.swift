@@ -38,7 +38,19 @@ struct GargantuaApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        configureMainWindow()
+        NSApplication.shared.setActivationPolicy(.regular)
+        DispatchQueue.main.async { [weak self] in
+            self?.configureMainWindow()
+            self?.activateMainWindow()
+        }
+    }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        activateMainWindow()
+        return true
     }
 
     private func configureMainWindow() {
@@ -67,5 +79,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let spacerView = NSView(frame: NSRect(x: 0, y: 0, width: 0, height: 8))
         spacer.view = spacerView
         window.addTitlebarAccessoryViewController(spacer)
+    }
+
+    private func activateMainWindow() {
+        guard let window = NSApplication.shared.windows.first else { return }
+        window.deminiaturize(nil)
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }

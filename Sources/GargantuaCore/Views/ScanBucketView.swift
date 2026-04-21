@@ -234,19 +234,24 @@ public struct ScanBucketListView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(GargantuaColors.ink4)
 
-            TextField(
-                "",
-                text: $naturalLanguageQuery,
-                prompt: Text("Search results").foregroundStyle(GargantuaColors.ink2)
-            )
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
-                .focused($isSearchFocused)
-                .frame(minWidth: 240, maxWidth: 420)
-                .onSubmit(resolveNaturalLanguageFilter)
-                .accessibilityLabel("Search results")
+            ZStack(alignment: .leading) {
+                if naturalLanguageQuery.isEmpty {
+                    Text("Search results")
+                        .font(GargantuaFonts.body)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .allowsHitTesting(false)
+                }
+
+                TextField("", text: $naturalLanguageQuery)
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1)
+                    .focused($isSearchFocused)
+                    .onSubmit(resolveNaturalLanguageFilter)
+                    .accessibilityLabel("Search results")
+            }
+            .frame(minWidth: 260, maxWidth: 460, minHeight: 24)
 
             if isResolvingFilter {
                 ProgressView()
@@ -280,7 +285,7 @@ public struct ScanBucketListView: View {
         .padding(.vertical, GargantuaSpacing.space1)
         .background(
             RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                .fill(GargantuaColors.surface4)
+                .fill(isSearchFocused ? GargantuaColors.surface4 : GargantuaColors.surface3)
         )
         .overlay(
             RoundedRectangle(cornerRadius: GargantuaRadius.small)
