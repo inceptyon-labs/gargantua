@@ -1,11 +1,11 @@
 ---
 # gargantua-r8vu
 title: 'Feature: Folder-grouped Deep Clean results with size sort and drill-down'
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-04-17T12:16:16Z
-updated_at: 2026-04-17T12:33:43Z
+updated_at: 2026-04-21T19:12:05Z
 ---
 
 ## Problem
@@ -29,7 +29,7 @@ Add an alternate grouping mode: group by common parent folder, sort groups by to
 - [x] Expand/collapse per group with disclosure chevron (new `ScanGroupHeader`)
 - [x] Keyboard nav (up/down, tab between groups) works in new modes
 - [x] Selection state survives mode toggles (selectedIDs keyed by item id)
-- [ ] Smoke test: toggle modes on a real scan result, confirm drill-down works and sort is by size
+- [x] Smoke test: toggle modes on a real scan result, confirm drill-down works and sort is by size
 
 ## Non-goals
 
@@ -41,3 +41,17 @@ Add an alternate grouping mode: group by common parent folder, sort groups by to
 
 - `Sources/GargantuaCore/Views/ScanBucketView.swift` — main changes
 - Tests for grouping logic: `Tests/GargantuaCoreTests/Views/ScanBucketViewTests.swift` (new or existing)
+
+## Completion (2026-04-21)
+
+Closed after verifying the code and smoke gates were already complete:
+
+- `ScanGroupingMode` supports safety, folder, and category modes.
+- `ScanBucketListView` exposes the grouping picker, expands groups after mode changes, preserves item-id keyed selection, and keeps keyboard navigation wired through the visible expanded rows.
+- `ScanGrouper` groups folder/category results by parent path/category and sorts groups by total size descending; items within groups sort by size descending.
+- `ScanGroupHeader` provides disclosure and group selection state.
+- Child task `gargantua-qwz4` completed the real Deep Clean smoke for safety/folder/category toggles, expand/collapse, size ordering, selection persistence, and keyboard usability.
+
+Verification:
+- `swift test` passed on 2026-04-21: 848 tests across 107 suites.
+- No source changes were needed for this closeout; this bean was stale after the child smoke task completed.
