@@ -1,11 +1,11 @@
 ---
 # gargantua-nrfg
 title: 'Natural Language Search: NL query to scan filter DSL'
-status: in-progress
+status: completed
 type: task
 priority: low
 created_at: 2026-04-20T14:06:44Z
-updated_at: 2026-04-21T10:57:59Z
+updated_at: 2026-04-21T11:09:45Z
 parent: gargantua-8igf
 ---
 

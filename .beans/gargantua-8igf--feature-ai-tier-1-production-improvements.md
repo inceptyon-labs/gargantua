@@ -1,11 +1,11 @@
 ---
 # gargantua-8igf
 title: 'Feature: AI Tier 1 production improvements'
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-04-17T18:07:38Z
-updated_at: 2026-04-21T01:04:31Z
+updated_at: 2026-04-21T11:09:59Z
 parent: gargantua-qe4a
 ---
 
@@ -33,3 +33,15 @@ This Feature was filed as an umbrella. Concrete work is now split out:
 This Feature closes when all four child Tasks close. The advisory use cases
 can be built against the Template engine first; they pick up real intelligence
 when `gargantua-ddaa` lands.
+
+## Completed
+
+All child tasks are completed:
+- `gargantua-6xce` — Engine selection: Template vs MLX with Settings toggle
+- `gargantua-7sge` — Classification Advisory surface
+- `gargantua-2xt6` — Cleanup Summary narrative via AI
+- `gargantua-nrfg` — Natural Language Search to scan filter DSL
+
+Tier 1 AI now has engine selection, advisory surfaces, cleanup summary narration,
+and natural-language scan filtering while preserving the invariant that AI never
+mutates YAML-derived safety classifications.
