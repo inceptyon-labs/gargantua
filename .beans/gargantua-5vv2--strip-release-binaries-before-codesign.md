@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T14:51:14Z
-updated_at: 2026-04-21T01:16:16Z
+updated_at: 2026-04-21T01:25:42Z
 ---
 
 ## Context
@@ -25,7 +25,31 @@ Also strip any other executables that ride along (`GargantuaMCP` is built; confi
 
 ## Acceptance
 
-- [ ] Release pipeline strips `Gargantua` (and `GargantuaMCP` if shipped) before codesign.
-- [ ] Running `Scripts/release.sh` produces a `.app` whose main exec is stripped (`du -sh` matches the stripped number in the mlx-backend design doc within a reasonable margin).
+- [x] Release pipeline strips `Gargantua` (and any executable shipped in `Contents/MacOS`, plus executable helpers in `Contents/Resources`) before codesign.
+- [x] Release build + assemble + strip produces a `.app` whose main exec is stripped: 53,631,912 B -> 26,538,488 B (`du -sh` main exec: 25M). Full `release.sh` path verified with `--snapshot --dry-run --ci`.
 - [ ] Codesign + notarize + spctl assessment still pass end-to-end after the strip step.
 - [ ] App bundle total size stays under PRD §7 50 MB ceiling (without bundled models).
+
+
+## Completion Notes
+
+Implemented in commits 6a063dc and d244f24.
+
+Files changed:
+- Scripts/release/strip-binaries.sh (new strip helper for shipped Mach-O executables)
+- Scripts/release/sign.sh (runs strip helper before inside-out codesign)
+- Scripts/release.sh (preflights file + strip tools)
+- Scripts/release/assemble-app.sh (fixes fallback placeholder iconset directory so local assemble succeeds)
+- Scripts/release/README.md (documents strip-before-sign behavior)
+
+Verification:
+- Baseline and final `swift test`: 830 tests passed.
+- `bash -n Scripts/release/assemble-app.sh Scripts/release/sign.sh Scripts/release/strip-binaries.sh Scripts/release.sh`: passed.
+- `git diff --check`: passed.
+- Synthetic strip smoke reduced copied executable 85,514,080 B -> 45,680,736 B.
+- Actual release build + assemble + strip reduced main executable 53,631,912 B -> 26,538,488 B and stripped fclones + czkawka_cli before codesign.
+- `./Scripts/release.sh --snapshot --dry-run --ci`: passed and shows strip commands before codesign commands.
+
+Not fully verified locally:
+- Real codesign + notarize + spctl was not run because .env.release is missing and SIGNING_IDENTITY / NOTARY_PROFILE / TEAM_ID are not exported in this environment.
+- App bundle remains 60M after stripping, above the PRD §7 50M target. Filed gargantua-u6gm for bundle-size reduction; current largest files are czkawka_cli 27M, Gargantua 25M, fclones 5.1M, mlx.metallib 3.0M.
