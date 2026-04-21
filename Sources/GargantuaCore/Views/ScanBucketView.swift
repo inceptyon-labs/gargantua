@@ -221,20 +221,6 @@ public struct ScanBucketListView: View {
 
             actionBar
         }
-        .focusable()
-        .focusEffectDisabled()
-        .onKeyPress(.upArrow) { guard !isSearchFocused else { return .ignored }; moveFocus(direction: -1); return .handled }
-        .onKeyPress(.downArrow) { guard !isSearchFocused else { return .ignored }; moveFocus(direction: 1); return .handled }
-        .onKeyPress(.space) { guard !isSearchFocused else { return .ignored }; toggleFocusedSelection(); return .handled }
-        .onKeyPress(.return) { guard !isSearchFocused else { return .ignored }; triggerClean(); return .handled }
-        .onKeyPress(.escape) { guard !isSearchFocused else { return .ignored }; handleEscape(); return .handled }
-        .onKeyPress(.tab) { guard !isSearchFocused else { return .ignored }; jumpToNextGroup(); return .handled }
-        .onKeyPress(characters: .init(charactersIn: "a")) { keyPress in
-            guard !isSearchFocused else { return .ignored }
-            guard keyPress.modifiers == .command else { return .ignored }
-            selectAllSafe()
-            return .handled
-        }
         .onChange(of: activeFilter) { _, _ in
             trimSelectionToDisplayedResults()
             expandedGroupIDs = Set(groups.map(\.id))
@@ -248,7 +234,11 @@ public struct ScanBucketListView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(GargantuaColors.ink4)
 
-            TextField("Search results", text: $naturalLanguageQuery)
+            TextField(
+                "",
+                text: $naturalLanguageQuery,
+                prompt: Text("Search results").foregroundStyle(GargantuaColors.ink2)
+            )
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink)
                 .textFieldStyle(.plain)
@@ -256,6 +246,7 @@ public struct ScanBucketListView: View {
                 .focused($isSearchFocused)
                 .frame(minWidth: 240, maxWidth: 420)
                 .onSubmit(resolveNaturalLanguageFilter)
+                .accessibilityLabel("Search results")
 
             if isResolvingFilter {
                 ProgressView()
@@ -289,12 +280,17 @@ public struct ScanBucketListView: View {
         .padding(.vertical, GargantuaSpacing.space1)
         .background(
             RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                .fill(GargantuaColors.surface3)
+                .fill(GargantuaColors.surface4)
         )
         .overlay(
             RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+                .stroke(isSearchFocused ? GargantuaColors.borderFocus : GargantuaColors.borderEm, lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            NSApp.activate(ignoringOtherApps: true)
+            isSearchFocused = true
+        }
     }
 
     private func filterStatusView(_ status: String) -> some View {
