@@ -1,14 +1,14 @@
 ---
 # gargantua-u6gm
 title: Reduce stripped release app below 50 MB
-status: in-progress
+status: completed
 type: task
 priority: normal
 tags:
     - area:release
     - size:S
 created_at: 2026-04-21T01:25:17Z
-updated_at: 2026-04-21T01:47:57Z
+updated_at: 2026-04-21T01:48:39Z
 ---
 
 ## Context
