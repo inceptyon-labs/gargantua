@@ -1,11 +1,11 @@
 ---
 # gargantua-5vv2
 title: Strip release binaries before codesign
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-04-20T14:51:14Z
-updated_at: 2026-04-21T01:25:42Z
+updated_at: 2026-04-21T01:26:35Z
 ---
 
 ## Context
