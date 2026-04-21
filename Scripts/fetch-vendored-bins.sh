@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCKFILE="$SCRIPT_DIR/vendored-bins.lock"
 DEST_DIR="$REPO_ROOT/Sources/GargantuaCore/Resources/bin"
+DEFAULT_RUSTFLAGS="-C opt-level=z -C panic=abort -C link-arg=-Wl,-dead_strip"
 
 die() {
     echo "error: $*" >&2
@@ -31,6 +32,7 @@ require_command() {
 [ -f "$LOCKFILE" ] || die "missing lockfile at $LOCKFILE"
 
 require_command cargo
+require_command codesign
 require_command curl
 require_command shasum
 require_command rustc
@@ -80,7 +82,8 @@ build_one() {
     verify_crate_checksum "$crate" "$version" "$expected_sha"
 
     echo "Building $crate $version for $HOST_TRIPLE..."
-    cargo install "$crate" \
+    echo "Using RUSTFLAGS=${RUSTFLAGS:-$DEFAULT_RUSTFLAGS}"
+    RUSTFLAGS="${RUSTFLAGS:-$DEFAULT_RUSTFLAGS}" cargo install "$crate" \
         --version "$version" \
         --root "$install_root" \
         --locked \
@@ -92,6 +95,7 @@ build_one() {
     cp "$src_bin" "$dest_bin"
     chmod 0755 "$dest_bin"
     strip "$dest_bin" 2>/dev/null || true
+    codesign --force --sign - "$dest_bin"
 
     size_bytes="$(stat -f%z "$dest_bin")"
     size_mb="$(awk "BEGIN { printf \"%.2f\", $size_bytes / 1024 / 1024 }")"
