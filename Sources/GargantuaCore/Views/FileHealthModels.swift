@@ -67,6 +67,23 @@ public struct FileHealthCategoryTab: Identifiable {
             return overflow ? Int64.max : next
         }
     }
+
+    /// Number of findings in this tab that appear in `selection`. Used by the
+    /// tab strip and header so the user can see per-category selection impact
+    /// without switching tabs.
+    public func selectedCount(in selection: Set<String>) -> Int {
+        findings.reduce(0) { $0 + (selection.contains($1.id) ? 1 : 0) }
+    }
+
+    /// Sum of sizes for the currently-selected findings in this tab. Saturates
+    /// on overflow for parity with `totalSize`.
+    public func selectedBytes(in selection: Set<String>) -> Int64 {
+        findings.reduce(Int64(0)) { sum, item in
+            guard selection.contains(item.id) else { return sum }
+            let (next, overflow) = sum.addingReportingOverflow(item.size)
+            return overflow ? Int64.max : next
+        }
+    }
 }
 
 // MARK: - Grouper

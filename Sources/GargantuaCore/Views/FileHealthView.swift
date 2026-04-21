@@ -18,6 +18,7 @@ import SwiftUI
 public struct FileHealthView: View {
     public let results: [ScanResult]
     public let warnings: [String]
+    public let session: FileHealthSessionState
     public let onExplain: ((ScanResult) -> Void)?
     public let onRescan: (() -> Void)?
 
@@ -26,11 +27,13 @@ public struct FileHealthView: View {
     public init(
         results: [ScanResult],
         warnings: [String] = [],
+        session: FileHealthSessionState? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
         onRescan: (() -> Void)? = nil
     ) {
         self.results = results
         self.warnings = warnings
+        self.session = session ?? FileHealthSessionState()
         self.onExplain = onExplain
         self.onRescan = onRescan
     }
@@ -168,12 +171,14 @@ public struct FileHealthView: View {
         // tab), so a stale id from the previous scan can't silently leave
         // every chip visually unselected.
         let activeID = selectedTab?.id
+        let selection = session.selectedResultIDs
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: GargantuaSpacing.space1) {
                 ForEach(tabs) { tab in
                     FileHealthTabChip(
                         tab: tab,
                         isSelected: tab.id == activeID,
+                        selectedCount: tab.selectedCount(in: selection),
                         onSelect: { selectedTabID = tab.id }
                     )
                 }
@@ -217,6 +222,8 @@ public struct FileHealthView: View {
                     ForEach(tab.findings) { finding in
                         FileHealthFindingRow(
                             result: finding,
+                            isSelected: session.isSelected(finding.id),
+                            onToggleSelection: { session.toggleSelection(for: finding.id) },
                             onExplain: onExplain
                         )
 
@@ -230,7 +237,9 @@ public struct FileHealthView: View {
     }
 
     private func tabHeader(_ tab: FileHealthCategoryTab) -> some View {
-        HStack(spacing: GargantuaSpacing.space2) {
+        let selectedCount = tab.selectedCount(in: session.selectedResultIDs)
+        let selectedBytes = tab.selectedBytes(in: session.selectedResultIDs)
+        return HStack(spacing: GargantuaSpacing.space2) {
             Image(systemName: tab.iconName)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(tab.safety.tintColor)
@@ -240,14 +249,18 @@ public struct FileHealthView: View {
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
 
-            Text("\(tab.count)")
+            Text("\(selectedCount) of \(tab.count) selected")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
 
             Spacer()
 
-            if tab.totalSize > 0 {
-                Text(AlertItem.formatBytes(tab.totalSize))
+            if selectedBytes > 0 {
+                Text(AlertItem.formatBytes(selectedBytes) + " reclaimable")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(tab.safety.tintColor)
+            } else if tab.totalSize > 0 {
+                Text(AlertItem.formatBytes(tab.totalSize) + " flagged")
                     .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink3)
             }
@@ -263,6 +276,7 @@ public struct FileHealthView: View {
 private struct FileHealthTabChip: View {
     let tab: FileHealthCategoryTab
     let isSelected: Bool
+    let selectedCount: Int
     let onSelect: () -> Void
 
     var body: some View {
@@ -276,7 +290,10 @@ private struct FileHealthTabChip: View {
                     .font(GargantuaFonts.label)
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
 
-                Text("\(tab.count)")
+                // Badge reads "selected / total" so switching tabs never hides
+                // a partial selection the user made elsewhere. Falls back to
+                // just the total when nothing is picked in this tab.
+                Text(selectedCount > 0 ? "\(selectedCount)/\(tab.count)" : "\(tab.count)")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
                     .padding(.horizontal, GargantuaSpacing.space1)
@@ -303,73 +320,9 @@ private struct FileHealthTabChip: View {
     }
 }
 
-// MARK: - Finding Row
-
-private struct FileHealthFindingRow: View {
-    let result: ScanResult
-    let onExplain: ((ScanResult) -> Void)?
-
-    var body: some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(result.name)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .lineLimit(1)
-
-                Text(result.path)
-                    .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                if !result.explanation.isEmpty {
-                    Text(result.explanation)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            if result.size > 0 {
-                Text(AlertItem.formatBytes(result.size))
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.ink2)
-            }
-        }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .contextMenu {
-            Button {
-                NSWorkspace.shared.selectFile(result.path, inFileViewerRootedAtPath: "")
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(result.path, forType: .string)
-            } label: {
-                Label("Copy Path", systemImage: "doc.on.doc")
-            }
-
-            if let onExplain {
-                Divider()
-                Button {
-                    onExplain(result)
-                } label: {
-                    Label("Explain", systemImage: "questionmark.circle")
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Safety Palette
 
-private extension SafetyLevel {
+extension SafetyLevel {
     var tintColor: Color {
         switch self {
         case .safe: GargantuaColors.safe

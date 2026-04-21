@@ -1,11 +1,11 @@
 ---
 # gargantua-m9y3
 title: 'File Health: per-item selection (checkboxes)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-04-20T23:00:08Z
-updated_at: 2026-04-20T23:00:08Z
+updated_at: 2026-04-21T00:48:24Z
 parent: gargantua-qe4a
 ---
 

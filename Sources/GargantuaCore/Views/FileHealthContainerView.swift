@@ -29,6 +29,7 @@ public struct FileHealthContainerView: View {
     @State private var scanProgress: ScanProgress = ScanProgress()
     @State private var activeScanTask: Task<Void, Never>?
     @State private var scanGeneration: Int = 0
+    @State private var session = FileHealthSessionState()
 
     enum ScanState {
         case idle
@@ -85,6 +86,7 @@ public struct FileHealthContainerView: View {
                     FileHealthView(
                         results: results,
                         warnings: warnings,
+                        session: session,
                         onExplain: onExplain,
                         onRescan: startScan
                     )
@@ -218,6 +220,7 @@ public struct FileHealthContainerView: View {
         let progress = ScanProgress()
         scanProgress = progress
         scanState = .scanning
+        session.clear()
 
         activeScanTask = Task {
             let outcome: ScanState
@@ -235,6 +238,9 @@ public struct FileHealthContainerView: View {
                 // Drop completions that belong to a superseded scan.
                 guard generation == scanGeneration else { return }
                 scanState = outcome
+                if case .results(let results, _) = outcome {
+                    session.finishScan(results: results)
+                }
                 activeScanTask = nil
             }
         }
