@@ -64,7 +64,12 @@ public final class AuditWriter: Sendable {
     }
 
     /// Build an AuditEntry from a CleanupResult and write it.
-    public func record(result: CleanupResult, tool: String = "native", command: String = "clean") throws {
+    public func record(
+        result: CleanupResult,
+        tool: String = "native",
+        command: String = "clean",
+        confirmationMethod: ConfirmationTier? = nil
+    ) throws {
         let succeeded = result.succeededItems
         guard !succeeded.isEmpty else { return }
 
@@ -76,7 +81,7 @@ public final class AuditWriter: Sendable {
             }
         }
 
-        let tier = confirmationTier(for: succeeded.map(\.item))
+        let tier = confirmationMethod ?? confirmationTier(for: succeeded.map(\.item))
 
         let entry = AuditEntry(
             tool: tool,

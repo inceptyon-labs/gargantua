@@ -6,6 +6,7 @@ import SwiftUI
 struct SafeCleanupConfirmationContent: View {
     let itemCount: Int
     let totalSize: Int64
+    let allowsPermanentDelete: Bool
     @Binding var cleanupMethod: CleanupMethod
     let onConfirm: () -> Void
     let onCancel: () -> Void
@@ -44,7 +45,9 @@ struct SafeCleanupConfirmationContent: View {
                     cleanupMethod: cleanupMethod
                 )
 
-                CleanupMethodPicker(selection: $cleanupMethod)
+                if allowsPermanentDelete {
+                    CleanupMethodPicker(selection: $cleanupMethod)
+                }
 
                 ConfirmationButtons(
                     itemCount: itemCount,

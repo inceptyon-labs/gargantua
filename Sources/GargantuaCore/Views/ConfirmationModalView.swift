@@ -22,6 +22,7 @@ public func confirmationTier(for items: [ScanResult]) -> ConfirmationTier {
 /// of the selected items.
 public struct ConfirmationModalView: View {
     let items: [ScanResult]
+    let allowsPermanentDelete: Bool
     let onConfirm: (CleanupMethod) -> Void
     let onCancel: () -> Void
 
@@ -29,10 +30,12 @@ public struct ConfirmationModalView: View {
 
     public init(
         items: [ScanResult],
+        allowsPermanentDelete: Bool = true,
         onConfirm: @escaping (CleanupMethod) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.items = items
+        self.allowsPermanentDelete = allowsPermanentDelete
         self.onConfirm = onConfirm
         self.onCancel = onCancel
     }
@@ -52,6 +55,7 @@ public struct ConfirmationModalView: View {
                 SafeCleanupConfirmationContent(
                     itemCount: items.count,
                     totalSize: totalSize,
+                    allowsPermanentDelete: allowsPermanentDelete,
                     cleanupMethod: $cleanupMethod,
                     onConfirm: { onConfirm(cleanupMethod) },
                     onCancel: onCancel
@@ -62,6 +66,7 @@ public struct ConfirmationModalView: View {
                 SummaryDialogContent(
                     items: items,
                     totalSize: totalSize,
+                    allowsPermanentDelete: allowsPermanentDelete,
                     cleanupMethod: $cleanupMethod,
                     onConfirm: { onConfirm(cleanupMethod) },
                     onCancel: onCancel
@@ -72,6 +77,7 @@ public struct ConfirmationModalView: View {
                 FullModalContent(
                     items: items,
                     totalSize: totalSize,
+                    allowsPermanentDelete: allowsPermanentDelete,
                     cleanupMethod: $cleanupMethod,
                     onConfirm: { onConfirm(cleanupMethod) },
                     onCancel: onCancel

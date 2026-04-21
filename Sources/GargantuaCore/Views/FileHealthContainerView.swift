@@ -13,29 +13,36 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "FileHeal
 ///   1. **Idle** — call-to-action to run the scan.
 ///   2. **Scanning** — progress indicator with live "items found" count.
 ///   3. **Results** — ``FileHealthView`` grouped by category tabs.
-///   4. **Error** — czkawka binary missing or scan failure with retry.
-///
-/// Destructive operations are intentionally not wired here. Tabs are
-/// read-only until Trust Layer composition (see bean gargantua-i36a) lets
-/// the Confirmation flow route File Health deletions the same way Duplicate
-/// Finder will.
+///   4. **Cleaning** — selected findings are moved to Trash.
+///   5. **Summary** — cleanup result, audit trail, and Trash reveal affordance.
+///   6. **Error** — czkawka binary missing or scan failure with retry.
 public struct FileHealthContainerView: View {
     public let scanRoots: [URL]?
     public let profile: CleanupProfile
     public let engineFactory: (_ scanRoots: [URL], _ profile: CleanupProfile) throws -> any ScanAdapter
     public let onExplain: ((ScanResult) -> Void)?
 
-    @State private var scanState: ScanState = .idle
+    @State var scanState: ScanState = .idle
     @State private var scanProgress: ScanProgress = ScanProgress()
     @State private var activeScanTask: Task<Void, Never>?
     @State private var scanGeneration: Int = 0
-    @State private var session = FileHealthSessionState()
+    @State var session = FileHealthSessionState()
+    @State var showConfirmation = false
+    @State var cleanupContext: CleanupContext?
 
     enum ScanState {
         case idle
         case scanning
+        case cleaning
+        case summary
         case results([ScanResult], warnings: [String])
         case error(String)
+    }
+
+    struct CleanupContext {
+        let result: CleanupResult
+        let remainingResults: [ScanResult]
+        let warnings: [String]
     }
 
     /// Derive the terminal scan state from results + adapter-recorded errors.
@@ -82,21 +89,43 @@ public struct FileHealthContainerView: View {
                     idleView
                 case .scanning:
                     scanningView
+                case .cleaning:
+                    cleanupProgressView
+                case .summary:
+                    if let cleanupContext {
+                        summaryState(context: cleanupContext)
+                    }
                 case .results(let results, let warnings):
                     FileHealthView(
                         results: results,
                         warnings: warnings,
                         session: session,
                         onExplain: onExplain,
-                        onRescan: startScan
+                        onRescan: startScan,
+                        onSendToTrash: { showConfirmation = true }
                     )
                 case .error(let message):
                     errorView(message)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if showConfirmation, case .results(let results, _) = scanState {
+                let selected = FileHealthCleanupFlow.selectedResults(
+                    from: results,
+                    selectedIDs: session.selectedResultIDs
+                )
+                ConfirmationModalView(
+                    items: selected,
+                    allowsPermanentDelete: false,
+                    onConfirm: { method in confirmCleanup(selected, method: method) },
+                    onCancel: { showConfirmation = false }
+                )
+                .transition(.opacity)
+            }
         }
         .onDisappear(perform: cancelActiveScan)
+        .animation(.easeOut(duration: 0.15), value: showConfirmation)
     }
 
     // MARK: - Phase views
@@ -220,6 +249,8 @@ public struct FileHealthContainerView: View {
         let progress = ScanProgress()
         scanProgress = progress
         scanState = .scanning
+        cleanupContext = nil
+        showConfirmation = false
         session.clear()
 
         activeScanTask = Task {
@@ -252,6 +283,7 @@ public struct FileHealthContainerView: View {
     private func cancelActiveScan() {
         activeScanTask?.cancel()
         activeScanTask = nil
+        showConfirmation = false
         scanGeneration &+= 1
     }
 

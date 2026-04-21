@@ -6,6 +6,7 @@ import SwiftUI
 struct SummaryDialogContent: View {
     let items: [ScanResult]
     let totalSize: Int64
+    let allowsPermanentDelete: Bool
     @Binding var cleanupMethod: CleanupMethod
     let onConfirm: () -> Void
     let onCancel: () -> Void
@@ -76,7 +77,9 @@ struct SummaryDialogContent: View {
                 )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                CleanupMethodPicker(selection: $cleanupMethod)
+                if allowsPermanentDelete {
+                    CleanupMethodPicker(selection: $cleanupMethod)
+                }
 
                 ConfirmationButtons(
                     itemCount: items.count,

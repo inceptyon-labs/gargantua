@@ -12,15 +12,13 @@ import SwiftUI
 /// ``CzkawkaTrustDefaults`` — safe tabs use the desaturated green token and
 /// review tabs use the amber token (same palette used across the rest of the
 /// Trust Layer surface area).
-///
-/// This view is intentionally read-only today: destructive actions remain
-/// gated behind the Confirmation flow that Duplicate Finder also waits on.
 public struct FileHealthView: View {
     public let results: [ScanResult]
     public let warnings: [String]
     public let session: FileHealthSessionState
     public let onExplain: ((ScanResult) -> Void)?
     public let onRescan: (() -> Void)?
+    public let onSendToTrash: (() -> Void)?
 
     @State private var selectedTabID: String?
 
@@ -29,13 +27,15 @@ public struct FileHealthView: View {
         warnings: [String] = [],
         session: FileHealthSessionState? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
-        onRescan: (() -> Void)? = nil
+        onRescan: (() -> Void)? = nil,
+        onSendToTrash: (() -> Void)? = nil
     ) {
         self.results = results
         self.warnings = warnings
         self.session = session ?? FileHealthSessionState()
         self.onExplain = onExplain
         self.onRescan = onRescan
+        self.onSendToTrash = onSendToTrash
     }
 
     private var tabs: [FileHealthCategoryTab] {
@@ -57,6 +57,20 @@ public struct FileHealthView: View {
     private var totalFlaggedBytes: Int64 {
         tabs.reduce(Int64(0)) { sum, tab in
             let (next, overflow) = sum.addingReportingOverflow(tab.totalSize)
+            return overflow ? Int64.max : next
+        }
+    }
+
+    private var selectedResults: [ScanResult] {
+        FileHealthCleanupFlow.selectedResults(
+            from: results,
+            selectedIDs: session.selectedResultIDs
+        )
+    }
+
+    private var selectedBytes: Int64 {
+        selectedResults.reduce(Int64(0)) { sum, result in
+            let (next, overflow) = sum.addingReportingOverflow(result.size)
             return overflow ? Int64.max : next
         }
     }
@@ -129,6 +143,28 @@ public struct FileHealthView: View {
             }
 
             Spacer()
+
+            if let onSendToTrash, !selectedResults.isEmpty {
+                Button(action: onSendToTrash) {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Send to Trash")
+                        Text("\(selectedResults.count) · \(AlertItem.formatBytes(selectedBytes))")
+                            .foregroundStyle(GargantuaColors.ink.opacity(0.75))
+                    }
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, GargantuaSpacing.space3)
+                        .padding(.vertical, GargantuaSpacing.space1)
+                        .background(
+                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                .fill(GargantuaColors.accent)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Send selected File Health items to Trash")
+            }
 
             if let onRescan {
                 Button(action: onRescan) {
@@ -341,26 +377,6 @@ private struct FileHealthTabChip: View {
                     RoundedRectangle(cornerRadius: GargantuaRadius.small)
                         .fill(tab.safety.tintBackground)
                 )
-        }
-    }
-}
-
-// MARK: - Safety Palette
-
-extension SafetyLevel {
-    var tintColor: Color {
-        switch self {
-        case .safe: GargantuaColors.safe
-        case .review: GargantuaColors.review
-        case .protected_: GargantuaColors.protected_
-        }
-    }
-
-    var tintBackground: Color {
-        switch self {
-        case .safe: GargantuaColors.safeDim
-        case .review: GargantuaColors.reviewDim
-        case .protected_: GargantuaColors.protectedDim
         }
     }
 }

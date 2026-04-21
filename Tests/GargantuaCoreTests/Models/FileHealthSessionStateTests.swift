@@ -180,3 +180,117 @@ struct FileHealthCategoryTabSelectionTests {
         #expect(tab.selectedBytes(in: []) == 0)
     }
 }
+
+// MARK: - FileHealthCleanupFlow
+
+@Suite("FileHealthCleanupFlow")
+struct FileHealthCleanupFlowTests {
+
+    @Test("selectedResults preserves scan order and filters by selected ids")
+    func selectedResultsFiltersBySelection() {
+        let results = [
+            makeCzkawkaResult(category: .emptyFiles, counter: 0),
+            makeCzkawkaResult(category: .bigFiles, counter: 1),
+            makeCzkawkaResult(category: .similarImages, counter: 2),
+        ]
+
+        let selected = FileHealthCleanupFlow.selectedResults(
+            from: results,
+            selectedIDs: ["czkawka-similarImages-2", "czkawka-emptyFiles-0"]
+        )
+
+        #expect(selected.map(\.id) == [
+            "czkawka-emptyFiles-0",
+            "czkawka-similarImages-2",
+        ])
+    }
+
+    @Test("confirmation tier matches highest-risk selected File Health item")
+    func confirmationTierMatchesSelectedRisk() {
+        let results = [
+            makeCzkawkaResult(category: .emptyFiles, counter: 0, safety: .safe),
+            makeCzkawkaResult(category: .bigFiles, counter: 1, safety: .review),
+            makeCzkawkaResult(category: .brokenFiles, counter: 2, safety: .protected_),
+        ]
+
+        #expect(FileHealthCleanupFlow.confirmationTier(
+            for: results,
+            selectedIDs: ["czkawka-emptyFiles-0"]
+        ) == .singleButton)
+
+        #expect(FileHealthCleanupFlow.confirmationTier(
+            for: results,
+            selectedIDs: ["czkawka-emptyFiles-0", "czkawka-bigFiles-1"]
+        ) == .summaryDialog)
+
+        #expect(FileHealthCleanupFlow.confirmationTier(
+            for: results,
+            selectedIDs: ["czkawka-bigFiles-1", "czkawka-brokenFiles-2"]
+        ) == .fullModal)
+    }
+
+    @Test("remainingResults removes succeeded items and keeps failed items visible")
+    func remainingResultsAfterPartialCleanup() {
+        let safe = makeCzkawkaResult(category: .emptyFiles, counter: 0, safety: .safe)
+        let denied = makeCzkawkaResult(category: .bigFiles, counter: 1, safety: .review)
+        let diskFull = makeCzkawkaResult(category: .similarImages, counter: 2, safety: .review)
+        let result = CleanupResult(itemResults: [
+            CleanupItemResult(item: safe, succeeded: true),
+            CleanupItemResult(item: denied, succeeded: false, error: "Permission denied"),
+            CleanupItemResult(item: diskFull, succeeded: false, error: "No space left on device"),
+        ])
+
+        let remaining = FileHealthCleanupFlow.remainingResults(
+            after: result,
+            from: [safe, denied, diskFull]
+        )
+        let selection = FileHealthCleanupFlow.remainingSelection(
+            after: result,
+            from: [safe.id, denied.id, diskFull.id]
+        )
+        let warnings = FileHealthCleanupFlow.failureWarnings(from: result)
+
+        #expect(remaining.map(\.id) == [denied.id, diskFull.id])
+        #expect(selection == [denied.id, diskFull.id])
+        #expect(warnings.contains("1: Permission denied"))
+        #expect(warnings.contains("2: No space left on device"))
+    }
+
+    @Test("audit entry shape uses File Health tool, trash method, and selected tier")
+    func fileHealthAuditEntryShape() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gargantua-file-health-audit-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let safe = makeCzkawkaResult(category: .emptyFiles, counter: 0, safety: .safe, size: 100)
+        let review = makeCzkawkaResult(category: .bigFiles, counter: 1, safety: .review, size: 250)
+        let protected = makeCzkawkaResult(category: .brokenFiles, counter: 2, safety: .protected_, size: 500)
+        let cleanup = CleanupResult(
+            itemResults: [
+                CleanupItemResult(item: safe, succeeded: true),
+                CleanupItemResult(item: review, succeeded: true),
+                CleanupItemResult(item: protected, succeeded: false, error: "Permission denied"),
+            ],
+            cleanupMethod: .trash
+        )
+
+        let writer = AuditWriter(logDirectory: dir)
+        try writer.record(
+            result: cleanup,
+            tool: "file-health",
+            command: "send-to-trash",
+            confirmationMethod: .fullModal
+        )
+        let entries = try writer.readEntries()
+
+        let entry = try #require(entries.first)
+        #expect(entries.count == 1)
+        #expect(entry.tool == "file-health")
+        #expect(entry.command == "send-to-trash")
+        #expect(entry.cleanupMethod == .trash)
+        #expect(entry.confirmationMethod == .fullModal)
+        #expect(entry.safetyLevel == .review)
+        #expect(entry.bytesFreed == 350)
+        #expect(entry.files.map(\.path) == [safe.path, review.path])
+    }
+}

@@ -167,3 +167,48 @@ public enum FileHealthGrouper {
         CzkawkaCategory.allCases.firstIndex(of: category) ?? Int.max
     }
 }
+
+// MARK: - Cleanup Flow Helpers
+
+/// Pure helpers for File Health's selected-item cleanup flow.
+///
+/// Kept outside the SwiftUI container so the selection, post-clean refresh,
+/// and failure-message behavior can be unit-tested without driving views.
+public enum FileHealthCleanupFlow {
+    public static func selectedResults(
+        from results: [ScanResult],
+        selectedIDs: Set<String>
+    ) -> [ScanResult] {
+        results.filter { selectedIDs.contains($0.id) }
+    }
+
+    public static func confirmationTier(
+        for results: [ScanResult],
+        selectedIDs: Set<String>
+    ) -> ConfirmationTier {
+        GargantuaCore.confirmationTier(for: selectedResults(from: results, selectedIDs: selectedIDs))
+    }
+
+    public static func remainingResults(
+        after cleanupResult: CleanupResult,
+        from results: [ScanResult]
+    ) -> [ScanResult] {
+        let succeededIDs = Set(cleanupResult.succeededItems.map(\.item.id))
+        return results.filter { !succeededIDs.contains($0.id) }
+    }
+
+    public static func remainingSelection(
+        after cleanupResult: CleanupResult,
+        from selectedIDs: Set<String>
+    ) -> Set<String> {
+        let succeededIDs = Set(cleanupResult.succeededItems.map(\.item.id))
+        return selectedIDs.subtracting(succeededIDs)
+    }
+
+    public static func failureWarnings(from cleanupResult: CleanupResult) -> [String] {
+        cleanupResult.failedItems.map { failure in
+            let message = failure.error ?? "Unknown cleanup error"
+            return "\(failure.item.name): \(message)"
+        }
+    }
+}

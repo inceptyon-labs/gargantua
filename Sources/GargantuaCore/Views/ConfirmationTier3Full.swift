@@ -6,6 +6,7 @@ import SwiftUI
 struct FullModalContent: View {
     let items: [ScanResult]
     let totalSize: Int64
+    let allowsPermanentDelete: Bool
     @Binding var cleanupMethod: CleanupMethod
     let onConfirm: () -> Void
     let onCancel: () -> Void
@@ -76,7 +77,9 @@ struct FullModalContent: View {
                 )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                CleanupMethodPicker(selection: $cleanupMethod)
+                if allowsPermanentDelete {
+                    CleanupMethodPicker(selection: $cleanupMethod)
+                }
 
                 if !allProtectedAcknowledged {
                     let remaining = protectedItems.count - acknowledgedIDs.count
