@@ -7,6 +7,8 @@ import SwiftUI
 public struct SettingsView: View {
     let persistence: PersistenceController
 
+    @AppStorage(AIEnginePreference.userDefaultsKey) private var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
+
     /// App-shared download manager. When `init(persistence:)` is used without
     /// an explicit manager, the view owns its own `@StateObject` so standalone
     /// previews still work; when `MainContentView` injects one, the view
@@ -67,6 +69,11 @@ public struct SettingsView: View {
             sectionHeader("AI Model")
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                enginePreferenceRow
+
+                Divider()
+                    .overlay(GargantuaColors.border)
+
                 // Model info row
                 HStack(spacing: GargantuaSpacing.space3) {
                     Image(systemName: "cpu")
@@ -87,6 +94,23 @@ public struct SettingsView: View {
                     Spacer()
 
                     modelSizeLabel
+                }
+
+                if shouldShowMLXDownloadNotice {
+                    HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.accent)
+                            .frame(width: 16, alignment: .center)
+
+                        Text("MLX needs the local model before it can be used. The app will use template explanations until the download is ready.")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(GargantuaSpacing.space3)
+                    .background(GargantuaColors.accent.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
 
                 // Progress bar (when downloading)
@@ -231,6 +255,36 @@ public struct SettingsView: View {
             .foregroundStyle(GargantuaColors.ink2)
     }
 
+    private var enginePreferenceRow: some View {
+        HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+            Image(systemName: preferredAIEngine.systemImage)
+                .font(.system(size: 16))
+                .foregroundStyle(GargantuaColors.accent)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Engine")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(preferredAIEngine.settingsDescription)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Picker("Engine", selection: $preferredAIEngineRawValue) {
+                ForEach(AIEnginePreference.allCases) { preference in
+                    Text(preference.label).tag(preference.rawValue)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 180)
+        }
+    }
+
     private func settingsRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: GargantuaSpacing.space3) {
             Image(systemName: icon)
@@ -286,6 +340,16 @@ public struct SettingsView: View {
         case .downloaded: GargantuaColors.safe
         case .failed: GargantuaColors.review
         }
+    }
+
+    private var preferredAIEngine: AIEnginePreference {
+        AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
+    }
+
+    private var shouldShowMLXDownloadNotice: Bool {
+        guard preferredAIEngine == .mlx else { return false }
+        if case .downloaded = downloadManager.state { return false }
+        return true
     }
 
     private var modelSizeLabel: some View {

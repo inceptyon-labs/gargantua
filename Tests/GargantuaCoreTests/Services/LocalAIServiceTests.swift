@@ -231,8 +231,8 @@ struct LocalAIServiceTests {
         #expect(service.lifecycleState == .ready, "engine load succeeded even though generate failed")
     }
 
-    @Test("Engine load failure is wrapped in AIServiceError.loadFailed")
-    func engineLoadFailureWrapped() async throws {
+    @Test("Engine load failure falls back to YAML rule explanation")
+    func engineLoadFailureFallsBack() async throws {
         let tmp = try makeTempModelFile(contents: "abc")
         defer { try? FileManager.default.removeItem(atPath: tmp.path) }
 
@@ -241,10 +241,12 @@ struct LocalAIServiceTests {
 
         let engine = FakeInferenceEngine(output: "unused", loadError: FakeEngineError.boom)
         let service = LocalAIService(downloadManager: manager, engine: engine)
+        let rule = makeRule(explanation: "Load failed fallback.")
 
-        await #expect(throws: AIServiceError.self) {
-            _ = try await service.explain(result: self.makeResult(), rule: self.makeRule())
-        }
+        let explanation = try await service.explain(result: makeResult(), rule: rule)
+
+        #expect(explanation.source == .rule)
+        #expect(explanation.text == "Load failed fallback.")
         #expect(service.lifecycleState == .unloaded)
         #expect(service.modelMemoryUsage == 0)
     }
@@ -310,8 +312,8 @@ struct LocalAIServiceTests {
         #expect(engine.unloadCallsDuringGenerate == 0, "engine was unloaded while generate was in flight")
     }
 
-    @Test("Post-load memory guard rejects models over RAM limit")
-    func residentMemoryGuard() async throws {
+    @Test("Post-load memory guard falls back to YAML rule explanation")
+    func residentMemoryGuardFallsBack() async throws {
         let tmp = try makeTempModelFile(contents: "abc")
         defer { try? FileManager.default.removeItem(atPath: tmp.path) }
 
@@ -323,10 +325,12 @@ struct LocalAIServiceTests {
         let bloated = LocalAIService.maxModelMemory + 1_000_000
         let engine = FakeInferenceEngine(output: "unused", reportedMemoryUsage: bloated)
         let service = LocalAIService(downloadManager: manager, engine: engine)
+        let rule = makeRule(explanation: "Resident guard fallback.")
 
-        await #expect(throws: AIServiceError.self) {
-            _ = try await service.explain(result: self.makeResult(), rule: self.makeRule())
-        }
+        let explanation = try await service.explain(result: makeResult(), rule: rule)
+
+        #expect(explanation.source == .rule)
+        #expect(explanation.text == "Resident guard fallback.")
         #expect(service.lifecycleState == .unloaded)
         #expect(service.modelMemoryUsage == 0)
         #expect(engine.unloadCallCount >= 1)
@@ -341,6 +345,79 @@ struct LocalAIServiceTests {
         #expect(text.contains("Safety:"))
     }
 
+    // MARK: - Engine Selection
+
+    @Test("AIEnginePreference defaults to Template and persists MLX")
+    func enginePreferenceStorage() throws {
+        let suiteName = "gargantua-ai-engine-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        #expect(AIEnginePreference.stored(in: defaults) == .template)
+
+        AIEnginePreference.mlx.store(in: defaults)
+
+        #expect(AIEnginePreference.stored(in: defaults) == .mlx)
+    }
+
+    @Test("MLX selected with model present returns MLX engine")
+    func engineFactoryUsesMLXWhenModelPresent() throws {
+        let model = try makeTempModelDirectory()
+        defer { try? FileManager.default.removeItem(at: model.url) }
+
+        let selection = AIInferenceEngineFactory.select(
+            preference: .mlx,
+            modelState: .downloaded(path: model.url.path, size: model.size)
+        )
+
+        #expect(selection.kind == .mlx)
+        #expect(selection.isFallback == false)
+        #expect(selection.engine is MLXInferenceEngine)
+    }
+
+    @Test("MLX selected with no model falls back to Template engine")
+    func engineFactoryFallsBackWithoutModel() {
+        let selection = AIInferenceEngineFactory.select(
+            preference: .mlx,
+            modelState: .notDownloaded
+        )
+
+        #expect(selection.kind == .template)
+        #expect(selection.isFallback == true)
+        #expect(selection.engine is TemplateInferenceEngine)
+    }
+
+    @Test("Template selected uses Template engine even when MLX model exists")
+    func engineFactoryHonorsTemplatePreference() throws {
+        let model = try makeTempModelDirectory()
+        defer { try? FileManager.default.removeItem(at: model.url) }
+
+        let selection = AIInferenceEngineFactory.select(
+            preference: .template,
+            modelState: .downloaded(path: model.url.path, size: model.size)
+        )
+
+        #expect(selection.kind == .template)
+        #expect(selection.isFallback == false)
+        #expect(selection.engine is TemplateInferenceEngine)
+    }
+
+    @Test("Template selected with model directory produces template AI output")
+    func templateSelectionWorksWithModelDirectory() async throws {
+        let model = try makeTempModelDirectory()
+        defer { try? FileManager.default.removeItem(at: model.url) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: model.url.path, size: model.size))
+        let service = LocalAIService(downloadManager: manager, engine: TemplateInferenceEngine())
+
+        let explanation = try await service.explain(result: makeResult(), rule: makeRule())
+
+        #expect(explanation.source == .ai)
+        #expect(explanation.text.contains("Chrome Browser Cache"))
+        #expect(service.lifecycleState == .ready)
+    }
+
     // MARK: - Test helpers
 
     private func makeTempModelFile(contents: String) throws -> (path: String, size: Int64) {
@@ -349,6 +426,25 @@ struct LocalAIServiceTests {
         try contents.data(using: .utf8)!.write(to: url)
         let size = Int64(contents.utf8.count)
         return (url.path, size)
+    }
+
+    private func makeTempModelDirectory() throws -> (url: URL, size: Int64) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gargantua-test-model-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let files: [(String, String)] = [
+            ("config.json", "{}"),
+            ("tokenizer_config.json", "{}"),
+            ("model.safetensors", "weights"),
+        ]
+        var total: Int64 = 0
+        for (name, contents) in files {
+            let data = try #require(contents.data(using: .utf8))
+            try data.write(to: dir.appendingPathComponent(name))
+            total += Int64(data.count)
+        }
+        return (dir, total)
     }
 }
 

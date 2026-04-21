@@ -1,11 +1,11 @@
 ---
 # gargantua-8igf
 title: 'Feature: AI Tier 1 production improvements'
-status: todo
+status: in-progress
 type: feature
 priority: normal
 created_at: 2026-04-17T18:07:38Z
-updated_at: 2026-04-20T14:07:35Z
+updated_at: 2026-04-21T01:04:31Z
 parent: gargantua-qe4a
 ---
 

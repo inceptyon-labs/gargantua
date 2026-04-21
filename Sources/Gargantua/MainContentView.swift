@@ -8,11 +8,13 @@ import SwiftUI
 /// Shows the permission request flow on first launch, then sidebar + content.
 struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage(AIEnginePreference.userDefaultsKey) private var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
     @State private var sidebarSelection: String? = "dashboard"
     @State private var persistence: PersistenceController?
     @State private var deepCleanSession = DeepCleanSessionState()
     @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
     @State private var duplicateFinderSelection: Set<String> = []
+    @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
     // button + every scan view's "model available?" check observe the same
@@ -27,7 +29,12 @@ struct MainContentView: View {
 
     init() {
         let manager = ModelDownloadManager()
-        let service = LocalAIService(downloadManager: manager, engine: MLXInferenceEngine())
+        let selectedEngine = AIInferenceEngineFactory.select(
+            preference: AIEnginePreference.stored(),
+            modelState: manager.state
+        )
+        let service = LocalAIService(downloadManager: manager, engine: selectedEngine.engine)
+        _activeAIEngineKind = State(initialValue: selectedEngine.kind)
         _downloadManager = StateObject(wrappedValue: manager)
         _aiService = StateObject(wrappedValue: service)
         _aiExplanation = StateObject(wrappedValue: AIExplanationController(service: service))
@@ -128,6 +135,13 @@ struct MainContentView: View {
                         persistence = try? PersistenceController()
                         try? persistence?.bootstrap()
                     }
+                    refreshAIEngineSelection()
+                }
+                .onChange(of: preferredAIEngineRawValue) { _, _ in
+                    refreshAIEngineSelection()
+                }
+                .onChange(of: downloadManager.state) { _, _ in
+                    refreshAIEngineSelection()
                 }
                 .sheet(item: Binding(
                     get: { aiExplanation.presentation },
@@ -169,6 +183,21 @@ struct MainContentView: View {
     /// scan-view signature.
     private var narrateHandler: CleanupNarrator {
         { result in await aiService.narrate(cleanup: result) }
+    }
+
+    /// Reconcile the long-lived AI service with the persisted preference and
+    /// current model availability. This lets Settings changes take effect
+    /// without replacing the controllers that already hold the service.
+    private func refreshAIEngineSelection() {
+        let preference = AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
+        let selectedEngine = AIInferenceEngineFactory.select(
+            preference: preference,
+            modelState: downloadManager.state
+        )
+        guard selectedEngine.kind != activeAIEngineKind else { return }
+
+        aiService.configureEngine(selectedEngine.engine)
+        activeAIEngineKind = selectedEngine.kind
     }
 
     /// Resolve the cleanup profile to use for Deep Clean.

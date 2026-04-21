@@ -28,7 +28,7 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
     public let idleTimeout: TimeInterval
 
     private let downloadManager: ModelDownloadManager
-    private let engine: AIInferenceEngine
+    private var engine: AIInferenceEngine
     private var idleTask: Task<Void, Never>?
     private var activeInferenceCount: Int = 0
 
@@ -59,6 +59,14 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         return false
     }
 
+    /// Replace the inference backend after a settings change or model-state
+    /// transition. Existing model state is unloaded first so the new backend
+    /// starts from a clean lifecycle.
+    public func configureEngine(_ newEngine: AIInferenceEngine) {
+        unloadModel()
+        engine = newEngine
+    }
+
     public func explain(result: ScanResult, rule: ScanRule) async throws -> AIExplanation {
         // Fallback: no model on disk → return YAML rule explanation
         guard isModelAvailable else {
@@ -67,7 +75,11 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
         // Lazy load
         if lifecycleState == .unloaded {
-            try await loadModel()
+            do {
+                try await loadModel()
+            } catch {
+                return AIExplanation(text: rule.explanation, source: .rule)
+            }
         }
 
         // Guard: if loading failed or model too large, fall back
@@ -141,7 +153,11 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
 
         if lifecycleState == .unloaded {
-            try await loadModel()
+            do {
+                try await loadModel()
+            } catch {
+                return reviewOnly.compactMap(yamlFallback)
+            }
         }
 
         guard lifecycleState == .ready else {

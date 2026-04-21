@@ -20,6 +20,15 @@ public final class TemplateInferenceEngine: AIInferenceEngine {
 
     public func load(modelPath: String, modelSize: Int64) async throws {
         let url = URL(fileURLWithPath: modelPath)
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+           isDirectory.boolValue {
+            mappedData = nil
+            memoryUsage = modelSize
+            isLoaded = true
+            return
+        }
+
         let data = try Data(contentsOf: url, options: .mappedIfSafe)
         mappedData = data
         memoryUsage = Int64(data.count)
