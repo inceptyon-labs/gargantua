@@ -345,6 +345,42 @@ struct LocalAIServiceTests {
         #expect(text.contains("Safety:"))
     }
 
+    @Test("scan filter asks injected engine even when no model is downloaded")
+    func scanFilterUsesInjectedEngineWithoutModel() async throws {
+        let manager = makeNeverDownloadedManager()
+        let filter = ScanFilterSet(categories: ["dev_artifacts"], safetyLevels: [.review])
+        let engine = FakeInferenceEngine(output: "unused", scanFilter: filter)
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let resolved = try await service.scanFilter(for: "show me everything related to Xcode")
+
+        #expect(resolved == filter)
+        #expect(engine.scanFilterCallCount == 1)
+        #expect(engine.loadCallCount == 0)
+    }
+
+    @Test("scan filter returns nil on engine failure")
+    func scanFilterFailureFallsBackToNil() async throws {
+        let manager = makeNeverDownloadedManager()
+        let engine = FakeInferenceEngine(output: "unused", scanFilterError: FakeEngineError.boom)
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let resolved = try await service.scanFilter(for: "unparseable")
+
+        #expect(resolved == nil)
+    }
+
+    @Test("TemplateInferenceEngine maps Xcode query to scan filter")
+    func templateEngineMapsXcodeQueryToFilter() async throws {
+        let engine = TemplateInferenceEngine()
+
+        let filter = try #require(try await engine.scanFilter(for: "Show me everything related to Xcode"))
+
+        #expect(filter.bundleIDs.contains("com.apple.dt.Xcode"))
+        #expect(filter.categories.contains("dev_artifacts"))
+        #expect(filter.pathGlobs.contains(where: { $0.localizedCaseInsensitiveContains("Xcode") }))
+    }
+
     // MARK: - Engine Selection
 
     @Test("AIEnginePreference defaults to Template and persists MLX")
@@ -460,11 +496,14 @@ private final class FakeInferenceEngine: AIInferenceEngine {
     private(set) var loadCallCount = 0
     private(set) var unloadCallCount = 0
     private(set) var generateCallCount = 0
+    private(set) var scanFilterCallCount = 0
     private(set) var unloadCallsDuringGenerate = 0
 
     private let output: String
     private let loadError: Error?
     private let generateError: Error?
+    private let scanFilter: ScanFilterSet?
+    private let scanFilterError: Error?
     private let generateDelay: Duration?
     private let reportedMemoryUsage: Int64?
     private var inFlight: Int = 0
@@ -473,12 +512,16 @@ private final class FakeInferenceEngine: AIInferenceEngine {
         output: String,
         loadError: Error? = nil,
         generateError: Error? = nil,
+        scanFilter: ScanFilterSet? = nil,
+        scanFilterError: Error? = nil,
         generateDelay: Duration? = nil,
         reportedMemoryUsage: Int64? = nil
     ) {
         self.output = output
         self.loadError = loadError
         self.generateError = generateError
+        self.scanFilter = scanFilter
+        self.scanFilterError = scanFilterError
         self.generateDelay = generateDelay
         self.reportedMemoryUsage = reportedMemoryUsage
     }
@@ -512,5 +555,13 @@ private final class FakeInferenceEngine: AIInferenceEngine {
             throw generateError
         }
         return output
+    }
+
+    func scanFilter(for query: String) async throws -> ScanFilterSet? {
+        scanFilterCallCount += 1
+        if let scanFilterError {
+            throw scanFilterError
+        }
+        return scanFilter
     }
 }

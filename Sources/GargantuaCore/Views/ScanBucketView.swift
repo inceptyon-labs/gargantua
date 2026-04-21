@@ -79,11 +79,16 @@ public struct ScanBucketListView: View {
     public let onCancel: (() -> Void)?
     public let onAddToWhitelist: ((ScanResult) -> Void)?
     public let onViewRule: ((ScanResult) -> Void)?
-    public let onAdvisoryForReview: (() -> Void)?
+    public let onAdvisoryForReview: (([ScanResult]) -> Void)?
+    public let onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)?
 
     @State private var groupingMode: ScanGroupingMode = .safety
     @State private var expandedGroupIDs: Set<String>
     @State private var focusedItemID: String?
+    @State private var naturalLanguageQuery: String = ""
+    @State private var activeFilter: ScanFilterSet?
+    @State private var filterStatus: String?
+    @State private var isResolvingFilter = false
 
     public init(
         results: [ScanResult],
@@ -94,7 +99,8 @@ public struct ScanBucketListView: View {
         onCancel: (() -> Void)? = nil,
         onAddToWhitelist: ((ScanResult) -> Void)? = nil,
         onViewRule: ((ScanResult) -> Void)? = nil,
-        onAdvisoryForReview: (() -> Void)? = nil
+        onAdvisoryForReview: (([ScanResult]) -> Void)? = nil,
+        onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)? = nil
     ) {
         self.results = results
         self.scanDuration = scanDuration
@@ -105,18 +111,23 @@ public struct ScanBucketListView: View {
         self.onAddToWhitelist = onAddToWhitelist
         self.onViewRule = onViewRule
         self.onAdvisoryForReview = onAdvisoryForReview
+        self.onResolveNaturalLanguageFilter = onResolveNaturalLanguageFilter
         // Start with every safety group expanded so the list doesn't flash
         // collapsed on mount.
         let initialGroups = ScanGrouper.group(results, mode: .safety)
         self._expandedGroupIDs = State(initialValue: Set(initialGroups.map(\.id)))
     }
 
+    private var displayedResults: [ScanResult] {
+        activeFilter?.apply(to: results) ?? results
+    }
+
     private var groups: [ScanGroup] {
-        ScanGrouper.group(results, mode: groupingMode)
+        ScanGrouper.group(displayedResults, mode: groupingMode)
     }
 
     private var reclaimableBytes: Int64 {
-        results.filter { selectedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
+        displayedResults.filter { selectedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
     }
 
     /// Flat list of all visible item IDs, respecting expanded/collapsed groups.
@@ -129,7 +140,7 @@ public struct ScanBucketListView: View {
     public var body: some View {
         VStack(spacing: 0) {
             ScanSummaryBar(
-                totalItems: results.count,
+                totalItems: displayedResults.count,
                 reclaimableBytes: reclaimableBytes,
                 scanDuration: scanDuration
             )
@@ -146,9 +157,12 @@ public struct ScanBucketListView: View {
                         expandedGroupIDs = Set(groups.map(\.id))
                         focusedItemID = nil
                     }
+                if onResolveNaturalLanguageFilter != nil {
+                    filterField
+                }
                 Spacer()
-                if let onAdvisoryForReview, results.contains(where: { $0.safety == .review }) {
-                    Button(action: onAdvisoryForReview) {
+                if let onAdvisoryForReview, displayedResults.contains(where: { $0.safety == .review }) {
+                    Button { onAdvisoryForReview(displayedResults) } label: {
                         HStack(spacing: GargantuaSpacing.space1) {
                             Image(systemName: "sparkles.rectangle.stack")
                                 .font(.system(size: 11, weight: .semibold))
@@ -164,6 +178,26 @@ public struct ScanBucketListView: View {
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space2)
             .background(GargantuaColors.surface2)
+
+            if let filterStatus {
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
+
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Image(systemName: activeFilter == nil ? "exclamationmark.triangle" : "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(activeFilter == nil ? GargantuaColors.review : GargantuaColors.accent)
+                    Text(filterStatus)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.vertical, GargantuaSpacing.space2)
+                .background(GargantuaColors.surface1)
+            }
 
             Rectangle()
                 .fill(GargantuaColors.border)
@@ -205,6 +239,65 @@ public struct ScanBucketListView: View {
             selectAllSafe()
             return .handled
         }
+        .onChange(of: activeFilter) { _, _ in
+            trimSelectionToDisplayedResults()
+            expandedGroupIDs = Set(groups.map(\.id))
+            focusedItemID = nil
+        }
+    }
+
+    private var filterField: some View {
+        HStack(spacing: GargantuaSpacing.space1) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(GargantuaColors.ink4)
+
+            TextField("Search results", text: $naturalLanguageQuery)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink)
+                .textFieldStyle(.plain)
+                .lineLimit(1)
+                .frame(width: 220)
+                .onSubmit(resolveNaturalLanguageFilter)
+
+            if isResolvingFilter {
+                ProgressView()
+                    .controlSize(.mini)
+                    .frame(width: 16, height: 16)
+            } else {
+                Button(action: resolveNaturalLanguageFilter) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GargantuaColors.accent)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+                .disabled(naturalLanguageQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(naturalLanguageQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                .help("Resolve search")
+            }
+
+            if activeFilter != nil || !naturalLanguageQuery.isEmpty || filterStatus != nil {
+                Button(action: clearNaturalLanguageFilter) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GargantuaColors.ink4)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, GargantuaSpacing.space2)
+        .padding(.vertical, GargantuaSpacing.space1)
+        .background(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .fill(GargantuaColors.surface3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
     }
 
     private var actionBar: some View {
@@ -402,13 +495,13 @@ public struct ScanBucketListView: View {
 
     private func toggleFocusedSelection() {
         guard let id = focusedItemID else { return }
-        let item = results.first { $0.id == id }
+        let item = displayedResults.first { $0.id == id }
         guard item?.safety != .protected_ else { return }
         toggleSelection(id)
     }
 
     private func selectAllSafe() {
-        let safeIDs = results.filter { $0.safety == .safe }.map(\.id)
+        let safeIDs = displayedResults.filter { $0.safety == .safe }.map(\.id)
         selectedIDs = Set(safeIDs)
     }
 
@@ -471,5 +564,39 @@ public struct ScanBucketListView: View {
         } else {
             selectedIDs.insert(id)
         }
+    }
+
+    private func resolveNaturalLanguageFilter() {
+        guard let resolver = onResolveNaturalLanguageFilter else { return }
+        let query = naturalLanguageQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, !isResolvingFilter else { return }
+
+        isResolvingFilter = true
+        Task {
+            let filter = await resolver(query)
+            await MainActor.run {
+                isResolvingFilter = false
+                if let filter {
+                    activeFilter = filter
+                    let count = filter.apply(to: results).count
+                    filterStatus = "\(count) match\(count == 1 ? "" : "es")"
+                } else {
+                    activeFilter = nil
+                    filterStatus = "Didn't understand"
+                }
+            }
+        }
+    }
+
+    private func clearNaturalLanguageFilter() {
+        naturalLanguageQuery = ""
+        activeFilter = nil
+        filterStatus = nil
+        isResolvingFilter = false
+    }
+
+    private func trimSelectionToDisplayedResults() {
+        let visible = Set(displayedResults.map(\.id))
+        selectedIDs.formIntersection(visible)
     }
 }

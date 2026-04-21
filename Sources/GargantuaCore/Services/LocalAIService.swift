@@ -238,6 +238,55 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
     }
 
+    /// Translate a natural-language query into the allow-listed scan filter DSL.
+    ///
+    /// The filter is display/control metadata only: it is applied to copies of
+    /// scan results in the UI and never writes to `ScanResult.safety`. When the
+    /// active engine cannot parse a valid DSL object, returns `nil` so callers
+    /// can show a soft "not understood" state.
+    public func scanFilter(for query: String) async throws -> ScanFilterSet? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        func runEngine() async throws -> ScanFilterSet? {
+            try await engine.scanFilter(for: trimmed)
+        }
+
+        guard isModelAvailable else {
+            do {
+                return try await runEngine()
+            } catch {
+                return nil
+            }
+        }
+
+        if lifecycleState == .unloaded {
+            do {
+                try await loadModel()
+            } catch {
+                return nil
+            }
+        }
+
+        guard lifecycleState == .ready else { return nil }
+
+        idleTask?.cancel()
+        idleTask = nil
+        activeInferenceCount += 1
+        defer {
+            activeInferenceCount -= 1
+            if activeInferenceCount == 0 && lifecycleState == .ready {
+                resetIdleTimer()
+            }
+        }
+
+        do {
+            return try await runEngine()
+        } catch {
+            return nil
+        }
+    }
+
     public func unloadModel() {
         idleTask?.cancel()
         idleTask = nil

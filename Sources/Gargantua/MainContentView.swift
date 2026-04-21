@@ -76,7 +76,8 @@ struct MainContentView: View {
                                     profile: activeDeepCleanProfile,
                                     session: deepCleanSession,
                                     onExplain: explainHandler,
-                                    onAdvisory: advisoryHandler
+                                    onAdvisory: advisoryHandler,
+                                    onResolveFilter: scanFilterHandler
                                 )
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
@@ -108,7 +109,8 @@ struct MainContentView: View {
                                 DevArtifactScanView(
                                     profile: .devPurge,
                                     scanRoots: resolvedScanRoots,
-                                    onExplain: explainHandler
+                                    onExplain: explainHandler,
+                                    onResolveFilter: scanFilterHandler
                                 )
                             case "devTools":
                                 DeveloperToolsView()
@@ -175,6 +177,13 @@ struct MainContentView: View {
     /// button can fire a batch advisory without knowing the controller.
     private var advisoryHandler: ([ScanResult]) -> Void {
         { results in aiAdvisory.request(for: results) }
+    }
+
+    /// Closure handed to bucket-based scan views so their search field can
+    /// resolve natural-language queries through the app's active local AI
+    /// engine without owning AI lifecycle state.
+    private var scanFilterHandler: (String) async -> ScanFilterSet? {
+        { query in try? await aiService.scanFilter(for: query) }
     }
 
     /// Build the narrator closure injected via the `\.cleanupNarrator`
