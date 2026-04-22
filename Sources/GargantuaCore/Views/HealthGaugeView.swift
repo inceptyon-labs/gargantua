@@ -1,9 +1,4 @@
 import SwiftUI
-#if os(macOS)
-import AppKit
-#elseif os(iOS)
-import UIKit
-#endif
 
 // MARK: - Health Score Range
 
@@ -63,25 +58,6 @@ public struct HealthGaugeView: View {
 
     public var body: some View {
         ZStack {
-            // Lensing glow behind the metric arc, keyed to the current health range.
-            arcShape(progress: 1.0)
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            range.color.opacity(0.08),
-                            range.color.opacity(0.36),
-                            Color(red: 1.0, green: 0.56, blue: 0.14).opacity(0.28),
-                            GargantuaColors.surface3.opacity(0.18),
-                            range.color.opacity(0.08),
-                        ],
-                        center: .center,
-                        startAngle: Self.startAngle,
-                        endAngle: Angle.degrees(135 + Self.arcSpan)
-                    ),
-                    style: StrokeStyle(lineWidth: lineWidth * 1.8, lineCap: .round)
-                )
-                .blur(radius: lineWidth * 0.45)
-
             // Track (background arc)
             arcShape(progress: 1.0)
                 .stroke(
@@ -96,8 +72,6 @@ public struct HealthGaugeView: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .animation(.linear(duration: 0.3), value: score)
-
-            eventHorizonCore
 
             // Score + caption
             VStack(spacing: GargantuaSpacing.space1) {
@@ -115,30 +89,6 @@ public struct HealthGaugeView: View {
         .frame(width: size, height: size)
     }
 
-    private var eventHorizonCore: some View {
-        ZStack {
-            if let image = Self.brandImage {
-                image
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size * 0.82, height: size * 0.82)
-                    .opacity(0.72)
-                    .saturation(1.08)
-            } else {
-                Circle()
-                    .fill(GargantuaColors.void_)
-                    .frame(width: size * 0.54, height: size * 0.54)
-            }
-
-            Circle()
-                .fill(GargantuaColors.void_.opacity(0.68))
-                .frame(width: size * 0.50, height: size * 0.50)
-                .shadow(color: .black.opacity(0.45), radius: lineWidth, x: 0, y: 0)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
     /// Creates an arc path for the given progress (0-1).
     private func arcShape(progress: Double) -> Path {
         Path { path in
@@ -151,24 +101,4 @@ public struct HealthGaugeView: View {
             )
         }
     }
-
-    private static let brandImage: Image? = {
-        guard let url = Bundle.module.url(
-            forResource: "gargantua-logo",
-            withExtension: "png",
-            subdirectory: "Brand"
-        ) else {
-            return nil
-        }
-
-        #if os(macOS)
-        guard let nsImage = NSImage(contentsOf: url) else { return nil }
-        return Image(nsImage: nsImage)
-        #elseif os(iOS)
-        guard let uiImage = UIImage(contentsOfFile: url.path) else { return nil }
-        return Image(uiImage: uiImage)
-        #else
-        return nil
-        #endif
-    }()
 }
