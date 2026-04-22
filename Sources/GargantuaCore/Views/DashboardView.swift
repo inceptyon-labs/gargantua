@@ -64,7 +64,7 @@ public struct DashboardView: View {
 
     private var healthSection: some View {
         HStack(spacing: GargantuaSpacing.space5) {
-            HealthGaugeView(score: healthScore, size: 140, lineWidth: 10)
+            HealthGaugeView(score: healthScore, size: 156, lineWidth: 11)
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
                 // Disk usage

@@ -154,7 +154,7 @@ private struct GargantuaSidebarBrandHeader: View {
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
             GargantuaBrandMark()
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Gargantua")
