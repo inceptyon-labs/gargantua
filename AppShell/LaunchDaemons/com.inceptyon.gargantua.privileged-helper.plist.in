@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>@HELPER_BUNDLE_ID@</string>
+    <key>BundleProgram</key>
+    <string>Contents/Library/LaunchServices/@HELPER_BUNDLE_ID@</string>
+    <key>MachServices</key>
+    <dict>
+        <key>@HELPER_BUNDLE_ID@</key>
+        <true/>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/var/log/gargantua-privileged-helper.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/gargantua-privileged-helper.log</string>
+</dict>
+</plist>

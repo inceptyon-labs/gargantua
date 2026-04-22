@@ -123,7 +123,8 @@ if [ "$DRY_RUN" != "1" ]; then
 
     # Anchor on the surrounding double-quotes that `security find-identity`
     # prints to avoid accepting a substring of another identity.
-    if ! security find-identity -v -p codesigning | grep -qF "\"$SIGNING_IDENTITY\""; then
+    if ! security find-identity -v -p codesigning | grep -qF "\"$SIGNING_IDENTITY\"" \
+        && ! security find-identity -v -p codesigning | grep -qF "$SIGNING_IDENTITY"; then
         die "SIGNING_IDENTITY not found in keychain: $SIGNING_IDENTITY
 
 Available codesigning identities:

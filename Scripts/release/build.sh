@@ -22,6 +22,12 @@ run swift build \
     --arch arm64 \
     --product "$APP_NAME"
 
+run swift build \
+    --package-path "$REPO_ROOT" \
+    -c release \
+    --arch arm64 \
+    --product "GargantuaPrivilegedHelper"
+
 # --show-bin-path is non-destructive, always safe to run even under --dry-run.
 SWIFT_BIN_DIR="$(swift build \
     --package-path "$REPO_ROOT" \
@@ -33,6 +39,8 @@ export SWIFT_BIN_DIR
 if [ "${DRY_RUN:-0}" != "1" ]; then
     [ -x "$SWIFT_BIN_DIR/$APP_NAME" ] \
         || die "swift build did not produce $SWIFT_BIN_DIR/$APP_NAME"
+    [ -x "$SWIFT_BIN_DIR/GargantuaPrivilegedHelper" ] \
+        || die "swift build did not produce $SWIFT_BIN_DIR/GargantuaPrivilegedHelper"
     [ -d "$SWIFT_BIN_DIR/Gargantua_GargantuaCore.bundle" ] \
         || die "missing GargantuaCore resource bundle at $SWIFT_BIN_DIR/Gargantua_GargantuaCore.bundle"
 fi

@@ -20,6 +20,15 @@ public struct PrivilegedUninstallRequest: Codable, Sendable, Equatable {
     }
 }
 
+/// Helper-side result payload returned over the privileged XPC boundary.
+public struct PrivilegedUninstallResponse: Codable, Sendable, Equatable {
+    public let items: [PrivilegedUninstallItemResult]
+
+    public init(items: [PrivilegedUninstallItemResult]) {
+        self.items = items
+    }
+}
+
 /// Single removable item in a privileged uninstall request.
 public struct PrivilegedUninstallItem: Codable, Sendable, Equatable, Identifiable {
     public enum Operation: String, Codable, Sendable {
@@ -45,6 +54,59 @@ public struct PrivilegedUninstallItem: Codable, Sendable, Equatable, Identifiabl
         self.size = size
         self.operation = operation
     }
+}
+
+/// Result for one item in a privileged uninstall request.
+public struct PrivilegedUninstallItemResult: Codable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let path: String
+    public let succeeded: Bool
+    public let trashPath: String?
+    public let error: String?
+
+    public init(
+        id: String,
+        path: String,
+        succeeded: Bool,
+        trashPath: String? = nil,
+        error: String? = nil
+    ) {
+        self.id = id
+        self.path = path
+        self.succeeded = succeeded
+        self.trashPath = trashPath
+        self.error = error
+    }
+}
+
+/// Error payload used when the helper cannot decode or execute a request.
+public struct PrivilegedUninstallErrorResponse: Codable, Sendable, Equatable {
+    public let error: String
+
+    public init(error: String) {
+        self.error = error
+    }
+}
+
+@objc public protocol PrivilegedUninstallXPCProtocol {
+    func moveItemsToTrash(
+        requestData: Data,
+        withReply reply: @escaping (Data) -> Void
+    )
+}
+
+public enum PrivilegedUninstallXPCCodec {
+    public static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
+    public static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 }
 
 extension PrivilegedUninstallRequest {

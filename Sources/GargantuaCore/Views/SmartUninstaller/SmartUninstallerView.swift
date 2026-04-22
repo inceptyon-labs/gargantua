@@ -278,7 +278,11 @@ public struct SmartUninstallerView: View {
         return SmartUninstallerViewModel(
             appScanner: scanner,
             planner: planner,
-            executor: UninstallExecutor(observer: stream),
+            executor: UninstallExecutor(
+                privilegedHelper: XPCPrivilegedUninstallHelper(),
+                observer: stream
+            ),
+            authorizationProvider: { .privilegedHelperApproved },
             pathStream: stream
         )
     }

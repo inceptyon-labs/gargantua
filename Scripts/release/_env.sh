@@ -127,6 +127,8 @@ export DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}.dmg"
 # ----- Bundle identity defaults ---------------------------------------------
 
 export BUNDLE_ID="${BUNDLE_ID:-com.gargantua.app}"
+export TEAM_ID="${TEAM_ID:-}"
+export HELPER_BUNDLE_ID="${HELPER_BUNDLE_ID:-$BUNDLE_ID.privileged-helper}"
 export MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-14.0}"
 
 # ----- Flag defaults --------------------------------------------------------

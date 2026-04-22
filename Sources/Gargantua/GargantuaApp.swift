@@ -11,6 +11,19 @@ struct GargantuaApp: App {
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
         }
+        if CommandLine.arguments.contains("--privileged-helper-status") {
+            Self.runPrivilegedHelperStatus()
+        }
+        if CommandLine.arguments.contains("--privileged-helper-register") {
+            Self.runPrivilegedHelperRegister()
+        }
+        if CommandLine.arguments.contains("--privileged-helper-unregister") {
+            Self.runPrivilegedHelperUnregister()
+        }
+        if let index = CommandLine.arguments.firstIndex(of: "--privileged-helper-smoke-trash") {
+            let path = CommandLine.arguments.dropFirst(index + 1).first
+            Self.runPrivilegedHelperSmokeTrash(path: path)
+        }
     }
 
     var body: some Scene {
@@ -31,6 +44,76 @@ struct GargantuaApp: App {
             fputs("selfcheck-binaries failed: \(error.localizedDescription)\n", stderr)
             exit(EXIT_FAILURE)
         }
+    }
+
+    private static func runPrivilegedHelperStatus() -> Never {
+        let installer = SMAppServicePrivilegedHelperInstaller()
+        print("privileged-helper status: \(installer.status().description)")
+        exit(EXIT_SUCCESS)
+    }
+
+    private static func runPrivilegedHelperRegister() -> Never {
+        let installer = SMAppServicePrivilegedHelperInstaller()
+        do {
+            let status = try installer.register()
+            print("privileged-helper register: \(status.description)")
+            exit(EXIT_SUCCESS)
+        } catch {
+            fputs("privileged-helper register failed: \(error.localizedDescription)\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+    }
+
+    private static func runPrivilegedHelperUnregister() -> Never {
+        let installer = SMAppServicePrivilegedHelperInstaller()
+        do {
+            let status = try installer.unregister()
+            print("privileged-helper unregister: \(status.description)")
+            exit(EXIT_SUCCESS)
+        } catch {
+            fputs("privileged-helper unregister failed: \(error.localizedDescription)\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+    }
+
+    private static func runPrivilegedHelperSmokeTrash(path: String?) -> Never {
+        guard let path, !path.isEmpty else {
+            fputs("usage: Gargantua --privileged-helper-smoke-trash /Applications/Example.app\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+
+        let item = PrivilegedUninstallItem(
+            id: "smoke",
+            path: path,
+            category: RemnantCategory.other.rawValue,
+            size: 0
+        )
+        let request = PrivilegedUninstallRequest(planID: UUID(), items: [item])
+        let helper = XPCPrivilegedUninstallHelper()
+
+        Task { @MainActor in
+            let results = await helper.movePrivilegedItemsToTrash(
+                request,
+                authorization: .privilegedHelperApproved
+            )
+            guard let result = results.first else {
+                fputs("privileged-helper smoke failed: no result returned\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+
+            if result.succeeded {
+                print("privileged-helper smoke moved: \(result.item.path)")
+                if let trashURL = result.trashURL {
+                    print("trash: \(trashURL.path)")
+                }
+                exit(EXIT_SUCCESS)
+            } else {
+                fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+        }
+        RunLoop.main.run()
+        exit(EXIT_FAILURE)
     }
 }
 

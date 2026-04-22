@@ -73,4 +73,14 @@ else
         "$DMG_PATH"
 fi
 
+if [ "${DRY_RUN:-0}" != "1" ]; then
+    [ -n "${SIGNING_IDENTITY:-}" ] || die "SIGNING_IDENTITY not set; cannot sign DMG"
+    log "Signing DMG..."
+    run codesign \
+        --force \
+        --timestamp \
+        --sign "$SIGNING_IDENTITY" \
+        "$DMG_PATH"
+fi
+
 log "DMG built: $DMG_PATH"

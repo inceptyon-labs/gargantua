@@ -7,6 +7,8 @@
 #       Info.plist              (rendered from AppShell/Info.plist.in)
 #       PkgInfo                 (APPL????)
 #       MacOS/Gargantua         (the executable)
+#       Library/LaunchDaemons/  (SMAppService launch daemon plist)
+#       Library/LaunchServices/ (privileged helper executable)
 #       Resources/
 #         AppIcon.icns          (compiled from AppShell/AppIcon.iconset)
 #         Gargantua_GargantuaCore.bundle/
@@ -40,6 +42,8 @@ log "Assembling $APP_BUNDLE..."
 
 run rm -rf "$APP_BUNDLE"
 run mkdir -p "$APP_BUNDLE/Contents/MacOS"
+run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchDaemons"
+run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchServices"
 run mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # ----- PkgInfo --------------------------------------------------------------
@@ -75,6 +79,25 @@ fi
 # ----- Executable -----------------------------------------------------------
 run cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 run chmod 0755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+
+# ----- Privileged helper ----------------------------------------------------
+HELPER_EXECUTABLE="$APP_BUNDLE/Contents/Library/LaunchServices/$HELPER_BUNDLE_ID"
+run cp "$SWIFT_BIN_DIR/GargantuaPrivilegedHelper" "$HELPER_EXECUTABLE"
+run chmod 0755 "$HELPER_EXECUTABLE"
+
+HELPER_PLIST_SRC="$APPSHELL_DIR/LaunchDaemons/$HELPER_BUNDLE_ID.plist.in"
+HELPER_PLIST_DST="$APP_BUNDLE/Contents/Library/LaunchDaemons/$HELPER_BUNDLE_ID.plist"
+[ -f "$HELPER_PLIST_SRC" ] || die "missing privileged helper plist template at $HELPER_PLIST_SRC"
+
+if [ "${DRY_RUN:-0}" != "1" ]; then
+    sed -e "s|@HELPER_BUNDLE_ID@|${HELPER_BUNDLE_ID}|g" \
+        "$HELPER_PLIST_SRC" > "$HELPER_PLIST_DST"
+    if grep -qE '@[A-Z_]+@' "$HELPER_PLIST_DST"; then
+        die "helper launch daemon plist still has unsubstituted tokens; check $HELPER_PLIST_DST"
+    fi
+else
+    log "DRY-RUN: render $HELPER_PLIST_SRC -> $HELPER_PLIST_DST"
+fi
 
 # ----- MLX Metal library ----------------------------------------------------
 # mlx-swift via SPM CLI does not produce default.metallib — Xcode's build

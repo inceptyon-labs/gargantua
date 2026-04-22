@@ -25,6 +25,7 @@ public struct UninstallAuthorization: @unchecked Sendable {
         authorizationRef != nil || testingAuthorized
     }
 
+    public static let privilegedHelperApproved = UninstallAuthorization(testingAuthorized: true)
     static let authorizedForTesting = UninstallAuthorization(testingAuthorized: true)
 }
 

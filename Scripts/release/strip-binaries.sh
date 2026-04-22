@@ -32,5 +32,5 @@ while IFS= read -r -d '' BIN; do
     log "  $BIN"
     run strip -u -r "$BIN"
     strip_count=$((strip_count + 1))
-done < <(find "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources" -type f -print0 2>/dev/null || true)
+done < <(find "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Library" "$APP_BUNDLE/Contents/Resources" -type f -print0 2>/dev/null || true)
 log "  stripped $strip_count executable binaries"
