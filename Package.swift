@@ -46,6 +46,7 @@ let package = Package(
             resources: [
                 .copy("Resources/cleanup_rules"),
                 .copy("Resources/uninstall_rules"),
+                .copy("Resources/Brand"),
                 .copy("Resources/bin")
             ]
         ),

@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // MARK: - Sidebar Data Model
 
@@ -101,6 +106,10 @@ public struct SidebarView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            GargantuaSidebarBrandHeader()
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.bottom, GargantuaSpacing.space4)
+
             ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
                 if index > 0 {
                     Rectangle()
@@ -139,6 +148,70 @@ public struct SidebarView: View {
             }
         }
     }
+}
+
+private struct GargantuaSidebarBrandHeader: View {
+    var body: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            GargantuaBrandMark()
+                .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Gargantua")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(GargantuaColors.ink)
+                    .lineLimit(1)
+
+                Text("Singularity cleaner")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(GargantuaColors.ink4)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct GargantuaBrandMark: View {
+    var body: some View {
+        Group {
+            if let image = Self.image {
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(GargantuaColors.surface2)
+                    .overlay {
+                        Image(systemName: "circle.hexagongrid.circle")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(GargantuaColors.accent)
+                    }
+            }
+        }
+        .shadow(color: GargantuaColors.accent.opacity(0.18), radius: 6, x: 0, y: 2)
+    }
+
+    private static let image: Image? = {
+        guard let url = Bundle.module.url(
+            forResource: "gargantua-logo",
+            withExtension: "png",
+            subdirectory: "Brand"
+        ) else {
+            return nil
+        }
+
+        #if os(macOS)
+        guard let nsImage = NSImage(contentsOf: url) else { return nil }
+        return Image(nsImage: nsImage)
+        #elseif os(iOS)
+        guard let uiImage = UIImage(contentsOfFile: url.path) else { return nil }
+        return Image(uiImage: uiImage)
+        #else
+        return nil
+        #endif
+    }()
 }
 
 // MARK: - Section View

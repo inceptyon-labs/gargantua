@@ -2,6 +2,7 @@
 
 This directory holds the source PNGs that `iconutil` compiles into
 `Gargantua.app/Contents/Resources/AppIcon.icns` during `Scripts/release.sh`.
+The current artwork is generated from `AppShell/Brand/gargantua-logo-1024.png`.
 
 ## Expected contents (Apple-standard iconset layout)
 
@@ -13,17 +14,12 @@ icon_256x256.png        icon_256x256@2x.png (512 px)
 icon_512x512.png        icon_512x512@2x.png (1024 px)
 ```
 
-## Placeholder behavior
+## Regenerating
 
-If this directory is empty (or missing some sizes), `assemble-app.sh` will
-synthesize a solid-color placeholder at build time and emit a loud warning:
+Regenerate the ten PNGs from the source art with ImageMagick:
 
 ```
-warn: AppShell/AppIcon.iconset is empty; generating placeholder icon.
-warn: Ship real artwork before public release.
+magick AppShell/Brand/gargantua-logo-source.png -resize 1024x1024^ -gravity center -extent 1024x1024 AppShell/Brand/gargantua-logo-1024.png
 ```
 
-## Replacing the placeholder
-
-Drop the ten PNGs listed above into this directory and commit. `iconutil`
-will pick them up automatically on the next `./Scripts/release.sh` run.
+Then resize that 1024px master to the Apple-standard filenames above.
