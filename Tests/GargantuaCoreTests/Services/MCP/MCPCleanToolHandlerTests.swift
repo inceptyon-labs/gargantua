@@ -312,6 +312,27 @@ struct MCPCleanToolHandlerTests {
         }
     }
 
+    @Test("duplicate item_ids are rejected with invalidParams")
+    func duplicateItemIDsRejected() throws {
+        let cache = Self.cacheWith([Self.makeResult(id: "a")])
+        let cleanerCalled = CapturedFlag()
+        let subject = handler(cache: cache, cleaner: { _, _ in
+            cleanerCalled.value = true
+            return CleanupResult(itemResults: [], cleanupMethod: .trash)
+        })
+        do {
+            _ = try subject.handle(arguments([
+                "item_ids": .array([.string("a"), .string("a")]),
+                "confirm": .bool(true),
+            ]))
+            Issue.record("handler should have thrown")
+        } catch MCPToolError.invalidParams(let message) {
+            #expect(message.contains("a"))
+            #expect(message.lowercased().contains("duplicate"))
+        }
+        #expect(cleanerCalled.value == false, "cleaner must not run on a duplicate-id request")
+    }
+
     @Test("empty item_ids is rejected at decode")
     func emptyItemIDsRejected() throws {
         let cache = Self.cacheWith([Self.makeResult(id: "a")])

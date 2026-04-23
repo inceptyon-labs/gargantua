@@ -76,6 +76,16 @@ public struct MCPCleanToolHandler: Sendable {
     public func handle(_ arguments: MCPToolArguments) throws -> MCPToolCallResult {
         let input = try arguments.decode(MCPCleanInput.self)
 
+        // Reject duplicate ids up front. A duplicate would cause the cleaner
+        // to act on the same path twice — the first call moves the file, the
+        // second fails with "file not found", which surfaces to the caller
+        // as a silent partial failure rather than the client bug it is.
+        if let duplicate = Self.firstDuplicate(in: input.itemIDs) {
+            throw MCPToolError.invalidParams(
+                "Duplicate item_id '\(duplicate)'. Each item_id must appear at most once per request."
+            )
+        }
+
         guard let method = Self.resolveMethod(input.method) else {
             throw MCPToolError.invalidParams(
                 "Unknown method '\(input.method)'. Expected 'trash' or 'delete'."
@@ -116,6 +126,19 @@ public struct MCPCleanToolHandler: Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Returns the first id that appears more than once in `ids`, or nil if
+    /// every id is unique. Preserves the caller's order so the error message
+    /// points at the first offending entry.
+    private static func firstDuplicate(in ids: [String]) -> String? {
+        var seen: Set<String> = []
+        seen.reserveCapacity(ids.count)
+        for id in ids {
+            if seen.contains(id) { return id }
+            seen.insert(id)
+        }
+        return nil
+    }
 
     private static func resolveMethod(_ raw: String) -> CleanupMethod? {
         switch raw {
