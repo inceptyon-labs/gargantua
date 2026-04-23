@@ -2,11 +2,11 @@ import SwiftUI
 
 // MARK: - Dashboard View
 
-/// Landing screen showing system health, disk usage, and actionable alerts.
+/// Landing screen that turns raw system metrics into a recommended next step.
 ///
-/// Composes ``HealthGaugeView`` for the health score arc,
-/// disk usage stats from ``SystemMetricCollector``, and
-/// ``AlertListView`` for reclaimable space alerts with navigation.
+/// The dashboard leads with one evidence-backed cleanup recommendation,
+/// then shows supporting system metrics and the largest reclaimable groups
+/// from the latest quick scan.
 public struct DashboardView: View {
     @Binding var sidebarSelection: String?
 
@@ -14,9 +14,14 @@ public struct DashboardView: View {
     @State private var diskUsedGB: Int = 0
     @State private var diskTotalGB: Int = 0
     @State private var diskUsage: Double = 0
+    @State private var memoryUsedGB: Int = 0
+    @State private var memoryTotalGB: Int = 0
+    @State private var memoryPressure: Double = 0
+    @State private var thermalLevel: ThermalLevel = .nominal
     @State private var alerts: [AlertItem] = []
     @State private var scanProgress = ScanProgress()
     @State private var isLoading = true
+    @State private var hasRunQuickScan = false
 
     private let collector = SystemMetricCollector()
 
@@ -26,15 +31,7 @@ public struct DashboardView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Dashboard")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-                Spacer()
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space4)
+            header
 
             Rectangle()
                 .fill(GargantuaColors.border)
@@ -48,7 +45,8 @@ public struct DashboardView: View {
             } else {
                 ScrollView {
                     VStack(spacing: GargantuaSpacing.space5) {
-                        healthSection
+                        recommendationSection
+                        systemSnapshotSection
                         alertsSection
                     }
                     .padding(.horizontal, GargantuaSpacing.space4)
@@ -60,83 +58,198 @@ public struct DashboardView: View {
         .task { await loadMetrics() }
     }
 
-    // MARK: - Health Section
+    // MARK: - Header
 
-    private var healthSection: some View {
-        HStack(spacing: GargantuaSpacing.space5) {
-            HealthGaugeView(score: healthScore, size: 140, lineWidth: 10)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            Text("Dashboard")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink)
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                // Disk usage
-                VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                    Text("Disk Usage")
+            Text("Start with the strongest cleanup recommendation, then drill into evidence.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space4)
+    }
+
+    // MARK: - Recommendation
+
+    private var recommendationSection: some View {
+        let recommendation = dashboardRecommendation
+        return VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
+            HStack(alignment: .top, spacing: GargantuaSpacing.space5) {
+                VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                    Text(recommendation.eyebrow)
                         .font(GargantuaFonts.sectionLabel)
-                        .foregroundStyle(GargantuaColors.ink4)
-                        .tracking(0.08 * 10)
-                        .textCase(.uppercase)
+                        .tracking(0.8)
+                        .foregroundStyle(recommendation.tone)
 
-                    Text("\(diskUsedGB) / \(diskTotalGB) GB")
-                        .font(GargantuaFonts.monoData)
+                    Text(recommendation.title)
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(GargantuaColors.ink)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    // Usage bar
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(GargantuaColors.surface2)
-                                .frame(height: 6)
+                    Text(recommendation.detail)
+                        .font(GargantuaFonts.body)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(diskBarColor)
-                                .frame(width: geo.size.width * diskUsage, height: 6)
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        ForEach(recommendation.evidence, id: \.self) { item in
+                            DashboardEvidencePill(text: item)
                         }
                     }
-                    .frame(height: 6)
-                    .frame(maxWidth: 200)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: GargantuaSpacing.space3) {
+                        Button(action: recommendation.primaryAction) {
+                            Text(recommendation.primaryLabel)
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.vertical, GargantuaSpacing.space2)
+                                .background(GargantuaColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(scanProgress.isScanning)
+                        .opacity(scanProgress.isScanning ? 0.6 : 1)
+
+                        if recommendation.showsRefresh {
+                            Button(action: startQuickScan) {
+                                Text("Refresh Recommendations")
+                                    .font(GargantuaFonts.label)
+                                    .foregroundStyle(GargantuaColors.ink)
+                                    .padding(.horizontal, GargantuaSpacing.space4)
+                                    .padding(.vertical, GargantuaSpacing.space2)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                            .fill(GargantuaColors.surface3)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                            .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(scanProgress.isScanning)
+                            .opacity(scanProgress.isScanning ? 0.6 : 1)
+                        }
+                    }
                 }
 
-                // Status line
-                Text(statusText)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink2)
+                Spacer(minLength: GargantuaSpacing.space5)
+
+                DashboardStatusPanel(
+                    healthScore: healthScore,
+                    healthLabel: healthLabel,
+                    freeDiskText: "\(freeDiskGB) GB free",
+                    freeDiskDetail: diskPressureSummary,
+                    highlightColor: diskBarColor
+                )
+                .frame(maxWidth: 240)
+            }
+
+            if !scanProgress.errors.isEmpty {
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(GargantuaColors.review)
+
+                    Text(scanProgress.errors.first ?? "Quick scan failed.")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.review)
+                        .lineLimit(2)
+                }
             }
         }
-        .padding(GargantuaSpacing.space4)
+        .padding(GargantuaSpacing.space5)
         .background(GargantuaColors.surface1)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .stroke(GargantuaColors.border, lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
     }
 
-    private var diskBarColor: Color {
-        if diskUsage > 0.9 { return GargantuaColors.protected_ }
-        if diskUsage > 0.75 { return GargantuaColors.review }
-        return GargantuaColors.safe
-    }
+    // MARK: - System Snapshot
 
-    private var statusText: String {
-        let freeGB = diskTotalGB - diskUsedGB
-        let range = HealthScoreRange(score: healthScore)
-        switch range {
-        case .healthy:  return "\(freeGB) GB free — system is healthy"
-        case .moderate: return "\(freeGB) GB free — consider cleaning up"
-        case .poor:     return "\(freeGB) GB free — disk space is low"
+    private var systemSnapshotSection: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            Text("SYSTEM SNAPSHOT")
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink4)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(minimum: 180), spacing: GargantuaSpacing.space3),
+                    GridItem(.flexible(minimum: 180), spacing: GargantuaSpacing.space3),
+                ],
+                spacing: GargantuaSpacing.space3
+            ) {
+                DashboardMetricCard(
+                    label: "Composite Health",
+                    value: "\(healthScore)",
+                    detail: healthSummaryText,
+                    tone: HealthScoreRange(score: healthScore).color
+                )
+                DashboardMetricCard(
+                    label: "Disk",
+                    value: "\(freeDiskGB) GB free",
+                    detail: "\(diskUsedGB) / \(diskTotalGB) GB used",
+                    tone: diskBarColor
+                )
+                DashboardMetricCard(
+                    label: "Memory Pressure",
+                    value: "\(Int((memoryPressure * 100).rounded()))%",
+                    detail: "\(memoryUsedGB) / \(memoryTotalGB) GB in use",
+                    tone: memoryTone
+                )
+                DashboardMetricCard(
+                    label: "Thermal",
+                    value: thermalTitle,
+                    detail: thermalDetail,
+                    tone: thermalTone
+                )
+            }
         }
     }
 
     // MARK: - Alerts Section
 
     private var alertsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("EVIDENCE")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(0.8)
+                    .foregroundStyle(GargantuaColors.ink4)
+
+                Text("Largest reclaimable groups from the latest quick scan.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+
             AlertListView(
                 alerts: alerts,
                 onNavigate: { destination in
                     navigateTo(destination)
                 },
                 scanProgress: scanProgress,
-                onScan: { startQuickScan() }
+                onScan: { startQuickScan() },
+                sectionTitle: "Largest reclaimable groups"
+            )
+            .background(GargantuaColors.surface1)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                    .stroke(GargantuaColors.border, lineWidth: 1)
             )
         }
-        .background(GargantuaColors.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
     }
 
     // MARK: - Actions
@@ -150,6 +263,7 @@ public struct DashboardView: View {
     }
 
     private func startQuickScan() {
+        hasRunQuickScan = true
         scanProgress = ScanProgress()
         Task {
             do {
@@ -169,6 +283,261 @@ public struct DashboardView: View {
         diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
         diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
         diskUsage = metrics.diskUsage
+        memoryTotalGB = Int(metrics.memoryTotal / (1024 * 1024 * 1024))
+        memoryUsedGB = Int(metrics.memoryUsed / (1024 * 1024 * 1024))
+        memoryPressure = metrics.memoryPressure
+        thermalLevel = metrics.thermalLevel
         isLoading = false
+    }
+
+    // MARK: - Recommendation Model
+
+    private struct Recommendation {
+        let eyebrow: String
+        let title: String
+        let detail: String
+        let evidence: [String]
+        let primaryLabel: String
+        let primaryAction: () -> Void
+        let showsRefresh: Bool
+        let tone: Color
+    }
+
+    private var dashboardRecommendation: Recommendation {
+        if let topAlert = alerts.first {
+            return Recommendation(
+                eyebrow: "RECOMMENDED NEXT STEP",
+                title: "Review \(topAlert.headline)",
+                detail: "This is the biggest actionable pile from your latest quick scan. Start here before exploring lower-value cleanup work.",
+                evidence: [
+                    topAlert.detail,
+                    destinationLabel(topAlert.destination),
+                    topAlert.staleness ?? "recently verified"
+                ],
+                primaryLabel: primaryLabel(for: topAlert.destination),
+                primaryAction: { navigateTo(topAlert.destination) },
+                showsRefresh: true,
+                tone: tone(for: topAlert.destination)
+            )
+        }
+
+        if hasRunQuickScan {
+            return Recommendation(
+                eyebrow: "NO URGENT CLEANUP DETECTED",
+                title: "Quick Scan did not find actionable cleanup",
+                detail: "Nothing safe or review-tier stood out in the last pass. You can run another scan later or inspect the system manually if disk pressure keeps climbing.",
+                evidence: [
+                    "\(freeDiskGB) GB free",
+                    healthSummaryText,
+                    thermalTitle
+                ],
+                primaryLabel: "Run Quick Scan Again",
+                primaryAction: startQuickScan,
+                showsRefresh: false,
+                tone: GargantuaColors.safe
+            )
+        }
+
+        return Recommendation(
+            eyebrow: "BUILD RECOMMENDATIONS",
+            title: "Run a quick scan before making cleanup decisions",
+            detail: "The dashboard can show evidence-backed cleanup priorities, but it needs one lightweight scan first. Gargantua will surface the biggest reclaimable groups and route you to the right tool.",
+            evidence: [
+                "\(freeDiskGB) GB free",
+                healthSummaryText,
+                "local scan only"
+            ],
+            primaryLabel: "Run Quick Scan",
+            primaryAction: startQuickScan,
+            showsRefresh: false,
+            tone: GargantuaColors.accent
+        )
+    }
+
+    private var freeDiskGB: Int {
+        max(diskTotalGB - diskUsedGB, 0)
+    }
+
+    private var diskBarColor: Color {
+        if diskUsage > 0.9 { return GargantuaColors.protected_ }
+        if diskUsage > 0.75 { return GargantuaColors.review }
+        return GargantuaColors.safe
+    }
+
+    private var memoryTone: Color {
+        if memoryPressure > 0.85 { return GargantuaColors.protected_ }
+        if memoryPressure > 0.65 { return GargantuaColors.review }
+        return GargantuaColors.safe
+    }
+
+    private var thermalTone: Color {
+        switch thermalLevel {
+        case .nominal: return GargantuaColors.safe
+        case .fair: return GargantuaColors.review
+        case .serious, .critical: return GargantuaColors.protected_
+        }
+    }
+
+    private var healthLabel: String {
+        switch HealthScoreRange(score: healthScore) {
+        case .healthy: return "Healthy"
+        case .moderate: return "Needs attention"
+        case .poor: return "Pressure rising"
+        }
+    }
+
+    private var healthSummaryText: String {
+        switch HealthScoreRange(score: healthScore) {
+        case .healthy:
+            return "System looks stable overall."
+        case .moderate:
+            return "Some pressure is building."
+        case .poor:
+            return "The machine is under sustained pressure."
+        }
+    }
+
+    private var diskPressureSummary: String {
+        if diskUsage > 0.9 { return "Disk pressure is high." }
+        if diskUsage > 0.75 { return "Free space is getting tight." }
+        return "Enough headroom for normal work."
+    }
+
+    private var thermalTitle: String {
+        thermalLevel.rawValue.capitalized
+    }
+
+    private var thermalDetail: String {
+        switch thermalLevel {
+        case .nominal: return "No thermal pressure."
+        case .fair: return "Warm, but still stable."
+        case .serious: return "Performance may throttle."
+        case .critical: return "System is heavily constrained."
+        }
+    }
+
+    private func destinationLabel(_ destination: AlertDestination) -> String {
+        switch destination {
+        case .deepClean: return "Deep Clean"
+        case .devPurge: return "Dev Artifact Purge"
+        case .diskExplorer: return "Disk Explorer"
+        }
+    }
+
+    private func primaryLabel(for destination: AlertDestination) -> String {
+        "Open \(destinationLabel(destination))"
+    }
+
+    private func tone(for destination: AlertDestination) -> Color {
+        switch destination {
+        case .deepClean: return GargantuaColors.accent
+        case .devPurge: return GargantuaColors.review
+        case .diskExplorer: return GargantuaColors.safe
+        }
+    }
+}
+
+private struct DashboardStatusPanel: View {
+    let healthScore: Int
+    let healthLabel: String
+    let freeDiskText: String
+    let freeDiskDetail: String
+    let highlightColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            Text("CURRENT PRESSURE")
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink4)
+
+            Text("\(healthScore)")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text(healthLabel)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(highlightColor)
+
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
+                .padding(.vertical, GargantuaSpacing.space2)
+
+            Text(freeDiskText)
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text(freeDiskDetail)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+        }
+        .padding(GargantuaSpacing.space4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GargantuaColors.surface2)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+}
+
+private struct DashboardMetricCard: View {
+    let label: String
+    let value: String
+    let detail: String
+    let tone: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            Text(label.uppercased())
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink4)
+
+            Text(value)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text(detail)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(GargantuaSpacing.space4)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+        .background(GargantuaColors.surface1)
+        .overlay(alignment: .topLeading) {
+            Rectangle()
+                .fill(tone)
+                .frame(width: 28, height: 2)
+                .padding(.horizontal, GargantuaSpacing.space4)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .stroke(GargantuaColors.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+}
+
+private struct DashboardEvidencePill: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(GargantuaColors.ink2)
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .padding(.vertical, GargantuaSpacing.space1)
+            .background(
+                Capsule()
+                    .fill(GargantuaColors.surface3)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+            )
     }
 }

@@ -190,7 +190,6 @@ private struct GargantuaBrandMark: View {
                     }
             }
         }
-        .shadow(color: GargantuaColors.accent.opacity(0.18), radius: 6, x: 0, y: 2)
     }
 
     private static let image: Image? = {
@@ -252,39 +251,46 @@ private struct SidebarItemRow: View {
     private static let transitionDuration: Double = 0.12
 
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: item.icon)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .frame(width: 20, alignment: .center)
+        HStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: item.icon)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink3)
+                .frame(width: 20, alignment: .center)
 
-                Text(item.label)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
-                    .lineLimit(1)
+            Text(item.label)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
+                .lineLimit(1)
 
-                Spacer()
-            }
-            .padding(.vertical, GargantuaSpacing.space2)
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .background(rowBackground)
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Rectangle()
-                        .fill(GargantuaColors.accent)
-                        .frame(width: 2)
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeOut(duration: Self.transitionDuration), value: isSelected)
-            .animation(.easeOut(duration: Self.transitionDuration), value: isHovered)
-            .contentShape(Rectangle())
+            Spacer()
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .background {
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium, style: .continuous)
+                .fill(rowBackground)
+                .overlay {
+                    RoundedRectangle(cornerRadius: GargantuaRadius.medium, style: .continuous)
+                        .stroke(isSelected ? GargantuaColors.borderEm : .clear, lineWidth: 1)
+                }
+        }
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Capsule(style: .continuous)
+                    .fill(GargantuaColors.accent)
+                    .frame(width: 3, height: 22)
+                    .padding(.leading, 6)
+            }
+        }
+        .padding(.horizontal, GargantuaSpacing.space2)
+        .animation(.easeOut(duration: Self.transitionDuration), value: isSelected)
+        .animation(.easeOut(duration: Self.transitionDuration), value: isHovered)
+        .contentShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium, style: .continuous))
+        .onTapGesture(perform: onSelect)
         .onHover { hovering in
             isHovered = hovering
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var rowBackground: Color {

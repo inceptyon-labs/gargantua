@@ -23,7 +23,8 @@ struct ScanGroupHeader: View {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(GargantuaColors.ink3)
-                    .frame(width: 12)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -173,9 +174,15 @@ struct ScanGroupingPicker: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             mode == candidate
-                                ? GargantuaColors.surface3
+                                ? GargantuaColors.surface2
                                 : Color.clear
                         )
+                        .overlay {
+                            if mode == candidate {
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small, style: .continuous)
+                                    .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                            }
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)

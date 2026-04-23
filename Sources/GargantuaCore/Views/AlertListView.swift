@@ -10,17 +10,20 @@ public struct AlertListView: View {
     private let onNavigate: (AlertDestination) -> Void
     private let scanProgress: ScanProgress?
     private let onScan: (() -> Void)?
+    private let sectionTitle: String
 
     public init(
         alerts: [AlertItem],
         onNavigate: @escaping (AlertDestination) -> Void,
         scanProgress: ScanProgress? = nil,
-        onScan: (() -> Void)? = nil
+        onScan: (() -> Void)? = nil,
+        sectionTitle: String = "Alerts"
     ) {
         self.alerts = alerts
         self.onNavigate = onNavigate
         self.scanProgress = scanProgress
         self.onScan = onScan
+        self.sectionTitle = sectionTitle
     }
 
     public var body: some View {
@@ -58,7 +61,7 @@ public struct AlertListView: View {
 
     private var scanHeader: some View {
         HStack {
-            Text("Alerts")
+            Text(sectionTitle)
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink2)
 

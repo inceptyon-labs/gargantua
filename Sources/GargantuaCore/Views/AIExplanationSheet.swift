@@ -186,12 +186,14 @@ public struct AIExplanationSheet: View {
                     controller.dismiss()
                     onOpenSettings?()
                 }
-                .buttonStyle(AccentButtonStyle())
+                .buttonStyle(AIModalButtonStyle(tone: .accent))
+                .focusable(false)
             }
 
             if case .failed = presentation {
                 Button("Retry") { controller.retry() }
-                    .buttonStyle(AccentButtonStyle())
+                    .buttonStyle(AIModalButtonStyle(tone: .accent))
+                    .focusable(false)
             }
 
             Spacer()
@@ -199,7 +201,8 @@ public struct AIExplanationSheet: View {
             Button(presentation.closeLabel) {
                 controller.dismiss()
             }
-            .buttonStyle(SecondaryButtonStyle())
+            .buttonStyle(AIModalButtonStyle(tone: .secondary))
+            .focusable(false)
             .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
@@ -211,31 +214,5 @@ private extension AIExplanationPresentation {
     var closeLabel: String {
         if case .loading = self { return "Cancel" }
         return "Close"
-    }
-}
-
-// MARK: - Button styles
-
-private struct AccentButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(GargantuaFonts.label)
-            .foregroundStyle(GargantuaColors.accent)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(GargantuaColors.accent.opacity(configuration.isPressed ? 0.22 : 0.12))
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-    }
-}
-
-private struct SecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(GargantuaFonts.label)
-            .foregroundStyle(GargantuaColors.ink2)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(GargantuaColors.surface3.opacity(configuration.isPressed ? 0.8 : 0.4))
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 }
