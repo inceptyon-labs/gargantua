@@ -67,6 +67,20 @@ public final class PersistenceController {
         return try context.fetch(descriptor).map { $0.toDomain() }
     }
 
+    /// Build the MCP profile catalog from the same persisted profiles and
+    /// active-profile setting used by the GUI.
+    public func fetchMCPProfileCatalog(
+        fallbackProfileID: String = "light"
+    ) throws -> MCPProfileCatalog {
+        try bootstrap()
+        let settings = try fetchSettings()
+        return MCPProfileCatalog(
+            profiles: try fetchProfiles(),
+            activeProfileID: settings.activeProfileID,
+            fallbackProfileID: fallbackProfileID
+        )
+    }
+
     /// Save or update a profile.
     public func saveProfile(_ profile: CleanupProfile) throws {
         let predicate = #Predicate<PersistedProfile> { $0.profileID == profile.id }

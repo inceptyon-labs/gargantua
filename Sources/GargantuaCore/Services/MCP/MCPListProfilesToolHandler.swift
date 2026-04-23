@@ -9,11 +9,9 @@ import Foundation
 // the two tool contracts self-consistent. Display names remain internal to
 // the app.
 //
-// Scope: this Task (gargantua-o4ef) wires a default provider in
-// `Sources/GargantuaMCP/main.swift` that returns `CleanupProfile.builtIn`
-// plus `active: "light"` (same safest-built-in default the scan handler
-// uses). Persisted user profiles and a real active-profile source land with
-// the persisted-profile bridge in a follow-up.
+// Production wiring in `Sources/GargantuaMCP/main.swift` feeds this handler
+// from `PersistenceController`, so built-in and custom profile identifiers
+// are the same values the GUI reads and writes.
 
 /// Combined profile-list snapshot. Bundles the available profiles with the
 /// active-profile identifier so the handler takes one injected closure

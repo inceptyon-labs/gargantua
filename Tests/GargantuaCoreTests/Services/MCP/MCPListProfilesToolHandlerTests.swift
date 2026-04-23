@@ -108,11 +108,8 @@ struct MCPListProfilesToolHandlerTests {
         #expect(output.active == "")
     }
 
-    @Test("default wiring surfaces all three built-ins with active: light")
+    @Test("snapshot surfaces all three built-ins with active: light")
     func builtInsDefault() throws {
-        // The production wiring in main.swift defaults to
-        // `CleanupProfile.builtIn` + `active: "light"`. Mirror that here to
-        // guard against accidental shape drift.
         let subject = handler(provider: {
             ProfilesSnapshot(profiles: CleanupProfile.builtIn, active: "light")
         })
@@ -120,6 +117,30 @@ struct MCPListProfilesToolHandlerTests {
         #expect(output.active == "light")
         let names = Set(output.profiles.map(\.name))
         #expect(names == ["developer", "light", "deep"])
+    }
+
+    @Test("custom profiles are listed by identifier")
+    func customProfilesListedByIdentifier() throws {
+        let custom = CleanupProfile(
+            id: "custom-dev",
+            name: "Custom Dev",
+            description: "User-defined developer cleanup",
+            categories: ["dev_artifacts", "docker"],
+            isCustom: true
+        )
+        let subject = handler(provider: {
+            ProfilesSnapshot(
+                profiles: CleanupProfile.builtIn + [custom],
+                active: "custom-dev"
+            )
+        })
+
+        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let customSummary = try #require(output.profiles.first { $0.name == "custom-dev" })
+
+        #expect(output.active == "custom-dev")
+        #expect(customSummary.categories == ["dev_artifacts", "docker"])
+        #expect(!output.profiles.contains { $0.name == "Custom Dev" })
     }
 
     @Test("wire envelope uses expected keys for PRD contract")

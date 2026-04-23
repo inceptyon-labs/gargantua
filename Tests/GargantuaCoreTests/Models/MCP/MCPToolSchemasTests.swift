@@ -36,11 +36,12 @@ struct MCPToolSchemasTests {
         #expect(scan.inputSchema.required?.contains("dry_run") == true)
     }
 
-    @Test("scan schema profile property uses PRD enum values")
-    func scanSchemaProfileEnum() {
+    @Test("scan schema profile property accepts identifiers from list_profiles")
+    func scanSchemaProfileAcceptsCatalogIdentifiers() {
         let scan = MCPPhase2Tools.scan
         let profile = scan.inputSchema.properties?["profile"]
-        #expect(profile?.enumValues == ["developer", "light", "deep", "custom"])
+        #expect(profile?.enumValues == nil)
+        #expect(profile?.description?.contains("list_profiles") == true)
     }
 
     // MARK: scan input decoding
@@ -51,6 +52,13 @@ struct MCPToolSchemasTests {
         let input = try JSONDecoder().decode(MCPScanInput.self, from: json)
         #expect(input.dryRun == true)
         #expect(input.profile == "developer")
+    }
+
+    @Test("scan input accepts custom profile identifiers")
+    func scanInputAcceptsCustomProfileID() throws {
+        let json = Data(#"{"profile":"custom-dev"}"#.utf8)
+        let input = try JSONDecoder().decode(MCPScanInput.self, from: json)
+        #expect(input.profile == "custom-dev")
     }
 
     @Test("scan input decodes when dry_run is explicitly true")

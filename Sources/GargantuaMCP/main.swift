@@ -54,34 +54,29 @@ let dispatcher = MCPRequestDispatcher(
 // `lookupAll(ids:)` surface.
 let scanSessionCache = MCPScanSessionCache()
 
+private func loadProfileCatalog() throws -> MCPProfileCatalog {
+    do {
+        return try runBlocking {
+            try await MainActor.run {
+                let persistence = try PersistenceController()
+                return try persistence.fetchMCPProfileCatalog()
+            }
+        }
+    } catch let error as MCPToolError {
+        throw error
+    } catch {
+        stderrLog("profile catalog load failed: \(error)")
+        throw MCPToolError.internalError("Profile store unavailable.")
+    }
+}
+
 // MARK: - scan
 
-// The Phase 2 MCP server is a standalone CLI; it doesn't have access to the
-// app's persisted "active profile" yet. Default to `.light` (the safest
-// built-in) when no profile is requested. "custom" is advertised by the
-// schema (PRD §7.3) but has no wiring yet — reject it explicitly so clients
-// can't get a silent profile downgrade; support will arrive with the
-// persisted-profile bridge in a follow-up.
-//
-// Unknown profile names get rejected with `-32602 invalidParams`.
+// Resolve profile identifiers through the same SwiftData-backed catalog the
+// GUI uses. Omitting `profile` follows the persisted active profile; explicit
+// unknown IDs are rejected with `-32602 invalidParams`.
 private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requested in
-    guard let name = requested else { return .light }
-    switch name {
-    case "developer":
-        return .developer
-    case "light":
-        return .light
-    case "deep":
-        return .deep
-    case "custom":
-        throw MCPToolError.invalidParams(
-            "'custom' profile is not yet supported via MCP; use 'developer', 'light', or 'deep'."
-        )
-    default:
-        throw MCPToolError.invalidParams(
-            "Unknown profile '\(name)'. Expected one of: developer, light, deep, custom."
-        )
-    }
+    try loadProfileCatalog().resolve(requested)
 }
 
 // Bridges `NativeScanAdapter.scan()` (async) into the synchronous `Scanner`
@@ -154,17 +149,14 @@ dispatcher.register(tool: .explain, handler: explainHandler.toolHandler)
 
 // MARK: - list_profiles
 
-// Default profiles provider: the three built-in profiles, with `active`
-// pinned to "light" (same safest built-in the scan handler falls back to
-// when no profile is requested). Persisted user profiles and the app's
-// real active-profile selection land with the persisted-profile bridge
-// in a follow-up.
-private let builtInProfilesProvider: MCPListProfilesToolHandler.ProfilesProvider = {
-    ProfilesSnapshot(profiles: CleanupProfile.builtIn, active: "light")
+// Default profiles provider: all persisted built-in and custom profiles,
+// plus the persisted active profile identifier.
+private let persistedProfilesProvider: MCPListProfilesToolHandler.ProfilesProvider = {
+    try loadProfileCatalog().snapshot
 }
 
 let listProfilesHandler = MCPListProfilesToolHandler(
-    profilesProvider: builtInProfilesProvider,
+    profilesProvider: persistedProfilesProvider,
     log: stderrLog
 )
 dispatcher.register(tool: .listProfiles, handler: listProfilesHandler.toolHandler)

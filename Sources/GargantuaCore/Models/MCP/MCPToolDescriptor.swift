@@ -175,8 +175,7 @@ public enum MCPPhase2Tools {
             properties: [
                 "profile": MCPJSONSchema(
                     type: .string,
-                    description: "Cleanup profile to use. Defaults to the active profile.",
-                    enumValues: ["developer", "light", "deep", "custom"]
+                    description: "Cleanup profile identifier from list_profiles. Defaults to the active profile."
                 ),
                 "categories": MCPJSONSchema(
                     type: .array,
