@@ -117,7 +117,7 @@ struct MCPRequestDispatcherTests {
             guard case .object(let obj) = entry, case .string(let name) = obj["name"] else { return nil }
             return name
         }
-        #expect(Set(names) == Set(MCPToolName.allCases.map(\.rawValue)))
+        #expect(Set(names) == Set(MCPPhase2Tools.all.map(\.name.rawValue)))
     }
 
     @Test("tools/list encodes the schema in MCP shape (name/description/inputSchema)")

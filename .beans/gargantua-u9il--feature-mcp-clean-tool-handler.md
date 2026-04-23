@@ -1,11 +1,11 @@
 ---
 # gargantua-u9il
 title: 'Feature: MCP clean tool handler'
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-04-23T20:54:06Z
-updated_at: 2026-04-23T21:10:15Z
+updated_at: 2026-04-23T21:11:29Z
 parent: gargantua-rght
 ---
 

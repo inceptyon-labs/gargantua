@@ -1,11 +1,11 @@
 ---
 # gargantua-rght
 title: 'Epic: MCP Server v2 (Phase 3)'
-status: todo
+status: in-progress
 type: epic
 priority: high
 created_at: 2026-04-23T21:05:56Z
-updated_at: 2026-04-23T21:05:56Z
+updated_at: 2026-04-23T21:11:29Z
 ---
 
 Phase 3 MCP server expansion. Per PRD §10 line 898: "MCP Server (v2 — clean tool + full agent integration)." Absorbs the Phase 3 transport work from §7.2 (SSE + bearer auth) and the destructive-tool guardrails from §7.4.

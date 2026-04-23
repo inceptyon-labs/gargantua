@@ -1,16 +1,18 @@
 import Foundation
 
-/// Stable identifier for the Phase 2 MCP tool set.
+/// Stable identifier for every MCP tool exposed by the server across phases.
 ///
-/// Phase 2 exposes read-only tools plus a dry-run `scan`. The `clean` tool is
-/// deferred to Phase 3 and is intentionally absent here so that no code path
-/// can synthesize a clean request via MCP during Phase 2.
+/// Phase 2 exposes read-only tools plus a dry-run `scan`. Phase 3 adds the
+/// destructive `clean` tool, registered through `MCPPhase3Tools` and never
+/// mixed into `MCPPhase2Tools.all` — Phase 2 server entry points must stay
+/// free of destructive capabilities.
 public enum MCPToolName: String, Codable, Sendable, CaseIterable {
     case scan
     case analyze
     case explain
     case listProfiles = "list_profiles"
     case status
+    case clean
 }
 
 /// A self-describing MCP tool definition: name, human description, and a
@@ -148,9 +150,9 @@ public enum MCPJSONValue: Codable, Sendable, Equatable {
 
 /// The canonical Phase 2 tool registry.
 ///
-/// Exactly five tools are defined (PRD §7.3). No `clean` tool is present;
-/// any future Phase 3 registry should be a distinct value so Phase 2 code
-/// paths cannot accidentally advertise destructive capabilities.
+/// Exactly five tools are defined (PRD §7.3). The destructive `clean` tool
+/// lives in `MCPPhase3Tools` so Phase 2 code paths cannot accidentally
+/// advertise destructive capabilities.
 public enum MCPPhase2Tools {
     public static let all: [MCPToolDescriptor] = [
         scan,
