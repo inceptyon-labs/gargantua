@@ -95,7 +95,23 @@ struct MCPStdioPhase3IntegrationTests {
         #expect(server.cleanupLog.invocations[0].method == .trash)
 
         #expect(server.notificationService.callCount == 1)
-        #expect(server.notificationService.lastClientID == "test-client")
+        #expect(
+            server.notificationService.lastClientID == "claude-code-stdio",
+            "notification service must receive the dispatcher-captured client name, not a hardcoded placeholder"
+        )
+    }
+
+    @Test("pre-initialize clean routes the 'unknown' sentinel into the notification service")
+    func preInitCleanUsesUnknownInNotification() throws {
+        let server = Phase3StdioTestServer()
+        defer { server.shutdown() }
+
+        // No initialize handshake — skip straight to scan + clean. The
+        // notification service must see the sentinel, not an empty string.
+        _ = try server.roundTrip(Self.scanRequest(id: 1))
+        _ = try server.roundTrip(Self.cleanRequest(id: 2, itemIDs: ["safe-a"]))
+
+        #expect(server.notificationService.lastClientID == MCPCleanToolHandler.unknownClientSentinel)
     }
 
     @Test("clean with a protected item hard-rejects with invalidParams and no audit")

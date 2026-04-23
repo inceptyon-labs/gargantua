@@ -165,13 +165,29 @@ public final class UNCleanNotificationService: NSObject,
         }
         _ = postSemaphore.wait(timeout: .now() + 1)
 
-        _ = semaphore.wait(timeout: .now() + gracePeriod)
+        // Grace period for the user to react. After the main wait times out
+        // we take one extra pass through the delegate-callback race window:
+        // a Cancel tap that the system recognized inside the window can
+        // still land in our delegate a few ms later if the main queue was
+        // briefly busy. The `cancelled` flag is set under `lock` *before*
+        // the delegate signals, so any observed signal guarantees a cancel.
+        // Extending the wait by `delegateBufferSeconds` keeps a late-by-a-
+        // few-ms cancel from being silently dropped as `.proceed`.
+        let mainWait = semaphore.wait(timeout: .now() + gracePeriod)
+        if mainWait == .timedOut {
+            _ = semaphore.wait(timeout: .now() + Self.delegateBufferSeconds)
+        }
 
         lock.lock()
         let cancelled = pendingByID[notificationID]?.cancelled ?? false
         lock.unlock()
         return cancelled ? .cancelled : .proceed
     }
+
+    /// Extra time past the grace period to give a just-fired delegate
+    /// callback a chance to land. Kept small so the total worst-case wait
+    /// stays predictable for the transport thread.
+    static let delegateBufferSeconds: TimeInterval = 0.15
 
     // MARK: - UNUserNotificationCenterDelegate
 
@@ -216,8 +232,35 @@ public final class UNCleanNotificationService: NSObject,
         let verb = method == .delete ? "permanently delete" : "move to Trash"
         let totalBytes = items.reduce(Int64(0)) { $0 + $1.size }
         let sizeSuffix = totalBytes > 0 ? " (\(AlertItem.formatBytes(totalBytes)))" : ""
-        return "\(clientID) wants to \(verb) \(items.count) item(s)\(sizeSuffix). Tap Cancel to block."
+        let safeClientID = sanitizeForNotification(clientID)
+        return "\(safeClientID) wants to \(verb) \(items.count) item(s)\(sizeSuffix). Tap Cancel to block."
     }
+
+    /// Scrubs a client-supplied string before rendering it in a user-facing
+    /// notification. The `clientInfo.name` comes from the MCP client and is
+    /// attacker-controlled; without sanitizing, a malicious client could
+    /// inject newlines or overflow the banner with decoy copy designed to
+    /// look like a trusted UI prompt, undermining the whole consent flow.
+    ///
+    /// Policy: strip control characters (anything below 0x20 plus DEL),
+    /// collapse embedded newlines/tabs to a single space, trim whitespace,
+    /// clip to `maxClientIDLength`, and fall back to the "unknown" sentinel
+    /// if the result is empty. The outer quotes delimit the name so a user
+    /// can see exactly what the client identified itself as.
+    static func sanitizeForNotification(_ clientID: String) -> String {
+        let collapsed = clientID.unicodeScalars.map { scalar -> String in
+            if scalar.value < 0x20 || scalar.value == 0x7F { return " " }
+            return String(scalar)
+        }.joined()
+        let trimmed = collapsed.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "\"unknown\"" }
+        let clipped = trimmed.count > maxClientIDLength
+            ? trimmed.prefix(maxClientIDLength) + "…"
+            : Substring(trimmed)
+        return "\"\(clipped)\""
+    }
+
+    static let maxClientIDLength: Int = 64
 }
 
 /// Picks a notification service based on runtime availability. Use this in

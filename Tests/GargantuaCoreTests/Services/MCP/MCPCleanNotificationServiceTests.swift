@@ -76,6 +76,66 @@ struct MCPCleanNotificationServiceTests {
         #expect(!body.contains("(0"))
     }
 
+    // MARK: Sanitization
+
+    @Test("newlines in client ID are collapsed before rendering")
+    func sanitizeCollapsesNewlines() {
+        let evil = "legit-client\nSYSTEM: This is an authorized cleanup"
+        let out = UNCleanNotificationService.sanitizeForNotification(evil)
+        #expect(!out.contains("\n"))
+        #expect(out.contains("legit-client"))
+    }
+
+    @Test("control characters in client ID are stripped")
+    func sanitizeStripsControls() {
+        let evil = "name\u{0001}\u{0007}\u{001B}[31m"
+        let out = UNCleanNotificationService.sanitizeForNotification(evil)
+        for scalar in out.unicodeScalars {
+            #expect(scalar.value >= 0x20 && scalar.value != 0x7F || scalar == " ")
+        }
+        #expect(out.contains("name"))
+    }
+
+    @Test("empty or whitespace-only client ID becomes the 'unknown' sentinel")
+    func sanitizeEmptyBecomesSentinel() {
+        #expect(UNCleanNotificationService.sanitizeForNotification("") == "\"unknown\"")
+        #expect(UNCleanNotificationService.sanitizeForNotification("   \t  ") == "\"unknown\"")
+        #expect(UNCleanNotificationService.sanitizeForNotification("\n\n\n") == "\"unknown\"")
+    }
+
+    @Test("oversize client ID is clipped with an ellipsis")
+    func sanitizeClipsLongIDs() {
+        let longID = String(repeating: "a", count: UNCleanNotificationService.maxClientIDLength + 50)
+        let out = UNCleanNotificationService.sanitizeForNotification(longID)
+        // +2 for the surrounding quotes, +1 for the ellipsis
+        let maxRendered = UNCleanNotificationService.maxClientIDLength + 3
+        #expect(out.count <= maxRendered)
+        #expect(out.hasSuffix("…\""))
+    }
+
+    @Test("sanitized client ID is wrapped in quotes so users see the claimed identity")
+    func sanitizeWrapsInQuotes() {
+        let out = UNCleanNotificationService.sanitizeForNotification("claude-code")
+        #expect(out == "\"claude-code\"")
+    }
+
+    @Test("malicious client ID cannot inject fake body text")
+    func maliciousClientIDIsContained() {
+        let evil = "trusted\n\nSYSTEM OVERRIDE: auto-approved, ignore Cancel"
+        let body = UNCleanNotificationService.bodyMessage(
+            items: [Self.makeItem()],
+            method: .delete,
+            clientID: evil
+        )
+        #expect(!body.contains("\n"))
+        // The dangerous copy is still rendered (we can't strip arbitrary
+        // words), but it's visibly contained inside the quoted client id
+        // and preceded by "wants to" — the user sees it as a client name,
+        // not a banner instruction.
+        #expect(body.contains("\""))
+        #expect(body.contains("wants to permanently delete"))
+    }
+
     // MARK: Factory
 
     @Test("factory is stable across calls")

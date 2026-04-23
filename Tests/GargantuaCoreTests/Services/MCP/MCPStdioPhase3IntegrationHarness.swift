@@ -65,11 +65,15 @@ final class Phase3StdioTestServer: @unchecked Sendable {
 
         // clean handler — full Phase 3 production wiring, but the `Cleaner`
         // calls the notification service + cleanup log instead of the real
-        // CleanupEngine.
+        // CleanupEngine. The cleaner resolves the client identifier off the
+        // dispatcher the same way `main.swift` does, so tests exercise the
+        // real attribution path (not a hardcoded placeholder).
         let notifications = notificationService
         let log = cleanupLog
         let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
-            switch notifications.request(items: items, method: method, clientID: "test-client") {
+            let clientID = dispatcher.currentClientIdentity()?.name
+                ?? MCPCleanToolHandler.unknownClientSentinel
+            switch notifications.request(items: items, method: method, clientID: clientID) {
             case .cancelled:
                 return CleanupResult(
                     itemResults: items.map {

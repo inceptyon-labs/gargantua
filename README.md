@@ -33,7 +33,7 @@ Phase 3 safety guardrails (PRD §7.4), enforced by the server on every call:
 - **Protected hard-reject.** Any item classified `protected` aborts the whole request; the server never removes a protected path over MCP.
 - **Rate limit.** One clean operation per 60 seconds per client. Exceeding it returns `invalidParams` with a retry-after hint.
 - **Audit trail.** Every attempted clean — success, failure, or user-cancelled — appends an entry to `~/Library/Logs/Gargantua/audit.json` tagged `transport: "mcp"` with the client identifier.
-- **User notification.** Before any files move, macOS posts a local notification with a `Cancel` action. If the user taps Cancel within 5 seconds, the clean is short-circuited and the attempt is still audited (`bytes_freed: 0`). If they don't, the clean proceeds.
+- **User notification.** Before any files move, macOS posts a local notification with a `Cancel` action. If the user taps Cancel within 5 seconds, the clean is short-circuited and the attempt is still audited (`bytes_freed: 0`). If they don't, the clean proceeds. The notification requires the user to have granted local notification permission to the Gargantua app in System Settings; on an unbundled CLI or with permission denied, the post fails silently and the grace period elapses — the rate limit and audit trail still apply, but the per-clean cancel guardrail is skipped.
 
 Client identification is read from the JSON-RPC `initialize` handshake's `clientInfo.name`. A client that skips `initialize`, sends a blank name, or re-initializes with a blank name is audited under the sentinel `"unknown"` and shares that bucket's rate-limit budget — it cannot bypass attribution by omitting its name.
 
