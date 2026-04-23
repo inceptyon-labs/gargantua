@@ -36,9 +36,17 @@ public struct MCPCleanToolHandler: Sendable {
     /// any other thrown error is surfaced to the client as a tool-domain
     /// `.failure(...)` result.
     ///
-    /// In production this closure wraps `CleanupEngine.clean` via the
-    /// `runBlocking` helper in `GargantuaMCP/main.swift` to bridge from the
-    /// sync transport thread to the `@MainActor` engine.
+    /// Task 4 wiring note: `CleanupEngine.clean` is `@MainActor`, and the
+    /// stdio transport currently runs on the main thread (see
+    /// `GargantuaMCP/main.swift`). Wrapping the engine call in `runBlocking`
+    /// the way `scan` does would deadlock — `runBlocking` parks the main
+    /// thread on a semaphore while the detached Task it spawns tries to hop
+    /// back to the main actor. The scan path avoids this because
+    /// `NativeScanAdapter.scan` is not `@MainActor`. Task 4 must either run
+    /// the transport off the main thread, or refactor `CleanupEngine.clean`
+    /// to a non-`@MainActor` entry point, before adopting this typealias in
+    /// production. The sync shape is preserved here so that refactor has a
+    /// stable handler contract to target.
     public typealias Cleaner = @Sendable (_ items: [ScanResult], _ method: CleanupMethod) throws -> CleanupResult
 
     /// Produces the `audit_id` emitted in every response. Task 2 returns a
@@ -101,6 +109,16 @@ public struct MCPCleanToolHandler: Sendable {
         // We do not silently drop protected items and clean the rest — a
         // partial clean masking a protected reject would be worse than the
         // loud error.
+        //
+        // Note: `safety` is a snapshot taken at scan time. If the filesystem
+        // content at a scanned path changes between scan and clean (e.g. a
+        // rogue process replaces the file), the cached `safety` label is
+        // stale. This handler does not revalidate. It is mitigated in
+        // practice by CleanupEngine operating on the exact scanned path (not
+        // following symlinks), and by the per-client rate limit + audit
+        // trail arriving in Task 3 which bound the replay window. A
+        // clean-time revalidation would require re-scanning each item and
+        // belongs with the Task 3 safety hardening pass.
         let protected = found.filter { $0.safety == .protected_ }
         if !protected.isEmpty {
             throw MCPToolError.invalidParams(Self.protectedRejectMessage(protected))
@@ -169,6 +187,13 @@ public struct MCPCleanToolHandler: Sendable {
     /// engine runs, so every engine result maps to `moved` or `failed`. The
     /// `skipped` slot stays in the vocabulary so later tasks (e.g. rate-limit
     /// partial skips) can emit it without a wire format change.
+    ///
+    /// `bytes_freed` and `freed` are sourced from `ScanResult.size` (the
+    /// scan-time sample) rather than actual post-clean disk delta — engine
+    /// doesn't currently track actual bytes removed (e.g. the
+    /// `emptyTrashContainer` path touches whatever Trash contains now, not
+    /// what it contained at scan time). Agents should treat `freed` as a
+    /// best-effort estimate, not a ground truth.
     private static func makeResult(
         result: CleanupResult,
         method: CleanupMethod,
