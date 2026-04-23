@@ -43,4 +43,9 @@ public enum ConfirmationTier: String, Codable, Sendable {
     case summaryDialog
     /// Full modal with item-by-item acknowledgment. Used when protected items are selected.
     case fullModal
+    /// MCP-initiated action. Confirmation is encoded at the protocol layer
+    /// (`MCPCleanInput.confirm == true` is required to even decode the
+    /// payload); recorded as a distinct tier so audit readers can see that
+    /// the clean did not go through an app-level UX flow.
+    case mcp
 }

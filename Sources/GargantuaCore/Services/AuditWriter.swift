@@ -96,6 +96,63 @@ public final class AuditWriter: Sendable {
         try write(entry)
     }
 
+    /// Record an MCP-initiated operation. Unlike `record(result:...)`, this
+    /// overload is called for every completed clean request, including ones
+    /// that failed before producing any successful items — an attempted
+    /// destructive operation is worth auditing whether or not it succeeded,
+    /// so forensic investigators can see what an MCP client tried to do.
+    ///
+    /// - Parameters:
+    ///   - requested: Items the client asked to clean (resolved against the
+    ///     scan cache). These are the `files` recorded in the entry.
+    ///   - result: The cleaner result, or nil for failure before the cleaner
+    ///     ran. When nil, `bytesFreed` is reported as 0 and the cleanup method
+    ///     falls back to `methodHint`.
+    ///   - methodHint: The cleanup method the client requested. Used when
+    ///     `result` is nil. Ignored when `result` is present.
+    ///   - clientID: Identifier of the initiating MCP client.
+    ///   - tool: Engine/tool attribution. Defaults to `"native"`.
+    ///   - command: Verb being audited. Defaults to `"clean"`.
+    /// - Returns: The UUID of the written entry, so the caller can surface it
+    ///   as `audit_id` in the tool response.
+    @discardableResult
+    public func recordMCP(
+        requested: [ScanResult],
+        result: CleanupResult?,
+        methodHint: CleanupMethod = .trash,
+        clientID: String,
+        tool: String = "native",
+        command: String = "clean"
+    ) throws -> UUID {
+        let files = requested.map { AuditFile(path: $0.path, size: $0.size) }
+
+        let highestSafety = requested.map(\.safety).reduce(SafetyLevel.safe) { current, next in
+            switch (current, next) {
+            case (.protected_, _), (_, .protected_): .protected_
+            case (.review, _), (_, .review): .review
+            default: .safe
+            }
+        }
+
+        let entry = AuditEntry(
+            tool: tool,
+            command: command,
+            files: files,
+            safetyLevel: highestSafety,
+            // `mcp` carries its own confirmation semantics (schema-level
+            // `confirm: true`); record it as a distinct tier via the stored
+            // string value rather than conflating with the UI tiers.
+            confirmationMethod: .mcp,
+            cleanupMethod: result?.cleanupMethod ?? methodHint,
+            bytesFreed: result?.totalFreed ?? 0,
+            transport: "mcp",
+            clientID: clientID
+        )
+
+        try write(entry)
+        return entry.id
+    }
+
     // MARK: - Reading
 
     private static let decoder: JSONDecoder = {
