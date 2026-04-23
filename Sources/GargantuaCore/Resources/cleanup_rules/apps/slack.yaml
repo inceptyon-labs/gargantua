@@ -1,0 +1,98 @@
+rules:
+  - id: slack_cache
+    name: Slack Cache
+    paths:
+      - "~/Library/Application Support/Slack/Cache"
+      - "~/Library/Application Support/Slack/GPUCache"
+    safety: safe
+    confidence: 97
+    explanation: "Electron cache files regenerated automatically on next launch."
+    source:
+      name: Slack
+      bundle_id: com.tinyspeck.slackmacgap
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - slack
+      - cache
+
+  - id: slack_code_cache
+    name: Slack Code Cache
+    paths:
+      - "~/Library/Application Support/Slack/Code Cache"
+    safety: safe
+    confidence: 96
+    explanation: "Compiled script cache regenerated automatically when Slack reloads."
+    source:
+      name: Slack
+      bundle_id: com.tinyspeck.slackmacgap
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - slack
+      - cache
+
+  - id: slack_service_worker
+    name: Slack Service Worker Cache
+    paths:
+      - "~/Library/Application Support/Slack/Service Worker"
+    safety: safe
+    confidence: 95
+    explanation: "Cached web app assets and service worker state rebuilt on next launch."
+    source:
+      name: Slack
+      bundle_id: com.tinyspeck.slackmacgap
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - slack
+      - cache
+
+  - id: slack_local_storage
+    name: Slack Local Storage
+    paths:
+      - "~/Library/Application Support/Slack/Local Storage"
+    safety: review
+    confidence: 76
+    explanation: "Local storage may contain workspace preferences, session tokens, and app state. Review before removing."
+    source:
+      name: Slack
+      bundle_id: com.tinyspeck.slackmacgap
+      verify_signature: true
+    regenerates: false
+    category: app_data
+    tags:
+      - app
+      - slack
+      - user_data
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 86
+        explanation_suffix: "No Slack activity in 90+ days — likely abandoned workspace state."
+        profiles:
+          - deep
+
+  - id: slack_logs
+    name: Slack Logs
+    paths:
+      - "~/Library/Logs/Slack"
+    safety: safe
+    confidence: 98
+    explanation: "Diagnostic logs safe to remove. Slack recreates them as needed."
+    source:
+      name: Slack
+      bundle_id: com.tinyspeck.slackmacgap
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - slack
+      - logs

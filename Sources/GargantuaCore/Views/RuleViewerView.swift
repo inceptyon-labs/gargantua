@@ -286,6 +286,9 @@ public struct RuleViewerView: View {
             let grouped = Dictionary(grouping: result.rules) { rule -> String in
                 // Derive category folder from the rule's category field
                 if rule.category.hasPrefix("browser") { return "browser" }
+                if rule.category.hasPrefix("app") || rule.tags.contains("app") {
+                    return "apps"
+                }
                 if rule.tags.contains("developer") || rule.category.hasPrefix("dev")
                     || rule.category.hasPrefix("build") || rule.category.hasPrefix("package") {
                     return "developer"
@@ -293,7 +296,7 @@ public struct RuleViewerView: View {
                 return "system"
             }
 
-            categories = ["browser", "developer", "system"].compactMap { name in
+            categories = ["browser", "apps", "developer", "system"].compactMap { name in
                 guard let rules = grouped[name], !rules.isEmpty else { return nil }
                 return RuleCategory(name: name, rules: rules.sorted { $0.name < $1.name })
             }
@@ -473,6 +476,7 @@ struct RuleCategory: Identifiable {
     var icon: String {
         switch name {
         case "browser": "globe"
+        case "apps": "app.badge"
         case "developer": "hammer"
         case "system": "gearshape.2"
         default: "folder"

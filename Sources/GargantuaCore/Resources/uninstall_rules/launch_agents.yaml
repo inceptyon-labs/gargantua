@@ -1,0 +1,41 @@
+# Generic launch services applied to every uninstalled app.
+remnant_rules:
+
+  - id: generic_user_launch_agents
+    name: User launch agents
+    category: launch_agents
+    path_templates:
+      - "~/Library/LaunchAgents/{bundleID}.plist"
+      - "~/Library/LaunchAgents/{bundleID}.*.plist"
+    confidence: 90
+    explanation: Per-user launch agents registered by the app.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, launchd]
+
+  - id: generic_system_launch_agents
+    name: System launch agents
+    category: launch_agents
+    path_templates:
+      - "/Library/LaunchAgents/{bundleID}.plist"
+      - "/Library/LaunchAgents/{bundleID}.*.plist"
+    confidence: 85
+    explanation: System-wide launch agents registered by the app installer.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, launchd, system]
+
+  - id: generic_launch_daemons
+    name: Launch daemons
+    category: launch_daemons
+    path_templates:
+      - "/Library/LaunchDaemons/{bundleID}.plist"
+      - "/Library/LaunchDaemons/{bundleID}.*.plist"
+    confidence: 80
+    explanation: System-wide daemons; removing requires administrator privileges.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, launchd, daemon]

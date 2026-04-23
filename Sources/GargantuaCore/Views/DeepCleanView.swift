@@ -160,7 +160,7 @@ public struct DeepCleanView: View {
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("Scans for browser caches, system logs, temp files, old installers, and other reclaimable space.")
+                Text("Scans for browser caches, app caches, system logs, temp files, old installers, and other reclaimable space.")
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink2)
                     .multilineTextAlignment(.center)

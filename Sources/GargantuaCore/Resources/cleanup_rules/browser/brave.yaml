@@ -1,0 +1,107 @@
+rules:
+  - id: brave_cache
+    name: Brave Browser Cache
+    paths:
+      - "~/Library/Caches/BraveSoftware/Brave-Browser"
+      - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Cache"
+    safety: safe
+    confidence: 98
+    explanation: "Browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Brave Browser
+      bundle_id: com.brave.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - brave
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "Cache untouched for 30+ days — very safe to remove."
+        profiles:
+          - developer
+          - deep
+
+  - id: brave_code_cache
+    name: Brave Code Cache
+    paths:
+      - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Code Cache"
+    safety: safe
+    confidence: 97
+    explanation: "Compiled JavaScript and WebAssembly cache. Rebuilt transparently on revisit."
+    source:
+      name: Brave Browser
+      bundle_id: com.brave.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - brave
+
+  - id: brave_service_worker
+    name: Brave Service Worker Cache
+    paths:
+      - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Service Worker"
+    safety: safe
+    confidence: 95
+    explanation: "Service worker and CacheStorage data. Sites re-download on next visit."
+    source:
+      name: Brave Browser
+      bundle_id: com.brave.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - brave
+
+  - id: brave_local_storage
+    name: Brave Local Storage
+    paths:
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Local Storage"
+    safety: review
+    confidence: 75
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Brave Browser
+      bundle_id: com.brave.Browser
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - brave
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No browser activity in 90+ days — likely abandoned site data."
+        profiles:
+          - deep
+
+  - id: brave_extensions_cache
+    name: Brave Extensions Cache
+    paths:
+      - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Extensions"
+    safety: safe
+    confidence: 90
+    explanation: "Cached extension assets. Extensions re-download from the Brave Web Store."
+    source:
+      name: Brave Browser
+      bundle_id: com.brave.Browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - extensions
+      - cache
+      - brave

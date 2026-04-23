@@ -227,16 +227,16 @@ struct RemnantRuleParserTests {
         }
     }
 
-    // MARK: - Bundled default_remnants.yaml
+    // MARK: - Bundled remnant YAML
 
-    @Test("Bundled default_remnants.yaml parses cleanly")
-    func bundledDefaultsParse() throws {
+    @Test("Bundled remnant_locations.yaml parses cleanly")
+    func bundledRemnantLocationsParse() throws {
         guard let url = Bundle.module.url(
-            forResource: "default_remnants",
+            forResource: "remnant_locations",
             withExtension: "yaml",
             subdirectory: "uninstall_rules"
         ) else {
-            Issue.record("default_remnants.yaml not bundled")
+            Issue.record("remnant_locations.yaml not bundled")
             return
         }
         let yaml = try String(contentsOf: url, encoding: .utf8)
@@ -247,14 +247,30 @@ struct RemnantRuleParserTests {
         #expect(categories.contains(.supportFiles))
         #expect(categories.contains(.caches))
         #expect(categories.contains(.preferences))
-        #expect(categories.contains(.launchAgents))
-        #expect(categories.contains(.launchDaemons))
         #expect(categories.contains(.logs))
 
         // Every rule must declare at least one path template.
         for rule in file.rules {
             #expect(!rule.pathTemplates.isEmpty)
         }
+    }
+
+    @Test("Bundled launch_agents.yaml parses cleanly")
+    func bundledLaunchAgentsParse() throws {
+        guard let url = Bundle.module.url(
+            forResource: "launch_agents",
+            withExtension: "yaml",
+            subdirectory: "uninstall_rules"
+        ) else {
+            Issue.record("launch_agents.yaml not bundled")
+            return
+        }
+        let yaml = try String(contentsOf: url, encoding: .utf8)
+        let file = try parser.parse(yaml: yaml, filePath: url.path)
+
+        let categories = Set(file.rules.map(\.category))
+        #expect(categories.contains(.launchAgents))
+        #expect(categories.contains(.launchDaemons))
     }
 }
 

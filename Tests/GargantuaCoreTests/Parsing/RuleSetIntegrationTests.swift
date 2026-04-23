@@ -29,10 +29,11 @@ struct RuleSetIntegrationTests {
     @Test("Expected number of rule files loaded")
     func expectedFileCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        // browser: chrome, safari, firefox, arc
+        // browser: chrome, safari, firefox, arc, brave
+        // apps: slack, spotify, dropbox
         // developer: xcode, node, docker, homebrew, python, rust, go
         // system: caches, logs, temp, trash
-        #expect(result.filesLoaded == 15)
+        #expect(result.filesLoaded == 19)
     }
 
     // MARK: - Rule Completeness
@@ -96,7 +97,7 @@ struct RuleSetIntegrationTests {
 
     // MARK: - Category Coverage
 
-    @Test("Browser rules cover Chrome, Safari, Firefox, Arc")
+    @Test("Browser rules cover Chrome, Safari, Firefox, Arc, Brave")
     func browserCoverage() throws {
         let result = try loader.loadRules(from: rulesDirectory)
         let browserRuleIDs = result.rules.filter { $0.category == "browser_cache" || $0.category == "browser_data" }.map(\.id)
@@ -105,6 +106,17 @@ struct RuleSetIntegrationTests {
         #expect(browserRuleIDs.contains(where: { $0.hasPrefix("safari") }), "Missing Safari rules")
         #expect(browserRuleIDs.contains(where: { $0.hasPrefix("firefox") }), "Missing Firefox rules")
         #expect(browserRuleIDs.contains(where: { $0.hasPrefix("arc") }), "Missing Arc rules")
+        #expect(browserRuleIDs.contains(where: { $0.hasPrefix("brave") }), "Missing Brave rules")
+    }
+
+    @Test("App rules cover Slack, Spotify, Dropbox")
+    func appCoverage() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let appRuleIDs = result.rules.filter { $0.category == "app_cache" || $0.category == "app_data" }.map(\.id)
+
+        #expect(appRuleIDs.contains(where: { $0.hasPrefix("slack") }), "Missing Slack rules")
+        #expect(appRuleIDs.contains(where: { $0.hasPrefix("spotify") }), "Missing Spotify rules")
+        #expect(appRuleIDs.contains(where: { $0.hasPrefix("dropbox") }), "Missing Dropbox rules")
     }
 
     @Test("Developer rules cover Xcode, node_modules, Docker, Homebrew, Python, Rust, Go")

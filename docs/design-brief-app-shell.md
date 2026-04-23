@@ -66,7 +66,7 @@ Reference the established design system (`.interface-design/system.md`) for all 
 - **Scanning:** Live progress — categories lighting up as scanned, items populating in real-time
 - **Results (primary):** Three-bucket split, all dense. Safe items expanded and pre-selected. Review items expanded but not selected. Protected items shown, locked, dimmed.
 - **Empty scan:** "No items found in [category]. Your Mac is already clean here."
-- **Error:** Specific error per category ("Mole scanner timed out after 30s. Retry or check Tools > Engine Status."), other categories still functional
+- **Error:** Specific error per category ("Native scan timed out after 30s. Retry or check Tools > Engine Status."), other categories still functional
 - **Post-clean:** Summary of what was removed, sizes freed, audit trail link
 
 ### Disk Explorer
@@ -76,7 +76,7 @@ Reference the established design system (`.interface-design/system.md`) for all 
 
 ### Settings
 - **Default:** Grouped list, similar to macOS System Settings density but with Gargantua's dark chrome
-- **Sections:** Cleanup profiles (list + edit), Scan rules (YAML viewer), Whitelists (add/remove), Tool versions (status indicators), AI config (tier selector + model download), MCP (running/stopped toggle), Audit log (scrollable timeline)
+- **Sections:** Cleanup profiles (list + edit), Scan rules (YAML viewer for bundled rules plus community-contribution visibility), Whitelists (add/remove), Tool versions (status indicators), AI config (tier selector + model download), MCP (running/stopped toggle), Audit log (scrollable timeline)
 
 ### Global States
 - **First launch:** Permission onboarding flow — one screen per permission, explains exactly what it unlocks, "Skip" is always available, no guilt
@@ -112,7 +112,7 @@ Reference the established design system (`.interface-design/system.md`) for all 
 Factual, not emotional. "No developer artifacts found." Period. No illustrations. No "Nothing to see here!"
 
 ### Error messages
-Specific and actionable. "Mole scanner timed out after 30s. Retry or check Tools > Engine Status." Not "Something went wrong."
+Specific and actionable. "Native scan timed out after 30s. Retry or check Tools > Engine Status." Not "Something went wrong."
 
 ### Confirmation dialog
 "Clean 45 items (18.2 GB) . Move to Trash" with itemized list below.

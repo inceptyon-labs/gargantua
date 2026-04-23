@@ -7,6 +7,8 @@ public enum ScanCategory: String, CaseIterable, Identifiable {
     case tempFiles = "temp_files"
     case trash
     case installers
+    case appCache = "app_cache"
+    case appData = "app_data"
     case devArtifacts = "dev_artifacts"
     case docker
     case homebrew
@@ -25,6 +27,8 @@ public enum ScanCategory: String, CaseIterable, Identifiable {
         case .tempFiles: return "Temp Files"
         case .trash: return "Trash"
         case .installers: return "Installers"
+        case .appCache: return "App Cache"
+        case .appData: return "App Data"
         case .devArtifacts: return "Dev Artifacts"
         case .docker: return "Docker"
         case .homebrew: return "Homebrew"
@@ -43,6 +47,8 @@ public enum ScanCategory: String, CaseIterable, Identifiable {
         case .tempFiles: return "clock.arrow.trianglehead.counterclockwise.rotate.90"
         case .trash: return "trash"
         case .installers: return "arrow.down.circle"
+        case .appCache: return "app.badge"
+        case .appData: return "app.badge.fill"
         case .devArtifacts: return "hammer"
         case .docker: return "shippingbox"
         case .homebrew: return "mug"

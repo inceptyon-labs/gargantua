@@ -1,0 +1,56 @@
+rules:
+  - id: dropbox_cache
+    name: Dropbox Cache
+    paths:
+      - "~/Library/Application Support/Dropbox/instance*/cache"
+    safety: safe
+    confidence: 96
+    explanation: "Transient sync cache that Dropbox can rebuild on demand."
+    source:
+      name: Dropbox
+      bundle_id: com.getdropbox.dropbox
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - dropbox
+      - cache
+
+  - id: dropbox_logs
+    name: Dropbox Logs
+    paths:
+      - "~/Library/Application Support/Dropbox/instance*/logs"
+      - "~/Library/Logs/Dropbox"
+    safety: safe
+    confidence: 98
+    explanation: "Diagnostic logs safe to remove. Dropbox recreates them as needed."
+    source:
+      name: Dropbox
+      bundle_id: com.getdropbox.dropbox
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - dropbox
+      - logs
+
+  - id: dropbox_sync_state
+    name: Dropbox Sync State
+    paths:
+      - "~/Library/Application Support/Dropbox/instance*/config.db*"
+      - "~/Library/Application Support/Dropbox/instance*/filecache.db*"
+    safety: review
+    confidence: 74
+    explanation: "Sync metadata and cache indexes may require Dropbox to re-index or re-download content. Review before removing."
+    source:
+      name: Dropbox
+      bundle_id: com.getdropbox.dropbox
+      verify_signature: true
+    regenerates: false
+    category: app_data
+    tags:
+      - app
+      - dropbox
+      - sync_state

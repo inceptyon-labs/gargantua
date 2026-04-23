@@ -75,10 +75,10 @@ extension CleanupProfile {
     public static let developer = CleanupProfile(
         id: "developer",
         name: "Developer",
-        description: "All caches + dev artifacts + Docker + Homebrew + installers",
+        description: "All caches + app caches + dev artifacts + Docker + Homebrew + installers",
         categories: [
             "browser_cache", "system_cache", "system_logs", "temp_files", "trash",
-            "dev_artifacts", "docker", "homebrew", "installers",
+            "app_cache", "dev_artifacts", "docker", "homebrew", "installers",
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -95,9 +95,9 @@ extension CleanupProfile {
     public static let light = CleanupProfile(
         id: "light",
         name: "Light Cleanup",
-        description: "Browser caches + system logs + Trash + installers",
+        description: "Browser caches + app caches + system logs + Trash + installers",
         categories: [
-            "browser_cache", "system_logs", "trash", "installers"
+            "browser_cache", "app_cache", "system_logs", "trash", "installers"
         ]
     )
 
@@ -105,10 +105,10 @@ extension CleanupProfile {
     public static let deep = CleanupProfile(
         id: "deep",
         name: "Deep Clean",
-        description: "Everything + similar images + empty files + broken symlinks",
+        description: "Everything + app data + similar images + empty files + broken symlinks",
         categories: [
             "browser_cache", "browser_data", "system_cache", "system_logs",
-            "temp_files", "trash", "dev_artifacts", "docker", "homebrew",
+            "temp_files", "trash", "app_cache", "app_data", "dev_artifacts", "docker", "homebrew",
             "installers", "similar_images", "empty_files", "broken_symlinks",
         ],
         safetyOverrides: [

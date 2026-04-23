@@ -14,6 +14,8 @@
 - v4.0: AI advisory-only constraint, profile-aware YAML safety overrides, lazy model loading, bundle size budget, monetization model, naming candidates, TCC subprocess guidance
 - v5.0: Finalized name (Gargantua), branding integration, consolidated final document
 
+**Implementation Note (April 23, 2026):** This PRD captures the product direction and the original Mole-to-native transition plan. The current repo implementation has already completed the runtime cutover to native scanning/status/analyze paths for shipped features, bundles YAML cleanup and uninstall rules in-app, and documents community rule contribution workflow in `CONTRIBUTING.md` and `docs/rules/`.
+
 ---
 
 ## 1. Vision & Objective
@@ -124,6 +126,8 @@ If the AI believes a classification is wrong, it surfaces this as: *"💡 AI Not
 
 This is the most consequential architecture decision in the project. The strategy is: **ship fast with Mole, transition to a native engine that's better for our Trust Layer and MCP server.**
 
+This section documents the transition strategy that shaped the product. In the current repo, the shipped implementation has already moved past the Mole-wrapper runtime for the main app flows.
+
 ### 3.1 Why Not Just Wrap Mole Forever?
 
 Mole (44k stars, MIT, actively maintained) is excellent. But permanently depending on it creates friction with our core goals:
@@ -144,6 +148,8 @@ Mole (44k stars, MIT, actively maintained) is excellent. But permanently dependi
 Because the real value in Mole isn't the code — it's the **domain knowledge**: which paths to scan, which caches are safe, which apps leave remnants where, how CoreSimulator volumes work, which browser stores data in which directory. That knowledge took years and thousands of users to accumulate. Replicating it through trial and error would take 6-12 months and produce worse results.
 
 ### 3.3 The Hybrid Strategy
+
+Historical transition plan:
 
 ```
 Phase 1 (MVP)                    Phase 1.5 (Parallel)              Phase 2+
@@ -292,7 +298,11 @@ cleanup_rules/
 
 **This is also a massive open-source contribution story.** Community members submit PRs to add rules for apps they use. Each rule is human-readable, auditable, and carries Trust Layer metadata. This becomes the "AdGuard filter list" equivalent for Mac cleanup.
 
+Implementation note: the repo now includes a starter kit for this workflow in `CONTRIBUTING.md`, `docs/rules/`, `docs/rules/templates/`, and `Scripts/validate-rules.sh`.
+
 ### 3.5 Phase-by-Phase Engine Transition
+
+The table below reflects the planned transition path. The current implementation has already surpassed the runtime assumptions in Phase 1 / 1.5 for the shipped cleanup flows by removing the active `mo` dependency from the app runtime.
 
 | Phase | Clean Engine | Uninstall Engine | Analyze Engine | Status Engine |
 |---|---|---|---|---|
@@ -305,7 +315,7 @@ cleanup_rules/
 
 - **The scan rule database** — ported into YAML, continuously enriched
 - **The safety philosophy** — dry-run defaults, whitelisting, confirmation before delete
-- **Optional CLI companion** — if user has `mo` installed, the app can offer "also scan with Mole" for validation / comparison
+- **Optional CLI companion** — originally envisioned as an optional validation path; not part of the current shipped runtime architecture
 
 ---
 

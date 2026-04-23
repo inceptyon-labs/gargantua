@@ -11,6 +11,7 @@ struct CleanupProfileTests {
         #expect(dev.categories.contains("docker"))
         #expect(dev.categories.contains("homebrew"))
         #expect(dev.categories.contains("browser_cache"))
+        #expect(dev.categories.contains("app_cache"))
     }
 
     @Test("Dev Purge profile is scoped to dev artifact categories only")
@@ -28,6 +29,7 @@ struct CleanupProfileTests {
     func lightCategories() {
         let light = CleanupProfile.light
         #expect(light.categories.contains("browser_cache"))
+        #expect(light.categories.contains("app_cache"))
         #expect(light.categories.contains("trash"))
         #expect(!light.categories.contains("dev_artifacts"))
         #expect(!light.categories.contains("docker"))
@@ -37,6 +39,8 @@ struct CleanupProfileTests {
     func deepCategories() {
         let deep = CleanupProfile.deep
         #expect(deep.categories.count > CleanupProfile.developer.categories.count)
+        #expect(deep.categories.contains("app_cache"))
+        #expect(deep.categories.contains("app_data"))
         #expect(deep.categories.contains("similar_images"))
         #expect(deep.categories.contains("empty_files"))
         #expect(deep.categories.contains("broken_symlinks"))

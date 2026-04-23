@@ -1,0 +1,73 @@
+rules:
+  - id: spotify_cache
+    name: Spotify Cache
+    paths:
+      - "~/Library/Caches/com.spotify.client"
+      - "~/Library/Application Support/Spotify/PersistentCache"
+    safety: safe
+    confidence: 97
+    explanation: "Cached artwork and streaming assets that Spotify can re-download."
+    source:
+      name: Spotify
+      bundle_id: com.spotify.client
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - spotify
+      - cache
+
+  - id: spotify_gpu_cache
+    name: Spotify GPU Cache
+    paths:
+      - "~/Library/Application Support/Spotify/GPUCache"
+    safety: safe
+    confidence: 95
+    explanation: "GPU cache regenerated automatically when Spotify restarts."
+    source:
+      name: Spotify
+      bundle_id: com.spotify.client
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - spotify
+      - cache
+
+  - id: spotify_offline_storage
+    name: Spotify Offline Storage
+    paths:
+      - "~/Library/Application Support/Spotify/Storage"
+    safety: review
+    confidence: 72
+    explanation: "Offline tracks and downloaded media may need to be re-downloaded after removal."
+    source:
+      name: Spotify
+      bundle_id: com.spotify.client
+      verify_signature: true
+    regenerates: false
+    category: app_data
+    tags:
+      - app
+      - spotify
+      - offline_media
+
+  - id: spotify_logs
+    name: Spotify Logs
+    paths:
+      - "~/Library/Logs/Spotify"
+    safety: safe
+    confidence: 98
+    explanation: "Diagnostic logs safe to remove. Spotify recreates them as needed."
+    source:
+      name: Spotify
+      bundle_id: com.spotify.client
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - spotify
+      - logs

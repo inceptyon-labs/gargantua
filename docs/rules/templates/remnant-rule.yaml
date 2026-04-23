@@ -1,0 +1,28 @@
+remnant_rules:
+  - id: example_support_files
+    name: Example Support Files
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/{appName}"
+    confidence: 90
+    explanation: App-written support data left behind after uninstall.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags:
+      - generic
+      - support
+
+  - id: example_launch_agent
+    name: Example Launch Agent
+    category: launch_agents
+    path_templates:
+      - "~/Library/LaunchAgents/{bundleID}.plist"
+    confidence: 85
+    explanation: User launch agent registered by the app installer.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags:
+      - generic
+      - launchd
