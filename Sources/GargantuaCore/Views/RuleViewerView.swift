@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let communityRulesRepositoryURL = URL(string: "https://github.com/inceptyon-labs/gargantua-rules")!
+
 /// Rule Viewer — browse cleanup rules by category with YAML display and whitelist management.
 ///
 /// Three-column layout: category list (browser/developer/system) → rule list → rule detail.
@@ -61,6 +63,18 @@ public struct RuleViewerView: View {
                 .foregroundStyle(GargantuaColors.ink)
 
             Spacer()
+
+            Link(destination: communityRulesRepositoryURL) {
+                Label("Contribute Rules", systemImage: "arrow.up.right.square")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.accent)
+                    .padding(.horizontal, GargantuaSpacing.space3)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .background(GargantuaColors.accent.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            }
+            .buttonStyle(.plain)
+            .help("Open the public gargantua-rules repository")
 
             if isLoading {
                 ProgressView()

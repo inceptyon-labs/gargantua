@@ -1,7 +1,7 @@
 ---
 # gargantua-071c
 title: 'Task: Create public gargantua-rules repository and link it'
-status: todo
+status: completed
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - area:infra
     - size:S
 created_at: 2026-04-23T23:00:52Z
-updated_at: 2026-04-23T23:00:52Z
+updated_at: 2026-04-23T23:16:00Z
 ---
 
 PRD §14 calls for a separate MIT-licensed `gargantua-rules` repository. The current repo documents community rule authoring in-tree, but no separate public repo is linked from the app/docs, and GitHub search did not find a matching `gargantua-rules` repository.
@@ -30,7 +30,18 @@ PRD §14 calls for a separate MIT-licensed `gargantua-rules` repository. The cur
 
 ## Acceptance Criteria
 
-- [ ] Public repo existence/ownership is documented.
-- [ ] README/CONTRIBUTING/docs link to the public rules repo.
-- [ ] Rule contribution workflow is clear for external contributors.
-- [ ] In-tree rule docs explain the sync/import relationship.
+- [x] Public repo existence/ownership is documented.
+- [x] README/CONTRIBUTING/docs link to the public rules repo.
+- [x] Rule contribution workflow is clear for external contributors.
+- [x] In-tree rule docs explain the sync/import relationship.
+
+## Completed
+
+- Verified `https://github.com/inceptyon-labs/gargantua-rules` exists, is public, and is owned under `inceptyon-labs`.
+- Added the public rules repo link to `README.md`, `CONTRIBUTING.md`, `docs/rules/README.md`, and `docs/rules/status.md`.
+- Added a "Contribute Rules" link in the in-app Rules screen header.
+- Documented the sync model: `gargantua-rules` is the intended source/collaboration repo, while this app vendors reviewed snapshots under `Sources/GargantuaCore/Resources/` for deterministic runtime safety classification.
+
+## Notes
+
+- The public repo currently has no default branch, license, or validation CI. The app docs now call this out so the contribution path is clear without implying the external repo is already fully self-serve.

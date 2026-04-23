@@ -11,11 +11,14 @@ The cleanup engine is driven by bundled YAML rules under `Sources/GargantuaCore/
 
 See [Community Rules](docs/rules/README.md) for authoring docs and [Rule Status](docs/rules/status.md) for current scope and known parity gaps.
 
+The public home for rule-only collaboration is [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules). This app vendors reviewed snapshots under `Sources/GargantuaCore/Resources/` so releases keep a deterministic safety model while community rule work can move independently.
+
 ## Repo Highlights
 
 - [PRD](Gargantua-PRD-v5-FINAL.md)
 - [Contributing](CONTRIBUTING.md)
 - [Community Rules](docs/rules/README.md)
+- [Public Rules Repo](https://github.com/inceptyon-labs/gargantua-rules)
 - [Rule Schema](docs/rules/schema.md)
 - [Design Brief](docs/design-brief-app-shell.md)
 

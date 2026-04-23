@@ -4,14 +4,22 @@ This folder is the starter kit for crowd-sourced cleanup and uninstall rules.
 
 For the current implemented rule inventory and remaining parity gaps, see [Rule Status](status.md).
 
+## Public Repository
+
+The public home for rule-only collaboration is [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules).
+
+Gargantua still ships a reviewed bundled snapshot in this app repo. The public rules repo is the source and collaboration surface; app releases import reviewed snapshots so local scans are deterministic and safety classifications cannot change at runtime.
+
 ## What Lives Where
 
+- `https://github.com/inceptyon-labs/gargantua-rules`
+  Public source repository for rule-only PRs, schema docs, templates, and standalone validation.
 - `Sources/GargantuaCore/Resources/cleanup_rules/`
-  For cleanup rules used by the native scanner.
+  Bundled cleanup snapshot used by the native scanner.
 - `Sources/GargantuaCore/Resources/uninstall_rules/`
-  For Smart Uninstaller remnant discovery.
+  Bundled Smart Uninstaller remnant snapshot.
 - `docs/rules/templates/`
-  Copyable starting points for new YAML files.
+  Copyable starting points mirrored in-tree until the public repo owns the full starter kit.
 
 ## Rule Types
 
@@ -46,11 +54,13 @@ These use `remnant_rules:` and `path_templates:` with placeholders such as:
 
 ## Contribution Workflow
 
-1. Choose the closest existing file to the app or category you are adding.
-2. Start from a template in `docs/rules/templates/`.
-3. Keep safety conservative.
-4. Run `Scripts/validate-rules.sh`.
-5. Open a PR using the rule checklist.
+1. Open rule-only changes against [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) once its initial branch is populated.
+2. Choose the closest existing file to the app or category you are adding.
+3. Start from a template in `docs/rules/templates/`.
+4. Keep safety conservative.
+5. Run `Scripts/validate-rules.sh`.
+6. If you change the app-bundled snapshot directly, include a sync note for the public repo.
+7. Open a PR using the rule checklist.
 
 See also:
 

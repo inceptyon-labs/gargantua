@@ -53,9 +53,15 @@ Scripts/validate-rules.sh
 - The PRD's note about `remnant_locations.yaml` carrying `52+ locations from Mole` is not satisfied yet.
 - There is no direct Mole-to-Gargantua parity harness in the repo because `mo` was intentionally removed from the runtime architecture.
 
-## Next Documentation Move
+## Public Rules Repository
 
-If rule contributions become frequent, the next clean step is a dedicated `gargantua-rules` repository with:
+The public rules repository is [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules).
+
+This app repository keeps the reviewed runtime snapshot under `Sources/GargantuaCore/Resources/`. The public repository is the intended source for rule-only contribution, schema documentation, templates, and standalone validation. App releases should import reviewed snapshots from that repo rather than loading mutable remote rules at runtime.
+
+As of the 2026-04-23 local verification pass, the public repository exists but still needs its initial branch contents, MIT license, and validation CI before it is fully self-serve for external contributors.
+
+The planned public repo starter kit should include:
 
 - versioned schema docs
 - standalone validation CI

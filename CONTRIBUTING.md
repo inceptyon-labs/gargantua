@@ -4,20 +4,23 @@ Thanks for helping improve Gargantua.
 
 ## Rule Contributions
 
-The easiest way to contribute today is by adding or refining YAML cleanup and uninstall rules.
+The easiest way to contribute today is by adding or refining YAML cleanup and uninstall rules. Rule-only collaboration belongs in the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; this app repository consumes reviewed snapshots from that repo.
 
-- Cleanup rules live in `Sources/GargantuaCore/Resources/cleanup_rules/`
-- Uninstall remnant rules live in `Sources/GargantuaCore/Resources/uninstall_rules/`
-- Rule authoring docs live in `docs/rules/`
-- Rule templates live in `docs/rules/templates/`
+- Public rule source: `https://github.com/inceptyon-labs/gargantua-rules`
+- App-bundled cleanup snapshot: `Sources/GargantuaCore/Resources/cleanup_rules/`
+- App-bundled uninstall snapshot: `Sources/GargantuaCore/Resources/uninstall_rules/`
+- In-tree rule docs and templates: `docs/rules/`
+
+The bundled snapshot remains the app's runtime authority for safety classification. If you update rules in this app repo directly, include a sync note explaining whether the change should also land in `gargantua-rules`.
 
 Before opening a PR for rules:
 
-1. Pick the closest existing file and match its style.
-2. Keep `safety` conservative when a path may contain user data.
-3. Add enough explanation text that a reviewer can understand why the rule is safe, review, or protected.
-4. Validate the rules locally with `Scripts/validate-rules.sh`.
-5. If you add a new category, update the built-in profiles and category UI in the app.
+1. Open rule-only PRs against `inceptyon-labs/gargantua-rules` once its initial branch is populated.
+2. Pick the closest existing file and match its style.
+3. Keep `safety` conservative when a path may contain user data.
+4. Add enough explanation text that a reviewer can understand why the rule is safe, review, or protected.
+5. Validate the rules locally with `Scripts/validate-rules.sh`.
+6. If you add a new category, update the built-in profiles and category UI in the app snapshot.
 
 ## Validation
 
