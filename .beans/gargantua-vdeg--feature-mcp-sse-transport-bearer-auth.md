@@ -5,7 +5,8 @@ status: todo
 type: feature
 priority: normal
 created_at: 2026-04-23T20:55:15Z
-updated_at: 2026-04-23T20:56:25Z
+updated_at: 2026-04-23T21:06:12Z
+parent: gargantua-rght
 blocked_by:
     - gargantua-n4jn
 ---
