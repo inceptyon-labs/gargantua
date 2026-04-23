@@ -30,7 +30,12 @@ import Foundation
 // - Audit: every non-dry-run invocation — success *or* failure — writes an
 //   entry through the injected `auditRecorder`. The entry's UUID is what
 //   `MCPCleanOutput.auditID` reports, so clients can cross-reference the
-//   wire response against the persisted trail.
+//   wire response against the persisted trail. The success path is
+//   fail-loud: if audit write fails after a successful clean, the handler
+//   surfaces `internalError` so operators cannot miss a destructive op
+//   whose record never made it to disk. Failure-path audit is best-effort
+//   — an already-failing request hiding a secondary audit-write error is
+//   less dangerous than dropping the forensic trail on a successful op.
 //
 // Not implemented here (future tasks):
 // - User notification + cancel window (Task 4 `gargantua-uxdr`).
@@ -192,13 +197,25 @@ public struct MCPCleanToolHandler: Sendable {
 
         do {
             let result = try cleaner(found, method)
-            recordAudit(
-                entryID: auditUUID,
-                clientID: clientID,
-                requested: found,
-                result: result,
-                methodHint: method
-            )
+            // Success path: audit is MANDATORY. A successful destructive op
+            // with no durable record breaks PRD §7.4 ("all MCP-initiated
+            // actions logged"). Fail-loud so the operator learns about the
+            // missing audit before it piles up.
+            do {
+                try recordAudit(
+                    entryID: auditUUID,
+                    clientID: clientID,
+                    requested: found,
+                    result: result,
+                    methodHint: method
+                )
+            } catch {
+                log?("clean audit record failed after successful clean: \(error)")
+                throw MCPToolError.internalError(
+                    "Clean completed but audit log write failed. "
+                    + "Audit trail may be incomplete; investigate the audit subsystem."
+                )
+            }
             return try Self.makeResult(
                 result: result,
                 method: method,
@@ -206,10 +223,10 @@ public struct MCPCleanToolHandler: Sendable {
             )
         } catch let error as MCPToolError {
             // The cleaner signalled a protocol-level error (e.g. rejected
-            // a method it didn't like). Audit the attempt before rethrowing
-            // — from the destructive-ops perspective the client still made
-            // an attempt worth recording.
-            recordAudit(
+            // a method it didn't like). Best-effort audit of the attempt
+            // before rethrowing — the clean didn't happen, so a dropped
+            // audit is less dangerous than hiding the original error.
+            tryRecordAudit(
                 entryID: auditUUID,
                 clientID: clientID,
                 requested: found,
@@ -219,7 +236,7 @@ public struct MCPCleanToolHandler: Sendable {
             throw error
         } catch {
             log?("clean handler error: \(error)")
-            recordAudit(
+            tryRecordAudit(
                 entryID: auditUUID,
                 clientID: clientID,
                 requested: found,
@@ -282,16 +299,15 @@ public struct MCPCleanToolHandler: Sendable {
     }
 
     /// Builds the audit entry and passes it to the injected recorder.
-    /// Swallowing-but-logging a recorder failure is deliberate: audit is
-    /// observability and should never mask or reverse a destructive op that
-    /// already executed.
+    /// Propagates recorder errors — the caller decides whether to treat the
+    /// failure as fatal (success path) or best-effort (failure path).
     private func recordAudit(
         entryID: UUID,
         clientID: String,
         requested: [ScanResult],
         result: CleanupResult?,
         methodHint: CleanupMethod
-    ) {
+    ) throws {
         guard let auditRecorder else { return }
 
         let files = requested.map { AuditFile(path: $0.path, size: $0.size) }
@@ -317,10 +333,29 @@ public struct MCPCleanToolHandler: Sendable {
             clientID: clientID
         )
 
+        try auditRecorder(entry)
+    }
+
+    /// Swallow-and-log variant of `recordAudit`. Used on failure paths where
+    /// the request is already failing — a secondary audit error there is
+    /// less important than surfacing the primary cleaner failure.
+    private func tryRecordAudit(
+        entryID: UUID,
+        clientID: String,
+        requested: [ScanResult],
+        result: CleanupResult?,
+        methodHint: CleanupMethod
+    ) {
         do {
-            try auditRecorder(entry)
+            try recordAudit(
+                entryID: entryID,
+                clientID: clientID,
+                requested: requested,
+                result: result,
+                methodHint: methodHint
+            )
         } catch {
-            log?("clean audit record failed: \(error)")
+            log?("clean audit record failed during error path: \(error)")
         }
     }
 

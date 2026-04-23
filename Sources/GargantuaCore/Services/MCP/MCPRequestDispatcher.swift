@@ -221,6 +221,14 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         return capturedClientIdentity
     }
 
+    /// Normalize a caller-supplied client name. Trims whitespace; returns
+    /// `nil` for empty/whitespace-only values so they don't masquerade as
+    /// their own rate-limit shard in audit attribution.
+    private static func normalizedClientName(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     /// Main entry point, designed to be passed as an `MCPMessageHandler` to
     /// `MCPStdioTransport`. Returns `nil` for notifications so the transport
     /// suppresses output, and always returns a response for requests.
@@ -286,19 +294,24 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
             )
         }
         // Capture client identity for downstream destructive tools (audit,
-        // rate limit). Missing `clientInfo` is tolerated — older clients may
-        // skip it and we don't want to break the handshake for them — but
-        // destructive tool handlers will fall back to a `"unknown"` sentinel
-        // when querying, which shows up in audit entries and is enough to
-        // keep per-client isolation honest.
-        if let client = parsed.clientInfo {
-            lock.lock()
+        // rate limit). Every `initialize` call resets the captured identity
+        // first — a re-initialize that omits `clientInfo` (or sends it
+        // malformed) MUST clear the prior client rather than keep a stale
+        // attribution. Missing/malformed `clientInfo` is tolerated so minimal
+        // clients keep working; handlers that query see `nil` and fall back
+        // to the `"unknown"` sentinel. Empty or whitespace-only names are
+        // normalized to `nil` so an adversarial client can't slip past
+        // per-client isolation by sending a blank name.
+        lock.lock()
+        capturedClientIdentity = nil
+        if let client = parsed.clientInfo,
+           let normalizedName = Self.normalizedClientName(client.name) {
             capturedClientIdentity = MCPClientIdentity(
-                name: client.name,
+                name: normalizedName,
                 version: client.version
             )
-            lock.unlock()
         }
+        lock.unlock()
         // We advertise the `tools` capability with no extra flags; we do not
         // emit list-changed notifications yet.
         return .object([

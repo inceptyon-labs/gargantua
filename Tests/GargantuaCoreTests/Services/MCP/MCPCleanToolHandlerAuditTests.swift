@@ -281,8 +281,8 @@ struct MCPCleanToolHandlerAuditTests {
         #expect(audit.entries.first?.clientID == MCPCleanToolHandler.unknownClientSentinel)
     }
 
-    @Test("audit recorder failure is swallowed with a log; the clean still reports success")
-    func auditRecorderFailureDoesNotFailRequest() throws {
+    @Test("audit recorder failure on successful clean fails loud with internalError")
+    func auditRecorderFailureOnSuccessIsFailLoud() throws {
         struct RecordBoom: Error, LocalizedError { var errorDescription: String? { "audit down" } }
         let cache = Self.cacheWith([Self.makeResult(id: "a", size: 5)])
         let captured = LogCapture()
@@ -300,12 +300,48 @@ struct MCPCleanToolHandlerAuditTests {
             log: { captured.append($0) }
         )
 
+        do {
+            _ = try subject.handle(arguments([
+                "item_ids": .array([.string("a")]),
+                "confirm": .bool(true),
+            ]))
+            Issue.record("successful clean with failing audit must throw internalError")
+        } catch MCPToolError.internalError(let message) {
+            #expect(message.lowercased().contains("audit"))
+            #expect(message.lowercased().contains("incomplete") || message.lowercased().contains("investigate"))
+        }
+        #expect(captured.joined.contains("audit record failed"))
+    }
+
+    @Test("audit recorder failure on cleaner failure path is best-effort — primary error surfaces")
+    func auditRecorderFailureOnCleanerFailureIsBestEffort() throws {
+        struct CleanerBoom: Error, LocalizedError { var errorDescription: String? { "cleaner exploded" } }
+        struct RecordBoom: Error { }
+        let cache = Self.cacheWith([Self.makeResult(id: "a", size: 5)])
+        let captured = LogCapture()
+        let subject = MCPCleanToolHandler(
+            sessionCache: cache,
+            cleaner: { _, _ in throw CleanerBoom() },
+            auditIDGenerator: { Self.fixedAuditUUID },
+            auditRecorder: { _ in throw RecordBoom() },
+            clientIDProvider: { "claude-code" },
+            log: { captured.append($0) }
+        )
+
+        // Primary failure is the cleaner exploding; secondary audit write
+        // failure must not hide it.
         let result = try subject.handle(arguments([
             "item_ids": .array([.string("a")]),
             "confirm": .bool(true),
         ]))
-        #expect(result.isError == false)
-        #expect(captured.joined.contains("audit record failed"))
+        #expect(result.isError == true)
+        guard case .text(let message) = result.content.first else {
+            Issue.record("expected text content")
+            return
+        }
+        #expect(message.contains("Clean failed"))
+        #expect(message.contains("cleaner exploded"))
+        #expect(captured.joined.contains("audit record failed during error path"))
     }
 }
 

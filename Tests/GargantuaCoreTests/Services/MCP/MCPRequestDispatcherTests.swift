@@ -166,6 +166,88 @@ struct MCPRequestDispatcherTests {
         #expect(identity?.version == nil)
     }
 
+    @Test("re-initialize without clientInfo clears the prior captured identity")
+    func reinitializeWithoutClientInfoClearsIdentity() {
+        let dispatcher = makeDispatcher()
+        _ = dispatcher.dispatch(
+            request(method: "initialize", params: Self.validInitializeParams)
+        )
+        #expect(dispatcher.currentClientIdentity()?.name == "test-client")
+
+        // Second handshake: no clientInfo. The stale identity must be
+        // cleared — a rogue client must not inherit a prior session's
+        // attribution by omitting clientInfo on a later init.
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("re-initialize with malformed clientInfo clears the prior captured identity")
+    func reinitializeWithMalformedClientInfoClearsIdentity() {
+        let dispatcher = makeDispatcher()
+        _ = dispatcher.dispatch(
+            request(method: "initialize", params: Self.validInitializeParams)
+        )
+        #expect(dispatcher.currentClientIdentity()?.name == "test-client")
+
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "version": .string("1.0"),
+                // No `name` — malformed per MCP spec.
+            ]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("empty clientInfo.name is normalized to nil (no sneaky rate-limit shard)")
+    func emptyClientNameNormalizedToNil() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string(""),
+                "version": .string("1.0"),
+            ]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("whitespace-only clientInfo.name is normalized to nil")
+    func whitespaceClientNameNormalizedToNil() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string("   \t\n"),
+            ]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("clientInfo.name with surrounding whitespace is trimmed")
+    func clientNameWhitespaceTrimmed() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string("  claude-code  "),
+            ]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(dispatcher.currentClientIdentity()?.name == "claude-code")
+    }
+
     // MARK: tools/list
 
     @Test("tools/list advertises all Phase 2 tools")
