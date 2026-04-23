@@ -85,6 +85,22 @@ public struct ConfirmationModalView: View {
                     onCancel: onCancel
                 )
             }
+        case .mcp:
+            // `.mcp` is an audit-record attribution, not a UX tier —
+            // `confirmationTier(for:)` never emits it for in-app flows, and
+            // MCP-initiated cleans don't route through this confirm view.
+            // Render the full-modal path defensively if we ever get here so
+            // the user is forced to re-confirm rather than auto-acting.
+            ModalChrome(onCancel: onCancel) {
+                FullModalContent(
+                    items: items,
+                    totalSize: totalSize,
+                    allowsPermanentDelete: allowsPermanentDelete,
+                    cleanupMethod: $cleanupMethod,
+                    onConfirm: { onConfirm(cleanupMethod) },
+                    onCancel: onCancel
+                )
+            }
         }
     }
 }

@@ -30,6 +30,17 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
     /// Total bytes freed by this operation.
     public let bytesFreed: Int64
 
+    /// Where the operation originated. `nil` for in-app actions (default);
+    /// `"mcp"` for actions invoked by an MCP client. Optional so existing
+    /// JSONL entries and persisted rows predating Phase 3 decode cleanly.
+    public let transport: String?
+
+    /// Identifier of the MCP client that initiated the operation, when
+    /// `transport == "mcp"`. Taken from the `initialize` handshake's
+    /// `clientInfo.name`; `"unknown"` if the client did not advertise one.
+    /// Always nil for in-app actions.
+    public let clientID: String?
+
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -39,7 +50,9 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         safetyLevel: SafetyLevel,
         confirmationMethod: ConfirmationTier,
         cleanupMethod: CleanupMethod = .trash,
-        bytesFreed: Int64
+        bytesFreed: Int64,
+        transport: String? = nil,
+        clientID: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -50,6 +63,22 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         self.confirmationMethod = confirmationMethod
         self.cleanupMethod = cleanupMethod
         self.bytesFreed = bytesFreed
+        self.transport = transport
+        self.clientID = clientID
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case timestamp
+        case tool
+        case command
+        case files
+        case safetyLevel
+        case confirmationMethod
+        case cleanupMethod
+        case bytesFreed
+        case transport
+        case clientID = "client_id"
     }
 }
 

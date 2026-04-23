@@ -102,6 +102,70 @@ struct MCPRequestDispatcherTests {
         #expect(response?.error?.code == MCPErrorCode.invalidParams)
     }
 
+    // MARK: clientInfo capture (Task 3 — gargantua-afft)
+
+    @Test("currentClientIdentity is nil before any initialize arrives")
+    func currentClientIdentityNilBeforeInitialize() {
+        let dispatcher = makeDispatcher()
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("initialize captures clientInfo.name and version for destructive-tool attribution")
+    func initializeCapturesClientInfo() {
+        let dispatcher = makeDispatcher()
+        _ = dispatcher.dispatch(
+            request(method: "initialize", params: Self.validInitializeParams)
+        )
+        let identity = dispatcher.currentClientIdentity()
+        #expect(identity?.name == "test-client")
+        #expect(identity?.version == "0.0")
+    }
+
+    @Test("initialize without clientInfo leaves identity nil (minimal-client compatibility)")
+    func initializeWithoutClientInfoLeavesIdentityNil() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("malformed clientInfo is tolerated — handshake still succeeds with nil identity")
+    func initializeWithMalformedClientInfoIsTolerated() {
+        let dispatcher = makeDispatcher()
+        // `name` is required; omitting it makes the block malformed. The
+        // handshake should still return a successful initialize response so
+        // minimal clients aren't rejected; the identity simply stays nil.
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "version": .string("1.0"),
+            ]),
+        ])
+        let response = dispatcher.dispatch(request(method: "initialize", params: params))
+        #expect(response?.error == nil, "malformed clientInfo must not fail handshake")
+        #expect(dispatcher.currentClientIdentity() == nil)
+    }
+
+    @Test("clientInfo without a version captures just the name")
+    func initializeCapturesNameOnlyWhenVersionAbsent() {
+        let dispatcher = makeDispatcher()
+        let params: MCPJSONAny = .object([
+            "protocolVersion": .string("2024-11-05"),
+            "capabilities": .object([:]),
+            "clientInfo": .object([
+                "name": .string("anon-client"),
+            ]),
+        ])
+        _ = dispatcher.dispatch(request(method: "initialize", params: params))
+        let identity = dispatcher.currentClientIdentity()
+        #expect(identity?.name == "anon-client")
+        #expect(identity?.version == nil)
+    }
+
     // MARK: tools/list
 
     @Test("tools/list advertises all Phase 2 tools")

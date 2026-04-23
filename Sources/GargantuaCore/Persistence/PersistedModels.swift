@@ -60,6 +60,10 @@ public final class PersistedAuditEntry {
     public var confirmationMethod: String
     public var cleanupMethod: String
     public var bytesFreed: Int64
+    // Phase 3 additions: both default to nil to keep lightweight migration
+    // compatible with rows written before the MCP destructive path landed.
+    public var transport: String?
+    public var clientID: String?
 
     public init(from entry: AuditEntry) {
         self.entryID = entry.id
@@ -71,6 +75,8 @@ public final class PersistedAuditEntry {
         self.confirmationMethod = entry.confirmationMethod.rawValue
         self.cleanupMethod = entry.cleanupMethod.rawValue
         self.bytesFreed = entry.bytesFreed
+        self.transport = entry.transport
+        self.clientID = entry.clientID
     }
 
     /// Convert back to domain model.
@@ -90,7 +96,9 @@ public final class PersistedAuditEntry {
             safetyLevel: safety,
             confirmationMethod: confirmation,
             cleanupMethod: cleanup,
-            bytesFreed: bytesFreed
+            bytesFreed: bytesFreed,
+            transport: transport,
+            clientID: clientID
         )
     }
 }

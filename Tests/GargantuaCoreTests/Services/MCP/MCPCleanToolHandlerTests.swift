@@ -7,7 +7,11 @@ struct MCPCleanToolHandlerTests {
 
     // MARK: Fixtures
 
-    private static let fixedAuditID = "audit-fixed-0000"
+    // Deterministic audit UUID for wire-assertion. `uuidString` always
+    // returns uppercase, so the wire-form string we expect is the uppercase
+    // form; tests that decode it back through UUID round-trip freely.
+    private static let fixedAuditUUID = UUID(uuidString: "00000000-0000-0000-0000-00000000AF01")!
+    private static var fixedAuditID: String { fixedAuditUUID.uuidString }
 
     private static let serverInfo = MCPServerInfo(name: "gargantua", version: "0.0.1")
 
@@ -47,13 +51,19 @@ struct MCPCleanToolHandlerTests {
         cleaner: @escaping MCPCleanToolHandler.Cleaner = { _, _ in
             CleanupResult(itemResults: [], cleanupMethod: .trash)
         },
-        auditID: String = fixedAuditID,
+        auditUUID: UUID = fixedAuditUUID,
+        auditRecorder: MCPCleanToolHandler.AuditRecorder? = nil,
+        rateLimiter: MCPRateLimiter? = nil,
+        clientID: String? = nil,
         log: MCPDispatcherLog? = nil
     ) -> MCPCleanToolHandler {
         MCPCleanToolHandler(
             sessionCache: cache,
             cleaner: cleaner,
-            auditIDGenerator: { auditID },
+            auditIDGenerator: { auditUUID },
+            auditRecorder: auditRecorder,
+            rateLimiter: rateLimiter,
+            clientIDProvider: { clientID },
             log: log
         )
     }
@@ -468,7 +478,7 @@ struct MCPCleanToolHandlerTests {
         let subject = MCPCleanToolHandler(
             sessionCache: cache,
             cleaner: { _, _ in throw SecretLeak() },
-            auditIDGenerator: { "audit" },
+            auditIDGenerator: { Self.fixedAuditUUID },
             log: { captured.append($0) }
         )
         let result = try subject.handle(arguments([
@@ -547,7 +557,7 @@ struct MCPCleanToolHandlerTests {
                     cleanupMethod: .trash
                 )
             },
-            auditIDGenerator: { Self.fixedAuditID }
+            auditIDGenerator: { Self.fixedAuditUUID }
         )
         let result = try cleanHandler.handle(MCPToolArguments([
             "item_ids": .array([.string("scan-a"), .string("scan-b")]),

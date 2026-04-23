@@ -18,13 +18,21 @@ import Foundation
 //   PRD's "review items require confirm" guardrail for free — reviews can
 //   never reach this handler without an explicit affirmative.
 // - `dry_run: true` short-circuits before `Cleaner` runs, returning a plan
-//   shaped like a successful run so agents can preview impact.
+//   shaped like a successful run so agents can preview impact. Dry runs are
+//   deliberately exempt from the rate limiter and do not write audit entries
+//   — they don't touch the disk, so the attack surface the guardrails exist
+//   to cover isn't present.
+// - Rate limit: by default, 1 clean op per 60 seconds per MCP client. Tripped
+//   requests return `invalidParams` with a retry-after hint. The scope
+//   (per-client) is enforced via `clientIDProvider`; unknown clients fall
+//   back to the literal `"unknown"` key so they share a budget and cannot
+//   bypass the limit by omitting `clientInfo`.
+// - Audit: every non-dry-run invocation — success *or* failure — writes an
+//   entry through the injected `auditRecorder`. The entry's UUID is what
+//   `MCPCleanOutput.auditID` reports, so clients can cross-reference the
+//   wire response against the persisted trail.
 //
 // Not implemented here (future tasks):
-// - Audit log persistence (Task 3 `gargantua-afft`). Task 2 generates an
-//   `auditID` via the injected closure so the output shape is stable, but the
-//   entry itself is not written.
-// - Client identifier plumbing + rate limiter (Task 3).
 // - User notification + cancel window (Task 4 `gargantua-uxdr`).
 
 /// Tool handler for `clean`.
@@ -49,25 +57,46 @@ public struct MCPCleanToolHandler: Sendable {
     /// stable handler contract to target.
     public typealias Cleaner = @Sendable (_ items: [ScanResult], _ method: CleanupMethod) throws -> CleanupResult
 
-    /// Produces the `audit_id` emitted in every response. Task 2 returns a
-    /// fresh UUID per call; Task 3 will route this through the audit log so
-    /// the ID points at a real persisted entry.
-    public typealias AuditIDGenerator = @Sendable () -> String
+    /// Produces the audit entry UUID for a call. Default returns a fresh
+    /// `UUID()`; tests inject a deterministic UUID so the wire response and
+    /// any persisted audit entry can be asserted against a known value.
+    public typealias AuditIDGenerator = @Sendable () -> UUID
+
+    /// Resolves the MCP client identity for the current request. `nil` means
+    /// the client did not complete `initialize` or did not advertise
+    /// `clientInfo.name`; the handler falls back to the sentinel
+    /// `"unknown"` for both audit attribution and rate-limit sharding.
+    public typealias ClientIDProvider = @Sendable () -> String?
+
+    /// Persists an `AuditEntry`. Production wiring plugs in
+    /// `AuditWriter.write(_:)`. Tests can capture calls for assertion.
+    /// Throwing is non-fatal — the handler logs and continues so audit
+    /// flakiness cannot mask a successful destructive operation.
+    public typealias AuditRecorder = @Sendable (_ entry: AuditEntry) throws -> Void
 
     private let sessionCache: MCPScanSessionCache
     private let cleaner: Cleaner
     private let auditIDGenerator: AuditIDGenerator
+    private let auditRecorder: AuditRecorder?
+    private let rateLimiter: MCPRateLimiter?
+    private let clientIDProvider: ClientIDProvider
     private let log: MCPDispatcherLog?
 
     public init(
         sessionCache: MCPScanSessionCache,
         cleaner: @escaping Cleaner,
-        auditIDGenerator: @escaping AuditIDGenerator = { UUID().uuidString },
+        auditIDGenerator: @escaping AuditIDGenerator = { UUID() },
+        auditRecorder: AuditRecorder? = nil,
+        rateLimiter: MCPRateLimiter? = nil,
+        clientIDProvider: @escaping ClientIDProvider = { nil },
         log: MCPDispatcherLog? = nil
     ) {
         self.sessionCache = sessionCache
         self.cleaner = cleaner
         self.auditIDGenerator = auditIDGenerator
+        self.auditRecorder = auditRecorder
+        self.rateLimiter = rateLimiter
+        self.clientIDProvider = clientIDProvider
         self.log = log
     }
 
@@ -78,6 +107,11 @@ public struct MCPCleanToolHandler: Sendable {
         let this = self
         return { arguments in try this.handle(arguments) }
     }
+
+    /// Sentinel client identifier used when the dispatcher has not captured
+    /// a `clientInfo.name` yet. Exposed so tests and forensic tooling can
+    /// filter audit entries that lack a proper attribution.
+    public static let unknownClientSentinel = "unknown"
 
     /// Execute the handler against a decoded arguments payload. Exposed for
     /// unit tests that want to bypass the dispatcher.
@@ -116,31 +150,84 @@ public struct MCPCleanToolHandler: Sendable {
         // stale. This handler does not revalidate. It is mitigated in
         // practice by CleanupEngine operating on the exact scanned path (not
         // following symlinks), and by the per-client rate limit + audit
-        // trail arriving in Task 3 which bound the replay window. A
-        // clean-time revalidation would require re-scanning each item and
-        // belongs with the Task 3 safety hardening pass.
+        // trail which bound the replay window. A clean-time revalidation
+        // would require re-scanning each item and is deferred — see the
+        // task notes on `gargantua-afft`.
         let protected = found.filter { $0.safety == .protected_ }
         if !protected.isEmpty {
             throw MCPToolError.invalidParams(Self.protectedRejectMessage(protected))
         }
 
-        let auditID = auditIDGenerator()
+        let auditUUID = auditIDGenerator()
 
         if input.dryRun {
-            return try Self.makeDryRunResult(items: found, method: method, auditID: auditID)
+            // Dry-run is a preview: no disk writes, no rate-limit budget,
+            // no audit entry. `auditID` in the output uses the generator's
+            // UUID as a placeholder so the wire shape stays stable.
+            return try Self.makeDryRunResult(
+                items: found,
+                method: method,
+                auditID: auditUUID.uuidString
+            )
         }
 
-        let result: CleanupResult
+        let clientID = clientIDProvider() ?? Self.unknownClientSentinel
+
+        if let limiter = rateLimiter {
+            switch limiter.recordAndCheck(clientID: clientID, tool: MCPToolName.clean.rawValue) {
+            case .allowed:
+                break
+            case .rejected(let retryAfter):
+                // Failed rate-limit attempts are not audited — they never
+                // reached the cleaner. Auditing rejected attempts would
+                // let a client with a stuck loop spam the log; the limiter
+                // itself is the forensic signal.
+                throw MCPToolError.invalidParams(Self.rateLimitMessage(
+                    window: limiter.window,
+                    maxOps: limiter.maxOps,
+                    retryAfter: retryAfter
+                ))
+            }
+        }
+
         do {
-            result = try cleaner(found, method)
+            let result = try cleaner(found, method)
+            recordAudit(
+                entryID: auditUUID,
+                clientID: clientID,
+                requested: found,
+                result: result,
+                methodHint: method
+            )
+            return try Self.makeResult(
+                result: result,
+                method: method,
+                auditID: auditUUID.uuidString
+            )
         } catch let error as MCPToolError {
+            // The cleaner signalled a protocol-level error (e.g. rejected
+            // a method it didn't like). Audit the attempt before rethrowing
+            // — from the destructive-ops perspective the client still made
+            // an attempt worth recording.
+            recordAudit(
+                entryID: auditUUID,
+                clientID: clientID,
+                requested: found,
+                result: nil,
+                methodHint: method
+            )
             throw error
         } catch {
             log?("clean handler error: \(error)")
+            recordAudit(
+                entryID: auditUUID,
+                clientID: clientID,
+                requested: found,
+                result: nil,
+                methodHint: method
+            )
             return .failure("Clean failed: \(MCPEncoding.clientFacingMessage(for: error))")
         }
-
-        return try Self.makeResult(result: result, method: method, auditID: auditID)
     }
 
     // MARK: - Helpers
@@ -178,6 +265,63 @@ public struct MCPCleanToolHandler: Sendable {
         let more = protected.count > 3 ? " and \(protected.count - 3) more" : ""
         return "Request rejected: \(protected.count) protected item(s) cannot be cleaned via MCP "
             + "(\(preview)\(more))."
+    }
+
+    private static func rateLimitMessage(
+        window: TimeInterval,
+        maxOps: Int,
+        retryAfter: TimeInterval
+    ) -> String {
+        let windowSeconds = Int(window.rounded())
+        let retrySeconds = max(1, Int(retryAfter.rounded(.up)))
+        let budget = maxOps == 1
+            ? "1 clean op per \(windowSeconds)s"
+            : "\(maxOps) clean ops per \(windowSeconds)s"
+        return "MCP clean rate limit exceeded (\(budget) per client). "
+            + "Cool-down active; retry in \(retrySeconds)s."
+    }
+
+    /// Builds the audit entry and passes it to the injected recorder.
+    /// Swallowing-but-logging a recorder failure is deliberate: audit is
+    /// observability and should never mask or reverse a destructive op that
+    /// already executed.
+    private func recordAudit(
+        entryID: UUID,
+        clientID: String,
+        requested: [ScanResult],
+        result: CleanupResult?,
+        methodHint: CleanupMethod
+    ) {
+        guard let auditRecorder else { return }
+
+        let files = requested.map { AuditFile(path: $0.path, size: $0.size) }
+
+        let highestSafety = requested.map(\.safety).reduce(SafetyLevel.safe) { current, next in
+            switch (current, next) {
+            case (.protected_, _), (_, .protected_): .protected_
+            case (.review, _), (_, .review): .review
+            default: .safe
+            }
+        }
+
+        let entry = AuditEntry(
+            id: entryID,
+            tool: "native",
+            command: "clean",
+            files: files,
+            safetyLevel: highestSafety,
+            confirmationMethod: .mcp,
+            cleanupMethod: result?.cleanupMethod ?? methodHint,
+            bytesFreed: result?.totalFreed ?? 0,
+            transport: "mcp",
+            clientID: clientID
+        )
+
+        do {
+            try auditRecorder(entry)
+        } catch {
+            log?("clean audit record failed: \(error)")
+        }
     }
 
     /// Shape a successful `CleanupResult` into an `MCPCleanOutput`. Per-item

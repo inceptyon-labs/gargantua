@@ -141,6 +141,31 @@ public struct MCPServerInfo: Sendable, Codable, Equatable {
     }
 }
 
+/// Client identity learned from the MCP `initialize` handshake.
+///
+/// Populated by the dispatcher once the client sends `initialize`, read by
+/// destructive tool handlers (e.g. `MCPCleanToolHandler`) to stamp audit
+/// entries and shard per-client rate limits. Tool handlers that see `nil`
+/// should fall back to the literal `"unknown"` for their audit/limit key so
+/// a misbehaving client cannot slip past per-client isolation by omitting
+/// `clientInfo`.
+public struct MCPClientIdentity: Sendable, Equatable {
+    /// `clientInfo.name` from the handshake. Not guaranteed unique across
+    /// clients — two distinct Claude Code processes both identify as
+    /// `"claude-code"`, for example — but stable within a single server
+    /// lifetime and sufficient for audit attribution.
+    public let name: String
+
+    /// `clientInfo.version` from the handshake, if the client advertised
+    /// one. Recorded verbatim; not parsed.
+    public let version: String?
+
+    public init(name: String, version: String? = nil) {
+        self.name = name
+        self.version = version
+    }
+}
+
 /// Optional diagnostic log sink for dispatcher-side events (unexpected
 /// handler errors, etc.). stderr-bound in production; swallowed in tests.
 public typealias MCPDispatcherLog = @Sendable (String) -> Void
@@ -163,6 +188,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
     private let log: MCPDispatcherLog?
     private let lock = NSLock()
     private var handlers: [MCPToolName: MCPToolHandler] = [:]
+    private var capturedClientIdentity: MCPClientIdentity?
 
     public init(
         serverInfo: MCPServerInfo,
@@ -182,6 +208,17 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         handlers[name] = handler
+    }
+
+    /// Client identity captured from the most recent `initialize` handshake,
+    /// or nil if the client has not completed `initialize` yet. Stdio
+    /// transport is single-session, so this is "the client" for the
+    /// process's lifetime. Intended for destructive-tool handlers that need
+    /// to stamp audit entries / shard rate limits.
+    public func currentClientIdentity() -> MCPClientIdentity? {
+        lock.lock()
+        defer { lock.unlock() }
+        return capturedClientIdentity
     }
 
     /// Main entry point, designed to be passed as an `MCPMessageHandler` to
@@ -240,12 +277,27 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         // and `clientInfo` are also mandatory in the spec but we accept them
         // loosely so Phase 2 stays compatible with minimal clients. Strict
         // version negotiation is deferred to a follow-up.
+        let parsed: InitializeParams
         do {
-            _ = try decodeFromJSONAny(InitializeParams.self, from: params)
+            parsed = try decodeFromJSONAny(InitializeParams.self, from: params)
         } catch {
             throw MCPDispatchError.invalidParams(
                 "initialize params malformed: \(describe(error))"
             )
+        }
+        // Capture client identity for downstream destructive tools (audit,
+        // rate limit). Missing `clientInfo` is tolerated — older clients may
+        // skip it and we don't want to break the handshake for them — but
+        // destructive tool handlers will fall back to a `"unknown"` sentinel
+        // when querying, which shows up in audit entries and is enough to
+        // keep per-client isolation honest.
+        if let client = parsed.clientInfo {
+            lock.lock()
+            capturedClientIdentity = MCPClientIdentity(
+                name: client.name,
+                version: client.version
+            )
+            lock.unlock()
         }
         // We advertise the `tools` capability with no extra flags; we do not
         // emit list-changed notifications yet.
@@ -359,9 +411,31 @@ private struct ToolCallParams: Decodable {
 }
 
 /// Minimal `initialize` params: only `protocolVersion` is decoded strictly.
-/// `capabilities` and `clientInfo` are accepted as-is and ignored for now.
+/// `capabilities` is accepted as-is and ignored; `clientInfo` is decoded
+/// defensively — a missing or malformed block is tolerated so minimal
+/// clients keep working, but a well-formed block's `name`/`version` is
+/// captured into `capturedClientIdentity`.
 private struct InitializeParams: Decodable {
     let protocolVersion: String
+    let clientInfo: ClientInfoParam?
+
+    private enum CodingKeys: String, CodingKey {
+        case protocolVersion, clientInfo
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocolVersion = try c.decode(String.self, forKey: .protocolVersion)
+        // Tolerate missing-name or wrong-shaped clientInfo: we want to log
+        // an identity when the client provides one, but not fail the
+        // handshake for a client that's out of spec on this field.
+        self.clientInfo = try? c.decodeIfPresent(ClientInfoParam.self, forKey: .clientInfo)
+    }
+
+    struct ClientInfoParam: Decodable {
+        let name: String
+        let version: String?
+    }
 }
 
 /// Shape written into the `tools/list` response. Mirrors MCP §tools/list
