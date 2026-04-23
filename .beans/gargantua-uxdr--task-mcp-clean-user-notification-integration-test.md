@@ -1,11 +1,11 @@
 ---
 # gargantua-uxdr
 title: 'Task: MCP clean user notification, integration test, docs'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-23T21:10:10Z
-updated_at: 2026-04-23T22:52:38Z
+updated_at: 2026-04-23T22:53:02Z
 parent: gargantua-u9il
 blocked_by:
     - gargantua-afft
@@ -34,7 +34,7 @@ Blocked by Task 3 (needs the fully-wired handler with audit + rate limit to vali
 - [x] Integration test: rate limiter triggers on second call
 - [x] README update: list Phase 3 MCP tools (`clean`), explain the opt-in/entry point, and describe client ID requirements
 - [x] CONTRIBUTING update: note Phase 2 (read-only) vs Phase 3 (destructive) split and the MCPPhase3Tools registry convention
-- [ ] Close `gargantua-u9il` feature bean once this task merges
+- [x] Close `gargantua-u9il` feature bean once this task merges
 
 ## Non-goals
 

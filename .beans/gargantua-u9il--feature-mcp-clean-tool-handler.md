@@ -1,11 +1,11 @@
 ---
 # gargantua-u9il
 title: 'Feature: MCP clean tool handler'
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-04-23T20:54:06Z
-updated_at: 2026-04-23T21:11:29Z
+updated_at: 2026-04-23T22:53:18Z
 parent: gargantua-rght
 ---
 
@@ -47,3 +47,15 @@ Each child owns its own testing + review cycle. This feature bean closes when al
 ## Architectural split
 
 Clean tool lives in `MCPPhase3Tools` (new type) and is registered only in Phase 3 code paths. The existing Phase 2 server entry point stays read-only; a Phase 3 entry point (or a feature flag) opts into Phase 3 tools.
+
+
+
+## Feature Complete
+
+All 4 child tasks merged to main:
+- `gargantua-0c7z` — Phase 3 tool registry + clean descriptor/schema
+- `gargantua-53q1` — MCPCleanToolHandler + scan-session cache + core safety
+- `gargantua-afft` — Client ID plumbing, audit wiring, rate limiter
+- `gargantua-uxdr` — User notification + cancel window, pipe-backed stdio integration test, README + CONTRIBUTING docs
+
+The MCP clean tool is now production-ready. All PRD §7.4 guardrails live: protected hard-reject, rate limit, audit trail, user notification with Cancel, client identification end-to-end.
