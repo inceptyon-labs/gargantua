@@ -107,14 +107,14 @@ private struct AutomationScreen: View {
             icon: "arrow.3.trianglepath",
             title: "Automation",
             explanation: "Unlock safer cleanup execution",
-            detail: "Gargantua uses Finder automation to safely move files to Trash "
-                + "instead of permanently deleting them. You can always restore from "
-                + "Trash if needed.",
+            detail: "Gargantua asks Finder to move files to Trash first, then falls "
+                + "back to macOS Trash APIs if Automation is unavailable. You can "
+                + "restore files from Trash if needed.",
             unlocks: [
-                "Move cleanup targets to Trash instead of deleting them outright",
-                "Restore files later if you change your mind"
+                "Use Finder-first cleanup for ordinary files",
+                "Keep direct Trash fallback available when Automation is denied"
             ],
-            limitedMode: "Without this, Gargantua can still scan, but cleanup actions are more limited.",
+            limitedMode: "Without Automation, Gargantua can still scan and use direct Trash APIs for cleanup.",
             settingsURL: automationURL,
             permissionGranted: nil,
             stepIndex: stepIndex,

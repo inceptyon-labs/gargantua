@@ -116,6 +116,62 @@ struct CleanupResultTests {
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
+    @Test("trash method uses injected Finder-first mover")
+    @MainActor
+    func trashMethodUsesInjectedMover() async {
+        let item = makeItem(id: "finder-primary", path: "/tmp/gargantua-finder-primary", size: 12)
+        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/gargantua-finder-primary")
+        let mover = RecordingTrashMover(outcome: .success(expectedTrashURL))
+        let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.allSucceeded)
+        #expect(result.totalFreed == 12)
+        #expect(result.itemResults.first?.trashURL == expectedTrashURL)
+        #expect(mover.movedURLs == [URL(fileURLWithPath: item.path)])
+    }
+
+    @Test("Finder Automation failure falls back to direct Trash mover")
+    @MainActor
+    func finderFailureFallsBackToDirectTrashMover() async throws {
+        let item = makeItem(id: "finder-fallback", path: "/tmp/gargantua-finder-fallback", size: 34)
+        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/gargantua-finder-fallback")
+        let finder = RecordingTrashMover(outcome: .failure("Automation denied"))
+        let direct = RecordingTrashMover(outcome: .success(expectedTrashURL))
+        let mover = FinderFirstTrashMover(primary: finder, fallback: direct)
+        let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.allSucceeded)
+        #expect(result.itemResults.first?.trashURL == expectedTrashURL)
+        #expect(finder.movedURLs == [URL(fileURLWithPath: item.path)])
+        #expect(direct.movedURLs == [URL(fileURLWithPath: item.path)])
+    }
+
+    @Test("Trash fallback failure preserves per-item result shape")
+    @MainActor
+    func trashFallbackFailurePreservesItemResult() async {
+        let item = makeItem(id: "finder-fallback-failure", path: "/tmp/gargantua-finder-fallback-failure", size: 56)
+        let finder = RecordingTrashMover(outcome: .failure("Automation denied"))
+        let direct = RecordingTrashMover(outcome: .failure("No such file"))
+        let mover = FinderFirstTrashMover(primary: finder, fallback: direct)
+        let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.cleanupMethod == .trash)
+        #expect(result.itemResults.count == 1)
+        #expect(result.failedItems.count == 1)
+        let itemResult = result.itemResults[0]
+        #expect(itemResult.succeeded == false)
+        #expect(itemResult.trashURL == nil)
+        #expect(itemResult.item.id == item.id)
+        #expect(itemResult.error?.contains("Finder Automation failed: Automation denied") == true)
+        #expect(itemResult.error?.contains("Direct Trash API fallback failed: No such file") == true)
+    }
+
     // MARK: - Trash Container Special Case
 
     /// Build a fake home directory with a `.Trash` subdirectory populated
@@ -243,5 +299,30 @@ struct CleanupResultTests {
         #expect(result.failedItems.count == 1)
         let error = result.failedItems.first?.error ?? ""
         #expect(!error.isEmpty)
+    }
+}
+
+@MainActor
+private final class RecordingTrashMover: TrashMoving {
+    enum Outcome {
+        case success(URL?)
+        case failure(String)
+    }
+
+    private let outcome: Outcome
+    private(set) var movedURLs: [URL] = []
+
+    init(outcome: Outcome) {
+        self.outcome = outcome
+    }
+
+    func moveToTrash(_ url: URL) async throws -> URL? {
+        movedURLs.append(url)
+        switch outcome {
+        case .success(let trashURL):
+            return trashURL
+        case .failure(let message):
+            throw TrashMoveFailure(message: message)
+        }
     }
 }

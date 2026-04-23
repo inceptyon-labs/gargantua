@@ -60,14 +60,20 @@ public struct CleanupResult: Sendable {
 public final class CleanupEngine: Sendable {
     /// Override the home directory used to resolve `~/.Trash`. Tests only.
     private let homeDirectory: URL
+    private let trashMover: any TrashMoving
 
     public init() {
         self.homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        self.trashMover = FinderFirstTrashMover()
     }
 
     /// Test-only initializer. Use the default `init()` in app code.
-    internal init(homeDirectoryForTesting: URL) {
+    internal init(
+        homeDirectoryForTesting: URL,
+        trashMover: any TrashMoving = FinderFirstTrashMover()
+    ) {
         self.homeDirectory = homeDirectoryForTesting
+        self.trashMover = trashMover
     }
 
     /// Remove the given scan results with the selected cleanup method.
@@ -136,25 +142,19 @@ public final class CleanupEngine: Sendable {
         }
     }
 
-    /// Recycle a single URL via NSWorkspace, returning the Trash URL on success.
+    /// Move a single URL to Trash. Finder Automation is tried first, with the
+    /// direct macOS Trash API kept as a fallback for denied or failed events.
     @MainActor
     private func recycleSingle(url: URL, item: ScanResult) async -> CleanupItemResult {
-        await withCheckedContinuation { continuation in
-            NSWorkspace.shared.recycle([url]) { trashedURLs, error in
-                if let error {
-                    continuation.resume(returning: CleanupItemResult(
-                        item: item,
-                        succeeded: false,
-                        error: error.localizedDescription
-                    ))
-                } else {
-                    continuation.resume(returning: CleanupItemResult(
-                        item: item,
-                        succeeded: true,
-                        trashURL: trashedURLs[url]
-                    ))
-                }
-            }
+        do {
+            let trashURL = try await trashMover.moveToTrash(url)
+            return CleanupItemResult(item: item, succeeded: true, trashURL: trashURL)
+        } catch {
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: error.localizedDescription
+            )
         }
     }
 

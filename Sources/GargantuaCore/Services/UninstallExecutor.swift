@@ -128,9 +128,10 @@ public protocol UninstallExecuting: Sendable {
 
 /// Executes a Smart Uninstaller plan.
 ///
-/// This layer is intentionally Trash-first. Non-privileged files are moved via
-/// `NSWorkspace.recycle`; launch daemons and privileged helpers are delegated to
-/// an authorized helper boundary because app-sandboxed code cannot remove them.
+/// This layer is intentionally Trash-first. Non-privileged files use the shared
+/// Finder-first Trash mover with direct API fallback; launch daemons and
+/// privileged helpers are delegated to an authorized helper boundary because
+/// app-sandboxed code cannot remove them.
 public final class UninstallExecutor: UninstallExecuting, Sendable {
     private let remover: any UninstallRemoving
     private let privilegedHelper: (any PrivilegedUninstallHelping)?
