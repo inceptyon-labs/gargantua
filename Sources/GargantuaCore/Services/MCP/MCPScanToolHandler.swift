@@ -31,15 +31,18 @@ public struct MCPScanToolHandler: Sendable {
 
     private let scanner: Scanner
     private let profileResolver: ProfileResolver
+    private let sessionCache: MCPScanSessionCache?
     private let log: MCPDispatcherLog?
 
     public init(
         scanner: @escaping Scanner,
         profileResolver: @escaping ProfileResolver,
+        sessionCache: MCPScanSessionCache? = nil,
         log: MCPDispatcherLog? = nil
     ) {
         self.scanner = scanner
         self.profileResolver = profileResolver
+        self.sessionCache = sessionCache
         self.log = log
     }
 
@@ -95,6 +98,13 @@ public struct MCPScanToolHandler: Sendable {
             log?("scan handler error: \(error)")
             return .failure("Scan failed: \(MCPEncoding.clientFacingMessage(for: error))")
         }
+
+        // Populate the scan-session cache before shaping output, so that a
+        // follow-up `clean` call can resolve these exact IDs. Last-scan-wins:
+        // a fresh scan always replaces any prior session state. Failures
+        // above threw before reaching here, so the cache is never polluted
+        // with a half-finished scan's results.
+        sessionCache?.replace(with: results)
 
         let output = Self.makeOutput(from: results)
         let payload = try MCPEncoding.encodeAsJSONAny(output)
