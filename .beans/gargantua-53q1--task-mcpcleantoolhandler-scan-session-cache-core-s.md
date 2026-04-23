@@ -1,14 +1,12 @@
 ---
 # gargantua-53q1
 title: 'Task: MCPCleanToolHandler + scan-session cache + core safety'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-23T21:09:46Z
-updated_at: 2026-04-23T21:10:18Z
+updated_at: 2026-04-23T21:25:07Z
 parent: gargantua-u9il
-blocked_by:
-    - gargantua-0c7z
 ---
 
 Second child of `gargantua-u9il`. Implements the clean tool handler with scan-session ID resolution and the core safety guardrails from PRD §7.4 (minus rate limit, audit plumbing, user notification — those land in Tasks 3 & 4).
