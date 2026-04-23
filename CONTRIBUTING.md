@@ -48,3 +48,23 @@ When in doubt, prefer `review`.
 - Realistic path samples from a test machine
 - Why the files regenerate, or why they should stay review-only
 - Notes about app-specific risk, such as offline media, login state, or shared containers
+
+## MCP Server Contributions
+
+The MCP server code lives in two places:
+
+- `Sources/GargantuaMCP/main.swift` — the CLI entry point that wires transport, dispatcher, and handlers.
+- `Sources/GargantuaCore/Services/MCP/` — handlers, session cache, rate limiter, notification service, and the request dispatcher.
+
+Tool descriptors are registered through two segregated registries:
+
+- `MCPPhase2Tools` — read-only tools. Exposed by default.
+- `MCPPhase3Tools` — destructive tools. Phase 2 code paths must never advertise them. A Phase 3 consumer opts in explicitly by passing `MCPPhase3Tools.all` (or `MCPPhase2Tools.all + MCPPhase3Tools.all`) to the dispatcher.
+
+When adding a new tool:
+
+- If it only reads state, register it in `MCPPhase2Tools`.
+- If it can modify disk, network, or any other persistent state, register it in `MCPPhase3Tools` and plug it into the same guardrails the `clean` tool uses (audit writer, shared `MCPRateLimiter`, client identifier provider, user notification service).
+- Never merge the two registries inside `GargantuaCore` — keeping them separate means no accidental Phase 3 exposure through a Phase 2 consumer.
+
+Integration coverage pattern: see `Tests/GargantuaCoreTests/Services/MCP/MCPStdioPhase3IntegrationTests.swift` for the pipe-backed stdio harness. Reuse it when adding destructive tools so the full transport + dispatch + guardrail chain is exercised, not just the handler.

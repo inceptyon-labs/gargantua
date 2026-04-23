@@ -1,11 +1,11 @@
 ---
 # gargantua-uxdr
 title: 'Task: MCP clean user notification, integration test, docs'
-status: todo
+status: in-progress
 type: task
 priority: high
 created_at: 2026-04-23T21:10:10Z
-updated_at: 2026-04-23T21:10:24Z
+updated_at: 2026-04-23T22:40:06Z
 parent: gargantua-u9il
 blocked_by:
     - gargantua-afft
@@ -25,15 +25,15 @@ Blocked by Task 3 (needs the fully-wired handler with audit + rate limit to vali
 
 ## Todo
 
-- [ ] Build `MCPCleanNotificationService` (or similar) that posts a `UNUserNotification` with title/body describing the incoming clean request and a `Cancel` action
-- [ ] Define a grace period (default 5s) during which the handler awaits the user's decision before invoking `CleanupEngine`
-- [ ] Cancel path: cancellation short-circuits the operation; audit entry records the cancel outcome; `MCPCleanOutput.per_item` reflects "skipped: user cancelled"
-- [ ] Unit tests with a fake notification service: timer elapses → proceed; cancel action → short-circuit
-- [ ] Integration test: end-to-end over pipe-backed stdio, `scan` → `clean` happy path, asserts audit entry + cleaned files. Use a temp home dir and an in-memory fake `CleanupEngine` so the test doesn't touch real filesystem
-- [ ] Integration test: protected-hard-reject surfaces correctly through stdio
-- [ ] Integration test: rate limiter triggers on second call
-- [ ] README update: list Phase 3 MCP tools (`clean`), explain the opt-in/entry point, and describe client ID requirements
-- [ ] CONTRIBUTING update: note Phase 2 (read-only) vs Phase 3 (destructive) split and the MCPPhase3Tools registry convention
+- [x] Build `MCPCleanNotificationService` (or similar) that posts a `UNUserNotification` with title/body describing the incoming clean request and a `Cancel` action
+- [x] Define a grace period (default 5s) during which the handler awaits the user's decision before invoking `CleanupEngine`
+- [x] Cancel path: cancellation short-circuits the operation; audit entry records the cancel outcome; `MCPCleanOutput.per_item` reflects "skipped: user cancelled"
+- [x] Unit tests with a fake notification service: timer elapses → proceed; cancel action → short-circuit
+- [x] Integration test: end-to-end over pipe-backed stdio, `scan` → `clean` happy path, asserts audit entry + cleaned files. Use a temp home dir and an in-memory fake `CleanupEngine` so the test doesn't touch real filesystem
+- [x] Integration test: protected-hard-reject surfaces correctly through stdio
+- [x] Integration test: rate limiter triggers on second call
+- [x] README update: list Phase 3 MCP tools (`clean`), explain the opt-in/entry point, and describe client ID requirements
+- [x] CONTRIBUTING update: note Phase 2 (read-only) vs Phase 3 (destructive) split and the MCPPhase3Tools registry convention
 - [ ] Close `gargantua-u9il` feature bean once this task merges
 
 ## Non-goals
