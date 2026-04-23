@@ -1,11 +1,11 @@
 ---
 # gargantua-53q1
 title: 'Task: MCPCleanToolHandler + scan-session cache + core safety'
-status: in-progress
+status: completed
 type: task
 priority: high
 created_at: 2026-04-23T21:09:46Z
-updated_at: 2026-04-23T21:44:01Z
+updated_at: 2026-04-23T21:44:37Z
 parent: gargantua-u9il
 ---
 
