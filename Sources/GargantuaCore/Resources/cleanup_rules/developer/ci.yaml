@@ -1,0 +1,99 @@
+rules:
+  - id: terraform_cache
+    name: Terraform Cache
+    paths:
+      - "~/.cache/terraform"
+    safety: safe
+    confidence: 96
+    explanation: "Terraform plugin/download cache. Project state and configuration are not matched."
+    source:
+      name: Terraform
+    regenerates: true
+    regenerate_command: "terraform init"
+    category: dev_artifacts
+    tags:
+      - developer
+      - devops
+      - cache
+
+  - id: grafana_cache
+    name: Grafana Cache
+    paths:
+      - "~/.grafana/cache"
+    safety: safe
+    confidence: 94
+    explanation: "Grafana local cache data. Recreated by Grafana when needed."
+    source:
+      name: Grafana
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - devops
+      - cache
+
+  - id: prometheus_wal_cache
+    name: Prometheus WAL Cache
+    paths:
+      - "~/.prometheus/data/wal"
+    safety: review
+    confidence: 76
+    explanation: "Prometheus write-ahead log data. Review first because it can contain recent unsnapshotted metrics."
+    source:
+      name: Prometheus
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - devops
+      - review
+
+  - id: jenkins_workspace_targets
+    name: Jenkins Workspace Target Caches
+    paths:
+      - "~/.jenkins/workspace/*/target"
+    safety: safe
+    confidence: 92
+    explanation: "Build target directories under Jenkins workspaces. Rebuilt by subsequent Jenkins jobs."
+    source:
+      name: Jenkins
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ci
+      - build_cache
+
+  - id: ci_runner_caches
+    name: Local CI Runner Caches
+    paths:
+      - "~/.cache/gitlab-runner"
+      - "~/.github/cache"
+      - "~/.circleci/cache"
+    safety: safe
+    confidence: 94
+    explanation: "Local GitLab Runner, GitHub Actions, and CircleCI caches. Recreated by future CI runs."
+    source:
+      name: CI runners
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ci
+      - cache
+
+  - id: sonarqube_cache
+    name: SonarQube Cache
+    paths:
+      - "~/.sonar/cache"
+    safety: safe
+    confidence: 94
+    explanation: "SonarQube scanner cache. Recreated during future analysis runs."
+    source:
+      name: SonarQube
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ci
+      - cache

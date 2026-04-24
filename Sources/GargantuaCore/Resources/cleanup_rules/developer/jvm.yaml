@@ -1,0 +1,78 @@
+rules:
+  - id: maven_repository_cache
+    name: Maven Local Repository
+    paths:
+      - "~/.m2/repository"
+    safety: review
+    confidence: 82
+    explanation: "Maven's local dependency repository. Re-downloadable, but often used as an offline mirror."
+    source:
+      name: Maven
+    regenerates: true
+    regenerate_command: "mvn dependency:go-offline"
+    category: dev_artifacts
+    tags:
+      - developer
+      - jvm
+      - dependencies
+    safety_overrides:
+      - condition: "age > 60d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "No Maven repository activity in 60+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: gradle_caches
+    name: Gradle Caches
+    paths:
+      - "~/.gradle/caches"
+      - "**/.gradle"
+    safety: safe
+    confidence: 94
+    explanation: "Gradle dependency, task, and project caches. Recreated by Gradle on the next build."
+    source:
+      name: Gradle
+    regenerates: true
+    regenerate_command: "gradle build"
+    category: dev_artifacts
+    tags:
+      - developer
+      - jvm
+      - build_cache
+
+  - id: gradle_daemon_logs
+    name: Gradle Daemon Logs
+    paths:
+      - "~/.gradle/daemon"
+    safety: safe
+    confidence: 96
+    explanation: "Gradle daemon state and logs. New daemon state is created by subsequent Gradle runs."
+    source:
+      name: Gradle
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - jvm
+      - logs
+
+  - id: sbt_ivy_caches
+    name: SBT and Ivy Caches
+    paths:
+      - "~/.sbt/boot"
+      - "~/.sbt/preloaded"
+      - "~/.sbt/launchers"
+      - "~/.ivy2/cache"
+    safety: safe
+    confidence: 92
+    explanation: "SBT and Ivy dependency caches. Re-downloaded on the next Scala build."
+    source:
+      name: SBT and Ivy
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - jvm
+      - cache

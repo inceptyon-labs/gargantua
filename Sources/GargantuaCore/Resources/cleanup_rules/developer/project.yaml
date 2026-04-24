@@ -1,0 +1,135 @@
+rules:
+  - id: nextjs_cache
+    name: Next.js Cache
+    paths:
+      - "**/.next/cache"
+    safety: safe
+    confidence: 97
+    explanation: "Next.js build cache inside project roots. Rebuilt by next dev/build."
+    source:
+      name: Next.js
+    regenerates: true
+    regenerate_command: "next build"
+    category: dev_artifacts
+    tags:
+      - developer
+      - node
+      - build_cache
+
+  - id: angular_cache
+    name: Angular Cache
+    paths:
+      - "**/.angular/cache"
+    safety: safe
+    confidence: 97
+    explanation: "Angular CLI persistent build cache. Recreated by Angular on future builds."
+    source:
+      name: Angular
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - node
+      - build_cache
+
+  - id: sveltekit_cache
+    name: SvelteKit Cache
+    paths:
+      - "**/.svelte-kit"
+    safety: safe
+    confidence: 96
+    explanation: "SvelteKit generated build cache. Rebuilt by the next SvelteKit command."
+    source:
+      name: SvelteKit
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - node
+      - build_cache
+
+  - id: coverage_outputs
+    name: Test Coverage Outputs
+    paths:
+      - "**/coverage"
+      - "**/.nyc_output"
+    safety: review
+    confidence: 84
+    explanation: "Generated coverage reports and nyc intermediate output. Usually recreated by tests, but review broad coverage folders first."
+    source:
+      name: Test coverage tools
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - tests
+      - build_cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "No coverage-output activity in 30+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: terraform_project_cache
+    name: Terraform Project Cache
+    paths:
+      - "**/.terraform"
+    safety: review
+    confidence: 82
+    explanation: "Terraform project plugin and module cache. Usually recreated by terraform init, but review before removal near infrastructure state."
+    source:
+      name: Terraform
+    regenerates: true
+    regenerate_command: "terraform init"
+    category: dev_artifacts
+    tags:
+      - developer
+      - devops
+      - review
+
+  - id: serverless_build_caches
+    name: Serverless Build Caches
+    paths:
+      - "**/.serverless"
+      - "**/.aws-sam/build"
+    safety: safe
+    confidence: 94
+    explanation: "Serverless Framework and AWS SAM generated build artifacts. Rebuilt during package/deploy."
+    source:
+      name: Serverless tooling
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cloud
+      - build_cache
+
+  - id: dotnet_build_outputs
+    name: .NET Build Outputs
+    paths:
+      - "**/bin/Debug"
+      - "**/bin/Release"
+      - "**/obj"
+    safety: review
+    confidence: 80
+    explanation: ".NET build outputs. Rebuilt by dotnet build, but review because generic bin/obj names can appear in non-.NET projects."
+    source:
+      name: .NET
+    regenerates: true
+    regenerate_command: "dotnet build"
+    category: dev_artifacts
+    tags:
+      - developer
+      - dotnet
+      - build_cache
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "No build-output activity in 30+ days."
+        profiles:
+          - developer
+          - deep

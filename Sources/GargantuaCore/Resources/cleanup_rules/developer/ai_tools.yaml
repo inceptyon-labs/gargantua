@@ -1,0 +1,121 @@
+rules:
+  - id: codex_caches
+    name: Codex Caches and Logs
+    paths:
+      - "~/Library/Logs/com.openai.codex"
+      - "~/Library/Application Support/Codex/Cache"
+      - "~/Library/Application Support/Codex/Code Cache"
+      - "~/Library/Application Support/Codex/GPUCache"
+      - "~/Library/Application Support/Codex/DawnGraphiteCache"
+      - "~/Library/Application Support/Codex/DawnWebGPUCache"
+    safety: safe
+    confidence: 95
+    explanation: "Codex Electron and CLI caches/logs. Recreated by Codex and do not include project workspaces."
+    source:
+      name: Codex
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+      - logs
+
+  - id: claude_desktop_caches
+    name: Claude Desktop Caches
+    paths:
+      - "~/Library/Application Support/Claude/Cache"
+      - "~/Library/Application Support/Claude/Code Cache"
+      - "~/Library/Application Support/Claude/GPUCache"
+      - "~/Library/Application Support/Claude/DawnGraphiteCache"
+      - "~/Library/Application Support/Claude/DawnWebGPUCache"
+      - "~/Library/Application Support/Claude/sentry"
+    safety: safe
+    confidence: 94
+    explanation: "Claude Desktop runtime, GPU, and crash-report caches. Recreated by the app."
+    source:
+      name: Claude Desktop
+      bundle_id: com.anthropic.claudefordesktop
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: claude_pending_uploads
+    name: Claude Pending Uploads
+    paths:
+      - "~/Library/Application Support/Claude/pending-uploads"
+    safety: review
+    confidence: 70
+    explanation: "Claude pending upload staging data. Review before removal in case an upload has not synced."
+    source:
+      name: Claude Desktop
+      bundle_id: com.anthropic.claudefordesktop
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - review
+
+  - id: antigravity_caches
+    name: Antigravity Caches
+    paths:
+      - "~/Library/Application Support/Antigravity/Cache"
+      - "~/Library/Application Support/Antigravity/Code Cache"
+      - "~/Library/Application Support/Antigravity/GPUCache"
+      - "~/Library/Application Support/Antigravity/DawnGraphiteCache"
+      - "~/Library/Application Support/Antigravity/DawnWebGPUCache"
+    safety: safe
+    confidence: 94
+    explanation: "Antigravity Electron caches. Recreated by the app and separate from user workspaces."
+    source:
+      name: Antigravity
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: qoder_caches
+    name: Qoder Caches and Logs
+    paths:
+      - "~/Library/Application Support/Qoder/Cache"
+      - "~/Library/Application Support/Qoder/CachedData"
+      - "~/Library/Application Support/Qoder/CachedExtensionVSIXs"
+      - "~/Library/Application Support/Qoder/Code Cache"
+      - "~/Library/Application Support/Qoder/GPUCache"
+      - "~/Library/Application Support/Qoder/DawnGraphiteCache"
+      - "~/Library/Application Support/Qoder/DawnWebGPUCache"
+      - "~/Library/Application Support/Qoder/logs"
+    safety: safe
+    confidence: 94
+    explanation: "Qoder runtime, extension-package, GPU, and log caches. Recreated by the app."
+    source:
+      name: Qoder
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - editor
+      - cache
+
+  - id: opencode_cache
+    name: OpenCode Cache
+    paths:
+      - "~/.cache/opencode"
+    safety: safe
+    confidence: 94
+    explanation: "OpenCode cache files. Recreated by OpenCode when needed."
+    source:
+      name: OpenCode
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache

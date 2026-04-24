@@ -1,0 +1,74 @@
+rules:
+  - id: database_tool_caches
+    name: Database Tool Caches
+    paths:
+      - "~/Library/Caches/com.sequel-ace.sequel-ace"
+      - "~/Library/Caches/com.eggerapps.Sequel-Pro"
+      - "~/Library/Caches/redis-desktop-manager"
+      - "~/Library/Caches/com.navicat.*"
+      - "~/Library/Caches/com.dbeaver.*"
+      - "~/Library/Caches/com.redis.RedisInsight"
+      - "~/Library/Caches/com.mongodb.compass"
+    safety: safe
+    confidence: 93
+    explanation: "Database GUI caches. Connection profiles and databases live outside these cache paths."
+    source:
+      name: Database developer tools
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - database
+      - cache
+
+  - id: api_tool_caches
+    name: API Client Caches
+    paths:
+      - "~/Library/Caches/com.postmanlabs.mac"
+      - "~/Library/Caches/com.konghq.insomnia"
+      - "~/Library/Caches/com.tinyapp.TablePlus"
+      - "~/Library/Caches/com.getpaw.Paw"
+    safety: safe
+    confidence: 93
+    explanation: "API/database client caches. Request collections and credentials are not matched."
+    source:
+      name: API developer tools
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - api
+      - cache
+
+  - id: proxy_debugger_caches
+    name: Proxy Debugger Caches
+    paths:
+      - "~/Library/Caches/com.charlesproxy.charles"
+      - "~/Library/Caches/com.proxyman.NSProxy"
+    safety: safe
+    confidence: 93
+    explanation: "Charles and Proxyman cache data. Proxy certificates and settings are not matched."
+    source:
+      name: Proxy debugging tools
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - network
+      - cache
+
+  - id: unity_cache
+    name: Unity Cache
+    paths:
+      - "~/Library/Caches/com.unity3d.*"
+    safety: safe
+    confidence: 92
+    explanation: "Unity editor cache data. Project assets and Library folders are not matched by this rule."
+    source:
+      name: Unity
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - game_dev
+      - cache

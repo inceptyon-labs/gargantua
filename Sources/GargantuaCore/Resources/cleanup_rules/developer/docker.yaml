@@ -60,3 +60,36 @@ rules:
     tags:
       - developer
       - logs
+
+  - id: docker_buildx_cache
+    name: Docker Buildx Cache
+    paths:
+      - "~/.docker/buildx/cache"
+    safety: safe
+    confidence: 95
+    explanation: "Docker Buildx local build cache. Layers can be rebuilt or pulled again."
+    source:
+      name: Docker Buildx
+    regenerates: true
+    regenerate_command: "docker buildx prune"
+    category: docker
+    tags:
+      - developer
+      - containers
+      - cache
+
+  - id: container_storage_temp
+    name: Container Storage Temp
+    paths:
+      - "~/.local/share/containers/storage/tmp"
+    safety: safe
+    confidence: 95
+    explanation: "Podman/container-storage temporary files. Recreated by container tooling when needed."
+    source:
+      name: containers/storage
+    regenerates: true
+    category: docker
+    tags:
+      - developer
+      - containers
+      - temp

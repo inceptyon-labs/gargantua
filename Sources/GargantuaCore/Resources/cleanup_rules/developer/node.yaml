@@ -46,10 +46,30 @@ rules:
       - developer
       - cache
 
+  - id: npm_residual_caches
+    name: npm Residual Caches
+    paths:
+      - "~/.npm/_npx"
+      - "~/.npm/_prebuilds"
+      - "~/.npm/_logs"
+    safety: safe
+    confidence: 96
+    explanation: "npm npx payloads, prebuild staging files, and logs. Recreated on future npm/npx runs."
+    source:
+      name: npm
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - node
+      - cache
+      - logs
+
   - id: yarn_cache
     name: Yarn Cache
     paths:
       - "~/Library/Caches/Yarn"
+      - "~/.yarn/cache"
     safety: safe
     confidence: 98
     explanation: "Yarn package cache. Re-downloaded from registry on next install."
@@ -61,6 +81,24 @@ rules:
     tags:
       - developer
       - cache
+
+  - id: tnpm_cache
+    name: tnpm Cache
+    paths:
+      - "~/.tnpm/_cacache"
+      - "~/.tnpm/_logs"
+    safety: safe
+    confidence: 96
+    explanation: "tnpm package cache and logs. Re-downloaded or recreated on the next tnpm install."
+    source:
+      name: tnpm
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - node
+      - cache
+      - logs
 
   - id: pnpm_store
     name: pnpm Store
@@ -76,6 +114,23 @@ rules:
     category: dev_artifacts
     tags:
       - developer
+      - cache
+
+  - id: corepack_cache
+    name: Corepack Cache
+    paths:
+      - "~/Library/Caches/node/corepack"
+      - "~/.cache/node/corepack"
+    safety: safe
+    confidence: 95
+    explanation: "Corepack package-manager shim cache. Recreated when Corepack prepares Yarn or pnpm."
+    source:
+      name: Corepack
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - node
       - cache
 
   - id: bun_cache

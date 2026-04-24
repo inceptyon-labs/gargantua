@@ -7,16 +7,16 @@ Mole commit date: 2026-04-24T08:02:08+08:00
 
 ## Summary
 
-Gargantua does not yet have full Mole rule parity. After the browser rule port, the app ships this reviewed snapshot:
+Gargantua does not yet have full Mole rule parity. After the developer-tool rule port, the app ships this reviewed snapshot:
 
 | Area | Gargantua files | Gargantua rules |
 | --- | ---: | ---: |
 | App cleanup | 3 | 12 |
 | Browser cleanup | 15 | 54 |
-| Developer cleanup | 7 | 37 |
+| Developer cleanup | 18 | 118 |
 | System cleanup | 4 | 12 |
 | Uninstall/remnant cleanup | 2 | 12 |
-| Total | 31 | 127 |
+| Total | 42 | 208 |
 
 Mole's cleanup implementation is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count. As a conservative proxy, the current Mole source has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
@@ -37,7 +37,7 @@ Bundled cleanup rule files:
 
 - Apps: Dropbox, Slack, Spotify.
 - Browsers: Arc, Brave, Chrome, Chromium, Comet, Dia, Edge, Firefox, Helium, Opera, Orion, Safari, Vivaldi, Yandex, Zen.
-- Developer tools: Docker, Go, Homebrew, Node, Python, Rust, Xcode.
+- Developer tools: Docker, Go, Homebrew, Node/frontend, Python/data, Rust, Xcode/mobile, JVM, editors, cloud CLIs, containers/Kubernetes, Ruby/PHP/.NET, Bazel/Zig/Deno/Terraform, CI caches, database/API tools, shell/network support, and AI/dev assistant caches.
 - System cleanup: caches, logs, temp files, Trash, downloaded installer/archive filters.
 
 Bundled remnant rule files:
@@ -74,7 +74,7 @@ Missing or partial Mole coverage:
 - Creative/media/productivity apps: Adobe, Sketch, Figma, Final Cut, DaVinci Resolve, Blender, Cinema 4D, Autodesk, SketchUp, Apple Music, Podcasts, TV, Plex, NetEase Music, QQ Music, VLC, IINA, MPV, Steam, Epic, Battle.net, Minecraft, Notion, Obsidian, Logseq, Bear, Evernote, Raycast, Alfred, Warp, Ghostty, and remote desktop tools.
 - Virtualization: VMware Fusion, Parallels, VirtualBox, Vagrant.
 
-Pre-port classification:
+Classification posture used for the port:
 
 - `safe`: cache, code cache, GPU cache, temp files, non-user logs, crash-report cache, media transcode cache where regenerated.
 - `review`: offline media, sync databases, local storage, clipboard/history caches, app-specific support data, plugin caches with user projects nearby.
@@ -83,14 +83,20 @@ Pre-port classification:
 
 ### Developer Tooling
 
-Missing or partial Mole coverage:
+Ported from Mole in `gargantua-kjv0`:
 
-- Node/frontend: tnpm, Yarn, pnpm store pruning behavior, Bun, Corepack, TypeScript, Electron, node-gyp, Turbo, Vite, Webpack, Parcel, ESLint, Prettier.
-- Python/data: pyenv, Hugging Face, PyTorch, TensorFlow, Conda/Anaconda, Weights & Biases, Jupyter runtime; current pip/poetry/uv rules are narrower than Mole.
-- Mobile/Xcode: Simulator runtime caches, unavailable simulator deletion, device support cleanup, documentation cache pruning, Android Studio/SDK caches, Expo caches.
-- Toolchains and languages: mise, Nix, Kubernetes, container temp, AWS CLI, Google Cloud logs, Azure logs, SBT, Ivy, Gradle, JetBrains, Ruby Bundler, Composer, NuGet, Bazel, Zig, Deno, Terraform, Grafana, Prometheus, Jenkins, GitLab Runner, GitHub Actions, CircleCI, SonarQube, Hex, Cabal, Opam.
-- Developer apps: Sequel Ace/Pro, Redis tools, Navicat, DBeaver, Postman, Insomnia, TablePlus, Paw, Charles, Proxyman, Unity, Figma, GitHub Desktop, crash reporters, VS Code, Zed, Copilot, Cursor.
-- Shell/network support: Git lock/backup files, Oh My Zsh cache, shell history backups, pre-commit cache, curl/wget caches.
+- Node/frontend: tnpm, npm residual caches, Yarn cache variants, Bun, Corepack, TypeScript, Electron, node-gyp, Turbo, Vite, Webpack, Parcel, ESLint, Prettier, Prisma, and bounded project-local web build caches.
+- Python/data: pyenv, Jupyter runtime, Hugging Face, PyTorch, TensorFlow, Conda/Anaconda, Weights & Biases, and Mole path variants for Poetry, uv, Ruff, mypy, and pytest.
+- Mobile/Xcode: CoreSimulator caches/logs/tmp, Xcode device logs/products/documentation/IB caches, Android Studio/SDK caches, SwiftPM cache variants, and Expo caches with account state excluded.
+- Toolchains and languages: mise, Kubernetes cache, container temp, AWS CLI cache, Google Cloud logs, Azure logs, SBT, Ivy, Gradle, Maven, Ruby Bundler, Composer, NuGet, Bazel, Zig, Deno, Terraform, Grafana, Prometheus WAL review, Jenkins, GitLab Runner, GitHub Actions, CircleCI, SonarQube, Hex, Cabal, and opam.
+- Developer apps: VS Code, Cursor, Zed, Copilot, JetBrains logs, Sublime Text, Sequel Ace/Pro, Redis tools, Navicat, DBeaver, Redis Insight, MongoDB Compass, Postman, Insomnia, TablePlus, Paw, Charles, Proxyman, Unity, Codex, Claude Desktop, Antigravity, Qoder, and OpenCode cache/log families.
+- Shell/network support: Git lock/backup files, Oh My Zsh and completion caches, shell history backups as review, pre-commit cache, curl/wget caches.
+
+Remaining gaps or deliberately deferred behavior:
+
+- Command-backed pruning remains out of YAML: pnpm store pruning behavior, `go clean`, `nix-collect-garbage`, unavailable simulator deletion, package-manager prune commands, and tool-aware old-version retention loops.
+- Version-pruning behaviors remain out of YAML where Mole keeps current/recent versions, such as JetBrains Toolbox apps, Xcode documentation indexes, simulator runtimes, device support versions, Claude Code versions, and Cursor Agent versions.
+- Broad or risky project artifacts remain conservative: generic `bin`/`obj`, Terraform project caches, shell-history backups, Prometheus WAL, model caches, and upload staging are review-gated.
 
 Pre-port classification:
 

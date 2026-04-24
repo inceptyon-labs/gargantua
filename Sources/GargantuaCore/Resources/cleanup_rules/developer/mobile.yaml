@@ -1,0 +1,58 @@
+rules:
+  - id: android_studio_cache
+    name: Android Studio Cache
+    paths:
+      - "~/Library/Caches/Google/AndroidStudio*"
+    safety: safe
+    confidence: 95
+    explanation: "Android Studio IDE caches. Rebuilt by the IDE after launch."
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - android
+      - cache
+
+  - id: android_sdk_caches
+    name: Android SDK Caches
+    paths:
+      - "~/.android/build-cache"
+      - "~/.android/cache"
+    safety: safe
+    confidence: 96
+    explanation: "Android build and SDK manager caches. Rebuilt or re-downloaded by Android tooling."
+    source:
+      name: Android SDK
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - android
+      - build_cache
+
+  - id: expo_caches
+    name: Expo Caches
+    paths:
+      - "~/.expo/expo-go"
+      - "~/.expo/android-apk-cache"
+      - "~/.expo/ios-simulator-app-cache"
+      - "~/.expo/native-modules-cache"
+      - "~/.expo/schema-cache"
+      - "~/.expo/template-cache"
+      - "~/.expo/versions-cache"
+    exclude:
+      - "*/state.json"
+    safety: safe
+    confidence: 95
+    explanation: "Expo app, schema, native module, and template caches. Recreated by Expo; account state is excluded."
+    source:
+      name: Expo
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - react_native
+      - cache

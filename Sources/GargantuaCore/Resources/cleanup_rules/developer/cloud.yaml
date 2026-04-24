@@ -1,0 +1,65 @@
+rules:
+  - id: kubernetes_cache
+    name: Kubernetes Cache
+    paths:
+      - "~/.kube/cache"
+    safety: safe
+    confidence: 97
+    explanation: "kubectl discovery and HTTP cache. Recreated on future cluster queries."
+    source:
+      name: Kubernetes
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cloud
+      - kubernetes
+      - cache
+
+  - id: aws_cli_cache
+    name: AWS CLI Cache
+    paths:
+      - "~/.aws/cli/cache"
+    safety: safe
+    confidence: 95
+    explanation: "AWS CLI cached session responses. Credentials and config live outside this cache path."
+    source:
+      name: AWS CLI
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cloud
+      - cache
+
+  - id: google_cloud_logs
+    name: Google Cloud CLI Logs
+    paths:
+      - "~/.config/gcloud/logs"
+    safety: safe
+    confidence: 96
+    explanation: "gcloud command logs. They do not contain the active Google Cloud configuration."
+    source:
+      name: Google Cloud CLI
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cloud
+      - logs
+
+  - id: azure_cli_logs
+    name: Azure CLI Logs
+    paths:
+      - "~/.azure/logs"
+    safety: safe
+    confidence: 96
+    explanation: "Azure CLI diagnostic logs. They do not contain the active Azure profile or token cache."
+    source:
+      name: Azure CLI
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - cloud
+      - logs

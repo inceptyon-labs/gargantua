@@ -1,0 +1,88 @@
+rules:
+  - id: git_lock_and_backup_files
+    name: Git Lock and Backup Files
+    paths:
+      - "~/.gitconfig.lock"
+      - "~/.gitconfig.bak*"
+    safety: review
+    confidence: 82
+    explanation: "Stale Git config lock or backup files. Review backups before removal in case they contain wanted config."
+    source:
+      name: Git
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - git
+      - review
+
+  - id: oh_my_zsh_cache
+    name: Oh My Zsh Cache
+    paths:
+      - "~/.oh-my-zsh/cache"
+      - "~/.zcompdump*"
+    safety: safe
+    confidence: 96
+    explanation: "Shell completion and Oh My Zsh cache files. Rebuilt by the shell."
+    source:
+      name: Oh My Zsh
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - shell
+      - cache
+
+  - id: shell_history_backups
+    name: Shell History Backups
+    paths:
+      - "~/.bash_history.bak*"
+      - "~/.zsh_history.bak*"
+      - "~/.config/fish/fish_history.bak*"
+    safety: review
+    confidence: 74
+    explanation: "Shell history backup files. They may contain sensitive commands, so review before removal."
+    source:
+      name: Shells
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - shell
+      - review
+
+  - id: pre_commit_cache
+    name: pre-commit Cache
+    paths:
+      - "~/.cache/pre-commit"
+    safety: safe
+    confidence: 96
+    explanation: "pre-commit hook environments and cache. Recreated on the next hook run."
+    source:
+      name: pre-commit
+    regenerates: true
+    regenerate_command: "pre-commit run"
+    category: dev_artifacts
+    tags:
+      - developer
+      - git
+      - cache
+
+  - id: curl_wget_caches
+    name: curl and wget Caches
+    paths:
+      - "~/.cache/curl"
+      - "~/.cache/wget"
+      - "~/Library/Caches/curl"
+      - "~/Library/Caches/wget"
+    safety: safe
+    confidence: 95
+    explanation: "curl and wget cache directories. Downloads re-fetch as needed."
+    source:
+      name: curl and wget
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - network
+      - cache

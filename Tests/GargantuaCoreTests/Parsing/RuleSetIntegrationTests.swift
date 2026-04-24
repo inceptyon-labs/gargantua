@@ -32,9 +32,11 @@ struct RuleSetIntegrationTests {
         // browser: arc, brave, chrome, chromium, comet, dia, edge, firefox,
         // helium, opera, orion, safari, vivaldi, yandex, zen
         // apps: slack, spotify, dropbox
-        // developer: xcode, node, docker, homebrew, python, rust, go
+        // developer: xcode, node, docker, homebrew, python, rust, go,
+        // plus Mole parity batches for frontend, cloud, mobile, JVM, editors,
+        // AI tools, languages, CI, database/API tools, shell/network, project caches
         // system: caches, logs, temp, trash
-        #expect(result.filesLoaded == 29)
+        #expect(result.filesLoaded == 40)
     }
 
     // MARK: - Rule Completeness
@@ -135,7 +137,7 @@ struct RuleSetIntegrationTests {
         #expect(appRuleIDs.contains(where: { $0.hasPrefix("dropbox") }), "Missing Dropbox rules")
     }
 
-    @Test("Developer rules cover Xcode, node_modules, Docker, Homebrew, Python, Rust, Go")
+    @Test("Developer rules cover Mole-backed developer tooling families")
     func developerCoverage() throws {
         let result = try loader.loadRules(from: rulesDirectory)
         let ids = result.rules.map(\.id)
@@ -147,6 +149,17 @@ struct RuleSetIntegrationTests {
         #expect(result.rules.contains(where: { $0.tags.contains("python") }), "Missing Python rules")
         #expect(result.rules.contains(where: { $0.tags.contains("rust") }), "Missing Rust rules")
         #expect(result.rules.contains(where: { $0.tags.contains("go") }), "Missing Go rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("jvm") }), "Missing JVM rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("android") }), "Missing Android rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("cloud") }), "Missing cloud CLI rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("kubernetes") }), "Missing Kubernetes rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("editor") }), "Missing editor rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("ai") }), "Missing AI/dev assistant rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("ci") }), "Missing CI rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("database") }), "Missing database tool rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("dotnet") }), "Missing .NET rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("php") }), "Missing PHP rules")
+        #expect(result.rules.contains(where: { $0.tags.contains("shell") }), "Missing shell rules")
     }
 
     @Test("System rules cover caches, logs, temp, trash")

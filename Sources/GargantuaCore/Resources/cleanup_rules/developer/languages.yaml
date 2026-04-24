@@ -1,0 +1,156 @@
+rules:
+  - id: mise_cache
+    name: mise Cache
+    paths:
+      - "~/Library/Caches/mise"
+      - "~/.cache/mise"
+    safety: safe
+    confidence: 95
+    explanation: "mise tool download and build cache. Recreated when installing tool versions."
+    source:
+      name: mise
+    regenerates: true
+    regenerate_command: "mise cache clear"
+    category: dev_artifacts
+    tags:
+      - developer
+      - toolchain
+      - cache
+
+  - id: ruby_bundler_cache
+    name: Ruby Bundler Cache
+    paths:
+      - "~/.bundle/cache"
+    safety: safe
+    confidence: 96
+    explanation: "Bundler gem package cache. Gems are re-downloaded on the next bundle install."
+    source:
+      name: Bundler
+    regenerates: true
+    regenerate_command: "bundle install"
+    category: dev_artifacts
+    tags:
+      - developer
+      - ruby
+      - cache
+
+  - id: composer_cache
+    name: Composer Cache
+    paths:
+      - "~/.composer/cache"
+      - "~/Library/Caches/composer"
+    safety: safe
+    confidence: 96
+    explanation: "PHP Composer package cache. Packages re-download on the next composer install."
+    source:
+      name: Composer
+    regenerates: true
+    regenerate_command: "composer clear-cache"
+    category: dev_artifacts
+    tags:
+      - developer
+      - php
+      - cache
+
+  - id: nuget_package_cache
+    name: NuGet Package Cache
+    paths:
+      - "~/.nuget/packages"
+    safety: safe
+    confidence: 94
+    explanation: "NuGet global package cache. Packages re-download during the next restore."
+    source:
+      name: NuGet
+    regenerates: true
+    regenerate_command: "dotnet restore"
+    category: dev_artifacts
+    tags:
+      - developer
+      - dotnet
+      - cache
+
+  - id: bazel_cache
+    name: Bazel Cache
+    paths:
+      - "~/.cache/bazel"
+    safety: safe
+    confidence: 94
+    explanation: "Bazel local output/cache data. Recomputed on future Bazel builds."
+    source:
+      name: Bazel
+    regenerates: true
+    regenerate_command: "bazel build"
+    category: dev_artifacts
+    tags:
+      - developer
+      - build_cache
+
+  - id: zig_cache
+    name: Zig Cache
+    paths:
+      - "~/.cache/zig"
+      - "**/.zig-cache"
+    safety: safe
+    confidence: 96
+    explanation: "Zig compiler cache. Recreated by Zig during future builds."
+    source:
+      name: Zig
+    regenerates: true
+    regenerate_command: "zig build"
+    category: dev_artifacts
+    tags:
+      - developer
+      - zig
+      - build_cache
+
+  - id: deno_cache
+    name: Deno Cache
+    paths:
+      - "~/Library/Caches/deno"
+      - "~/.cache/deno"
+    safety: safe
+    confidence: 95
+    explanation: "Deno module and compiler cache. Re-downloaded or recompiled by Deno as needed."
+    source:
+      name: Deno
+    regenerates: true
+    regenerate_command: "deno cache"
+    category: dev_artifacts
+    tags:
+      - developer
+      - deno
+      - cache
+
+  - id: elixir_hex_cache
+    name: Hex Cache
+    paths:
+      - "~/.hex/cache"
+    safety: safe
+    confidence: 96
+    explanation: "Hex package cache. Packages re-download on future Mix builds."
+    source:
+      name: Hex
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - elixir
+      - cache
+
+  - id: haskell_ocaml_caches
+    name: Haskell and OCaml Download Caches
+    paths:
+      - "~/.cabal/packages"
+      - "~/.opam/download-cache"
+    safety: safe
+    confidence: 94
+    explanation: "Cabal package indexes/downloads and opam package download cache. Recreated by the package managers."
+    source:
+      name: Cabal and opam
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - haskell
+      - ocaml
+      - cache

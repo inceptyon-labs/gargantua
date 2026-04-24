@@ -65,6 +65,7 @@ rules:
     name: Swift Package Manager Cache
     paths:
       - "~/Library/Caches/org.swift.swiftpm"
+      - "~/.cache/swift-package-manager"
     safety: safe
     confidence: 97
     explanation: "SPM repository and artifact cache. Re-downloaded on next resolve."
