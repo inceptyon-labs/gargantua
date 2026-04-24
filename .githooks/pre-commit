@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Blocks commits containing secrets (API keys, tokens, etc).
+# Uses gitleaks against staged changes only.
+
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+pre-commit: gitleaks not found.
+Install it:
+  macOS:   brew install gitleaks
+  Linux:   https://github.com/gitleaks/gitleaks/releases
+To bypass (NOT recommended): git commit --no-verify
+EOF
+  exit 1
+fi
+
+gitleaks protect --staged --redact --verbose --config "$(git rev-parse --show-toplevel)/.gitleaks.toml" || {
+  cat >&2 <<'EOF'
+
+pre-commit: secrets detected in staged changes (see output above).
+- If false positive, add to .gitleaks.toml [allowlist].
+- If real, REMOVE the secret, rotate the credential, and restage.
+- To bypass (NOT recommended): git commit --no-verify
+EOF
+  exit 1
+}

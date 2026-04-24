@@ -1,4 +1,15 @@
-# Gargantua
+<p align="center">
+  <img src="AppShell/Brand/gargantua-logo-1024.png" width="160" alt="Gargantua">
+</p>
+
+<h1 align="center">Gargantua</h1>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black.svg?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-5.10-orange.svg?logo=swift" alt="Swift 5.10">
+  <img src="https://img.shields.io/badge/MCP-compatible-6e40c9.svg" alt="MCP compatible">
+</p>
 
 Gargantua is a native macOS cleaner focused on trust, explainability, and developer-heavy cleanup workflows.
 
@@ -61,3 +72,13 @@ Run the full test suite:
 ```bash
 swift test
 ```
+
+## Security
+
+If you discover a security issue — especially anything involving the privileged helper, an MCP guardrail bypass, or a rules-engine path that could remove a `protected`-classified file — please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
+
+## License
+
+Gargantua is licensed under the [GNU Affero General Public License v3.0](LICENSE). Network/SaaS use triggers the share-alike clause — if you run a modified version and expose it over a network, you must offer source to your users.
+
+YAML cleanup and uninstall rules under `Sources/GargantuaCore/Resources/` are sourced from the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; see that repo's LICENSE for rule-specific terms.

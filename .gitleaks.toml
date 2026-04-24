@@ -1,0 +1,58 @@
+[extend]
+useDefault = true
+
+# ===== Custom rules for services not in the default ruleset =====
+# The default ruleset covers ~180 services (AWS, GitHub, Stripe, Slack, HF,
+# OpenAI, etc.) but misses services with generic-looking formats (UUIDs,
+# sk_+hex). Add rules here as you integrate new providers.
+
+[[rules]]
+id = "elevenlabs-api-key"
+description = "ElevenLabs API key (sk_ + 48 hex)"
+regex = '''\bsk_[a-f0-9]{48}\b'''
+keywords = ["sk_"]
+
+[[rules]]
+id = "fal-ai-api-key"
+description = "FAL.ai API key (UUID:hex32)"
+regex = '''\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{32}\b'''
+keywords = ["fal"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google / Gemini API key"
+regex = '''\bAIza[0-9A-Za-z_-]{35}\b'''
+keywords = ["AIza"]
+
+[[rules]]
+id = "revenuecat-api-key"
+description = "RevenueCat public SDK key"
+regex = '''\b(goog|appl|amzn)_[A-Za-z0-9]{32,}\b'''
+keywords = ["goog_", "appl_", "amzn_"]
+
+# Catchall: long opaque string assigned to a secret-looking variable.
+# Catches unknown/future services at the cost of occasional false positives
+# (allowlist them below as they come up).
+[[rules]]
+id = "generic-secret-assignment"
+description = "Long opaque value assigned to a secret-looking variable (catchall)"
+regex = '''(?i)(api[_-]?key|apikey|secret|token|auth[_-]?token|access[_-]?key|private[_-]?key|password|passwd)\s*[:=]\s*['"]([A-Za-z0-9_\-:.]{24,})['"]'''
+secretGroup = 2
+entropy = 3.5
+keywords = ["key", "secret", "token", "auth", "password", "passwd"]
+
+[allowlist]
+description = "Known-safe paths and placeholder values"
+
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)\.env\.release\.example$''',
+  '''(^|/)README\.md$''',
+  '''(^|/)docs/''',
+]
+
+regexes = [
+  '''YOUR_[A-Z_]+_KEY''',
+  '''YOUR_[A-Z_]+_API_KEY''',
+  '''AIza[A-Za-z0-9_-]{0,5}EXAMPLE''',
+]

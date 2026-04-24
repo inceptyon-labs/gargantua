@@ -2,6 +2,23 @@
 
 Thanks for helping improve Gargantua.
 
+## Development Setup
+
+After cloning, activate the versioned git hooks so gitleaks runs on every commit:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This is a one-time, per-clone step — the hook config lives in `.git/config`, which isn't versioned, so each fresh clone needs it. Install the binary too:
+
+```bash
+brew install gitleaks   # macOS
+# or grab a release from https://github.com/gitleaks/gitleaks/releases
+```
+
+The hook blocks commits that contain secrets matched by `.gitleaks.toml`. If you hit a false positive, add an entry under `[allowlist]` in that file rather than bypassing with `--no-verify`.
+
 ## Rule Contributions
 
 The easiest way to contribute today is by adding or refining YAML cleanup and uninstall rules. Rule-only collaboration belongs in the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; this app repository consumes reviewed snapshots from that repo.
