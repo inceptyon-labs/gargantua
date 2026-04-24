@@ -186,6 +186,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
     private let protocolVersion: String
     private let tools: [MCPToolDescriptor]
     private let log: MCPDispatcherLog?
+    private let statusReporter: MCPServerStatusReporting?
     private let lock = NSLock()
     private var handlers: [MCPToolName: MCPToolHandler] = [:]
     private var capturedClientIdentity: MCPClientIdentity?
@@ -194,12 +195,14 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         serverInfo: MCPServerInfo,
         protocolVersion: String = MCPRequestDispatcher.defaultProtocolVersion,
         tools: [MCPToolDescriptor] = MCPPhase2Tools.all,
-        log: MCPDispatcherLog? = nil
+        log: MCPDispatcherLog? = nil,
+        statusReporter: MCPServerStatusReporting? = nil
     ) {
         self.serverInfo = serverInfo
         self.protocolVersion = protocolVersion
         self.tools = tools
         self.log = log
+        self.statusReporter = statusReporter
     }
 
     /// Registers (or replaces) a handler for a tool. Safe to call from any
@@ -302,6 +305,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         // to the `"unknown"` sentinel. Empty or whitespace-only names are
         // normalized to `nil` so an adversarial client can't slip past
         // per-client isolation by sending a blank name.
+        let capturedIdentity: MCPClientIdentity?
         lock.lock()
         capturedClientIdentity = nil
         if let client = parsed.clientInfo,
@@ -311,7 +315,9 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
                 version: client.version
             )
         }
+        capturedIdentity = capturedClientIdentity
         lock.unlock()
+        statusReporter?.replaceCurrentClient(capturedIdentity)
         // We advertise the `tools` capability with no extra flags; we do not
         // emit list-changed notifications yet.
         return .object([
@@ -375,17 +381,22 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
                 "Tool not implemented: \(toolName.rawValue)"
             )
         }
+        let currentClient = currentClientIdentity()
         let toolResult: MCPToolCallResult
         do {
             toolResult = try handler(arguments)
+            statusReporter?.recordToolCall(toolName, client: currentClient)
         } catch MCPToolError.invalidParams(let message) {
+            statusReporter?.recordToolCall(toolName, client: currentClient)
             // Handler explicitly signalled a client-side error.
             throw MCPDispatchError.invalidParams(message)
         } catch MCPToolError.internalError(let message) {
+            statusReporter?.recordToolCall(toolName, client: currentClient)
             // Handler explicitly signalled a server-side error it chose to
             // expose. The message is considered sanitised by the handler.
             throw MCPDispatchError.internalError(message)
         } catch {
+            statusReporter?.recordToolCall(toolName, client: currentClient)
             // Unexpected exception: do not leak the error's textual
             // description to the client (may contain paths, sensitive state).
             // Log details to stderr and return a generic internal error.

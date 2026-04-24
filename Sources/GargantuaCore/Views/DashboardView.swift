@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Dashboard View
@@ -23,11 +24,20 @@ public struct DashboardView: View {
     @State private var isLoading = true
     @State private var hasRunQuickScan = false
     @State private var cloudStatus: CloudAIStatus?
+    @StateObject private var mcpStatusModel: MCPServerStatusViewModel
 
     private let collector = SystemMetricCollector()
 
+    @MainActor
     public init(sidebarSelection: Binding<String?>) {
         self._sidebarSelection = sidebarSelection
+        self._mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
+    }
+
+    @MainActor
+    public init(sidebarSelection: Binding<String?>, mcpStatusModel: MCPServerStatusViewModel) {
+        self._sidebarSelection = sidebarSelection
+        self._mcpStatusModel = StateObject(wrappedValue: mcpStatusModel)
     }
 
     public var body: some View {
@@ -56,7 +66,10 @@ public struct DashboardView: View {
             }
         }
         .background(GargantuaColors.void_)
-        .task { await loadMetrics() }
+        .task {
+            await loadMetrics()
+            await refreshMCPStatusLoop()
+        }
     }
 
     // MARK: - Header
@@ -217,6 +230,10 @@ public struct DashboardView: View {
                     tone: thermalTone
                 )
                 DashboardCloudAIMetricCard(status: cloudStatus)
+                DashboardMCPStatusCard(
+                    model: mcpStatusModel,
+                    onOpenAuditLog: openMCPAuditLog
+                )
             }
         }
     }
@@ -276,6 +293,22 @@ public struct DashboardView: View {
                 scanProgress.recordError(error.localizedDescription)
                 scanProgress.finish(itemsFound: 0)
             }
+        }
+    }
+
+    private func openMCPAuditLog() {
+        let logFile = AuditWriter().logFile
+        if FileManager.default.fileExists(atPath: logFile.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([logFile])
+        }
+    }
+
+    private func refreshMCPStatusLoop() async {
+        while !Task.isCancelled {
+            await MainActor.run {
+                mcpStatusModel.refresh()
+            }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
 

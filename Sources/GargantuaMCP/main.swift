@@ -41,10 +41,14 @@ private let stderrLog: @Sendable (String) -> Void = { message in
     FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
 }
 
+let serverStatusStore = MCPServerStatusStore(persistence: MCPServerStatusPersistence())
+serverStatusStore.markRunning(transportMode: .stdio)
+
 let dispatcher = MCPRequestDispatcher(
     serverInfo: MCPServerInfo(name: "gargantua", version: mcpServerVersion),
     tools: MCPPhase2Tools.all + MCPPhase3Tools.all,
-    log: stderrLog
+    log: stderrLog,
+    statusReporter: serverStatusStore
 )
 
 // Shared scan session cache: `scan` populates it on every successful scan,
@@ -234,6 +238,7 @@ private let transportQueue = DispatchQueue(
 
 transportQueue.async {
     transport.run()
+    serverStatusStore.markStopped()
     // EOF on stdin — the client disconnected. Tear down the process so
     // whatever launched us (claude-code, mcp inspector, etc.) sees a clean
     // exit.
