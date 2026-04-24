@@ -1,0 +1,246 @@
+rules:
+  - id: desktop_ai_app_caches
+    name: Desktop AI App Caches
+    paths:
+      - "~/Library/Caches/com.openai.chat"
+      - "~/Library/Caches/com.anthropic.claudefordesktop"
+      - "~/Library/Logs/Claude"
+    safety: safe
+    confidence: 92
+    explanation: "ChatGPT and Claude Desktop cache and log locations from Mole. Conversations, projects, and account state are excluded."
+    source:
+      name: Desktop AI apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - ai
+      - chatgpt
+      - claude
+      - cache
+      - logs
+
+  - id: apple_media_app_caches
+    name: Apple Media App Caches
+    paths:
+      - "~/Library/Caches/com.apple.Music"
+      - "~/Library/Caches/com.apple.podcasts"
+      - "~/Library/Containers/com.apple.podcasts/Data/tmp/StreamedMedia"
+      - "~/Library/Containers/com.apple.podcasts/Data/tmp/*.heic"
+      - "~/Library/Containers/com.apple.podcasts/Data/tmp/*.img"
+      - "~/Library/Containers/com.apple.podcasts/Data/tmp/*CFNetworkDownload*.tmp"
+      - "~/Library/Caches/com.apple.TV"
+    safety: safe
+    confidence: 91
+    explanation: "Apple Music, Podcasts, and TV cache and podcast temp files from Mole. Libraries, subscriptions, and downloads are excluded."
+    source:
+      name: Apple media apps
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - media
+      - apple
+      - cache
+      - temp
+
+  - id: third_party_music_caches
+    name: Third-Party Music Caches
+    paths:
+      - "~/Library/Caches/tv.plex.player.desktop"
+      - "~/Library/Caches/com.netease.163music"
+      - "~/Library/Caches/com.tencent.QQMusic"
+      - "~/Library/Caches/com.kugou.mac"
+      - "~/Library/Caches/com.kuwo.mac"
+    safety: safe
+    confidence: 90
+    explanation: "Plex and music-app cache directories from Mole. Libraries, playlists, and offline media folders are excluded."
+    source:
+      name: Music and Plex apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - media
+      - music
+      - cache
+
+  - id: video_player_caches
+    name: Video Player Caches
+    paths:
+      - "~/Library/Caches/com.colliderli.iina"
+      - "~/Library/Caches/org.videolan.vlc"
+      - "~/Library/Caches/io.mpv"
+      - "~/Library/Caches/com.iqiyi.player"
+      - "~/Library/Caches/com.tencent.tenvideo"
+      - "~/Library/Caches/tv.danmaku.bili"
+      - "~/Library/Caches/com.douyu.*"
+      - "~/Library/Caches/com.huya.*"
+      - "~/Library/Caches/smart.stremio*"
+      - "~/Library/Application Support/stremio/stremio-server/stremio-cache"
+    safety: safe
+    confidence: 90
+    explanation: "Video player and streaming cache directories from Mole. User media libraries and downloads are excluded."
+    source:
+      name: Video player apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - media
+      - video
+      - cache
+
+  - id: download_manager_caches
+    name: Download Manager Caches
+    paths:
+      - "~/Library/Caches/net.xmac.aria2gui"
+      - "~/Library/Caches/org.m0k.transmission"
+      - "~/Library/Caches/com.qbittorrent.qBittorrent"
+      - "~/Library/Caches/com.downie.Downie-*"
+      - "~/Library/Caches/com.folx.*"
+      - "~/Library/Caches/com.charlessoft.pacifist"
+    safety: safe
+    confidence: 89
+    explanation: "Download-manager cache directories from Mole. Completed downloads, torrents, watch folders, and app settings are excluded."
+    source:
+      name: Download manager apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - downloads
+      - cache
+
+  - id: game_platform_caches
+    name: Game Platform Caches and Logs
+    paths:
+      - "~/Library/Caches/com.valvesoftware.steam"
+      - "~/Library/Application Support/Steam/htmlcache"
+      - "~/Library/Application Support/Steam/appcache"
+      - "~/Library/Application Support/Steam/depotcache"
+      - "~/Library/Application Support/Steam/steamapps/shadercache"
+      - "~/Library/Application Support/Steam/logs"
+      - "~/Library/Caches/com.epicgames.EpicGamesLauncher"
+      - "~/Library/Caches/com.blizzard.Battle.net"
+      - "~/Library/Application Support/Battle.net/Cache"
+      - "~/Library/Caches/com.ea.*"
+      - "~/Library/Caches/com.gog.galaxy"
+      - "~/Library/Caches/com.riotgames.*"
+      - "~/Library/Application Support/minecraft/logs"
+      - "~/Library/Application Support/minecraft/crash-reports"
+      - "~/Library/Application Support/minecraft/webcache"
+      - "~/Library/Application Support/minecraft/webcache2"
+      - "~/.lunarclient/game-cache"
+      - "~/.lunarclient/launcher-cache"
+      - "~/.lunarclient/logs"
+      - "~/.lunarclient/offline/*/logs"
+      - "~/.lunarclient/offline/files/*/logs"
+      - "~/Library/Caches/net.pcsx2.PCSX2"
+      - "~/Library/Application Support/PCSX2/cache"
+      - "~/Library/Logs/PCSX2"
+      - "~/Library/Caches/net.rpcs3.rpcs3"
+      - "~/Library/Application Support/rpcs3/logs"
+    safety: review
+    confidence: 76
+    explanation: "Game launcher, emulator, shader-cache, and log locations from Mole. Review because some caches can be large offline assets."
+    source:
+      name: Game platforms and emulators
+    regenerates: true
+    category: app_data
+    tags:
+      - app
+      - games
+      - cache
+      - logs
+      - review
+
+  - id: note_app_caches
+    name: Note App Caches
+    paths:
+      - "~/Library/Caches/notion.id"
+      - "~/Library/Caches/md.obsidian"
+      - "~/Library/Caches/com.logseq.*"
+      - "~/Library/Caches/com.bear-writer.*"
+      - "~/Library/Caches/com.evernote.*"
+      - "~/Library/Caches/com.yinxiang.*"
+    safety: safe
+    confidence: 90
+    explanation: "Note-app cache directories from Mole. Vaults, notebooks, attachments, sync databases, and account state are excluded."
+    source:
+      name: Note-taking apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - notes
+      - productivity
+      - cache
+
+  - id: launcher_automation_caches
+    name: Launcher and Automation Caches
+    paths:
+      - "~/Library/Caches/com.runningwithcrayons.Alfred"
+      - "~/Library/Caches/cx.c3.theunarchiver"
+      - "~/Library/Caches/com.raycast.macos/urlcache"
+      - "~/Library/Caches/com.raycast.macos/fsCachedData"
+    safety: safe
+    confidence: 90
+    explanation: "Launcher cache locations from Mole. Raycast clipboard history, scripts, extensions, and preferences are deliberately excluded."
+    source:
+      name: Launcher and automation apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - launcher
+      - automation
+      - raycast
+      - alfred
+      - cache
+
+  - id: remote_desktop_caches
+    name: Remote Desktop Caches
+    paths:
+      - "~/Library/Caches/com.teamviewer.*"
+      - "~/Library/Caches/com.anydesk.*"
+      - "~/Library/Caches/com.todesk.*"
+      - "~/Library/Caches/com.sunlogin.*"
+    safety: safe
+    confidence: 90
+    explanation: "Remote desktop cache directories from Mole. Saved credentials, recordings, downloads, and account state are excluded."
+    source:
+      name: Remote desktop apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - remote_desktop
+      - cache
+
+  - id: utility_app_caches
+    name: Utility App Caches
+    paths:
+      - "~/Library/Caches/com.youdao.YoudaoDict"
+      - "~/Library/Caches/com.eudic.*"
+      - "~/Library/Caches/com.bob-build.Bob"
+      - "~/Library/Caches/com.cleanshot.*"
+      - "~/Library/Caches/com.reincubate.camo"
+      - "~/Library/Caches/com.xnipapp.xnip"
+      - "~/Library/Caches/com.readdle.smartemail-Mac"
+      - "~/Library/Caches/com.airmail.*"
+      - "~/Library/Caches/com.todoist.mac.Todoist"
+      - "~/Library/Caches/com.any.do.*"
+    safety: safe
+    confidence: 89
+    explanation: "Translation, capture, email-client, and task-app cache directories from Mole. User documents and account data are excluded."
+    source:
+      name: Utility and productivity apps
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - productivity
+      - utilities
+      - cache

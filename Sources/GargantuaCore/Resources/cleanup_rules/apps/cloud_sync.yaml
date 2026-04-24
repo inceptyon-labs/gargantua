@@ -1,0 +1,120 @@
+rules:
+  - id: google_drive_cache
+    name: Google Drive Cache
+    paths:
+      - "~/Library/Caches/com.google.GoogleDrive"
+    safety: safe
+    confidence: 94
+    explanation: "Google Drive client cache from Mole's cloud-storage cleanup. This excludes Drive sync roots and user documents."
+    source:
+      name: Google Drive
+      bundle_id: com.google.GoogleDrive
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - cloud
+      - sync
+      - google_drive
+      - cache
+
+  - id: baidu_netdisk_cache
+    name: Baidu Netdisk Cache
+    paths:
+      - "~/Library/Caches/com.baidu.netdisk"
+    safety: safe
+    confidence: 93
+    explanation: "Baidu Netdisk cache files targeted by Mole. Sync folders, account databases, and documents are not included."
+    source:
+      name: Baidu Netdisk
+      bundle_id: com.baidu.netdisk
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - cloud
+      - sync
+      - baidu
+      - cache
+
+  - id: alibaba_cloud_drive_cache
+    name: Alibaba Cloud Drive Cache
+    paths:
+      - "~/Library/Caches/com.alibaba.teambitiondisk"
+    safety: safe
+    confidence: 93
+    explanation: "Alibaba Cloud Drive cache files from Mole's cloud-storage cleanup. User sync roots and account data are excluded."
+    source:
+      name: Alibaba Cloud Drive
+      bundle_id: com.alibaba.teambitiondisk
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - cloud
+      - sync
+      - alibaba
+      - cache
+
+  - id: box_drive_cache
+    name: Box Drive Cache
+    paths:
+      - "~/Library/Caches/com.box.desktop"
+    safety: safe
+    confidence: 94
+    explanation: "Box desktop cache files. The rule does not target Box sync roots or user-created cloud content."
+    source:
+      name: Box Drive
+      bundle_id: com.box.desktop
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - cloud
+      - sync
+      - box
+      - cache
+
+  - id: onedrive_cache
+    name: OneDrive Cache
+    paths:
+      - "~/Library/Caches/com.microsoft.OneDrive"
+    safety: safe
+    confidence: 94
+    explanation: "OneDrive cache files from Mole's cloud-storage cleanup. Sync roots, Office documents, and account data are excluded."
+    source:
+      name: OneDrive
+      bundle_id: com.microsoft.OneDrive
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - cloud
+      - sync
+      - microsoft
+      - onedrive
+      - cache
+
+  - id: dropbox_cache_variants
+    name: Dropbox Cache Variants
+    paths:
+      - "~/Library/Caches/com.dropbox.*"
+      - "~/Library/Caches/com.getdropbox.dropbox"
+    safety: safe
+    confidence: 95
+    explanation: "Additional Dropbox cache locations from Mole. This complements Dropbox instance caches without touching sync state or files."
+    source:
+      name: Dropbox
+      bundle_id: com.getdropbox.dropbox
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - cloud
+      - sync
+      - dropbox
+      - cache

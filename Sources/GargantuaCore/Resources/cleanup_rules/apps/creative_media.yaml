@@ -1,0 +1,160 @@
+rules:
+  - id: sketch_caches
+    name: Sketch Caches
+    paths:
+      - "~/Library/Caches/com.bohemiancoding.sketch3"
+      - "~/Library/Application Support/com.bohemiancoding.sketch3/cache"
+    safety: safe
+    confidence: 93
+    explanation: "Sketch cache directories from Mole. User documents, libraries, and plugins are excluded."
+    source:
+      name: Sketch
+      bundle_id: com.bohemiancoding.sketch3
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - design
+      - sketch
+      - cache
+
+  - id: adobe_caches
+    name: Adobe Caches
+    paths:
+      - "~/Library/Caches/Adobe"
+      - "~/Library/Caches/com.adobe.*"
+      - "~/Library/Application Support/Adobe/Common/Media Cache Files"
+      - "~/Library/Caches/com.adobe.PremierePro.*"
+    safety: safe
+    confidence: 90
+    explanation: "Adobe app and media cache directories from Mole. Project files, presets, catalogs, and cloud documents are excluded."
+    source:
+      name: Adobe Creative Cloud
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - adobe
+      - media
+      - cache
+
+  - id: figma_cache
+    name: Figma Cache
+    paths:
+      - "~/Library/Caches/com.figma.Desktop"
+    safety: safe
+    confidence: 93
+    explanation: "Figma desktop cache directory from Mole. Local file exports, account data, and plugin settings are excluded."
+    source:
+      name: Figma
+      bundle_id: com.figma.Desktop
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - design
+      - figma
+      - cache
+
+  - id: screenflow_cache
+    name: ScreenFlow Cache
+    paths:
+      - "~/Library/Caches/net.telestream.screenflow10"
+    safety: safe
+    confidence: 91
+    explanation: "ScreenFlow cache directory from Mole. Recordings and project documents are excluded."
+    source:
+      name: ScreenFlow
+      bundle_id: net.telestream.screenflow10
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - video
+      - screenflow
+      - cache
+
+  - id: final_cut_cache
+    name: Final Cut Pro Cache
+    paths:
+      - "~/Library/Caches/com.apple.FinalCut"
+    safety: safe
+    confidence: 91
+    explanation: "Final Cut Pro cache directory from Mole. Libraries, events, projects, and media folders are excluded."
+    source:
+      name: Final Cut Pro
+      bundle_id: com.apple.FinalCut
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - video
+      - final_cut
+      - cache
+
+  - id: davinci_resolve_cache
+    name: DaVinci Resolve Cache
+    paths:
+      - "~/Library/Caches/com.blackmagic-design.DaVinciResolve"
+    safety: safe
+    confidence: 90
+    explanation: "DaVinci Resolve cache directory from Mole. Project databases and media folders are excluded."
+    source:
+      name: DaVinci Resolve
+      bundle_id: com.blackmagic-design.DaVinciResolve
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - video
+      - davinci
+      - cache
+
+  - id: davinci_resolve_cacheclip
+    name: DaVinci Resolve CacheClip
+    paths:
+      - "~/Movies/CacheClip"
+    safety: review
+    confidence: 78
+    explanation: "DaVinci Resolve render-cache media from Mole. Review because it lives in Movies and may be tied to active projects."
+    source:
+      name: DaVinci Resolve
+    regenerates: true
+    category: app_data
+    tags:
+      - app
+      - creative
+      - video
+      - davinci
+      - cache
+      - review
+
+  - id: three_d_cad_caches
+    name: 3D and CAD Caches
+    paths:
+      - "~/Library/Caches/org.blenderfoundation.blender"
+      - "~/Library/Caches/com.maxon.cinema4d"
+      - "~/Library/Caches/com.autodesk.*"
+      - "~/Library/Caches/com.sketchup.*"
+    safety: safe
+    confidence: 90
+    explanation: "Blender, Cinema 4D, Autodesk, and SketchUp cache directories from Mole. Project files, libraries, and assets are excluded."
+    source:
+      name: 3D and CAD applications
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - creative
+      - 3d
+      - cad
+      - cache

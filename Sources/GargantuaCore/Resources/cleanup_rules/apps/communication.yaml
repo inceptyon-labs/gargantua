@@ -1,0 +1,198 @@
+rules:
+  - id: discord_legcord_caches
+    name: Discord and Legcord Caches
+    paths:
+      - "~/Library/Application Support/discord/Cache"
+      - "~/Library/Application Support/legcord/Cache"
+    safety: safe
+    confidence: 94
+    explanation: "Electron cache directories for Discord-compatible clients from Mole. Account state and downloaded user files are excluded."
+    source:
+      name: Discord and Legcord
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - discord
+      - legcord
+      - cache
+
+  - id: zoom_cache
+    name: Zoom Cache
+    paths:
+      - "~/Library/Caches/us.zoom.xos"
+    safety: safe
+    confidence: 94
+    explanation: "Zoom cache directory from Mole. Recordings, chat history, and account data are not targeted."
+    source:
+      name: Zoom
+      bundle_id: us.zoom.xos
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - zoom
+      - cache
+
+  - id: wechat_cache
+    name: WeChat Cache
+    paths:
+      - "~/Library/Caches/com.tencent.xinWeChat"
+    safety: safe
+    confidence: 91
+    explanation: "WeChat cache directory from Mole. Message databases, attachments, and account stores are excluded."
+    source:
+      name: WeChat
+      bundle_id: com.tencent.xinWeChat
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - wechat
+      - cache
+
+  - id: telegram_cache
+    name: Telegram Cache
+    paths:
+      - "~/Library/Caches/ru.keepcoder.Telegram"
+    safety: safe
+    confidence: 92
+    explanation: "Telegram cache directory from Mole. Chats, account data, and downloads are excluded."
+    source:
+      name: Telegram
+      bundle_id: ru.keepcoder.Telegram
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - telegram
+      - cache
+
+  - id: microsoft_teams_caches
+    name: Microsoft Teams Caches and Logs
+    paths:
+      - "~/Library/Caches/com.microsoft.teams2"
+      - "~/Library/Application Support/Microsoft/Teams/Cache"
+      - "~/Library/Application Support/Microsoft/Teams/Application Cache"
+      - "~/Library/Application Support/Microsoft/Teams/Code Cache"
+      - "~/Library/Application Support/Microsoft/Teams/GPUCache"
+      - "~/Library/Application Support/Microsoft/Teams/logs"
+      - "~/Library/Application Support/Microsoft/Teams/tmp"
+    safety: safe
+    confidence: 94
+    explanation: "Modern and legacy Teams cache, GPU, log, and temp directories from Mole. Account and chat databases are excluded."
+    source:
+      name: Microsoft Teams
+      bundle_id: com.microsoft.teams2
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - microsoft
+      - teams
+      - cache
+      - logs
+
+  - id: whatsapp_cache
+    name: WhatsApp Cache
+    paths:
+      - "~/Library/Caches/net.whatsapp.WhatsApp"
+    safety: safe
+    confidence: 91
+    explanation: "WhatsApp cache directory from Mole. Chat databases, media downloads, and account state are excluded."
+    source:
+      name: WhatsApp
+      bundle_id: net.whatsapp.WhatsApp
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - whatsapp
+      - cache
+
+  - id: skype_cache
+    name: Skype Cache
+    paths:
+      - "~/Library/Caches/com.skype.skype"
+    safety: safe
+    confidence: 91
+    explanation: "Skype cache directory from Mole. Chat history, account data, and downloads are excluded."
+    source:
+      name: Skype
+      bundle_id: com.skype.skype
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - skype
+      - cache
+
+  - id: tencent_meeting_wecom_caches
+    name: Tencent Meeting and WeCom Caches
+    paths:
+      - "~/Library/Caches/com.tencent.meeting"
+      - "~/Library/Caches/com.tencent.WeWorkMac"
+    safety: safe
+    confidence: 91
+    explanation: "Tencent meeting and enterprise chat cache directories from Mole. Meetings, messages, downloads, and account state are excluded."
+    source:
+      name: Tencent Meeting and WeCom
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - tencent
+      - meeting
+      - wecom
+      - cache
+
+  - id: feishu_cache
+    name: Feishu Cache
+    paths:
+      - "~/Library/Caches/com.feishu.*"
+    safety: safe
+    confidence: 91
+    explanation: "Feishu cache directories from Mole. Workspace data, downloads, and account stores are excluded."
+    source:
+      name: Feishu
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - feishu
+      - cache
+
+  - id: dingtalk_caches_logs
+    name: DingTalk Caches and Logs
+    paths:
+      - "~/Library/Caches/dd.work.exclusive4aliding"
+      - "~/Library/Caches/com.alibaba.AliLang.osx"
+      - "~/Library/Application Support/iDingTalk/log"
+      - "~/Library/Application Support/iDingTalk/holmeslogs"
+    safety: safe
+    confidence: 91
+    explanation: "DingTalk cache and diagnostic log locations from Mole. Chat data, downloads, and account stores are excluded."
+    source:
+      name: DingTalk
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - communication
+      - dingtalk
+      - logs
+      - cache

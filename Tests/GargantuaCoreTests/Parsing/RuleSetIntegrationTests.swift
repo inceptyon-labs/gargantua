@@ -31,13 +31,15 @@ struct RuleSetIntegrationTests {
         let result = try loader.loadRules(from: rulesDirectory)
         // browser: arc, brave, chrome, chromium, comet, dia, edge, firefox,
         // helium, opera, orion, safari, vivaldi, yandex, zen
-        // apps: slack, spotify, dropbox
+        // apps: Slack, Spotify, Dropbox, plus Mole app/cache parity batches for
+        // cloud sync, office/mail, communication, virtualization, creative/media,
+        // productivity, media, launchers, games, utilities, and remote desktop
         // developer: xcode, node, docker, homebrew, python, rust, go,
         // plus Mole parity batches for frontend, cloud, mobile, JVM, editors,
         // AI tools, languages, CI, database/API tools, shell/network, project caches
         // system: caches, logs, temp, trash, plus Mole parity batches for
         // Apple services, user state, mobile installers/backups, and privileged paths
-        #expect(result.filesLoaded == 44)
+        #expect(result.filesLoaded == 50)
     }
 
     // MARK: - Rule Completeness
@@ -128,14 +130,46 @@ struct RuleSetIntegrationTests {
         }
     }
 
-    @Test("App rules cover Slack, Spotify, Dropbox")
+    @Test("App rules cover shipped app families")
     func appCoverage() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        let appRuleIDs = result.rules.filter { $0.category == "app_cache" || $0.category == "app_data" }.map(\.id)
+        let appRules = result.rules.filter { $0.category == "app_cache" || $0.category == "app_data" }
+        let appRuleIDs = appRules.map(\.id)
 
         #expect(appRuleIDs.contains(where: { $0.hasPrefix("slack") }), "Missing Slack rules")
         #expect(appRuleIDs.contains(where: { $0.hasPrefix("spotify") }), "Missing Spotify rules")
         #expect(appRuleIDs.contains(where: { $0.hasPrefix("dropbox") }), "Missing Dropbox rules")
+        #expect(appRuleIDs.contains("google_drive_cache"), "Missing Google Drive cache rule")
+        #expect(appRuleIDs.contains("onedrive_cache"), "Missing OneDrive cache rule")
+        #expect(appRuleIDs.contains("microsoft_word_caches"), "Missing Microsoft Word cache rule")
+        #expect(appRuleIDs.contains("apple_mail_cache"), "Missing Apple Mail cache rule")
+        #expect(appRuleIDs.contains("microsoft_teams_caches"), "Missing Microsoft Teams cache rule")
+        #expect(appRuleIDs.contains("vmware_fusion_cache"), "Missing VMware Fusion cache rule")
+        #expect(appRuleIDs.contains("figma_cache"), "Missing Figma cache rule")
+        #expect(appRuleIDs.contains("game_platform_caches"), "Missing game platform cache rule")
+        #expect(appRuleIDs.contains("launcher_automation_caches"), "Missing launcher automation cache rule")
+        #expect(appRules.contains(where: { $0.tags.contains("communication") }), "Missing communication app rules")
+        #expect(appRules.contains(where: { $0.tags.contains("office") }), "Missing office app rules")
+        #expect(appRules.contains(where: { $0.tags.contains("virtualization") }), "Missing virtualization app rules")
+        #expect(appRules.contains(where: { $0.tags.contains("creative") }), "Missing creative app rules")
+        #expect(appRules.contains(where: { $0.tags.contains("remote_desktop") }), "Missing remote desktop rules")
+    }
+
+    @Test("Mole-backed app rules keep user-adjacent data review gated")
+    func moleAppRuleSafety() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let rulesByID = Dictionary(uniqueKeysWithValues: result.rules.map { ($0.id, $0) })
+
+        #expect(rulesByID["google_drive_cache"]?.safety == .safe, "Cloud app caches should be safe")
+        #expect(rulesByID["microsoft_word_caches"]?.safety == .safe, "Office cache/temp/log paths should be safe")
+        #expect(rulesByID["microsoft_teams_caches"]?.safety == .safe, "Communication cache/log paths should be safe")
+        #expect(rulesByID["virtualbox_vm_cache"]?.safety == .review, "VM-adjacent caches should require review")
+        #expect(rulesByID["davinci_resolve_cacheclip"]?.safety == .review, "Project-adjacent media cache should require review")
+        #expect(rulesByID["game_platform_caches"]?.safety == .review, "Large/offline game caches should require review")
+        #expect(
+            rulesByID["launcher_automation_caches"]?.paths.contains(where: { $0.localizedCaseInsensitiveContains("clipboard") }) == false,
+            "Raycast clipboard history must stay out of cache cleanup"
+        )
     }
 
     @Test("Developer rules cover Mole-backed developer tooling families")

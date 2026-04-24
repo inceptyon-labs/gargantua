@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added Mole-backed app cleanup coverage for cloud-sync, Office/mail, communication, virtualization, creative/media, productivity, launcher, game, utility, and remote desktop caches.
 - Expanded Smart Uninstaller remnant rules with Mole-backed WebKit, HTTP storage, app script, plug-in, XDG config, app extension, system-level, and protected receipt templates.
 
 ## [0.1.0] - 2026-04-23

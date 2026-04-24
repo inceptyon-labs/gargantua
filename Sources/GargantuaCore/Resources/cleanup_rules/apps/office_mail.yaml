@@ -1,0 +1,176 @@
+rules:
+  - id: microsoft_word_caches
+    name: Microsoft Word Caches
+    paths:
+      - "~/Library/Caches/com.microsoft.Word"
+      - "~/Library/Containers/com.microsoft.Word/Data/Library/Caches"
+      - "~/Library/Containers/com.microsoft.Word/Data/tmp"
+      - "~/Library/Containers/com.microsoft.Word/Data/Library/Logs"
+    skip_if_process_running:
+      - com.microsoft.Word
+      - Microsoft Word
+    safety: safe
+    confidence: 94
+    explanation: "Word cache, temporary, and container log directories from Mole. Documents, AutoRecovery, templates, and preferences are excluded."
+    source:
+      name: Microsoft Word
+      bundle_id: com.microsoft.Word
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - office
+      - microsoft
+      - word
+      - cache
+      - logs
+
+  - id: microsoft_excel_caches
+    name: Microsoft Excel Caches
+    paths:
+      - "~/Library/Caches/com.microsoft.Excel"
+      - "~/Library/Containers/com.microsoft.Excel/Data/Library/Caches"
+      - "~/Library/Containers/com.microsoft.Excel/Data/tmp"
+      - "~/Library/Containers/com.microsoft.Excel/Data/Library/Logs"
+    skip_if_process_running:
+      - com.microsoft.Excel
+      - Microsoft Excel
+    safety: safe
+    confidence: 94
+    explanation: "Excel cache, temporary, and container log directories from Mole. Workbooks, AutoRecovery, templates, and preferences are excluded."
+    source:
+      name: Microsoft Excel
+      bundle_id: com.microsoft.Excel
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - office
+      - microsoft
+      - excel
+      - cache
+      - logs
+
+  - id: microsoft_powerpoint_cache
+    name: Microsoft PowerPoint Cache
+    paths:
+      - "~/Library/Caches/com.microsoft.Powerpoint"
+    skip_if_process_running:
+      - com.microsoft.Powerpoint
+      - Microsoft PowerPoint
+    safety: safe
+    confidence: 93
+    explanation: "PowerPoint cache directory from Mole. Presentations, AutoRecovery data, templates, and preferences are excluded."
+    source:
+      name: Microsoft PowerPoint
+      bundle_id: com.microsoft.Powerpoint
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - office
+      - microsoft
+      - powerpoint
+      - cache
+
+  - id: microsoft_outlook_cache
+    name: Microsoft Outlook Cache
+    paths:
+      - "~/Library/Caches/com.microsoft.Outlook"
+    skip_if_process_running:
+      - com.microsoft.Outlook
+      - Microsoft Outlook
+    safety: safe
+    confidence: 90
+    explanation: "Outlook cache directory from Mole. Mail profiles, account databases, and message stores are not targeted."
+    source:
+      name: Microsoft Outlook
+      bundle_id: com.microsoft.Outlook
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - office
+      - mail
+      - microsoft
+      - outlook
+      - cache
+
+  - id: apple_iwork_caches
+    name: Apple iWork Caches
+    paths:
+      - "~/Library/Caches/com.apple.iWork.*"
+    safety: safe
+    confidence: 92
+    explanation: "Pages, Numbers, and Keynote cache directories from Mole. User documents and iCloud storage are excluded."
+    source:
+      name: Apple iWork
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - office
+      - apple
+      - iwork
+      - cache
+
+  - id: wps_office_cache
+    name: WPS Office Cache
+    paths:
+      - "~/Library/Caches/com.kingsoft.wpsoffice.mac"
+    safety: safe
+    confidence: 92
+    explanation: "WPS Office cache directory from Mole. Documents, templates, and account state are excluded."
+    source:
+      name: WPS Office
+      bundle_id: com.kingsoft.wpsoffice.mac
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - office
+      - wps
+      - cache
+
+  - id: thunderbird_cache
+    name: Thunderbird Cache
+    paths:
+      - "~/Library/Caches/org.mozilla.thunderbird"
+    safety: safe
+    confidence: 91
+    explanation: "Thunderbird cache directory from Mole. Mail profiles, local folders, and account configuration are excluded."
+    source:
+      name: Thunderbird
+      bundle_id: org.mozilla.thunderbird
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - mail
+      - thunderbird
+      - cache
+
+  - id: apple_mail_cache
+    name: Apple Mail Cache
+    paths:
+      - "~/Library/Caches/com.apple.mail"
+    safety: safe
+    confidence: 90
+    explanation: "Apple Mail cache directory from Mole. Mailboxes, downloads, accounts, and message data are excluded."
+    source:
+      name: Apple Mail
+      bundle_id: com.apple.mail
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - mail
+      - apple
+      - cache

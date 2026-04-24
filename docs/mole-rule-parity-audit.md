@@ -7,16 +7,16 @@ Mole commit date: 2026-04-24T08:02:08+08:00
 
 ## Summary
 
-Gargantua does not yet have full Mole rule parity. After the system/user rule port, the app ships this reviewed snapshot:
+Gargantua does not yet have full Mole rule parity. After the app/cloud/office rule port, the app ships this reviewed snapshot:
 
 | Area | Gargantua files | Gargantua rules |
 | --- | ---: | ---: |
-| App cleanup | 3 | 12 |
+| App cleanup | 9 | 58 |
 | Browser cleanup | 15 | 54 |
 | Developer cleanup | 18 | 118 |
 | System cleanup | 8 | 44 |
 | Uninstall/remnant cleanup | 2 | 28 |
-| Total | 46 | 256 |
+| Total | 52 | 302 |
 
 Mole's cleanup implementation is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count. As a conservative proxy, the current Mole source has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
@@ -35,7 +35,7 @@ The current Gargantua snapshot is enough for the initial native scanner, but par
 
 Bundled cleanup rule files:
 
-- Apps: Dropbox, Slack, Spotify.
+- Apps: Dropbox, Slack, Spotify, cloud-sync apps, Office/mail apps, communication apps, virtualization caches, creative/media apps, productivity utilities, note apps, game/launcher caches, and remote desktop caches.
 - Browsers: Arc, Brave, Chrome, Chromium, Comet, Dia, Edge, Firefox, Helium, Opera, Orion, Safari, Vivaldi, Yandex, Zen.
 - Developer tools: Docker, Go, Homebrew, Node/frontend, Python/data, Rust, Xcode/mobile, JVM, editors, cloud CLIs, containers/Kubernetes, Ruby/PHP/.NET, Bazel/Zig/Deno/Terraform, CI caches, database/API tools, shell/network support, and AI/dev assistant caches.
 - System cleanup: caches, logs, temp files, Trash, downloaded installer/archive filters, Finder metadata, Apple service caches, recent items, saved/autosave state, Mail Downloads, MobileSync backup protection, cached device firmware, privileged diagnostics/logs/updates/installers, and Rosetta/Apple Silicon caches.
@@ -66,14 +66,20 @@ Classification guidance:
 
 ### App, Cloud, Office, And GUI Caches
 
-Missing or partial Mole coverage:
+Ported from Mole in `gargantua-o1ka`:
 
-- Cloud and sync apps: Google Drive, Baidu Netdisk, Alibaba Cloud, Box, OneDrive, plus expanded Dropbox cache variants.
-- Office and mail apps: Microsoft Word, Excel, PowerPoint, Outlook, Apple iWork, WPS Office, Thunderbird, Apple Mail.
-- Communication apps: Discord, Legcord, Zoom, WeChat, Telegram, Teams, WhatsApp, Skype, Tencent Meeting, WeCom, Feishu, DingTalk.
-- AI and developer-facing GUI apps: ChatGPT, Claude Desktop, Codex, Antigravity, Filo, Qoder, OpenCode.
-- Creative/media/productivity apps: Adobe, Sketch, Figma, Final Cut, DaVinci Resolve, Blender, Cinema 4D, Autodesk, SketchUp, Apple Music, Podcasts, TV, Plex, NetEase Music, QQ Music, VLC, IINA, MPV, Steam, Epic, Battle.net, Minecraft, Notion, Obsidian, Logseq, Bear, Evernote, Raycast, Alfred, Warp, Ghostty, and remote desktop tools.
-- Virtualization: VMware Fusion, Parallels, VirtualBox, Vagrant.
+- Cloud and sync apps: Google Drive, Baidu Netdisk, Alibaba Cloud Drive, Box, OneDrive, and expanded Dropbox cache variants. Sync roots, documents, account stores, and sync databases remain excluded.
+- Office and mail apps: Microsoft Word, Excel, PowerPoint, Outlook, Apple iWork, WPS Office, Thunderbird, and Apple Mail. The YAML only targets cache, temp, and log directories; documents, AutoRecovery stores, mailboxes, templates, and preferences remain out of scope.
+- Communication apps: Discord, Legcord, Zoom, WeChat, Telegram, Teams modern/legacy caches, WhatsApp, Skype, Tencent Meeting, WeCom, Feishu, and DingTalk cache/log locations. Message databases, downloads, and account state remain excluded.
+- Virtualization: VMware Fusion and Parallels caches are safe, Vagrant temp files are safe, and VirtualBox's default `.cache` under `~/VirtualBox VMs` is review-gated because it sits next to VM bundles and disk images.
+- Creative/media/productivity apps: ChatGPT and Claude desktop cache/logs, Sketch, Adobe, Figma, ScreenFlow, Final Cut Pro, DaVinci Resolve, Blender/Cinema 4D/Autodesk/SketchUp, Apple and third-party media caches, download-manager caches, note-app caches, Raycast and Alfred cache locations, remote desktop caches, and utility app caches.
+- Game and emulator caches: Steam, Epic, Battle.net, EA, GOG, Riot, Minecraft, Lunar Client, PCSX2, and RPCS3 cache/log families are review-gated because some cache locations can represent large offline assets or project-adjacent generated data.
+
+Remaining gaps or deliberately deferred behavior:
+
+- Low-signal or highly niche GUI app cache paths from Mole can be added later, but the high-value cloud, office, communication, VM, media, productivity, launcher, game, and remote desktop families are now represented.
+- Dynamic pruning behaviors remain out of YAML, including app-specific retention loops and checks that require command execution or app-aware current-version logic.
+- App-specific protection checks such as Spotify offline-media detection and Raycast clipboard-history protection are represented conservatively by review-gated rules or narrow cache paths, not by broad data-directory deletion.
 
 Classification posture used for the port:
 
@@ -159,12 +165,12 @@ Remaining gaps for full Mole parity:
 ## Recommended Port Order
 
 1. Keep porting in narrow batches with conservative safety levels and explicit review/protected classifications.
-2. Expand app/cloud/office caches in narrow batches with app-specific review/protected classification for sync/offline data.
-3. Expand remnant rules using name-transform and sensitive-data preflight support.
+2. Sync accepted Mole parity rules into the public `gargantua-rules` repository and vendor the reviewed snapshot back into this app.
+3. Continue remnant-rule expansion only when new app-specific ownership evidence or receipt/BOM support exists.
 4. Defer command-backed cleanup to dedicated adapters or Developer Tools flows.
 5. Defer privileged cleanup escalation beyond review findings until helper UX and Trust Layer policy are explicit.
 6. Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.
 
 ## Follow-Up Tasks
 
-The parent epic still has child tasks for app/cloud/office cleanup and public rule sync/docs work. Browser, developer, rule-engine support, system/user, and generic remnant batches are now represented in the bundled rule snapshot.
+The parent epic still has a child task for public rule sync/docs work. Browser, app/cloud/office, developer, rule-engine support, system/user, and generic remnant batches are now represented in the bundled rule snapshot.

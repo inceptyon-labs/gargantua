@@ -1,0 +1,78 @@
+rules:
+  - id: vmware_fusion_cache
+    name: VMware Fusion Cache
+    paths:
+      - "~/Library/Caches/com.vmware.fusion"
+    skip_if_process_running:
+      - com.vmware.fusion
+      - VMware Fusion
+    safety: safe
+    confidence: 92
+    explanation: "VMware Fusion cache directory from Mole. Virtual machine bundles and disk images are not targeted."
+    source:
+      name: VMware Fusion
+      bundle_id: com.vmware.fusion
+      verify_signature: true
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - virtualization
+      - vmware
+      - cache
+
+  - id: parallels_cache
+    name: Parallels Cache
+    paths:
+      - "~/Library/Caches/com.parallels.*"
+    skip_if_process_running:
+      - com.parallels.desktop.console
+      - Parallels Desktop
+    safety: safe
+    confidence: 91
+    explanation: "Parallels cache directories from Mole. Virtual machine packages and disk images are excluded."
+    source:
+      name: Parallels Desktop
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - virtualization
+      - parallels
+      - cache
+
+  - id: virtualbox_vm_cache
+    name: VirtualBox VM Cache
+    paths:
+      - "~/VirtualBox VMs/.cache"
+    safety: review
+    confidence: 78
+    explanation: "VirtualBox cache under the default VM folder. Review because it sits next to user-managed virtual machine images."
+    source:
+      name: VirtualBox
+      bundle_id: org.virtualbox.app.VirtualBox
+    regenerates: true
+    category: app_data
+    tags:
+      - app
+      - virtualization
+      - virtualbox
+      - cache
+      - review
+
+  - id: vagrant_tmp_files
+    name: Vagrant Temporary Files
+    paths:
+      - "~/.vagrant.d/tmp"
+    safety: safe
+    confidence: 92
+    explanation: "Vagrant temporary files from Mole. Box downloads, project Vagrantfiles, and VM state are not targeted."
+    source:
+      name: Vagrant
+    regenerates: true
+    category: app_cache
+    tags:
+      - app
+      - virtualization
+      - vagrant
+      - temp
