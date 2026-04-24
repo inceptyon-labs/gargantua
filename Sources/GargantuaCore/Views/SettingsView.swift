@@ -16,21 +16,32 @@ public struct SettingsView: View {
     /// every other scan view that also observes it.
     @StateObject private var ownedManager: ModelDownloadManager
     @ObservedObject private var downloadManager: ModelDownloadManager
+    @StateObject private var ownedUpdateSettingsViewModel: AppUpdateSettingsViewModel
+    @ObservedObject private var updateSettingsViewModel: AppUpdateSettingsViewModel
     @State private var settings: PersistedSettings?
 
     public init(persistence: PersistenceController) {
         let manager = ModelDownloadManager()
+        let updateSettingsViewModel = AppUpdateSettingsViewModel()
         self.persistence = persistence
         self._ownedManager = StateObject(wrappedValue: manager)
         self._downloadManager = ObservedObject(wrappedValue: manager)
+        self._ownedUpdateSettingsViewModel = StateObject(wrappedValue: updateSettingsViewModel)
+        self._updateSettingsViewModel = ObservedObject(wrappedValue: updateSettingsViewModel)
     }
 
-    public init(persistence: PersistenceController, downloadManager: ModelDownloadManager) {
+    public init(
+        persistence: PersistenceController,
+        downloadManager: ModelDownloadManager,
+        updateSettingsViewModel: AppUpdateSettingsViewModel
+    ) {
         self.persistence = persistence
         // `@StateObject` still needs a default; unused when the caller injects,
         // but it has to exist for the property wrapper to initialize cleanly.
         self._ownedManager = StateObject(wrappedValue: downloadManager)
         self._downloadManager = ObservedObject(wrappedValue: downloadManager)
+        self._ownedUpdateSettingsViewModel = StateObject(wrappedValue: updateSettingsViewModel)
+        self._updateSettingsViewModel = ObservedObject(wrappedValue: updateSettingsViewModel)
     }
 
     public var body: some View {
@@ -39,6 +50,7 @@ public struct SettingsView: View {
                 headerView
                 modelSection
                 CloudAISettingsSection()
+                updatesSection
                 ScanRootsSettingsSection(
                     settings: settings,
                     persistence: persistence,
@@ -213,6 +225,95 @@ public struct SettingsView: View {
 
     // MARK: - General Section
 
+    private var updatesSection: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
+            sectionHeader("Updates")
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                HStack(spacing: GargantuaSpacing.space3) {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(GargantuaColors.accent)
+                        .frame(width: 24, alignment: .center)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(updateFeedDisplay)
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text(updateLastCheckDisplay)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+
+                    Spacer(minLength: GargantuaSpacing.space3)
+
+                    actionButton(
+                        label: "Check Now",
+                        icon: "arrow.clockwise",
+                        color: updateSettingsViewModel.canCheckForUpdates ? GargantuaColors.accent : GargantuaColors.ink4
+                    ) {
+                        updateSettingsViewModel.userCheckForUpdates()
+                    }
+                    .disabled(!updateSettingsViewModel.canCheckForUpdates)
+                }
+
+                Divider()
+                    .overlay(GargantuaColors.border)
+
+                HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 16))
+                        .foregroundStyle(GargantuaColors.accent)
+                        .frame(width: 24, alignment: .center)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Channel")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text(updateSettingsViewModel.channel.detail)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+
+                    Spacer(minLength: GargantuaSpacing.space3)
+
+                    Picker("Channel", selection: updateChannelBinding) {
+                        ForEach(AppUpdateChannel.allCases) { channel in
+                            Text(channel.label).tag(channel)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                }
+
+                updateToggleRow(
+                    icon: "clock.arrow.circlepath",
+                    label: "Automatic Checks",
+                    isOn: Binding(
+                        get: { updateSettingsViewModel.automaticallyChecksForUpdates },
+                        set: { updateSettingsViewModel.userSetAutomaticallyChecksForUpdates($0) }
+                    )
+                )
+
+                updateToggleRow(
+                    icon: "arrow.down.circle",
+                    label: "Automatic Downloads",
+                    isOn: Binding(
+                        get: { updateSettingsViewModel.automaticallyDownloadsUpdates },
+                        set: { updateSettingsViewModel.userSetAutomaticallyDownloadsUpdates($0) }
+                    )
+                )
+                .disabled(!updateSettingsViewModel.automaticallyChecksForUpdates || !updateSettingsViewModel.allowsAutomaticUpdates)
+            }
+            .padding(GargantuaSpacing.space4)
+            .background(GargantuaColors.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
+    }
+
     private var generalSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
             sectionHeader("General")
@@ -308,6 +409,26 @@ public struct SettingsView: View {
         .background(GargantuaColors.surface2)
     }
 
+    private func updateToggleRow(icon: String, label: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(GargantuaColors.ink3)
+                .frame(width: 24, alignment: .center)
+
+            Text(label)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Spacer()
+
+            Toggle(label, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+        }
+        .padding(.vertical, GargantuaSpacing.space1)
+    }
+
     private func actionButton(label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: GargantuaSpacing.space2) {
@@ -351,6 +472,27 @@ public struct SettingsView: View {
         guard preferredAIEngine == .mlx else { return false }
         if case .downloaded = downloadManager.state { return false }
         return true
+    }
+
+    private var updateChannelBinding: Binding<AppUpdateChannel> {
+        Binding(
+            get: { updateSettingsViewModel.channel },
+            set: { updateSettingsViewModel.userSetChannel($0) }
+        )
+    }
+
+    private var updateFeedDisplay: String {
+        guard let host = updateSettingsViewModel.feedURL?.host, !host.isEmpty else {
+            return "Sparkle"
+        }
+        return host
+    }
+
+    private var updateLastCheckDisplay: String {
+        guard let date = updateSettingsViewModel.lastUpdateCheckDate else {
+            return "No checks yet"
+        }
+        return "Last checked \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private var modelSizeLabel: some View {

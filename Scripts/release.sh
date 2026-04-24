@@ -37,6 +37,8 @@ Environment (set in .env.release — gitignored — or exported in the shell):
   SIGNING_IDENTITY     "Developer ID Application: ... (TEAM_ID)"
   NOTARY_PROFILE       Name of the notarytool keychain profile.
   BUNDLE_ID            Defaults to com.gargantua.app.
+  SPARKLE_PUBLIC_ED_KEY Public EdDSA key printed by Sparkle generate_keys.
+  SPARKLE_FEED_URL      Defaults to https://gargantua.dev/appcast.xml.
 
 Preflight will fail fast on:
   - Missing Xcode CLT tools (codesign, notarytool, stapler, iconutil, …).
@@ -88,6 +90,7 @@ _need file "macOS system tool"
 _need strip "Xcode CLT"
 _need codesign "Xcode CLT"
 _need xcrun "Xcode CLT"
+_need install_name_tool "Xcode CLT"
 _need ditto "macOS system tool"
 _need iconutil "Xcode CLT"
 _need hdiutil "macOS system tool"
@@ -120,6 +123,12 @@ if [ "$DRY_RUN" != "1" ]; then
         || die "SIGNING_IDENTITY not set. Copy .env.release.example to .env.release and fill in, or export SIGNING_IDENTITY."
     [ -n "${NOTARY_PROFILE:-}" ] \
         || die "NOTARY_PROFILE not set. See .env.release.example for setup."
+    [ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ] \
+        || die "SPARKLE_PUBLIC_ED_KEY not set. Generate once with Sparkle's generate_keys and keep the private key in Keychain/CI secrets."
+    case "$SPARKLE_FEED_URL" in
+        https://*) : ;;
+        *) die "SPARKLE_FEED_URL must use HTTPS: $SPARKLE_FEED_URL" ;;
+    esac
 
     # Anchor on the surrounding double-quotes that `security find-identity`
     # prints to avoid accepting a substring of another identity.
@@ -177,10 +186,13 @@ if [ "$DRY_RUN" != "1" ]; then
         || die "spctl rejected $DMG_PATH"
 fi
 
+"$RELEASE_SCRIPTS_DIR/appcast.sh"
+
 log ""
 log "Release complete."
 log "  App: $APP_BUNDLE"
 log "  DMG: $DMG_PATH"
+log "  Appcast: $DIST_DIR/sparkle-updates/$(basename "$SPARKLE_FEED_URL")"
 if [ "$DRY_RUN" = "1" ]; then
     log ""
     log "(dry-run: no actual artifacts were produced.)"

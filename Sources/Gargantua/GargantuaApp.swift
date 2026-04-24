@@ -6,6 +6,7 @@ import SwiftUI
 @main
 struct GargantuaApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
+    @StateObject private var updateController: AppUpdateController
 
     init() {
         if CommandLine.arguments.contains("--selfcheck-binaries") {
@@ -24,14 +25,20 @@ struct GargantuaApp: App {
             let path = CommandLine.arguments.dropFirst(index + 1).first
             Self.runPrivilegedHelperSmokeTrash(path: path)
         }
+        _updateController = StateObject(wrappedValue: AppUpdateController())
     }
 
     var body: some Scene {
         WindowGroup {
-            MainContentView()
+            MainContentView(updateSettingsViewModel: updateController.settingsViewModel)
                 .frame(minWidth: 700, minHeight: 500)
         }
         .defaultSize(width: 900, height: 600)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesCommand(viewModel: updateController.settingsViewModel)
+            }
+        }
     }
 
     private static func runBinarySelfCheck() -> Never {

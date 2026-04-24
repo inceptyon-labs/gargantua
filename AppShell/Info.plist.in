@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Info.plist template for Gargantua.app. Scripts/release/assemble-app.sh
-  substitutes @VERSION@, @BUILD@, @BUNDLE_ID@, and @MACOS_MIN_VERSION@.
+  substitutes @VERSION@, @BUILD@, @BUNDLE_ID@, @MACOS_MIN_VERSION@,
+  @SPARKLE_FEED_URL@, and @SPARKLE_PUBLIC_ED_KEY@.
 
   The TCC usage strings below are mandatory: macOS will deny Full Disk Access
   style prompts without them, and the Duplicate Finder / Big Files scans
@@ -48,5 +49,19 @@
     <string>Gargantua scans connected external drives to find duplicate, unused, and large files when you explicitly select them.</string>
     <key>NSNetworkVolumesUsageDescription</key>
     <string>Gargantua scans mounted network volumes to find duplicate, unused, and large files when you explicitly select them.</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUFeedURL</key>
+    <string>@SPARKLE_FEED_URL@</string>
+    <key>SUPublicEDKey</key>
+    <string>@SPARKLE_PUBLIC_ED_KEY@</string>
+    <key>SUShowReleaseNotes</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SURequireSignedFeed</key>
+    <true/>
 </dict>
 </plist>

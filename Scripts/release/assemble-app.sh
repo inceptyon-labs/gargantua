@@ -7,6 +7,7 @@
 #       Info.plist              (rendered from AppShell/Info.plist.in)
 #       PkgInfo                 (APPL????)
 #       MacOS/Gargantua         (the executable)
+#       Frameworks/Sparkle.framework
 #       Library/LaunchDaemons/  (SMAppService launch daemon plist)
 #       Library/LaunchServices/ (privileged helper executable)
 #       Resources/
@@ -42,6 +43,7 @@ log "Assembling $APP_BUNDLE..."
 
 run rm -rf "$APP_BUNDLE"
 run mkdir -p "$APP_BUNDLE/Contents/MacOS"
+run mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchDaemons"
 run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchServices"
 run mkdir -p "$APP_BUNDLE/Contents/Resources"
@@ -66,6 +68,8 @@ if [ "${DRY_RUN:-0}" != "1" ]; then
         -e "s|@BUILD@|${BUILD}|g" \
         -e "s|@BUNDLE_ID@|${BUNDLE_ID}|g" \
         -e "s|@MACOS_MIN_VERSION@|${MACOS_MIN_VERSION}|g" \
+        -e "s|@SPARKLE_FEED_URL@|${SPARKLE_FEED_URL}|g" \
+        -e "s|@SPARKLE_PUBLIC_ED_KEY@|${SPARKLE_PUBLIC_ED_KEY}|g" \
         "$PLIST_SRC" > "$PLIST_DST"
     # Sanity check: no unsubstituted tokens should remain.
     # ERE because BSD grep's BRE does not treat \+ as repetition.
@@ -79,6 +83,25 @@ fi
 # ----- Executable -----------------------------------------------------------
 run cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 run chmod 0755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+
+# SwiftPM links Sparkle with @rpath/Sparkle.framework and gives the CLI
+# executable @loader_path as its only local rpath. App bundles conventionally
+# embed frameworks under Contents/Frameworks, so add that rpath before signing.
+if [ "${DRY_RUN:-0}" != "1" ]; then
+    if ! otool -l "$APP_BUNDLE/Contents/MacOS/$APP_NAME" | grep -q '@executable_path/../Frameworks'; then
+        install_name_tool -add_rpath '@executable_path/../Frameworks' \
+            "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+    fi
+else
+    log "DRY-RUN: install_name_tool -add_rpath @executable_path/../Frameworks $APP_BUNDLE/Contents/MacOS/$APP_NAME"
+fi
+
+# ----- Sparkle framework ----------------------------------------------------
+SPARKLE_FRAMEWORK_SRC="$SWIFT_BIN_DIR/Sparkle.framework"
+if [ "${DRY_RUN:-0}" != "1" ] && [ ! -d "$SPARKLE_FRAMEWORK_SRC" ]; then
+    die "missing Sparkle.framework at $SPARKLE_FRAMEWORK_SRC (did swift build copy binary artifacts?)"
+fi
+run ditto "$SPARKLE_FRAMEWORK_SRC" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
 
 # ----- Privileged helper ----------------------------------------------------
 HELPER_EXECUTABLE="$APP_BUNDLE/Contents/Library/LaunchServices/$HELPER_BUNDLE_ID"

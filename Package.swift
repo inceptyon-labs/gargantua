@@ -16,12 +16,16 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.31.3"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0")
     ],
     targets: [
         .executableTarget(
             name: "Gargantua",
-            dependencies: ["GargantuaCore"],
+            dependencies: [
+                "GargantuaCore",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/Gargantua"
         ),
         .executableTarget(

@@ -38,6 +38,7 @@ Most cleaner apps optimize for big numbers and vague confidence. Gargantua optim
 - **Explainability:** per-item explanations sourced from rules, metadata, and optional local model inference.
 - **Audit Trail:** MCP-triggered cleanup attempts are written to `~/Library/Logs/Gargantua/audit.json`.
 - **Release Pipeline:** scripts for assembling, signing, notarizing, stapling, and packaging the app as a DMG.
+- **Auto Updates:** Sparkle 2 appcasts with EdDSA signatures, signed-feed validation, and stable/beta channels.
 
 ## Safety Model
 
@@ -132,6 +133,7 @@ Scripts/release.sh
 ```
 
 Release signing and notarization use local environment values from `.env.release`, which is intentionally ignored. See `Scripts/release/README.md` for the required variables and release flow.
+The release flow also stages a signed Sparkle appcast under `dist/sparkle-updates/` for upload to the HTTPS location configured by `SPARKLE_FEED_URL`.
 
 Useful supporting scripts:
 

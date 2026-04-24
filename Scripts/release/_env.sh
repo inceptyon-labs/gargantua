@@ -130,6 +130,8 @@ export BUNDLE_ID="${BUNDLE_ID:-com.gargantua.app}"
 export TEAM_ID="${TEAM_ID:-}"
 export HELPER_BUNDLE_ID="${HELPER_BUNDLE_ID:-$BUNDLE_ID.privileged-helper}"
 export MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-14.0}"
+export SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://gargantua.dev/appcast.xml}"
+export SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
 
 # ----- Flag defaults --------------------------------------------------------
 # release.sh parses flags and exports these before sourcing sub-scripts.
@@ -145,4 +147,5 @@ export CI_MODE="${CI_MODE:-0}"
 if [ "$DRY_RUN" = "1" ]; then
     export SIGNING_IDENTITY="${SIGNING_IDENTITY:-DRYRUN-PLACEHOLDER-IDENTITY}"
     export NOTARY_PROFILE="${NOTARY_PROFILE:-DRYRUN-PLACEHOLDER-PROFILE}"
+    export SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-DRYRUN-SPARKLE-PUBLIC-ED-KEY}"
 fi

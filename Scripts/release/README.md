@@ -29,7 +29,8 @@ SPM sources. Canonical entry point is `Scripts/release.sh`. Full design:
    ```sh
    cp .env.release.example .env.release
    chmod 600 .env.release
-   # Edit: TEAM_ID, SIGNING_IDENTITY, NOTARY_PROFILE
+   # Edit: TEAM_ID, SIGNING_IDENTITY, NOTARY_PROFILE,
+   #       SPARKLE_PUBLIC_ED_KEY, SPARKLE_FEED_URL
    ```
    The pipeline refuses to source `.env.release` unless it's mode `0600`
    (sourced as shell code; 0644 would let any local user run arbitrary
@@ -42,6 +43,18 @@ SPM sources. Canonical entry point is `Scripts/release.sh`. Full design:
    Without it, the pipeline falls back to plain `hdiutil` (functional, not
    polished).
 
+   Optional: install `cmark` or `pandoc` if you want the appcast step to
+   convert changelog markdown to HTML release notes. Without either tool,
+   Sparkle 2.9 renders the staged markdown notes directly.
+
+5. **Generate Sparkle EdDSA keys** once on the release machine:
+   ```sh
+   swift package resolve
+   .build/artifacts/sparkle/Sparkle/bin/generate_keys
+   ```
+   Put the printed public key in `SPARKLE_PUBLIC_ED_KEY`. Keep the private
+   key in Keychain or CI secrets only; never commit it.
+
 ## Cutting a release
 
 ```sh
@@ -52,6 +65,7 @@ git tag v0.1.0
 Outputs:
 - `dist/Gargantua.app`              — signed, notarized, stapled
 - `dist/Gargantua-0.1.0.dmg`        — stapled, ready to distribute
+- `dist/sparkle-updates/appcast.xml` — signed Sparkle appcast plus staged DMG
 
 ## Dev builds
 
@@ -98,6 +112,7 @@ standalone for debugging (after the preceding stages have succeeded):
 | DMG build       | `dmg.sh`                     | create-dmg (or hdiutil), via staging directory.     |
 | Notarize (DMG)  | `notarize.sh $DMG_PATH`      | notarytool submit --wait → staple DMG.              |
 | Verify          | (inline in `release.sh`)     | `spctl --assess` on both app and DMG.               |
+| Appcast         | `appcast.sh`                 | stages DMG + markdown notes; runs `generate_appcast`. |
 
 **Why two notarizations?** The `.app` gets its own ticket so it stays
 Gatekeeper-clean once extracted to `/Applications` — including offline.

@@ -26,13 +26,15 @@ struct MainContentView: View {
     @StateObject private var aiService: LocalAIService
     @StateObject private var aiExplanation: AIExplanationController
     @StateObject private var aiAdvisory: AIAdvisoryController
+    private let updateSettingsViewModel: AppUpdateSettingsViewModel
 
-    init() {
+    init(updateSettingsViewModel: AppUpdateSettingsViewModel) {
         let manager = ModelDownloadManager()
         let selectedEngine = AIInferenceEngineFactory.select(
             preference: AIEnginePreference.stored(),
             modelState: manager.state
         )
+        self.updateSettingsViewModel = updateSettingsViewModel
         let service = LocalAIService(downloadManager: manager, engine: selectedEngine.engine)
         _activeAIEngineKind = State(initialValue: selectedEngine.kind)
         _downloadManager = StateObject(wrappedValue: manager)
@@ -118,7 +120,8 @@ struct MainContentView: View {
                                 if let persistence {
                                     SettingsView(
                                         persistence: persistence,
-                                        downloadManager: downloadManager
+                                        downloadManager: downloadManager,
+                                        updateSettingsViewModel: updateSettingsViewModel
                                     )
                                 } else {
                                     ProgressView()

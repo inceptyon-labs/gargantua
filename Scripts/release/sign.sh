@@ -8,9 +8,9 @@
 #   1. Privileged helper executable in Contents/Library/LaunchServices/.
 #   2. Every Mach-O executable file in Contents/Resources/ (e.g. bin/fclones).
 #   3. Non-main code assets in Contents/MacOS (e.g. mlx.metallib).
-#   4. Every valid nested *.bundle, deepest first. SwiftPM resource bundles are
-#      plain directories sealed by the top-level app signature, not signable
-#      code bundles.
+#   4. Every valid nested *.xpc, *.app, *.framework, and *.bundle, deepest
+#      first. SwiftPM resource bundles are plain directories sealed by the
+#      top-level app signature, not signable code bundles.
 #   5. The top-level Gargantua.app, with entitlements and hardened runtime.
 #
 # After signing, asserts the Authority line starts with
@@ -103,17 +103,27 @@ done < <(find "$APP_BUNDLE/Contents/MacOS" -type f -print0 2>/dev/null || true)
 log "  signed $phase2_count code assets"
 
 # ----- Phase 4: nested bundles (deepest-first via -depth) -------------------
-log "Phase 4/5: signing nested bundles (deepest first)..."
+log "Phase 4/5: signing nested code bundles (deepest first)..."
 phase3_count=0
-while IFS= read -r -d '' BUNDLE; do
-    if [ ! -f "$BUNDLE/Contents/Info.plist" ] && [ ! -f "$BUNDLE/Info.plist" ]; then
-        log "  skipping plain resource bundle: $BUNDLE"
-        continue
-    fi
-    log "  $BUNDLE"
-    _sign --sign "$SIGNING_IDENTITY" "$BUNDLE"
+while IFS= read -r -d '' CODE_BUNDLE; do
+    case "$CODE_BUNDLE" in
+        *.bundle)
+            if [ ! -f "$CODE_BUNDLE/Contents/Info.plist" ] \
+                && [ ! -f "$CODE_BUNDLE/Info.plist" ] \
+                && [ ! -f "$CODE_BUNDLE/Resources/Info.plist" ]; then
+                log "  skipping plain resource bundle: $CODE_BUNDLE"
+                continue
+            fi
+            ;;
+    esac
+    log "  $CODE_BUNDLE"
+    _sign --sign "$SIGNING_IDENTITY" "$CODE_BUNDLE"
     phase3_count=$((phase3_count + 1))
-done < <(find "$APP_BUNDLE/Contents" -depth -type d -name '*.bundle' -print0 2>/dev/null || true)
+done < <(
+    find "$APP_BUNDLE/Contents" -depth -type d \
+        \( -name '*.xpc' -o -name '*.app' -o -name '*.framework' -o -name '*.bundle' \) \
+        -print0 2>/dev/null || true
+)
 log "  signed $phase3_count nested bundles"
 
 # ----- Phase 5: top-level .app with entitlements ----------------------------
