@@ -11,11 +11,13 @@ public enum MCPServerRunState: String, Codable, Sendable, Equatable {
 public enum MCPServerTransportMode: String, Codable, Sendable, Equatable {
     case stdio
     case sse
+    case stdioAndSSE = "stdio_sse"
 
     public var displayName: String {
         switch self {
         case .stdio: return "stdio"
         case .sse: return "SSE"
+        case .stdioAndSSE: return "stdio + SSE"
         }
     }
 }

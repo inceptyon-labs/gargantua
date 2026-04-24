@@ -41,8 +41,14 @@ private let stderrLog: @Sendable (String) -> Void = { message in
     FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
 }
 
+private let runtimeOptions = parseRuntimeOptions()
+private let storedSSEConfiguration = MCPSSEConfigurationStore().load()
+private let effectiveTransportMode = runtimeOptions.transportMode
+    ?? (storedSSEConfiguration.isEnabled ? .both : .stdio)
+private let tokenManager = MCPBearerTokenManager()
+
 let serverStatusStore = MCPServerStatusStore(persistence: MCPServerStatusPersistence())
-serverStatusStore.markRunning(transportMode: .stdio)
+serverStatusStore.markRunning(transportMode: effectiveTransportMode.statusMode)
 
 let dispatcher = MCPRequestDispatcher(
     serverInfo: MCPServerInfo(name: "gargantua", version: mcpServerVersion),
@@ -219,7 +225,46 @@ dispatcher.register(tool: .clean, handler: cleanHandler.toolHandler)
 
 // MARK: - Transport
 
-let transport = MCPStdioTransport(
+var sseTransport: MCPSSETransport?
+
+if effectiveTransportMode.includesSSE {
+    var sseConfiguration = storedSSEConfiguration
+    if let port = runtimeOptions.ssePort {
+        sseConfiguration.port = MCPSSEServerConfiguration.normalizedPort(port)
+    }
+    if let bindScope = runtimeOptions.bindScope {
+        sseConfiguration.bindScope = bindScope
+    }
+    sseConfiguration.isEnabled = true
+
+    let configuredToken = runtimeOptions.bearerToken
+    let tokenProvider: MCPSSETransport.TokenProvider = {
+        if let configuredToken { return configuredToken }
+        return try tokenManager.readToken()
+    }
+
+    let transport = MCPSSETransport(
+        configuration: sseConfiguration,
+        tokenProvider: tokenProvider,
+        handler: { request in dispatcher.dispatch(request) },
+        log: stderrLog,
+        queue: DispatchQueue(label: "com.gargantua.mcp.sse", qos: .userInitiated)
+    )
+
+    do {
+        try transport.start()
+        sseTransport = transport
+    } catch {
+        let message = clientFacingMessage(for: error)
+        serverStatusStore.recordError(message)
+        stderrLog("SSE transport failed to start: \(message)")
+        if effectiveTransportMode == .sse {
+            exit(1)
+        }
+    }
+}
+
+let stdioTransport = MCPStdioTransport(
     source: StandardInputMessageSource(),
     sink: StandardOutputMessageSink(),
     handler: { request in dispatcher.dispatch(request) },
@@ -236,16 +281,20 @@ private let transportQueue = DispatchQueue(
     qos: .userInitiated
 )
 
-transportQueue.async {
-    transport.run()
-    serverStatusStore.markStopped()
-    // EOF on stdin — the client disconnected. Tear down the process so
-    // whatever launched us (claude-code, mcp inspector, etc.) sees a clean
-    // exit.
-    exit(0)
+if effectiveTransportMode.includesStdio {
+    transportQueue.async {
+        stdioTransport.run()
+        if effectiveTransportMode.includesSSE, sseTransport != nil {
+            serverStatusStore.markRunning(transportMode: .sse)
+        } else {
+            serverStatusStore.markStopped()
+            // EOF on stdin — the client disconnected. Tear down the process so
+            // whatever launched us (claude-code, mcp inspector, etc.) sees a clean
+            // exit.
+            exit(0)
+        }
+    }
 }
-
-dispatchMain()
 
 // MARK: - Async-to-sync bridge
 
@@ -275,6 +324,108 @@ private func runBlocking<T: Sendable>(
     return try holder.get().get()
 }
 
+// MARK: - Runtime options
+
+private enum MCPRuntimeTransportMode: String {
+    case stdio
+    case sse
+    case both
+
+    var includesStdio: Bool { self == .stdio || self == .both }
+    var includesSSE: Bool { self == .sse || self == .both }
+
+    var statusMode: MCPServerTransportMode {
+        switch self {
+        case .stdio: return .stdio
+        case .sse: return .sse
+        case .both: return .stdioAndSSE
+        }
+    }
+}
+
+private struct MCPRuntimeOptions {
+    var transportMode: MCPRuntimeTransportMode?
+    var ssePort: Int?
+    var bindScope: MCPServerBindScope?
+    var bearerToken: String?
+}
+
+private func parseRuntimeOptions() -> MCPRuntimeOptions {
+    var options = MCPRuntimeOptions()
+    var iterator = CommandLine.arguments.dropFirst().makeIterator()
+    while let argument = iterator.next() {
+        switch argument {
+        case "--stdio":
+            options.transportMode = .stdio
+        case "--sse":
+            options.transportMode = .sse
+        case "--both":
+            options.transportMode = .both
+        case "--transport":
+            guard let value = iterator.next(),
+                  let mode = MCPRuntimeTransportMode(rawValue: value.lowercased())
+            else {
+                stderrLog("invalid --transport value; expected stdio, sse, or both")
+                exit(64)
+            }
+            options.transportMode = mode
+        case "--port":
+            guard let value = iterator.next(), let port = Int(value) else {
+                stderrLog("invalid --port value")
+                exit(64)
+            }
+            options.ssePort = port
+        case "--bind":
+            guard let value = iterator.next(),
+                  let scope = MCPServerBindScope(rawValue: value.lowercased())
+            else {
+                stderrLog("invalid --bind value; expected localhost or lan")
+                exit(64)
+            }
+            options.bindScope = scope
+        case "--token":
+            guard let value = iterator.next(),
+                  MCPBearerTokenValidator.isPlausible(value)
+            else {
+                stderrLog("invalid --token value")
+                exit(64)
+            }
+            options.bearerToken = MCPBearerTokenValidator.normalized(value)
+        case "--help", "-h":
+            printRuntimeHelp()
+            exit(0)
+        default:
+            stderrLog("unknown argument \(argument)")
+            printRuntimeHelp()
+            exit(64)
+        }
+    }
+    return options
+}
+
+private func printRuntimeHelp() {
+    let help = """
+    GargantuaMCP options:
+      --transport stdio|sse|both   Select MCP transport. Defaults to stdio, or both when SSE is enabled in Settings.
+      --stdio                      Shortcut for --transport stdio.
+      --sse                        Shortcut for --transport sse.
+      --both                       Shortcut for --transport both.
+      --port 7493                  Override the SSE port.
+      --bind localhost|lan         Bind SSE to 127.0.0.1 or all interfaces.
+      --token TOKEN                Bearer token override for LAN SSE.
+    """
+    FileHandle.standardError.write(Data("\(help)\n".utf8))
+}
+
+private func clientFacingMessage(for error: Error) -> String {
+    if let localized = error as? LocalizedError,
+       let description = localized.errorDescription,
+       !description.isEmpty {
+        return description
+    }
+    return "MCP transport failed."
+}
+
 /// Lock-guarded storage for the result of `runBlocking`'s detached Task.
 /// Needed because Swift's strict concurrency forbids capturing a mutable
 /// local from a `@Sendable` closure.
@@ -299,3 +450,5 @@ private final class ResultHolder<T: Sendable>: @unchecked Sendable {
         return value
     }
 }
+
+dispatchMain()

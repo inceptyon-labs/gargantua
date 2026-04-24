@@ -50,6 +50,7 @@ public struct SettingsView: View {
                 headerView
                 modelSection
                 CloudAISettingsSection()
+                MCPTransportSettingsSection()
                 updatesSection
                 ScanRootsSettingsSection(
                     settings: settings,

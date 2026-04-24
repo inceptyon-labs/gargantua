@@ -54,13 +54,56 @@ Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/` and `Sources/G
 
 ## MCP Server
 
-`GargantuaMCP` exposes local tools for MCP clients over newline-delimited JSON-RPC 2.0 on stdin/stdout. Logs go to stderr.
+`GargantuaMCP` exposes local tools for MCP clients over newline-delimited JSON-RPC 2.0 on stdin/stdout. It can also serve MCP over localhost Server-Sent Events on port `7493`. Logs go to stderr.
 
 Run it locally:
 
 ```bash
 swift run GargantuaMCP
 ```
+
+Run the SSE transport only:
+
+```bash
+swift run GargantuaMCP -- --transport sse --port 7493 --bind localhost
+```
+
+Run both transports:
+
+```bash
+swift run GargantuaMCP -- --transport both
+```
+
+SSE binds to `127.0.0.1` by default. Binding to LAN uses `--bind lan` or the app's Settings -> MCP Transport pane and requires a bearer token stored in Keychain or supplied with `--token`. The SSE endpoint is:
+
+```text
+http://127.0.0.1:7493/sse
+```
+
+Example client entries:
+
+```json
+{
+  "mcpServers": {
+    "gargantua": {
+      "command": "swift",
+      "args": ["run", "GargantuaMCP", "--", "--stdio"]
+    }
+  }
+}
+```
+
+```json
+{
+  "mcpServers": {
+    "gargantua": {
+      "url": "http://127.0.0.1:7493/sse"
+    }
+  }
+}
+```
+
+For Claude Desktop, Cursor, or Claude Code, use the first shape when the client launches the server process and the second shape when the client connects to a separately running SSE server.
 
 Read-only tools:
 

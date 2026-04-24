@@ -40,6 +40,18 @@ struct DashboardMCPStatusCardTests {
         #expect(presentation.tone == .safe)
     }
 
+    @Test("combined stdio and SSE mode has readable transport detail")
+    func combinedTransportPresentation() {
+        let snapshot = MCPServerStatusSnapshot(
+            state: .running,
+            transportMode: .stdioAndSSE
+        )
+
+        let presentation = DashboardMCPStatusPresentation.make(from: snapshot)
+
+        #expect(presentation.detail == "stdio + SSE transport · no clients")
+    }
+
     @Test("error snapshot surfaces the last error")
     func errorPresentation() {
         let snapshot = MCPServerStatusSnapshot(
