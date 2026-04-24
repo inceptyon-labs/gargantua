@@ -15,8 +15,8 @@ Gargantua does not yet have full Mole rule parity. After the system/user rule po
 | Browser cleanup | 15 | 54 |
 | Developer cleanup | 18 | 118 |
 | System cleanup | 8 | 44 |
-| Uninstall/remnant cleanup | 2 | 12 |
-| Total | 46 | 240 |
+| Uninstall/remnant cleanup | 2 | 28 |
+| Total | 46 | 256 |
 
 Mole's cleanup implementation is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count. As a conservative proxy, the current Mole source has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
@@ -42,7 +42,8 @@ Bundled cleanup rule files:
 
 Bundled remnant rule files:
 
-- Generic user remnants: Application Support, Caches, Preferences, Containers, Group Containers, Logs, Saved State, WebKit, Privileged Helper Tools.
+- Generic user remnants: Application Support including bundle ID and safe name variants, Caches, NSURLSession downloads, Preferences and ByHost/SyncedPreferences, Containers and extension containers, Group Containers, Logs/crash reports, Saved State/recent shared file lists, WebKit/WebContent, HTTP storage/cookies, Application Scripts/workflows, user plug-ins/extensions, Unix-style config/data directories, and Privileged Helper Tools.
+- System-level remnants: `/Library` support/preferences, caches/logs, plug-ins/extensions, and protected package receipts.
 - Launch services: user LaunchAgents, system LaunchAgents, LaunchDaemons.
 
 ## Gap Inventory
@@ -123,19 +124,25 @@ Classification posture used for the port:
 
 ### Uninstall And Remnant Rules
 
-Missing or partial Mole coverage:
+Ported from Mole in `gargantua-jjue`:
 
-- User-level static patterns not yet covered: `~/Library/WebKit/com.apple.WebKit.WebContent/{bundleID}`, `~/Library/HTTPStorages/{bundleID}`, `~/Library/HTTPStorages/{bundleID}.binarycookies`, `~/Library/Cookies/{bundleID}.binarycookies`, `~/Library/Application Scripts/{bundleID}`, `~/Library/Services/{appName}.workflow`, QuickLook generators, Internet Plug-Ins, Audio Plug-Ins, PreferencePanes, Input Methods, Screen Savers, Frameworks, Autosave Information, Contextual Menu Items, Spotlight importers, ColorPickers, Workflows, SyncedPreferences, Address Book plug-ins, Accessibility bundles, Mail bundles, `~/.config/{appName}`, `~/.local/share/{appName}`, dotfiles, and ByHost preferences.
-- Bundle-ID-derived remnants: app extensions under Application Scripts, Containers, FileProvider, shared file lists, NSURLSession download caches, and group containers matching bundle-id variants.
-- System-level remnants: `/Library/Application Support`, `/Library/Caches`, `/Library/Logs`, `/Library/Preferences`, receipts, BOM-derived installed files, system LaunchAgent/Daemon variants, PrivilegedHelperTools, kernel/system extensions, frameworks, plug-ins, preference panes, input methods, screen savers.
+- User-level static patterns: WebKit WebContent, HTTPStorages, cookies, Application Scripts, Services/Workflows, QuickLook generators, Internet Plug-Ins, Audio Plug-Ins, PreferencePanes, Input Methods, Screen Savers, Frameworks, Contextual Menu Items, Spotlight importers, ColorPickers, SyncedPreferences, Address Book plug-ins, Accessibility bundles, Mail bundles, XDG-style config/data directories, dotfiles, ByHost preferences, CrashReporter, diagnostic reports, shared file lists, and NSURLSession downloads.
+- Bundle-ID-derived remnants: app extension containers under Application Scripts, Containers, FileProvider, and Group Containers using bundle ID, team ID, and name variants where available.
+- System-level remnants: `/Library/Application Support`, `/Library/Caches`, `/Library/Logs`, `/Library/Preferences`, plug-ins/extensions, privileged helpers, LaunchAgent/Daemon variants, and protected package receipts.
+- Scanner support: Mole-style app-name variants now include lowercase compound forms such as `maestro-studio`, and literal template hits resolve to the filesystem's actual child casing before dedupe.
+
+Remaining gaps or deliberately deferred behavior:
+
 - App-specific uninstall knowledge: Android Studio, Xcode, JetBrains, Unity/Unreal/Godot, VS Code, Docker, Maestro Studio, Raycast.
+- Receipt/BOM expansion: package receipt files are protected, but Gargantua still cannot declaratively expand BOM contents into owned installed files.
+- Login item removal, defaults-domain deletion, app-name variant command workflows, and sensitive-data preflight UX beyond current review/protected classification.
 
 Pre-port classification:
 
 - `safe`: logs, caches, saved state, crash reports, generated WebKit caches after app uninstall.
-- `review`: preferences, containers, group containers, HTTP storage/cookies, Application Support, dotfiles, app-specific project/tool directories.
-- `protected`: credentials, documents, system extensions, kernel extensions, login/network extension state, shared containers without ownership proof.
-- `out-of-scope until engine support`: receipt/BOM expansion, login item removal, defaults-domain deletion, app-name variant generation, and sensitive-data preflight.
+- `review`: preferences, containers, group containers, HTTP storage/cookies, Application Support variants, Application Scripts/workflows, plug-ins/extensions, dotfiles, app-specific project/tool directories, privileged helpers, and system-level support/cache/log paths.
+- `protected`: package receipts, credentials, documents, system extensions, kernel extensions, login/network extension state, shared containers without ownership proof.
+- `out-of-scope until dedicated support`: receipt/BOM expansion, login item removal, defaults-domain deletion, and app-specific destructive workflows.
 
 ## Rule Engine And Schema Gaps
 
@@ -160,4 +167,4 @@ Remaining gaps for full Mole parity:
 
 ## Follow-Up Tasks
 
-The parent epic already has child tasks for app/cloud/office, remnant expansion, and public rule sync/docs work. Browser, developer, rule-engine support, and system/user batches are now represented in the bundled rule snapshot.
+The parent epic still has child tasks for app/cloud/office cleanup and public rule sync/docs work. Browser, developer, rule-engine support, system/user, and generic remnant batches are now represented in the bundled rule snapshot.

@@ -146,11 +146,15 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
 
         var variants: [String] = []
         for candidate in candidates {
+            let lowercase = candidate.lowercased()
             variants.append(candidate)
             variants.append(removeSpaces(candidate))
             variants.append(joinWords(candidate, separator: "-"))
             variants.append(joinWords(candidate, separator: "_"))
-            variants.append(candidate.lowercased())
+            variants.append(lowercase)
+            variants.append(removeSpaces(lowercase))
+            variants.append(joinWords(lowercase, separator: "-"))
+            variants.append(joinWords(lowercase, separator: "_"))
         }
 
         return unique(variants.compactMap(safeVariant))
@@ -162,7 +166,6 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         rule: RemnantRule,
         app: AppInfo
     ) -> [RemnantItem] {
-        let fileManager = FileManager.default
         var out: [RemnantItem] = []
         var counter = 0
 
@@ -177,8 +180,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
                 if isGlob {
                     paths = expander.expand(pattern: expanded, roots: scanRoots).paths
                 } else {
-                    let path = (expanded as NSString).expandingTildeInPath
-                    paths = fileManager.fileExists(atPath: path) ? [path] : []
+                    paths = Self.existingFilesystemPath(for: expanded).map { [$0] } ?? []
                 }
 
                 for path in paths {
@@ -403,6 +405,35 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
             }
         }
         return false
+    }
+}
+
+private extension RemnantScanner {
+    static func existingFilesystemPath(for path: String) -> String? {
+        let expanded = (path as NSString).expandingTildeInPath
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: expanded) else { return nil }
+
+        let url = URL(fileURLWithPath: expanded)
+        let parent = url.deletingLastPathComponent()
+        let name = url.lastPathComponent
+        let parentPath = (expanded as NSString).deletingLastPathComponent
+        guard let children = try? fileManager.contentsOfDirectory(
+            at: parent,
+            includingPropertiesForKeys: nil
+        ) else {
+            return expanded
+        }
+
+        if let exact = children.first(where: { $0.lastPathComponent == name }) {
+            return (parentPath as NSString).appendingPathComponent(exact.lastPathComponent)
+        }
+        guard let caseFolded = children.first(where: {
+            $0.lastPathComponent.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }) else {
+            return expanded
+        }
+        return (parentPath as NSString).appendingPathComponent(caseFolded.lastPathComponent)
     }
 }
 

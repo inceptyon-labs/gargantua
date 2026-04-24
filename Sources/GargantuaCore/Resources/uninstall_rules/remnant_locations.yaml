@@ -13,6 +13,7 @@ remnant_rules:
     category: support_files
     path_templates:
       - "~/Library/Application Support/{appName}"
+      - "~/Library/Application Support/{bundleID}"
       - "~/Library/Containers/{bundleID}/Data/Library/Application Support"
     confidence: 92
     explanation: App-written support data; regenerated if the app is reinstalled.
@@ -21,6 +22,19 @@ remnant_rules:
       verify_signature: false
     regenerates: true
     tags: [generic, support]
+
+  - id: generic_application_support_variants
+    name: Application Support name variants
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/{appNameVariant}"
+    safety: review
+    confidence: 78
+    explanation: App support data using common app-name variants; review because it may contain user-created state.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, support, variants, mole]
 
   - id: generic_caches
     name: Caches
@@ -35,6 +49,19 @@ remnant_rules:
     regenerates: true
     tags: [generic, cache]
 
+  - id: generic_nsurlsession_downloads
+    name: NSURLSession download cache
+    category: caches
+    path_templates:
+      - "~/Library/Caches/com.apple.nsurlsessiond/Downloads/{bundleID}"
+    safety: review
+    confidence: 82
+    explanation: App-scoped NSURLSession download cache; review because downloads may be incomplete or user-visible.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, cache, downloads, mole]
+
   - id: generic_preferences_plist
     name: Preferences plist
     category: preferences
@@ -46,6 +73,21 @@ remnant_rules:
       name: "{appName}"
     regenerates: false
     tags: [generic, preferences]
+
+  - id: generic_preference_domains
+    name: Preference domains and synced preferences
+    category: preferences
+    path_templates:
+      - "~/Library/Preferences/{bundleID}"
+      - "~/Library/Preferences/ByHost/{bundleID}*.plist"
+      - "~/Library/SyncedPreferences/{bundleID}.plist"
+    safety: review
+    confidence: 82
+    explanation: App preference domains can include settings and account-adjacent state; review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, preferences, byhost, mole]
 
   - id: generic_containers
     name: Sandbox container
@@ -59,6 +101,22 @@ remnant_rules:
     regenerates: false
     tags: [generic, sandbox]
 
+  - id: generic_app_extension_containers
+    name: App extension containers
+    category: containers
+    path_templates:
+      - "~/Library/Containers/{bundleID}.*"
+      - "~/Library/Containers/*.{bundleID}*"
+      - "~/Library/Application Support/FileProvider/{bundleID}*"
+      - "~/Library/Application Support/FileProvider/*.{bundleID}*"
+    safety: review
+    confidence: 78
+    explanation: Bundle-ID-derived extension and FileProvider containers may hold user data; review ownership before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, sandbox, extensions, fileprovider, mole]
+
   - id: generic_group_containers
     name: Group container
     category: group_containers
@@ -70,6 +128,20 @@ remnant_rules:
       name: "{appName}"
     regenerates: false
     tags: [generic, sandbox, shared]
+
+  - id: generic_group_container_variants
+    name: Group container variants
+    category: group_containers
+    path_templates:
+      - "~/Library/Group Containers/{teamID}.{bundleID}"
+      - "~/Library/Group Containers/*{bundleID}*"
+    safety: review
+    confidence: 72
+    explanation: Shared group containers can be used by multiple related apps; review unless ownership is clear.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, sandbox, shared, variants, mole]
 
   - id: generic_logs
     name: Logs
@@ -84,6 +156,21 @@ remnant_rules:
     regenerates: true
     tags: [generic, logs]
 
+  - id: generic_crash_reports
+    name: Crash reports
+    category: logs
+    path_templates:
+      - "~/Library/Application Support/CrashReporter/{appNameVariant}"
+      - "~/Library/Logs/DiagnosticReports/{appName}*"
+      - "~/Library/Logs/DiagnosticReports/{appNameNoSpace}*"
+      - "~/Library/Logs/DiagnosticReports/{bundleName}*"
+    confidence: 90
+    explanation: App crash and diagnostic reports are generated logs left after uninstall.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, logs, crash_reports, mole]
+
   - id: generic_saved_state
     name: Saved application state
     category: saved_state
@@ -95,6 +182,19 @@ remnant_rules:
       name: "{appName}"
     regenerates: true
     tags: [generic, state]
+
+  - id: generic_shared_file_lists
+    name: Shared file lists
+    category: saved_state
+    path_templates:
+      - "~/Library/Application Support/com.apple.sharedfilelist/**/{bundleID}.sfl4"
+    safety: review
+    confidence: 78
+    explanation: App-scoped recent-item lists can reveal user document history; review before removal.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, state, recent_items, mole]
 
   - id: generic_webkit_storage
     name: WebKit storage
@@ -108,14 +208,175 @@ remnant_rules:
     regenerates: true
     tags: [generic, webkit]
 
+  - id: generic_webkit_webcontent_storage
+    name: WebKit WebContent storage
+    category: web_data
+    path_templates:
+      - "~/Library/WebKit/com.apple.WebKit.WebContent/{bundleID}"
+    confidence: 94
+    explanation: Generated WebKit WebContent storage tied to the app bundle identifier.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, webkit, mole]
+
+  - id: generic_http_cookie_storage
+    name: HTTP and cookie storage
+    category: cookies
+    path_templates:
+      - "~/Library/HTTPStorages/{bundleID}"
+      - "~/Library/HTTPStorages/{bundleID}.binarycookies"
+      - "~/Library/Cookies/{bundleID}.binarycookies"
+    safety: review
+    confidence: 80
+    explanation: App-scoped HTTP storage and cookies may contain account/session data; review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, cookies, http_storage, mole]
+
+  - id: generic_application_scripts_services
+    name: Application scripts and workflows
+    category: other
+    path_templates:
+      - "~/Library/Application Scripts/{bundleID}"
+      - "~/Library/Application Scripts/{bundleID}.*"
+      - "~/Library/Application Scripts/*.{bundleID}*"
+      - "~/Library/Services/{appName}.workflow"
+      - "~/Library/Workflows/{appName}.workflow"
+    safety: review
+    confidence: 76
+    explanation: App scripts, services, and workflows can back user automation; review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, scripts, workflows, mole]
+
+  - id: generic_user_plugins
+    name: User plug-ins and extensions
+    category: helpers
+    path_templates:
+      - "~/Library/QuickLook/{appName}.qlgenerator"
+      - "~/Library/Internet Plug-Ins/{appName}.plugin"
+      - "~/Library/Audio/Plug-Ins/Components/{appName}.component"
+      - "~/Library/Audio/Plug-Ins/VST/{appName}.vst"
+      - "~/Library/Audio/Plug-Ins/VST3/{appName}.vst3"
+      - "~/Library/Audio/Plug-Ins/Digidesign/{appName}.dpm"
+      - "~/Library/PreferencePanes/{appName}.prefPane"
+      - "~/Library/Input Methods/{appName}.app"
+      - "~/Library/Input Methods/{bundleID}.app"
+      - "~/Library/Screen Savers/{appName}.saver"
+      - "~/Library/Frameworks/{appName}.framework"
+      - "~/Library/Contextual Menu Items/{appName}.plugin"
+      - "~/Library/Spotlight/{appName}.mdimporter"
+      - "~/Library/ColorPickers/{appName}.colorPicker"
+      - "~/Library/Address Book Plug-Ins/{appName}.bundle"
+      - "~/Library/Accessibility/{appName}.bundle"
+      - "~/Library/Mail/Bundles/{appName}.mailbundle"
+    safety: review
+    confidence: 78
+    explanation: User-installed plug-ins and extensions can affect other apps or user workflows; review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, plugins, extensions, mole]
+
   - id: generic_privileged_helpers
     name: Privileged helpers
     category: helpers
     path_templates:
       - "/Library/PrivilegedHelperTools/{bundleID}*"
+    safety: review
     confidence: 80
     explanation: Privileged helper tools installed by the app; require admin.
     source:
       name: "{appName}"
     regenerates: false
     tags: [generic, helpers, privileged]
+
+  - id: generic_unix_config_state
+    name: Unix-style config and data directories
+    category: other
+    path_templates:
+      - "~/.config/{appNameVariant}"
+      - "~/.local/share/{appNameVariant}"
+      - "~/.{appNameVariant}"
+      - "~/.{appNameVariant}rc"
+    safety: review
+    confidence: 72
+    explanation: Dotfiles and XDG-style directories can hold credentials, settings, and user-created data; review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, xdg, dotfiles, mole]
+
+  - id: generic_system_support_preferences
+    name: System support and preferences
+    category: support_files
+    path_templates:
+      - "/Library/Application Support/{appName}"
+      - "/Library/Application Support/{appNameVariant}"
+      - "/Library/Application Support/{bundleID}"
+      - "/Library/Preferences/{bundleID}.plist"
+    safety: review
+    confidence: 76
+    explanation: System-level support and preference files require administrator review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, system, support, preferences, mole]
+
+  - id: generic_system_caches_logs
+    name: System caches and logs
+    category: caches
+    path_templates:
+      - "/Library/Caches/{bundleID}"
+      - "/Library/Caches/{appName}"
+      - "/Library/Caches/{appNameVariant}"
+      - "/Library/Logs/{bundleID}"
+      - "/Library/Logs/{appName}"
+    safety: review
+    confidence: 82
+    explanation: System-wide app caches and logs are scoped to the app but require review and administrator authorization.
+    source:
+      name: "{appName}"
+    regenerates: true
+    tags: [generic, system, cache, logs, mole]
+
+  - id: generic_system_plugins
+    name: System plug-ins and extensions
+    category: helpers
+    path_templates:
+      - "/Library/Frameworks/{appName}.framework"
+      - "/Library/Internet Plug-Ins/{appName}.plugin"
+      - "/Library/Audio/Plug-Ins/Components/{appName}.component"
+      - "/Library/Audio/Plug-Ins/VST/{appName}.vst"
+      - "/Library/Audio/Plug-Ins/VST3/{appName}.vst3"
+      - "/Library/Audio/Plug-Ins/Digidesign/{appName}.dpm"
+      - "/Library/Input Methods/{appName}.app"
+      - "/Library/Input Methods/{bundleID}.app"
+      - "/Library/QuickLook/{appName}.qlgenerator"
+      - "/Library/PreferencePanes/{appName}.prefPane"
+      - "/Library/Screen Savers/{appName}.saver"
+    safety: review
+    confidence: 76
+    explanation: System-level plug-ins may affect multiple apps and require administrator review before removal.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, system, plugins, extensions, mole]
+
+  - id: generic_package_receipts
+    name: Package receipts
+    category: other
+    path_templates:
+      - "/Library/Receipts/{bundleID}.bom"
+      - "/Library/Receipts/{bundleID}.plist"
+      - "/private/var/db/receipts/*{bundleID}*"
+    safety: protected
+    confidence: 70
+    explanation: Package receipts can affect installer metadata and BOM-based ownership; protect until explicit receipt cleanup support exists.
+    source:
+      name: "{appName}"
+    regenerates: false
+    tags: [generic, system, receipts, protected, mole]

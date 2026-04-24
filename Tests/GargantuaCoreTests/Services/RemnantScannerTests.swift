@@ -3,48 +3,48 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+private final class FixtureTree {
+    let root: URL
+
+    init() throws {
+        let raw = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemnantScannerTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
+        let resolved = Self.realpath(raw.path) ?? raw.path
+        root = URL(fileURLWithPath: resolved, isDirectory: true)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    @discardableResult
+    func makeDir(_ relative: String) throws -> URL {
+        let url = root.appendingPathComponent(relative, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @discardableResult
+    func makeFile(_ relative: String, contents: String = "x") throws -> URL {
+        let url = root.appendingPathComponent(relative)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private static func realpath(_ path: String) -> String? {
+        guard let cstr = Darwin.realpath(path, nil) else { return nil }
+        defer { free(cstr) }
+        return String(cString: cstr)
+    }
+}
+
 @Suite("RemnantScanner")
 struct RemnantScannerTests {
-
-    private final class FixtureTree {
-        let root: URL
-
-        init() throws {
-            let raw = FileManager.default.temporaryDirectory
-                .appendingPathComponent("RemnantScannerTests-\(UUID().uuidString)", isDirectory: true)
-            try FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
-            let resolved = Self.realpath(raw.path) ?? raw.path
-            root = URL(fileURLWithPath: resolved, isDirectory: true)
-        }
-
-        deinit {
-            try? FileManager.default.removeItem(at: root)
-        }
-
-        @discardableResult
-        func makeDir(_ relative: String) throws -> URL {
-            let url = root.appendingPathComponent(relative, isDirectory: true)
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            return url
-        }
-
-        @discardableResult
-        func makeFile(_ relative: String, contents: String = "x") throws -> URL {
-            let url = root.appendingPathComponent(relative)
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try contents.write(to: url, atomically: true, encoding: .utf8)
-            return url
-        }
-
-        private static func realpath(_ path: String) -> String? {
-            guard let cstr = Darwin.realpath(path, nil) else { return nil }
-            defer { free(cstr) }
-            return String(cString: cstr)
-        }
-    }
 
     private static func app(bundlePath: String = "/Applications/Google Chrome.app") -> AppInfo {
         AppInfo(
@@ -96,10 +96,15 @@ struct RemnantScannerTests {
         #expect(variants.contains("Google-Chrome-Beta"))
         #expect(variants.contains("Google_Chrome_Beta"))
         #expect(variants.contains("google chrome beta"))
+        #expect(variants.contains("googlechromebeta"))
+        #expect(variants.contains("google-chrome-beta"))
+        #expect(variants.contains("google_chrome_beta"))
         #expect(variants.contains("Google Chrome"))
         #expect(variants.contains("GoogleChrome"))
+        #expect(variants.contains("google-chrome"))
         #expect(variants.contains("Chrome"))
         #expect(expanded.contains("/tmp/GoogleChrome"))
+        #expect(expanded.contains("/tmp/google-chrome"))
         #expect(expanded.contains("/tmp/Chrome"))
     }
 
@@ -155,6 +160,117 @@ struct RemnantScannerTests {
         let plan = RemnantScanner(rules: [rule]).plan(for: app, includeAppBundle: false)
 
         #expect(plan.remnants.map(\.path) == [cache.deletingLastPathComponent().path])
+    }
+
+    @Test("Variant templates find lowercase XDG remnants")
+    func variantTemplatesFindLowercaseXDGRemnants() throws {
+        let fixture = try FixtureTree()
+        let config = try fixture.makeFile(".config/maestro-studio/config.json", contents: "settings")
+        let data = try fixture.makeFile(".local/share/maestrostudio/state.db", contents: "state")
+        let rule = RemnantRule(
+            id: "xdg_state",
+            name: "XDG State",
+            category: .other,
+            pathTemplates: [
+                fixture.root.appendingPathComponent(".config/{appNameVariant}").path,
+                fixture.root.appendingPathComponent(".local/share/{appNameVariant}").path,
+            ],
+            safety: .review,
+            confidence: 72,
+            explanation: "XDG app state.",
+            source: SourceAttribution(name: "{appName}")
+        )
+        let app = AppInfo(
+            bundleID: "com.maestro.studio",
+            name: "Maestro Studio",
+            bundlePath: "/Applications/Maestro Studio.app"
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: app, includeAppBundle: false)
+
+        #expect(Set(plan.remnants.map(\.path)) == [
+            config.deletingLastPathComponent().path,
+            data.deletingLastPathComponent().path,
+        ])
+        #expect(plan.remnants.allSatisfy { $0.safety == .review })
+    }
+
+    @Test("Bundle-derived glob templates find extension remnants")
+    func bundleDerivedGlobTemplatesFindExtensionRemnants() throws {
+        let fixture = try FixtureTree()
+        let appScript = try fixture.makeFile(
+            "Library/Application Scripts/5A4RE8SF68.com.tencent.xinWeChat/action.js"
+        )
+        let container = try fixture.makeFile(
+            "Library/Containers/com.tencent.xinWeChat.WeChatMacShare/state.db"
+        )
+        let fileProvider = try fixture.makeFile(
+            "Library/Application Support/FileProvider/com.tencent.xinWeChat.WeChatFileProviderExtension/data"
+        )
+        let groupContainer = try fixture.makeFile(
+            "Library/Group Containers/5A4RE8SF68.com.tencent.xinWeChat/shared.db"
+        )
+        try fixture.makeFile("Library/Containers/com.tencent.otherapp.Helper/state.db")
+        let app = AppInfo(
+            bundleID: "com.tencent.xinWeChat",
+            name: "WeChat",
+            bundlePath: "/Applications/WeChat.app",
+            teamIdentifier: "5A4RE8SF68"
+        )
+        let rules = [
+            RemnantRule(
+                id: "app_scripts",
+                name: "Application Scripts",
+                category: .other,
+                pathTemplates: [
+                    fixture.root.appendingPathComponent("Library/Application Scripts/*.{bundleID}*").path,
+                ],
+                safety: .review,
+                confidence: 76,
+                explanation: "App scripts.",
+                source: SourceAttribution(name: "{appName}")
+            ),
+            RemnantRule(
+                id: "app_extensions",
+                name: "App Extensions",
+                category: .containers,
+                pathTemplates: [
+                    fixture.root.appendingPathComponent("Library/Containers/{bundleID}.*").path,
+                    fixture.root.appendingPathComponent("Library/Application Support/FileProvider/{bundleID}*").path,
+                ],
+                safety: .review,
+                confidence: 78,
+                explanation: "App extension containers.",
+                source: SourceAttribution(name: "{appName}")
+            ),
+            RemnantRule(
+                id: "group_variants",
+                name: "Group Container Variants",
+                category: .groupContainers,
+                pathTemplates: [
+                    fixture.root.appendingPathComponent("Library/Group Containers/*.{bundleID}").path,
+                ],
+                safety: .review,
+                confidence: 72,
+                explanation: "Group containers.",
+                source: SourceAttribution(name: "{appName}")
+            ),
+        ]
+
+        let plan = RemnantScanner(
+            rules: rules,
+            scanRoots: [fixture.root],
+            expander: PathExpander(limits: .init(maxDepth: 8, maxEntries: 10_000, timeBudget: 5))
+        ).plan(for: app, includeAppBundle: false)
+
+        #expect(Set(plan.remnants.map(\.path)) == [
+            appScript.deletingLastPathComponent().path,
+            container.deletingLastPathComponent().path,
+            fileProvider.deletingLastPathComponent().path,
+            groupContainer.deletingLastPathComponent().path,
+        ])
+        #expect(plan.remnants.allSatisfy { $0.safety == .review })
+        #expect(!plan.remnants.contains { $0.path.contains("otherapp") })
     }
 
     @Test("Sensitive-data preflight downgrades safe remnant matches to review")
