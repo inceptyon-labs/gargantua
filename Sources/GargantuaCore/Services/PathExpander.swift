@@ -151,7 +151,11 @@ public struct PathExpander: Sendable {
         // Match zero directories: proceed with the remaining segments here.
         walk(atPath: path, remaining: rest, depth: depth, results: &results, state: state)
         // Match one or more directories: descend, keep `**` in remaining.
-        for (childPath, _) in enumerateChildren(atPath: path, state: state) {
+        for (childPath, _) in enumerateChildren(
+            atPath: path,
+            includeHidden: Self.requiresHiddenEnumeration(remaining),
+            state: state
+        ) {
             if state.shouldStop { return }
             walk(atPath: childPath, remaining: remaining, depth: depth + 1, results: &results, state: state)
         }
@@ -166,7 +170,11 @@ public struct PathExpander: Sendable {
         results: inout Set<String>,
         state: WalkState
     ) {
-        for (childPath, childName) in enumerateChildren(atPath: path, state: state) {
+        for (childPath, childName) in enumerateChildren(
+            atPath: path,
+            includeHidden: Self.requiresHiddenEnumeration([segment]),
+            state: state
+        ) {
             if state.shouldStop { return }
             if Self.fnmatch(pattern: segment, name: childName) {
                 walk(atPath: childPath, remaining: rest, depth: depth + 1, results: &results, state: state)
@@ -189,14 +197,19 @@ public struct PathExpander: Sendable {
         }
     }
 
-    private func enumerateChildren(atPath path: String, state: WalkState) -> [(path: String, name: String)] {
+    private func enumerateChildren(
+        atPath path: String,
+        includeHidden: Bool = false,
+        state: WalkState
+    ) -> [(path: String, name: String)] {
         if state.shouldStop { return [] }
         let fm = FileManager.default
         let url = URL(fileURLWithPath: path)
+        let options: FileManager.DirectoryEnumerationOptions = includeHidden ? [] : [.skipsHiddenFiles]
         guard let contents = try? fm.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isSymbolicLinkKey],
-            options: [.skipsHiddenFiles]
+            options: options
         ) else {
             return []
         }
@@ -218,6 +231,12 @@ public struct PathExpander: Sendable {
 
     private static func hasWildcard(_ component: String) -> Bool {
         component.contains("*")
+    }
+
+    private static func requiresHiddenEnumeration(_ components: [String]) -> Bool {
+        components.contains { component in
+            component.hasPrefix(".") || component.hasPrefix(".*")
+        }
     }
 
     /// Minimal fnmatch supporting `*` wildcards against a single segment name.

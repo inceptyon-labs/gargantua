@@ -1,7 +1,36 @@
+import AppKit
 import Foundation
 import OSLog
 
 private let logger = Logger(subsystem: "com.gargantua.core", category: "NativeScanAdapter")
+
+/// Abstraction over running-process detection for rule guards.
+public protocol RunningProcessChecking: Sendable {
+    func isRunning(identifier: String) -> Bool
+}
+
+/// Production process checker backed by AppKit's running application list.
+public struct DefaultRunningProcessChecker: RunningProcessChecking {
+    public init() {}
+
+    public func isRunning(identifier: String) -> Bool {
+        let needle = identifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return false }
+
+        return NSWorkspace.shared.runningApplications.contains { app in
+            let bundleID = app.bundleIdentifier?.lowercased()
+            let localizedName = app.localizedName?.lowercased()
+            let executableName = app.executableURL?
+                .deletingPathExtension()
+                .lastPathComponent
+                .lowercased()
+
+            return bundleID == needle
+                || localizedName == needle
+                || executableName == needle
+        }
+    }
+}
 
 /// Native filesystem scanner driven by YAML rules.
 ///
@@ -18,19 +47,22 @@ public struct NativeScanAdapter: ScanAdapter {
     private let classifier: SafetyClassifier
     private let scanRoots: [URL]
     private let expander: PathExpander
+    private let processChecker: any RunningProcessChecking
 
     public init(
         rules: [ScanRule],
         profile: CleanupProfile = .light,
         classifier: SafetyClassifier = SafetyClassifier(),
         scanRoots: [URL] = PathExpander.defaultScanRoots(),
-        expander: PathExpander = PathExpander()
+        expander: PathExpander = PathExpander(),
+        processChecker: any RunningProcessChecking = DefaultRunningProcessChecker()
     ) {
         self.rules = rules
         self.profile = profile
         self.classifier = classifier
         self.scanRoots = scanRoots
         self.expander = expander
+        self.processChecker = processChecker
     }
 
     /// Build a scanner against the YAML rules shipped with the app.
@@ -114,6 +146,7 @@ public struct NativeScanAdapter: ScanAdapter {
 
             let expander = expander
             let roots = scanRoots
+            let processChecker = processChecker
             let evaluation = await Task.detached {
                 Self.evaluate(
                     rule: rule,
@@ -121,6 +154,7 @@ public struct NativeScanAdapter: ScanAdapter {
                     profile: profile,
                     expander: expander,
                     scanRoots: roots,
+                    processChecker: processChecker,
                     onSizing: onSizing
                 )
             }.value
@@ -163,8 +197,13 @@ public struct NativeScanAdapter: ScanAdapter {
         profile: CleanupProfile,
         expander: PathExpander,
         scanRoots: [URL],
+        processChecker: any RunningProcessChecking,
         onSizing: @Sendable (String) -> Void = { _ in }
     ) -> RuleEvaluation {
+        if NativeRuleGuardEvaluator.shouldSkipRule(rule: rule, processChecker: processChecker) {
+            return RuleEvaluation(results: [], warnings: [])
+        }
+
         let fileManager = FileManager.default
         var out: [ScanResult] = []
         var warnings: [String] = []
@@ -280,6 +319,18 @@ public struct NativeScanAdapter: ScanAdapter {
             .contentModificationDateKey,
         ])
         let isDirectory = values?.isDirectory ?? false
+        let lastAccessed = values?.contentAccessDate ?? values?.contentModificationDate
+        let modifiedAt = values?.contentModificationDate
+
+        guard NativeRuleGuardEvaluator.matchesRuleFilters(
+            rule: rule,
+            lastAccessed: lastAccessed,
+            modifiedAt: modifiedAt
+        ),
+              !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
+            return nil
+        }
+
         let size: Int64
         if isDirectory {
             size = DirectorySizeScanner.directorySize(at: path).totalSize
@@ -288,10 +339,6 @@ public struct NativeScanAdapter: ScanAdapter {
             size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
         }
         guard size > 0 else { return nil }
-
-        // Prefer access time so stale-mtime-but-actively-read caches aren't
-        // mis-classified safe. Fall back to mtime on filesystems without atime.
-        let lastAccessed = values?.contentAccessDate ?? values?.contentModificationDate
 
         let displayName = Self.displayName(forRule: rule, path: path)
 
@@ -396,5 +443,78 @@ public struct NativeScanAdapter: ScanAdapter {
             }
         }
         return true
+    }
+}
+
+private enum NativeRuleGuardEvaluator {
+    static func shouldSkipRule(
+        rule: ScanRule,
+        processChecker: any RunningProcessChecking
+    ) -> Bool {
+        rule.skipIfProcessRunning.contains { processChecker.isRunning(identifier: $0) }
+    }
+
+    static func matchesRuleFilters(
+        rule: ScanRule,
+        lastAccessed: Date?,
+        modifiedAt: Date?
+    ) -> Bool {
+        let evaluator = ConditionEvaluator()
+        return rule.matchFilters.allSatisfy {
+            evaluator.evaluate(condition: $0, lastAccessed: lastAccessed, modifiedAt: modifiedAt)
+        }
+    }
+
+    static func isGuardedCandidate(rule: ScanRule, candidatePath: String) -> Bool {
+        let fileManager = FileManager.default
+
+        for guardRule in rule.presenceGuards {
+            let path = resolveGuardPath(guardRule.path, scope: guardRule.scope, candidatePath: candidatePath)
+            if fileManager.fileExists(atPath: path) {
+                return true
+            }
+        }
+
+        for guardRule in rule.contentGuards {
+            let path = resolveGuardPath(guardRule.path, scope: guardRule.scope, candidatePath: candidatePath)
+            guard fileManager.fileExists(atPath: path),
+                  let contents = readGuardFile(atPath: path) else {
+                continue
+            }
+            if guardRule.contains.contains(where: contents.contains) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private static func resolveGuardPath(
+        _ path: String,
+        scope: RuleGuardPathScope,
+        candidatePath: String
+    ) -> String {
+        if scope == .absolute || path.hasPrefix("/") || path.hasPrefix("~") {
+            return expandTilde(path)
+        }
+        if path.isEmpty {
+            return candidatePath
+        }
+        return (candidatePath as NSString).appendingPathComponent(path)
+    }
+
+    private static func readGuardFile(atPath path: String, byteLimit: Int = 64 * 1024) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: path)) else {
+            return nil
+        }
+        defer { try? handle.close() }
+
+        let data = handle.readData(ofLength: byteLimit)
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func expandTilde(_ path: String) -> String {
+        guard path.hasPrefix("~") else { return path }
+        return (path as NSString).expandingTildeInPath
     }
 }

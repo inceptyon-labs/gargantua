@@ -79,6 +79,30 @@ struct RemnantScannerTests {
         #expect(RemnantScanner.expand(template: "/tmp/{teamID}/{bundleID}", for: app) == nil)
     }
 
+    @Test("App name variant expansion includes Mole-style safe variants")
+    func appNameVariantExpansion() {
+        let app = AppInfo(
+            bundleID: "com.google.Chrome",
+            name: "Google Chrome Beta",
+            displayName: "Google Chrome Beta",
+            bundlePath: "/Applications/Google Chrome Beta.app"
+        )
+
+        let variants = RemnantScanner.appNameVariants(for: app)
+        let expanded = RemnantScanner.expandAll(template: "/tmp/{appNameVariant}", for: app)
+
+        #expect(variants.contains("Google Chrome Beta"))
+        #expect(variants.contains("GoogleChromeBeta"))
+        #expect(variants.contains("Google-Chrome-Beta"))
+        #expect(variants.contains("Google_Chrome_Beta"))
+        #expect(variants.contains("google chrome beta"))
+        #expect(variants.contains("Google Chrome"))
+        #expect(variants.contains("GoogleChrome"))
+        #expect(variants.contains("Chrome"))
+        #expect(expanded.contains("/tmp/GoogleChrome"))
+        #expect(expanded.contains("/tmp/Chrome"))
+    }
+
     @Test("Scans literal templates and resolves remnant metadata")
     func scansLiteralTemplates() throws {
         let fixture = try FixtureTree()
@@ -107,6 +131,59 @@ struct RemnantScannerTests {
         #expect(plan.remnants[0].ruleID == "generic_caches")
         #expect(plan.remnants[0].lastAccessed != nil)
         #expect(plan.totalBytes == plan.remnants[0].size)
+    }
+
+    @Test("Variant templates find no-space app remnants")
+    func variantTemplatesFindNoSpaceRemnants() throws {
+        let fixture = try FixtureTree()
+        let cache = try fixture.makeFile("Library/Caches/GoogleChrome/cache.db", contents: "abcdef")
+        let rule = RemnantRule(
+            id: "variant_caches",
+            name: "Variant Caches",
+            category: .caches,
+            pathTemplates: [fixture.root.appendingPathComponent("Library/Caches/{appNameVariant}").path],
+            confidence: 99,
+            explanation: "Disposable cache data.",
+            source: SourceAttribution(name: "{appName}")
+        )
+        let app = AppInfo(
+            bundleID: "com.google.Chrome",
+            name: "Google Chrome Beta",
+            bundlePath: "/Applications/Google Chrome Beta.app"
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: app, includeAppBundle: false)
+
+        #expect(plan.remnants.map(\.path) == [cache.deletingLastPathComponent().path])
+    }
+
+    @Test("Sensitive-data preflight downgrades safe remnant matches to review")
+    func sensitiveDataPreflightDowngradesSafeRemnants() throws {
+        let fixture = try FixtureTree()
+        let cookies = try fixture.makeFile("Library/WebKit/com.example.Writer/Cookies.binarycookies", contents: "session")
+        let rule = RemnantRule(
+            id: "webkit_data",
+            name: "WebKit Data",
+            category: .webData,
+            pathTemplates: [cookies.path],
+            safety: .safe,
+            confidence: 98,
+            explanation: "Generated WebKit data.",
+            source: SourceAttribution(name: "{appName}")
+        )
+        let app = AppInfo(
+            bundleID: "com.example.Writer",
+            name: "Writer",
+            bundlePath: "/Applications/Writer.app"
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: app, includeAppBundle: false)
+
+        #expect(plan.remnants.count == 1)
+        #expect(plan.remnants[0].safety == .review)
+        #expect(plan.remnants[0].confidence == 80)
+        #expect(plan.remnants[0].explanation.contains("cookies"))
+        #expect(plan.remnants[0].tags.contains("sensitive_preflight"))
     }
 
     @Test("Applies rule scope before scanning")

@@ -1,10 +1,12 @@
 import Foundation
 
-/// Evaluates condition expressions from safety overrides against file metadata.
+/// Evaluates condition expressions from safety overrides and match filters
+/// against file metadata.
 ///
 /// Supported expressions:
-/// - `age > Nd` — file older than N days (based on last accessed date)
-/// - `age > Nh` — file older than N hours
+/// - `age > Nd` — file older than N days (last access, falling back to mtime)
+/// - `atime > Nh` — file older than N hours by last-access time
+/// - `mtime > Nm` — file older than N minutes by modification time
 public struct ConditionEvaluator: Sendable {
 
     public init() {}
@@ -17,12 +19,31 @@ public struct ConditionEvaluator: Sendable {
     ///   - now: Reference date for age calculation (defaults to current date).
     /// - Returns: Whether the condition is satisfied.
     public func evaluate(condition: String, lastAccessed: Date?, now: Date = Date()) -> Bool {
-        guard let lastAccessed else { return false }
+        evaluate(condition: condition, lastAccessed: lastAccessed, modifiedAt: nil, now: now)
+    }
 
+    /// Evaluate a condition string against access and modification metadata.
+    public func evaluate(
+        condition: String,
+        lastAccessed: Date?,
+        modifiedAt: Date?,
+        now: Date = Date()
+    ) -> Bool {
         let trimmed = condition.trimmingCharacters(in: .whitespaces)
 
         if let parsed = parseAgeCondition(trimmed) {
-            let fileAge = now.timeIntervalSince(lastAccessed)
+            let reference: Date?
+            switch parsed.field {
+            case .age:
+                reference = lastAccessed ?? modifiedAt
+            case .atime:
+                reference = lastAccessed
+            case .mtime:
+                reference = modifiedAt
+            }
+
+            guard let reference else { return false }
+            let fileAge = now.timeIntervalSince(reference)
             switch parsed.op {
             case .greaterThan: return fileAge > parsed.threshold
             case .greaterThanOrEqual: return fileAge >= parsed.threshold
@@ -43,19 +64,33 @@ private extension ConditionEvaluator {
         case greaterThan, greaterThanOrEqual, lessThan, lessThanOrEqual
     }
 
+    enum DateField {
+        case age, atime, mtime
+    }
+
     struct AgeCondition {
+        let field: DateField
         let op: ComparisonOp
         let threshold: TimeInterval
     }
 
     /// Parse "age > 30d", "age >= 7d", "age < 1h", etc.
     func parseAgeCondition(_ condition: String) -> AgeCondition? {
-        let pattern = #/^age\s*(>=|<=|>|<)\s*(\d+)([dhm])$/#
+        let pattern = #/^(age|atime|mtime)\s*(>=|<=|>|<)\s*(\d+)([dhm])$/#
         guard let match = try? pattern.firstMatch(in: condition) else { return nil }
 
-        let opStr = String(match.output.1)
-        let value = Double(String(match.output.2)) ?? 0
-        let unit = String(match.output.3)
+        let fieldStr = String(match.output.1)
+        let opStr = String(match.output.2)
+        let value = Double(String(match.output.3)) ?? 0
+        let unit = String(match.output.4)
+
+        let field: DateField
+        switch fieldStr {
+        case "age": field = .age
+        case "atime": field = .atime
+        case "mtime": field = .mtime
+        default: return nil
+        }
 
         let op: ComparisonOp
         switch opStr {
@@ -74,6 +109,6 @@ private extension ConditionEvaluator {
         default: return nil
         }
 
-        return AgeCondition(op: op, threshold: value * multiplier)
+        return AgeCondition(field: field, op: op, threshold: value * multiplier)
     }
 }

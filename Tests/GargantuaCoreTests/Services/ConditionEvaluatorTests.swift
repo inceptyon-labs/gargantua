@@ -59,6 +59,31 @@ struct ConditionEvaluatorTests {
         #expect(evaluator.evaluate(condition: "age > 60m", lastAccessed: lastAccessed, now: now))
     }
 
+    @Test("mtime conditions use modification date instead of access date")
+    func mtimeCondition() {
+        let lastAccessed = now
+        let modifiedAt = now.addingTimeInterval(-8 * 86400)
+
+        #expect(evaluator.evaluate(
+            condition: "mtime > 7d",
+            lastAccessed: lastAccessed,
+            modifiedAt: modifiedAt,
+            now: now
+        ))
+    }
+
+    @Test("atime conditions require access date")
+    func atimeCondition() {
+        let modifiedAt = now.addingTimeInterval(-8 * 86400)
+
+        #expect(!evaluator.evaluate(
+            condition: "atime > 7d",
+            lastAccessed: nil,
+            modifiedAt: modifiedAt,
+            now: now
+        ))
+    }
+
     // MARK: - Edge Cases
 
     @Test("returns false when lastAccessed is nil")

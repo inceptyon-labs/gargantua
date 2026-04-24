@@ -95,6 +95,10 @@ public struct RuleParser: Sendable {
 
         let pattern = optionalString("pattern", from: mapping)
         let exclude = optionalStringArray("exclude", from: mapping)
+        let skipIfProcessRunning = optionalStringArray("skip_if_process_running", from: mapping)
+        let presenceGuards = try parsePresenceGuards(from: mapping, index: index, filePath: filePath)
+        let contentGuards = try parseContentGuards(from: mapping, index: index, filePath: filePath)
+        let matchFilters = optionalStringArray("match_filters", from: mapping)
         let tags = optionalStringArray("tags", from: mapping)
         let regenerates = optionalBool("regenerates", from: mapping) ?? false
         let regenerateCommand = optionalString("regenerate_command", from: mapping)
@@ -106,6 +110,10 @@ public struct RuleParser: Sendable {
             paths: paths,
             pattern: pattern,
             exclude: exclude,
+            skipIfProcessRunning: skipIfProcessRunning,
+            presenceGuards: presenceGuards,
+            contentGuards: contentGuards,
+            matchFilters: matchFilters,
             safety: safety,
             confidence: confidence,
             explanation: explanation,
@@ -116,6 +124,91 @@ public struct RuleParser: Sendable {
             tags: tags,
             safetyOverrides: safetyOverrides
         )
+    }
+
+    private func parsePresenceGuards(
+        from mapping: Node.Mapping,
+        index: Int,
+        filePath: String
+    ) throws -> [RulePresenceGuard] {
+        guard let guardsNode = mapping["presence_guards"],
+              let guardsSequence = guardsNode.sequence else {
+            return []
+        }
+
+        return try guardsSequence.enumerated().map { guardIndex, guardNode in
+            guard let guardMapping = guardNode.mapping else {
+                throw RuleParseError.missingField(
+                    field: "presence_guards[\(guardIndex)].path",
+                    ruleIndex: index,
+                    filePath: filePath
+                )
+            }
+
+            let path = try requireString("path", from: guardMapping, index: index, filePath: filePath)
+            let scope = try parseGuardScope(
+                optionalString("scope", from: guardMapping),
+                field: "presence_guards[\(guardIndex)].scope",
+                index: index,
+                filePath: filePath
+            )
+            return RulePresenceGuard(path: path, scope: scope)
+        }
+    }
+
+    private func parseContentGuards(
+        from mapping: Node.Mapping,
+        index: Int,
+        filePath: String
+    ) throws -> [RuleContentGuard] {
+        guard let guardsNode = mapping["content_guards"],
+              let guardsSequence = guardsNode.sequence else {
+            return []
+        }
+
+        return try guardsSequence.enumerated().map { guardIndex, guardNode in
+            guard let guardMapping = guardNode.mapping else {
+                throw RuleParseError.missingField(
+                    field: "content_guards[\(guardIndex)].path",
+                    ruleIndex: index,
+                    filePath: filePath
+                )
+            }
+
+            let path = try requireString("path", from: guardMapping, index: index, filePath: filePath)
+            let contains = try requireStringOrStringArray(
+                "contains",
+                from: guardMapping,
+                index: index,
+                filePath: filePath
+            )
+            let scope = try parseGuardScope(
+                optionalString("scope", from: guardMapping),
+                field: "content_guards[\(guardIndex)].scope",
+                index: index,
+                filePath: filePath
+            )
+            return RuleContentGuard(path: path, contains: contains, scope: scope)
+        }
+    }
+
+    private func parseGuardScope(
+        _ raw: String?,
+        field: String,
+        index: Int,
+        filePath: String
+    ) throws -> RuleGuardPathScope {
+        guard let raw else { return .candidate }
+        guard let scope = RuleGuardPathScope(rawValue: raw) else {
+            throw RuleParseError.invalidValue(
+                field: field,
+                value: raw,
+                expected: "candidate|absolute",
+                ruleIndex: index,
+                filePath: filePath
+            )
+        }
+        return scope
     }
 
     private func parseSource(from mapping: Node.Mapping, index: Int, filePath: String) throws -> SourceAttribution {
@@ -189,6 +282,24 @@ public struct RuleParser: Sendable {
             throw RuleParseError.missingField(field: key, ruleIndex: index, filePath: filePath)
         }
         return sequence.compactMap { $0.string }
+    }
+
+    private func requireStringOrStringArray(
+        _ key: String,
+        from mapping: Node.Mapping,
+        index: Int,
+        filePath: String
+    ) throws -> [String] {
+        guard let node = mapping[key] else {
+            throw RuleParseError.missingField(field: key, ruleIndex: index, filePath: filePath)
+        }
+        if let string = node.string {
+            return [string]
+        }
+        if let sequence = node.sequence {
+            return sequence.compactMap { $0.string }
+        }
+        throw RuleParseError.missingField(field: key, ruleIndex: index, filePath: filePath)
     }
 
     private func optionalString(_ key: String, from mapping: Node.Mapping) -> String? {

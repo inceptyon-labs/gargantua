@@ -33,6 +33,23 @@ public struct ScanRule: Codable, Sendable, Identifiable {
     /// Paths or patterns to exclude from matches.
     public let exclude: [String]
 
+    /// Running process identifiers that cause the rule to be skipped.
+    ///
+    /// Values may be bundle identifiers (preferred) or process/app names.
+    public let skipIfProcessRunning: [String]
+
+    /// Candidate-relative or absolute paths that skip a match when present.
+    public let presenceGuards: [RulePresenceGuard]
+
+    /// Candidate-relative or absolute files whose contents can skip a match.
+    public let contentGuards: [RuleContentGuard]
+
+    /// Conditions that must match before a filesystem item is surfaced.
+    ///
+    /// Supports the same age expressions as `SafetyOverride`, plus `mtime`
+    /// and `atime` prefixes for modification/access time filters.
+    public let matchFilters: [String]
+
     /// Trust Layer safety classification for matched items.
     public let safety: SafetyLevel
 
@@ -69,6 +86,10 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         paths: [String],
         pattern: String? = nil,
         exclude: [String] = [],
+        skipIfProcessRunning: [String] = [],
+        presenceGuards: [RulePresenceGuard] = [],
+        contentGuards: [RuleContentGuard] = [],
+        matchFilters: [String] = [],
         safety: SafetyLevel,
         confidence: Int,
         explanation: String,
@@ -84,6 +105,10 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         self.paths = paths
         self.pattern = pattern
         self.exclude = exclude
+        self.skipIfProcessRunning = skipIfProcessRunning
+        self.presenceGuards = presenceGuards
+        self.contentGuards = contentGuards
+        self.matchFilters = matchFilters
         self.safety = safety
         self.confidence = confidence
         self.explanation = explanation
@@ -93,5 +118,46 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         self.category = category
         self.tags = tags
         self.safetyOverrides = safetyOverrides
+    }
+}
+
+/// How a rule guard's `path` should be resolved.
+public enum RuleGuardPathScope: String, Codable, Sendable, Equatable {
+    /// Resolve the guard path relative to the matched candidate path.
+    case candidate
+
+    /// Treat the guard path as an absolute or tilde-expanded path.
+    case absolute
+}
+
+/// A simple filesystem presence predicate attached to a cleanup rule.
+public struct RulePresenceGuard: Codable, Sendable, Equatable {
+    /// Candidate-relative path by default, or absolute path when `scope == .absolute`.
+    public let path: String
+
+    /// Path resolution scope.
+    public let scope: RuleGuardPathScope
+
+    public init(path: String, scope: RuleGuardPathScope = .candidate) {
+        self.path = path
+        self.scope = scope
+    }
+}
+
+/// A bounded content predicate attached to a cleanup rule.
+public struct RuleContentGuard: Codable, Sendable, Equatable {
+    /// Candidate-relative path by default, or absolute path when `scope == .absolute`.
+    public let path: String
+
+    /// Substrings that cause the candidate to be skipped when found.
+    public let contains: [String]
+
+    /// Path resolution scope.
+    public let scope: RuleGuardPathScope
+
+    public init(path: String, contains: [String], scope: RuleGuardPathScope = .candidate) {
+        self.path = path
+        self.contains = contains
+        self.scope = scope
     }
 }

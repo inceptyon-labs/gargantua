@@ -95,14 +95,65 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
 
     /// Expand one template without touching the filesystem.
     public static func expand(template: String, for app: AppInfo) -> String? {
+        expandAll(template: template, for: app).first
+    }
+
+    /// Expand one template into every safe app-name variant it requests.
+    ///
+    /// `{appNameVariant}` fans out to a bounded, sanitized set containing the
+    /// original app name plus no-space, hyphen, underscore, lowercase,
+    /// base-channel, and bundle-derived variants.
+    public static func expandAll(template: String, for app: AppInfo) -> [String] {
         guard !template.contains("{teamID}") || app.teamIdentifier?.isEmpty == false else {
-            return nil
+            return []
         }
 
-        return template
-            .replacingOccurrences(of: "{bundleID}", with: app.bundleID)
-            .replacingOccurrences(of: "{appName}", with: app.name)
-            .replacingOccurrences(of: "{teamID}", with: app.teamIdentifier ?? "")
+        let replacements: [(token: String, values: [String])] = [
+            ("{bundleID}", [app.bundleID]),
+            ("{bundleName}", bundleDerivedVariants(for: app)),
+            ("{appName}", [app.name]),
+            ("{appNameNoSpace}", [removeSpaces(app.name)]),
+            ("{appNameHyphen}", [joinWords(app.name, separator: "-")]),
+            ("{appNameUnderscore}", [joinWords(app.name, separator: "_")]),
+            ("{appNameLowercase}", [app.name.lowercased()]),
+            ("{appNameBase}", [baseChannelName(app.name)]),
+            ("{appNameVariant}", appNameVariants(for: app)),
+            ("{teamID}", [app.teamIdentifier ?? ""]),
+        ]
+
+        let expanded = replacements.reduce([template]) { current, replacement in
+            guard current.contains(where: { $0.contains(replacement.token) }) else {
+                return current
+            }
+            return current.flatMap { candidate in
+                replacement.values.map {
+                    candidate.replacingOccurrences(of: replacement.token, with: $0)
+                }
+            }
+        }
+
+        return unique(expanded.map { ($0 as NSString).expandingTildeInPath })
+    }
+
+    /// Safe app-name variants for broad Mole-style remnant path expansion.
+    public static func appNameVariants(for app: AppInfo) -> [String] {
+        var candidates: [String] = [app.name]
+        if let displayName = app.displayName, displayName != app.name {
+            candidates.append(displayName)
+        }
+        candidates.append(contentsOf: candidates.map(baseChannelName))
+        candidates.append(contentsOf: bundleDerivedVariants(for: app))
+
+        var variants: [String] = []
+        for candidate in candidates {
+            variants.append(candidate)
+            variants.append(removeSpaces(candidate))
+            variants.append(joinWords(candidate, separator: "-"))
+            variants.append(joinWords(candidate, separator: "_"))
+            variants.append(candidate.lowercased())
+        }
+
+        return unique(variants.compactMap(safeVariant))
     }
 
     // MARK: - Internal
@@ -115,41 +166,43 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         var out: [RemnantItem] = []
         var counter = 0
 
-        let expandedExcludes = rule.exclude.compactMap { Self.expand(template: $0, for: app) }
+        let expandedExcludes = rule.exclude.flatMap { Self.expandAll(template: $0, for: app) }
 
         for template in rule.pathTemplates {
-            guard let expanded = Self.expand(template: template, for: app) else { continue }
+            let expandedTemplates = Self.expandAll(template: template, for: app)
 
-            let isGlob = expanded.contains("*")
-            let paths: [String]
-            if isGlob {
-                paths = expander.expand(pattern: expanded, roots: scanRoots).paths
-            } else {
-                let path = (expanded as NSString).expandingTildeInPath
-                paths = fileManager.fileExists(atPath: path) ? [path] : []
-            }
-
-            for path in paths {
-                let needsChildEnumeration = rule.pattern != nil || (!isGlob && !expandedExcludes.isEmpty)
-                if needsChildEnumeration {
-                    enumerateChildren(
-                        at: path,
-                        context: RuleContext(rule: rule, app: app, excludes: expandedExcludes),
-                        counter: &counter,
-                        into: &out
-                    )
+            for expanded in expandedTemplates {
+                let isGlob = expanded.contains("*")
+                let paths: [String]
+                if isGlob {
+                    paths = expander.expand(pattern: expanded, roots: scanRoots).paths
                 } else {
-                    let url = URL(fileURLWithPath: path)
-                    if Self.isExcluded(url, excludes: expandedExcludes) {
-                        observer?.didEmit(ScanProgressEvent(
-                            path: path,
-                            outcome: .skipped(reason: "exclude rule")
-                        ))
-                        continue
-                    }
-                    observer?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
-                    if let item = Self.makeItem(rule: rule, app: app, path: path, counter: &counter) {
-                        out.append(item)
+                    let path = (expanded as NSString).expandingTildeInPath
+                    paths = fileManager.fileExists(atPath: path) ? [path] : []
+                }
+
+                for path in paths {
+                    let needsChildEnumeration = rule.pattern != nil || (!isGlob && !expandedExcludes.isEmpty)
+                    if needsChildEnumeration {
+                        enumerateChildren(
+                            at: path,
+                            context: RuleContext(rule: rule, app: app, excludes: expandedExcludes),
+                            counter: &counter,
+                            into: &out
+                        )
+                    } else {
+                        let url = URL(fileURLWithPath: path)
+                        if Self.isExcluded(url, excludes: expandedExcludes) {
+                            observer?.didEmit(ScanProgressEvent(
+                                path: path,
+                                outcome: .skipped(reason: "exclude rule")
+                            ))
+                            continue
+                        }
+                        observer?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
+                        if let item = Self.makeItem(rule: rule, app: app, path: path, counter: &counter) {
+                            out.append(item)
+                        }
                     }
                 }
             }
@@ -177,13 +230,15 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         )) ?? []
 
         for child in children {
-            if let pattern = context.rule.pattern.flatMap({ Self.expand(template: $0, for: context.app) }),
-               !PathExpander.fnmatch(pattern: pattern, name: child.lastPathComponent) {
-                observer?.didEmit(ScanProgressEvent(
-                    path: child.path,
-                    outcome: .skipped(reason: "pattern miss")
-                ))
-                continue
+            if let pattern = context.rule.pattern {
+                let patterns = Self.expandAll(template: pattern, for: context.app)
+                if !patterns.contains(where: { PathExpander.fnmatch(pattern: $0, name: child.lastPathComponent) }) {
+                    observer?.didEmit(ScanProgressEvent(
+                        path: child.path,
+                        outcome: .skipped(reason: "pattern miss")
+                    ))
+                    continue
+                }
             }
             if Self.isExcluded(child, excludes: context.excludes) {
                 observer?.didEmit(ScanProgressEvent(
@@ -206,20 +261,29 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         counter: inout Int
     ) -> RemnantItem? {
         guard let metadata = metadata(at: path), metadata.size > 0 else { return nil }
+        let preflight = SensitiveDataPreflight.evaluate(path: path, category: rule.category)
+        let downgraded = rule.safety == .safe && preflight != nil
+        let safety = downgraded ? SafetyLevel.review : rule.safety
+        let confidence = downgraded ? min(rule.confidence, 80) : rule.confidence
+        let explanation = downgraded ? preflight.map {
+            "\(rule.explanation) Sensitive-data preflight matched \($0); review before removal."
+        } ?? rule.explanation : rule.explanation
+        let tags = downgraded ? unique(rule.tags + ["sensitive_preflight"]) : rule.tags
+
         let item = RemnantItem(
             id: "\(rule.id)-\(counter)",
             appBundleID: app.bundleID,
             category: rule.category,
             path: path,
             size: metadata.size,
-            safety: rule.safety,
-            confidence: rule.confidence,
-            explanation: rule.explanation,
+            safety: safety,
+            confidence: confidence,
+            explanation: explanation,
             source: resolve(source: rule.source, app: app),
             ruleID: rule.id,
             lastAccessed: metadata.lastAccessed,
             regenerates: rule.regenerates,
-            tags: rule.tags
+            tags: tags
         )
         counter += 1
         return item
@@ -276,6 +340,55 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         )
     }
 
+    private static func bundleDerivedVariants(for app: AppInfo) -> [String] {
+        let parts = app.bundleID
+            .split(separator: ".")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        guard let last = parts.last else { return [] }
+        return unique([last, last.lowercased()])
+    }
+
+    private static func baseChannelName(_ name: String) -> String {
+        let suffixes = [
+            "Alpha", "Beta", "Canary", "Dev", "Developer", "Nightly",
+            "Preview", "Release", "Stable", "Insider", "Insiders",
+        ]
+        let escaped = suffixes.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let pattern = #"(?i)(?:[\s._-]+)(\#(escaped))$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return name }
+        let range = NSRange(name.startIndex..<name.endIndex, in: name)
+        return regex.stringByReplacingMatches(in: name, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func removeSpaces(_ name: String) -> String {
+        name.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    private static func joinWords(_ name: String, separator: String) -> String {
+        name.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: separator)
+    }
+
+    private static func safeVariant(_ variant: String) -> String? {
+        let trimmed = variant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              trimmed != ".",
+              trimmed != "..",
+              !trimmed.contains("/"),
+              !trimmed.contains("\0") else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { seen.insert($0).inserted }
+    }
+
     private static func isExcluded(_ url: URL, excludes: [String]) -> Bool {
         let path = url.path
         let name = url.lastPathComponent
@@ -295,4 +408,51 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
 
 public enum RemnantScannerError: Error, Equatable {
     case rulesDirectoryNotFound
+}
+
+private enum SensitiveDataPreflight {
+    static func evaluate(path: String, category: RemnantCategory) -> String? {
+        let lower = path.lowercased()
+        let componentNames = URL(fileURLWithPath: path).pathComponents.map { $0.lowercased() }
+
+        if category == .cookies || lower.contains("cookie") || lower.contains(".binarycookies") {
+            return "cookies"
+        }
+
+        if componentNames.contains("documents")
+            || componentNames.contains("desktop")
+            || componentNames.contains("projects")
+            || lower.contains("/document")
+            || lower.hasSuffix(".doc")
+            || lower.hasSuffix(".docx")
+            || lower.hasSuffix(".pdf") {
+            return "documents"
+        }
+
+        let credentialMarkers = [
+            "credential", "credentials", "keychain", "secret", "token",
+            "oauth", "password", "passwd", "private key", "id_rsa", ".pem", ".key",
+        ]
+        if credentialMarkers.contains(where: lower.contains) {
+            return "credentials"
+        }
+
+        let accountMarkers = [
+            "account", "accounts", "identity", "login data", "web data",
+            "local state", "profile",
+        ]
+        if accountMarkers.contains(where: lower.contains) {
+            return "account data"
+        }
+
+        if category == .preferences
+            || lower.contains("preferences")
+            || lower.contains("/settings")
+            || lower.contains("/config")
+            || lower.hasSuffix(".plist") {
+            return "settings"
+        }
+
+        return nil
+    }
 }

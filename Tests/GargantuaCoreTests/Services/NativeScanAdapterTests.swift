@@ -27,6 +27,11 @@ struct NativeScanAdapterTests {
         name: String,
         paths: [String],
         pattern: String? = nil,
+        exclude: [String] = [],
+        skipIfProcessRunning: [String] = [],
+        presenceGuards: [RulePresenceGuard] = [],
+        contentGuards: [RuleContentGuard] = [],
+        matchFilters: [String] = [],
         safety: SafetyLevel = .safe,
         category: String,
         tags: [String] = []
@@ -36,6 +41,11 @@ struct NativeScanAdapterTests {
             name: name,
             paths: paths,
             pattern: pattern,
+            exclude: exclude,
+            skipIfProcessRunning: skipIfProcessRunning,
+            presenceGuards: presenceGuards,
+            contentGuards: contentGuards,
+            matchFilters: matchFilters,
             safety: safety,
             confidence: 90,
             explanation: "Test cleanup rule",
@@ -73,6 +83,14 @@ struct NativeScanAdapterTests {
             )
             try Data(repeating: 0x1, count: byteCount).write(to: url)
             return url
+        }
+    }
+
+    private struct StubProcessChecker: RunningProcessChecking {
+        let running: Set<String>
+
+        func isRunning(identifier: String) -> Bool {
+            running.contains(identifier)
         }
     }
 
@@ -182,6 +200,124 @@ struct NativeScanAdapterTests {
 
         #expect(results.map(\.path) == [dmg.path])
         #expect(results.first?.name == "Installer Images — tool.dmg")
+    }
+
+    @Test("skip_if_process_running suppresses guarded cleanup rules")
+    func processGuardSkipsRule() async throws {
+        let fixture = try Self.makeFixture()
+        let firefoxCache = try fixture.makeFile("Firefox/Profile/cache2/entry", byteCount: 64)
+            .deletingLastPathComponent()
+        let rule = Self.rule(
+            id: "firefox_cache",
+            name: "Firefox Cache",
+            paths: [firefoxCache.path],
+            skipIfProcessRunning: ["org.mozilla.firefox"],
+            category: "browser_cache"
+        )
+        let profile = CleanupProfile(
+            id: "browser",
+            name: "Browser",
+            description: "Browser cache",
+            categories: ["browser_cache"]
+        )
+
+        let runningResults = try await NativeScanAdapter(
+            rules: [rule],
+            profile: profile,
+            processChecker: StubProcessChecker(running: ["org.mozilla.firefox"])
+        ).scan()
+        let stoppedResults = try await NativeScanAdapter(
+            rules: [rule],
+            profile: profile,
+            processChecker: StubProcessChecker(running: [])
+        ).scan()
+
+        #expect(runningResults.isEmpty)
+        #expect(stoppedResults.map(\.path) == [firefoxCache.path])
+    }
+
+    @Test("presence and content guards skip protected app-specific caches")
+    func presenceAndContentGuardsSkipCandidates() async throws {
+        let fixture = try Self.makeFixture()
+        let spotifyCache = try fixture.makeFile("Spotify/Storage/data.bin", byteCount: 64)
+            .deletingLastPathComponent()
+        try fixture.makeFile("Spotify/Storage/offline.bnk", byteCount: 16)
+        let raycastCache = try fixture.makeFile("Raycast/Cache/blob.bin", byteCount: 64)
+            .deletingLastPathComponent()
+        try fixture.makeFile("Raycast/Cache/metadata.json", byteCount: 32)
+        try #"{"feature":"clipboard_history"}"#.write(
+            to: raycastCache.appendingPathComponent("metadata.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let safeCache = try fixture.makeFile("Other/Cache/blob.bin", byteCount: 64)
+            .deletingLastPathComponent()
+
+        let profile = CleanupProfile(
+            id: "apps",
+            name: "Apps",
+            description: "App caches",
+            categories: ["app_cache"]
+        )
+        let rules = [
+            Self.rule(
+                id: "spotify_cache",
+                name: "Spotify Cache",
+                paths: [spotifyCache.path],
+                presenceGuards: [RulePresenceGuard(path: "offline.bnk")],
+                category: "app_cache"
+            ),
+            Self.rule(
+                id: "raycast_cache",
+                name: "Raycast Cache",
+                paths: [raycastCache.path],
+                contentGuards: [RuleContentGuard(path: "metadata.json", contains: ["clipboard_history"])],
+                category: "app_cache"
+            ),
+            Self.rule(
+                id: "safe_cache",
+                name: "Safe Cache",
+                paths: [safeCache.path],
+                category: "app_cache"
+            ),
+        ]
+
+        let results = try await NativeScanAdapter(rules: rules, profile: profile).scan()
+
+        #expect(results.map(\.path) == [safeCache.path])
+    }
+
+    @Test("match_filters apply mtime age before surfacing results")
+    func matchFiltersApplyBeforeResults() async throws {
+        let fixture = try Self.makeFixture()
+        let oldLog = try fixture.makeFile("Logs/old.log", byteCount: 64)
+        let recentLog = try fixture.makeFile("Logs/recent.log", byteCount: 64)
+        let now = Date()
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-8 * 86_400)],
+            ofItemAtPath: oldLog.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-1 * 86_400)],
+            ofItemAtPath: recentLog.path
+        )
+        let rule = Self.rule(
+            id: "old_logs",
+            name: "Old Logs",
+            paths: [oldLog.path, recentLog.path],
+            matchFilters: ["mtime > 7d"],
+            category: "system_logs"
+        )
+        let profile = CleanupProfile(
+            id: "logs",
+            name: "Logs",
+            description: "Logs",
+            categories: ["system_logs"]
+        )
+
+        let results = try await NativeScanAdapter(rules: [rule], profile: profile).scan()
+
+        #expect(results.map(\.path) == [oldLog.path])
     }
 
     // MARK: - Progress and factory wiring

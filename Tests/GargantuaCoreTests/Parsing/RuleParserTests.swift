@@ -19,6 +19,16 @@ struct RuleParserTests {
             pattern: "Cache/*"
             exclude:
               - "*.log"
+            skip_if_process_running:
+              - com.google.Chrome
+            presence_guards:
+              - path: Offline Media
+            content_guards:
+              - path: metadata.json
+                contains:
+                  - clipboard_history
+            match_filters:
+              - "mtime > 7d"
             safety: safe
             confidence: 97
             explanation: Browser cache that Chrome rebuilds automatically
@@ -51,6 +61,10 @@ struct RuleParserTests {
         #expect(rule.paths == ["~/Library/Caches/Google/Chrome"])
         #expect(rule.pattern == "Cache/*")
         #expect(rule.exclude == ["*.log"])
+        #expect(rule.skipIfProcessRunning == ["com.google.Chrome"])
+        #expect(rule.presenceGuards == [RulePresenceGuard(path: "Offline Media")])
+        #expect(rule.contentGuards == [RuleContentGuard(path: "metadata.json", contains: ["clipboard_history"])])
+        #expect(rule.matchFilters == ["mtime > 7d"])
         #expect(rule.safety == .safe)
         #expect(rule.confidence == 97)
         #expect(rule.explanation == "Browser cache that Chrome rebuilds automatically")
@@ -125,6 +139,10 @@ struct RuleParserTests {
         #expect(rule.regenerates == false)
         #expect(rule.regenerateCommand == nil)
         #expect(rule.safetyOverrides.isEmpty)
+        #expect(rule.skipIfProcessRunning.isEmpty)
+        #expect(rule.presenceGuards.isEmpty)
+        #expect(rule.contentGuards.isEmpty)
+        #expect(rule.matchFilters.isEmpty)
         #expect(rule.source.bundleID == nil)
         #expect(rule.source.verifySignature == false)
     }

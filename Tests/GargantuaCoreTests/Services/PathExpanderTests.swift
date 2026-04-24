@@ -160,6 +160,26 @@ struct PathExpanderTests {
         #expect(Set(result.paths) == expected)
     }
 
+    @Test("recursive hidden-directory patterns descend hidden ancestors only when requested")
+    func recursiveHiddenDirectoryPatterns() throws {
+        let fixture = try Self.makeFixture()
+        try fixture.makeDir(".workspace/project/.venv")
+        try fixture.makeDir(".workspace/project/node_modules")
+        try fixture.makeDir("visible/.tox")
+
+        let hiddenResult = PathExpander().expand(pattern: "**/.venv", roots: [fixture.root])
+        let nonHiddenResult = PathExpander().expand(pattern: "**/node_modules", roots: [fixture.root])
+        let toxResult = PathExpander().expand(pattern: "**/.tox", roots: [fixture.root])
+
+        #expect(hiddenResult.paths == [
+            fixture.root.appendingPathComponent(".workspace/project/.venv").path,
+        ])
+        #expect(nonHiddenResult.paths.isEmpty)
+        #expect(toxResult.paths == [
+            fixture.root.appendingPathComponent("visible/.tox").path,
+        ])
+    }
+
     // MARK: - Limits
 
     @Test("Depth cap stops descent and marks hitCap")

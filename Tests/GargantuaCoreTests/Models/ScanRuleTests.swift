@@ -32,6 +32,10 @@ struct ScanRuleTests {
         #expect(rule.paths == ["~/Library/Caches/Google/Chrome"])
         #expect(rule.pattern == "Cache/*")
         #expect(rule.exclude.isEmpty)
+        #expect(rule.skipIfProcessRunning.isEmpty)
+        #expect(rule.presenceGuards.isEmpty)
+        #expect(rule.contentGuards.isEmpty)
+        #expect(rule.matchFilters.isEmpty)
         #expect(rule.safety == .safe)
         #expect(rule.confidence == 97)
         #expect(rule.explanation == "Browser cache that Chrome rebuilds automatically")
@@ -63,6 +67,33 @@ struct ScanRuleTests {
         #expect(rule.regenerates == false)
         #expect(rule.regenerateCommand == nil)
         #expect(rule.safetyOverrides.isEmpty)
+        #expect(rule.skipIfProcessRunning.isEmpty)
+        #expect(rule.presenceGuards.isEmpty)
+        #expect(rule.contentGuards.isEmpty)
+        #expect(rule.matchFilters.isEmpty)
+    }
+
+    @Test("Rule guards and match filters are stored")
+    func guardsAndMatchFilters() {
+        let rule = ScanRule(
+            id: "spotify_cache",
+            name: "Spotify Cache",
+            paths: ["~/Library/Caches/com.spotify.client"],
+            skipIfProcessRunning: ["com.spotify.client"],
+            presenceGuards: [RulePresenceGuard(path: "Storage/offline.bnk")],
+            contentGuards: [RuleContentGuard(path: "metadata.json", contains: ["offline"])],
+            matchFilters: ["mtime > 7d"],
+            safety: .safe,
+            confidence: 90,
+            explanation: "Spotify cache",
+            source: SourceAttribution(name: "Spotify"),
+            category: "app_cache"
+        )
+
+        #expect(rule.skipIfProcessRunning == ["com.spotify.client"])
+        #expect(rule.presenceGuards == [RulePresenceGuard(path: "Storage/offline.bnk")])
+        #expect(rule.contentGuards == [RuleContentGuard(path: "metadata.json", contains: ["offline"])])
+        #expect(rule.matchFilters == ["mtime > 7d"])
     }
 
     @Test("Rule with safety overrides and condition expressions")
@@ -146,6 +177,10 @@ struct ScanRuleTests {
         #expect(decoded.regenerateCommand == "open -a 'Google Chrome'")
         #expect(decoded.category == "browser_cache")
         #expect(decoded.tags == ["browser", "cache", "chromium"])
+        #expect(decoded.skipIfProcessRunning.isEmpty)
+        #expect(decoded.presenceGuards.isEmpty)
+        #expect(decoded.contentGuards.isEmpty)
+        #expect(decoded.matchFilters.isEmpty)
     }
 
     @Test("Codable round-trip preserves safety overrides")
