@@ -26,13 +26,13 @@ The easiest way to contribute today is by adding or refining YAML cleanup and un
 - Public rule source: `https://github.com/inceptyon-labs/gargantua-rules`
 - App-bundled cleanup snapshot: `Sources/GargantuaCore/Resources/cleanup_rules/`
 - App-bundled uninstall snapshot: `Sources/GargantuaCore/Resources/uninstall_rules/`
-- In-tree rule docs and templates: `docs/rules/`
+- Rule docs and templates: `https://github.com/inceptyon-labs/gargantua-rules/tree/main/docs`
 
 The bundled snapshot remains the app's runtime authority for safety classification. If you update rules in this app repo directly, include a sync note explaining whether the change should also land in `gargantua-rules`.
 
 Before opening a PR for rules:
 
-1. Open rule-only PRs against `inceptyon-labs/gargantua-rules` once its initial branch is populated.
+1. Open rule-only PRs against `inceptyon-labs/gargantua-rules`.
 2. Pick the closest existing file and match its style.
 3. Keep `safety` conservative when a path may contain user data.
 4. Add enough explanation text that a reviewer can understand why the rule is safe, review, or protected.

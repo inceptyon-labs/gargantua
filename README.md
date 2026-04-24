@@ -142,12 +142,11 @@ Useful supporting scripts:
 
 ## Rule Contributions
 
-Rule authoring docs live in [docs/rules](docs/rules/README.md):
+Rule authoring docs, schema notes, and templates live in the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository:
 
-- [Rule Schema](docs/rules/schema.md)
-- [Rule Status](docs/rules/status.md)
-- [Cleanup Rule Template](docs/rules/templates/cleanup-rule.yaml)
-- [Remnant Rule Template](docs/rules/templates/remnant-rule.yaml)
+- [Rule Schema](https://github.com/inceptyon-labs/gargantua-rules/blob/main/docs/schema.md)
+- [Cleanup Rule Template](https://github.com/inceptyon-labs/gargantua-rules/blob/main/docs/templates/cleanup-rule.yaml)
+- [Remnant Rule Template](https://github.com/inceptyon-labs/gargantua-rules/blob/main/docs/templates/remnant-rule.yaml)
 
 Validate bundled rules before opening a rule PR:
 
@@ -155,7 +154,7 @@ Validate bundled rules before opening a rule PR:
 Scripts/validate-rules.sh
 ```
 
-The public home for rule-only collaboration is [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules). This app repository vendors reviewed snapshots so releases remain deterministic.
+Rule-only collaboration should happen in `gargantua-rules`. This app repository vendors reviewed snapshots so releases remain deterministic.
 
 ## Development Notes
 
