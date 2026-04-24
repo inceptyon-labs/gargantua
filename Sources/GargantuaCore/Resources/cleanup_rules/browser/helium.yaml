@@ -1,0 +1,78 @@
+rules:
+  - id: helium_cache
+    name: Helium Browser Cache
+    paths:
+      - "~/Library/Caches/net.imput.helium"
+      - "~/Library/Application Support/net.imput.helium/*/Application Cache"
+    safety: safe
+    confidence: 96
+    explanation: "Helium browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Helium
+      bundle_id: net.imput.helium
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - helium
+
+  - id: helium_gpu_shader_cache
+    name: Helium GPU and Shader Cache
+    paths:
+      - "~/Library/Application Support/net.imput.helium/*/GPUCache"
+      - "~/Library/Application Support/net.imput.helium/ShaderCache"
+      - "~/Library/Application Support/net.imput.helium/GrShaderCache"
+      - "~/Library/Application Support/net.imput.helium/GraphiteDawnCache"
+    safety: safe
+    confidence: 96
+    explanation: "GPU and shader caches used to accelerate rendering. Helium rebuilds them as needed."
+    source:
+      name: Helium
+      bundle_id: net.imput.helium
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - helium
+
+  - id: helium_extensions_cache
+    name: Helium Extensions Cache
+    paths:
+      - "~/Library/Application Support/net.imput.helium/component_crx_cache"
+      - "~/Library/Application Support/net.imput.helium/extensions_crx_cache"
+    safety: safe
+    confidence: 90
+    explanation: "Cached extension packages. Extensions re-download their packages when needed."
+    source:
+      name: Helium
+      bundle_id: net.imput.helium
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - extensions
+      - cache
+      - helium
+
+  - id: helium_local_storage
+    name: Helium Local Storage
+    paths:
+      - "~/Library/Application Support/net.imput.helium/*/Local Storage"
+    safety: review
+    confidence: 72
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Helium
+      bundle_id: net.imput.helium
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - helium

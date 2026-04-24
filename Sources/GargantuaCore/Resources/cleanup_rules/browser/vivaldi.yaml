@@ -1,0 +1,93 @@
+rules:
+  - id: vivaldi_cache
+    name: Vivaldi Browser Cache
+    paths:
+      - "~/Library/Caches/com.vivaldi.Vivaldi"
+      - "~/Library/Caches/com.vivaldi.Vivaldi/*/Cache"
+      - "~/Library/Application Support/Vivaldi/*/Application Cache"
+    safety: safe
+    confidence: 97
+    explanation: "Vivaldi browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Vivaldi
+      bundle_id: com.vivaldi.Vivaldi
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - vivaldi
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "Cache untouched for 30+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: vivaldi_gpu_shader_cache
+    name: Vivaldi GPU and Shader Cache
+    paths:
+      - "~/Library/Application Support/Vivaldi/*/GPUCache"
+      - "~/Library/Application Support/Vivaldi/ShaderCache"
+      - "~/Library/Application Support/Vivaldi/GrShaderCache"
+      - "~/Library/Application Support/Vivaldi/GraphiteDawnCache"
+    safety: safe
+    confidence: 97
+    explanation: "GPU and shader caches used to accelerate rendering. Vivaldi rebuilds them as needed."
+    source:
+      name: Vivaldi
+      bundle_id: com.vivaldi.Vivaldi
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - vivaldi
+
+  - id: vivaldi_service_worker
+    name: Vivaldi Service Worker Cache
+    paths:
+      - "~/Library/Application Support/Vivaldi/*/Service Worker/CacheStorage"
+      - "~/Library/Application Support/Vivaldi/*/Service Worker/ScriptCache"
+    safety: safe
+    confidence: 95
+    explanation: "Service worker cache data. Sites re-register workers and redownload cache entries on next visit."
+    source:
+      name: Vivaldi
+      bundle_id: com.vivaldi.Vivaldi
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - vivaldi
+
+  - id: vivaldi_local_storage
+    name: Vivaldi Local Storage
+    paths:
+      - "~/Library/Application Support/Vivaldi/*/Local Storage"
+    safety: review
+    confidence: 75
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Vivaldi
+      bundle_id: com.vivaldi.Vivaldi
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - vivaldi
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No browser activity in 90+ days -- likely abandoned site data."
+        profiles:
+          - deep

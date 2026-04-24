@@ -3,6 +3,10 @@ rules:
     name: Arc Browser Cache
     paths:
       - "~/Library/Caches/company.thebrowser.Browser"
+      - "~/Library/Application Support/Arc/*/GPUCache"
+      - "~/Library/Application Support/Arc/ShaderCache"
+      - "~/Library/Application Support/Arc/GrShaderCache"
+      - "~/Library/Application Support/Arc/GraphiteDawnCache"
     safety: safe
     confidence: 97
     explanation: "Arc browser cache. Regenerated automatically on browsing."
@@ -69,6 +73,8 @@ rules:
     name: Arc Service Worker Cache
     paths:
       - "~/Library/Caches/company.thebrowser.Browser/Default/Service Worker"
+      - "~/Library/Application Support/Arc/*/Service Worker/CacheStorage"
+      - "~/Library/Application Support/Arc/*/Service Worker/ScriptCache"
     safety: safe
     confidence: 95
     explanation: "Service worker data. Sites re-register on next visit."

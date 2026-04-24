@@ -1,0 +1,89 @@
+rules:
+  - id: edge_cache
+    name: Microsoft Edge Browser Cache
+    paths:
+      - "~/Library/Caches/com.microsoft.edgemac"
+      - "~/Library/Caches/com.microsoft.edgemac/*/Cache"
+    safety: safe
+    confidence: 98
+    explanation: "Edge browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Microsoft Edge
+      bundle_id: com.microsoft.edgemac
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - edge
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "Cache untouched for 30+ days -- very safe to remove."
+        profiles:
+          - developer
+          - deep
+
+  - id: edge_code_cache
+    name: Microsoft Edge Code Cache
+    paths:
+      - "~/Library/Caches/com.microsoft.edgemac/*/Code Cache"
+    safety: safe
+    confidence: 97
+    explanation: "Compiled JavaScript and WebAssembly cache. Rebuilt transparently on revisit."
+    source:
+      name: Microsoft Edge
+      bundle_id: com.microsoft.edgemac
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - edge
+
+  - id: edge_service_worker
+    name: Microsoft Edge Service Worker Cache
+    paths:
+      - "~/Library/Application Support/Microsoft Edge/*/Service Worker/CacheStorage"
+      - "~/Library/Application Support/Microsoft Edge/*/Service Worker/ScriptCache"
+    safety: safe
+    confidence: 95
+    explanation: "Service worker cache data. Sites re-register workers and redownload cache entries on next visit."
+    source:
+      name: Microsoft Edge
+      bundle_id: com.microsoft.edgemac
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - edge
+
+  - id: edge_local_storage
+    name: Microsoft Edge Local Storage
+    paths:
+      - "~/Library/Application Support/Microsoft Edge/*/Local Storage"
+    safety: review
+    confidence: 75
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Microsoft Edge
+      bundle_id: com.microsoft.edgemac
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - edge
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No browser activity in 90+ days -- likely abandoned site data."
+        profiles:
+          - deep

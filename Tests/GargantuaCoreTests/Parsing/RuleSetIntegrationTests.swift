@@ -29,11 +29,12 @@ struct RuleSetIntegrationTests {
     @Test("Expected number of rule files loaded")
     func expectedFileCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        // browser: chrome, safari, firefox, arc, brave
+        // browser: arc, brave, chrome, chromium, comet, dia, edge, firefox,
+        // helium, opera, orion, safari, vivaldi, yandex, zen
         // apps: slack, spotify, dropbox
         // developer: xcode, node, docker, homebrew, python, rust, go
         // system: caches, logs, temp, trash
-        #expect(result.filesLoaded == 19)
+        #expect(result.filesLoaded == 29)
     }
 
     // MARK: - Rule Completeness
@@ -97,16 +98,31 @@ struct RuleSetIntegrationTests {
 
     // MARK: - Category Coverage
 
-    @Test("Browser rules cover Chrome, Safari, Firefox, Arc, Brave")
+    @Test("Browser rules cover shipped browser families")
     func browserCoverage() throws {
         let result = try loader.loadRules(from: rulesDirectory)
         let browserRuleIDs = result.rules.filter { $0.category == "browser_cache" || $0.category == "browser_data" }.map(\.id)
 
-        #expect(browserRuleIDs.contains(where: { $0.hasPrefix("chrome") }), "Missing Chrome rules")
-        #expect(browserRuleIDs.contains(where: { $0.hasPrefix("safari") }), "Missing Safari rules")
-        #expect(browserRuleIDs.contains(where: { $0.hasPrefix("firefox") }), "Missing Firefox rules")
-        #expect(browserRuleIDs.contains(where: { $0.hasPrefix("arc") }), "Missing Arc rules")
-        #expect(browserRuleIDs.contains(where: { $0.hasPrefix("brave") }), "Missing Brave rules")
+        let expectedPrefixes = [
+            "arc",
+            "brave",
+            "chrome",
+            "chromium",
+            "comet",
+            "dia",
+            "edge",
+            "firefox",
+            "helium",
+            "opera",
+            "orion",
+            "safari",
+            "vivaldi",
+            "yandex",
+            "zen",
+        ]
+        for prefix in expectedPrefixes {
+            #expect(browserRuleIDs.contains(where: { $0.hasPrefix(prefix) }), "Missing \(prefix) rules")
+        }
     }
 
     @Test("App rules cover Slack, Spotify, Dropbox")

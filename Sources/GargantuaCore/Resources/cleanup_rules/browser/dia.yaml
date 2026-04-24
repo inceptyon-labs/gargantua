@@ -1,0 +1,37 @@
+rules:
+  - id: dia_cache
+    name: Dia Browser Cache
+    paths:
+      - "~/Library/Caches/company.thebrowser.dia"
+      - "~/Library/Caches/company.thebrowser.dia/*/Cache"
+    safety: safe
+    confidence: 96
+    explanation: "Dia browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Dia
+      bundle_id: company.thebrowser.dia
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - dia
+
+  - id: dia_local_storage
+    name: Dia Local Storage
+    paths:
+      - "~/Library/Application Support/Dia/*/Local Storage"
+    safety: review
+    confidence: 72
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Dia
+      bundle_id: company.thebrowser.dia
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - dia

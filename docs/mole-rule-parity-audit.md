@@ -7,16 +7,16 @@ Mole commit date: 2026-04-24T08:02:08+08:00
 
 ## Summary
 
-Gargantua does not yet have full Mole rule parity. The app currently ships a reviewed starter snapshot:
+Gargantua does not yet have full Mole rule parity. After the browser rule port, the app ships this reviewed snapshot:
 
 | Area | Gargantua files | Gargantua rules |
 | --- | ---: | ---: |
 | App cleanup | 3 | 12 |
-| Browser cleanup | 5 | 22 |
+| Browser cleanup | 15 | 54 |
 | Developer cleanup | 7 | 37 |
 | System cleanup | 4 | 12 |
 | Uninstall/remnant cleanup | 2 | 12 |
-| Total | 21 | 95 |
+| Total | 31 | 127 |
 
 Mole's cleanup implementation is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count. As a conservative proxy, the current Mole source has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
@@ -36,7 +36,7 @@ The current Gargantua snapshot is enough for the initial native scanner, but par
 Bundled cleanup rule files:
 
 - Apps: Dropbox, Slack, Spotify.
-- Browsers: Arc, Brave, Chrome, Firefox, Safari.
+- Browsers: Arc, Brave, Chrome, Chromium, Comet, Dia, Edge, Firefox, Helium, Opera, Orion, Safari, Vivaldi, Yandex, Zen.
 - Developer tools: Docker, Go, Homebrew, Node, Python, Rust, Xcode.
 - System cleanup: caches, logs, temp files, Trash, downloaded installer/archive filters.
 
@@ -51,16 +51,17 @@ Bundled remnant rule files:
 
 Missing or partial Mole coverage:
 
-- Missing dedicated browsers: Edge, Chromium, Dia, Helium, Yandex, Opera, Vivaldi, Comet, Orion, Zen.
-- Existing Chrome/Arc/Brave rules are partial. Mole includes additional cache families such as shader caches, Graphite/Dawn caches, component/extension CRX caches, GoogleUpdater cache/old files, Puppeteer cache, and Service Worker ScriptCache paths.
-- Firefox has basic coverage, but Mole also guards cleanup when Firefox is running.
+- Dedicated cache rules now cover Edge, Chromium, Dia, Helium, Yandex, Opera, Vivaldi, Comet, Orion, and Zen.
+- Chrome/Arc/Brave now include Mole's additional shader, Graphite/Dawn, GPU, component/extension CRX, GoogleUpdater, Puppeteer, and Service Worker ScriptCache paths where applicable.
+- Firefox cache cleanup now carries a running-process guard.
+- Remaining browser gaps are mostly dynamic pruning behaviors such as old browser framework versions and updater-version retention checks.
 
-Pre-port classification:
+Classification guidance:
 
 - `safe`: browser cache, code cache, GPU cache, shader cache, CRX/component cache, script cache, Puppeteer browser cache.
 - `review`: Local Storage, cookies, IndexedDB, extension data, profile state, session restore data.
 - `protected`: none by default, unless a path points at profile roots or credential/account databases.
-- `out-of-scope until engine support`: old browser version pruning and running-process-aware cleanup.
+- `out-of-scope until pruning policy`: old browser version pruning and updater retention checks.
 
 ### App, Cloud, Office, And GUI Caches
 

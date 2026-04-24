@@ -4,6 +4,11 @@ rules:
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser"
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Cache"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/*/Application Cache"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/*/GPUCache"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/ShaderCache"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/GrShaderCache"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/GraphiteDawnCache"
     safety: safe
     confidence: 98
     explanation: "Browser cache files regenerated automatically on next visit. No user data lost."
@@ -48,6 +53,8 @@ rules:
     name: Brave Service Worker Cache
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Service Worker"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/*/Service Worker/CacheStorage"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/*/Service Worker/ScriptCache"
     safety: safe
     confidence: 95
     explanation: "Service worker and CacheStorage data. Sites re-download on next visit."
@@ -91,6 +98,7 @@ rules:
     name: Brave Extensions Cache
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Extensions"
+      - "~/Library/Application Support/BraveSoftware/Brave-Browser/component_crx_cache"
     safety: safe
     confidence: 90
     explanation: "Cached extension assets. Extensions re-download from the Brave Web Store."

@@ -3,6 +3,9 @@ rules:
     name: Firefox Browser Cache
     paths:
       - "~/Library/Caches/Firefox/Profiles/*/cache2"
+      - "~/Library/Application Support/Firefox/Profiles/*/cache2"
+    skip_if_process_running:
+      - org.mozilla.firefox
     safety: safe
     confidence: 98
     explanation: "Firefox disk cache. Rebuilt automatically on browsing."
@@ -28,6 +31,8 @@ rules:
     name: Firefox Startup Cache
     paths:
       - "~/Library/Caches/Firefox/Profiles/*/startupCache"
+    skip_if_process_running:
+      - org.mozilla.firefox
     safety: safe
     confidence: 97
     explanation: "Startup acceleration cache. Rebuilt on next Firefox launch."
@@ -45,6 +50,8 @@ rules:
     name: Firefox Local Storage
     paths:
       - "~/Library/Application Support/Firefox/Profiles/*/storage/default"
+    skip_if_process_running:
+      - org.mozilla.firefox
     safety: review
     confidence: 70
     explanation: "Site-specific storage including IndexedDB and localStorage. May contain app data."
@@ -69,6 +76,8 @@ rules:
     name: Firefox Crash Reports
     paths:
       - "~/Library/Application Support/Firefox/Crash Reports"
+    skip_if_process_running:
+      - org.mozilla.firefox
     safety: safe
     confidence: 95
     explanation: "Old crash reports with no ongoing diagnostic value."

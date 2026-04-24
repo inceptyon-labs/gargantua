@@ -4,6 +4,11 @@ rules:
     paths:
       - "~/Library/Caches/Google/Chrome"
       - "~/Library/Caches/Google/Chrome/Default/Cache"
+      - "~/Library/Application Support/Google/Chrome/*/Application Cache"
+      - "~/Library/Application Support/Google/Chrome/*/GPUCache"
+      - "~/Library/Application Support/Google/Chrome/ShaderCache"
+      - "~/Library/Application Support/Google/Chrome/GrShaderCache"
+      - "~/Library/Application Support/Google/Chrome/GraphiteDawnCache"
     safety: safe
     confidence: 98
     explanation: "Browser cache files regenerated automatically on next visit. No user data lost."
@@ -46,6 +51,8 @@ rules:
     name: Chrome Service Worker Cache
     paths:
       - "~/Library/Caches/Google/Chrome/Default/Service Worker"
+      - "~/Library/Application Support/Google/Chrome/*/Service Worker/CacheStorage"
+      - "~/Library/Application Support/Google/Chrome/*/Service Worker/ScriptCache"
     safety: safe
     confidence: 95
     explanation: "Service worker and CacheStorage data. Sites re-download on next visit."
@@ -87,6 +94,7 @@ rules:
     name: Chrome Extensions Cache
     paths:
       - "~/Library/Caches/Google/Chrome/Default/Extensions"
+      - "~/Library/Application Support/Google/Chrome/component_crx_cache"
     safety: safe
     confidence: 90
     explanation: "Cached extension assets. Extensions re-download from Chrome Web Store."
@@ -100,3 +108,37 @@ rules:
       - browser
       - extensions
       - cache
+
+  - id: chrome_google_updater_cache
+    name: GoogleUpdater Browser CRX Cache
+    paths:
+      - "~/Library/Application Support/Google/GoogleUpdater/crx_cache"
+      - "~/Library/Application Support/Google/GoogleUpdater/*.old"
+    safety: safe
+    confidence: 92
+    explanation: "Google browser updater CRX cache and stale updater sidecar files. Recreated by GoogleUpdater."
+    source:
+      name: GoogleUpdater
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - updater
+
+  - id: chrome_puppeteer_cache
+    name: Puppeteer Browser Cache
+    paths:
+      - "~/.cache/puppeteer"
+    safety: safe
+    confidence: 94
+    explanation: "Downloaded browser binaries used by Puppeteer. Puppeteer downloads them again when needed."
+    source:
+      name: Puppeteer
+    regenerates: true
+    regenerate_command: "npx puppeteer browsers install"
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - puppeteer

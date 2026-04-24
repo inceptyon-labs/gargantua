@@ -1,0 +1,32 @@
+rules:
+  - id: zen_cache
+    name: Zen Browser Cache
+    paths:
+      - "~/Library/Caches/zen"
+    safety: safe
+    confidence: 94
+    explanation: "Zen browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Zen
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - zen
+
+  - id: zen_local_storage
+    name: Zen Local Storage
+    paths:
+      - "~/Library/Application Support/zen/Profiles/*/storage/default"
+    safety: review
+    confidence: 70
+    explanation: "Site-specific storage including IndexedDB and localStorage. May contain app data."
+    source:
+      name: Zen
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - zen

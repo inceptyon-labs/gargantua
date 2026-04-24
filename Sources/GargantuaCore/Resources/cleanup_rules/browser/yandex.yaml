@@ -1,0 +1,58 @@
+rules:
+  - id: yandex_cache
+    name: Yandex Browser Cache
+    paths:
+      - "~/Library/Caches/Yandex/YandexBrowser"
+      - "~/Library/Caches/Yandex/YandexBrowser/*/Cache"
+    safety: safe
+    confidence: 97
+    explanation: "Yandex browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Yandex Browser
+      bundle_id: ru.yandex.desktop.yandex-browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - yandex
+
+  - id: yandex_gpu_shader_cache
+    name: Yandex GPU and Shader Cache
+    paths:
+      - "~/Library/Application Support/Yandex/YandexBrowser/*/GPUCache"
+      - "~/Library/Application Support/Yandex/YandexBrowser/ShaderCache"
+      - "~/Library/Application Support/Yandex/YandexBrowser/GrShaderCache"
+      - "~/Library/Application Support/Yandex/YandexBrowser/GraphiteDawnCache"
+    safety: safe
+    confidence: 97
+    explanation: "GPU and shader caches used to accelerate rendering. Yandex Browser rebuilds them as needed."
+    source:
+      name: Yandex Browser
+      bundle_id: ru.yandex.desktop.yandex-browser
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - yandex
+
+  - id: yandex_local_storage
+    name: Yandex Local Storage
+    paths:
+      - "~/Library/Application Support/Yandex/YandexBrowser/*/Local Storage"
+    safety: review
+    confidence: 75
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Yandex Browser
+      bundle_id: ru.yandex.desktop.yandex-browser
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - yandex

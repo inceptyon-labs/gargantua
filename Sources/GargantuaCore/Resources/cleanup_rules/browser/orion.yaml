@@ -1,0 +1,36 @@
+rules:
+  - id: orion_cache
+    name: Orion Browser Cache
+    paths:
+      - "~/Library/Caches/com.kagi.kagimacOS"
+    safety: safe
+    confidence: 94
+    explanation: "Orion browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Orion
+      bundle_id: com.kagi.kagimacOS
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - orion
+
+  - id: orion_local_storage
+    name: Orion Local Storage
+    paths:
+      - "~/Library/Application Support/Orion/*/Local Storage"
+    safety: review
+    confidence: 70
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Orion
+      bundle_id: com.kagi.kagimacOS
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - orion

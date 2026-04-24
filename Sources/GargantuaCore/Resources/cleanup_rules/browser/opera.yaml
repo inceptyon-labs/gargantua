@@ -1,0 +1,72 @@
+rules:
+  - id: opera_cache
+    name: Opera Browser Cache
+    paths:
+      - "~/Library/Caches/com.operasoftware.Opera"
+      - "~/Library/Caches/com.operasoftware.Opera/*/Cache"
+      - "~/Library/Application Support/com.operasoftware.Opera/*/Application Cache"
+      - "~/Library/Application Support/com.operasoftware.Opera/*/GPUCache"
+    safety: safe
+    confidence: 97
+    explanation: "Opera browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Opera
+      bundle_id: com.operasoftware.Opera
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - opera
+    safety_overrides:
+      - condition: "age > 30d"
+        safety: safe
+        confidence: 99
+        explanation_suffix: "Cache untouched for 30+ days."
+        profiles:
+          - developer
+          - deep
+
+  - id: opera_code_cache
+    name: Opera Code Cache
+    paths:
+      - "~/Library/Caches/com.operasoftware.Opera/*/Code Cache"
+    safety: safe
+    confidence: 96
+    explanation: "Compiled JavaScript and WebAssembly cache. Rebuilt transparently on revisit."
+    source:
+      name: Opera
+      bundle_id: com.operasoftware.Opera
+      verify_signature: true
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - opera
+
+  - id: opera_local_storage
+    name: Opera Local Storage
+    paths:
+      - "~/Library/Application Support/com.operasoftware.Opera/*/Local Storage"
+    safety: review
+    confidence: 75
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Opera
+      bundle_id: com.operasoftware.Opera
+      verify_signature: true
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - opera
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 85
+        explanation_suffix: "No browser activity in 90+ days -- likely abandoned site data."
+        profiles:
+          - deep

@@ -1,0 +1,32 @@
+rules:
+  - id: comet_cache
+    name: Comet Browser Cache
+    paths:
+      - "~/Library/Caches/Comet"
+    safety: safe
+    confidence: 94
+    explanation: "Comet browser cache files regenerated automatically on next visit. No user data lost."
+    source:
+      name: Comet
+    regenerates: true
+    category: browser_cache
+    tags:
+      - browser
+      - cache
+      - comet
+
+  - id: comet_local_storage
+    name: Comet Local Storage
+    paths:
+      - "~/Library/Application Support/Comet/*/Local Storage"
+    safety: review
+    confidence: 70
+    explanation: "Website local storage may contain login tokens and preferences. Review before removing."
+    source:
+      name: Comet
+    regenerates: false
+    category: browser_data
+    tags:
+      - browser
+      - user_data
+      - comet
