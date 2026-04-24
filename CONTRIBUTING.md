@@ -29,6 +29,7 @@ The easiest way to contribute today is by adding or refining YAML cleanup and un
 - Rule docs and templates: `https://github.com/inceptyon-labs/gargantua-rules/tree/main/docs`
 
 The bundled snapshot remains the app's runtime authority for safety classification. If you update rules in this app repo directly, include a sync note explaining whether the change should also land in `gargantua-rules`.
+The current app snapshot is a reviewed Mole-expanded subset, not full Mole parity. When adding Mole-derived paths, call out what was intentionally deferred because it needs command execution, active-file checks, current-version retention, receipt expansion, or external-volume policy.
 
 Before opening a PR for rules:
 

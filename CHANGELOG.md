@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added Mole-backed app cleanup coverage for cloud-sync, Office/mail, communication, virtualization, creative/media, productivity, launcher, game, utility, and remote desktop caches.
 - Expanded Smart Uninstaller remnant rules with Mole-backed WebKit, HTTP storage, app script, plug-in, XDG config, app extension, system-level, and protected receipt templates.
+- Synced the reviewed Mole-expanded rule snapshot to the public `gargantua-rules` repository and documented that the snapshot is not yet full Mole parity.
 
 ## [0.1.0] - 2026-04-23
 

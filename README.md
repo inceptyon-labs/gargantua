@@ -49,7 +49,7 @@ Gargantua's trust layer uses three safety levels:
 | `review` | Files that may be removable, but could contain preferences, sync state, offline data, or context the user should inspect. | Shown, explained, not silently selected. |
 | `protected` | Files with system impact, privilege implications, or high risk of data loss. | Visible for transparency; destructive flows hard-reject them. |
 
-Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/` and `Sources/GargantuaCore/Resources/uninstall_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime.
+Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/` and `Sources/GargantuaCore/Resources/uninstall_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The current reviewed snapshot includes 50 cleanup files / 274 cleanup rules and 2 uninstall files / 28 remnant rules; it is intentionally not a full Mole parity claim.
 
 ## MCP Server
 
@@ -154,7 +154,7 @@ Validate bundled rules before opening a rule PR:
 Scripts/validate-rules.sh
 ```
 
-Rule-only collaboration should happen in `gargantua-rules`. This app repository vendors reviewed snapshots so releases remain deterministic.
+Rule-only collaboration should happen in `gargantua-rules`. This app repository vendors reviewed snapshots so releases remain deterministic. Mole-backed additions should continue to land as reviewed, bounded batches rather than broad parity claims.
 
 ## Development Notes
 
