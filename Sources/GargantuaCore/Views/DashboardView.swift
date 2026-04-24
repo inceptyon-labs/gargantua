@@ -22,6 +22,7 @@ public struct DashboardView: View {
     @State private var scanProgress = ScanProgress()
     @State private var isLoading = true
     @State private var hasRunQuickScan = false
+    @State private var cloudStatus: CloudAIStatus?
 
     private let collector = SystemMetricCollector()
 
@@ -215,6 +216,7 @@ public struct DashboardView: View {
                     detail: thermalDetail,
                     tone: thermalTone
                 )
+                DashboardCloudAIMetricCard(status: cloudStatus)
             }
         }
     }
@@ -287,6 +289,7 @@ public struct DashboardView: View {
         memoryUsedGB = Int(metrics.memoryUsed / (1024 * 1024 * 1024))
         memoryPressure = metrics.memoryPressure
         thermalLevel = metrics.thermalLevel
+        cloudStatus = await CloudAIStatusProvider.snapshot()
         isLoading = false
     }
 
@@ -312,7 +315,7 @@ public struct DashboardView: View {
                 evidence: [
                     topAlert.detail,
                     destinationLabel(topAlert.destination),
-                    topAlert.staleness ?? "recently verified"
+                    topAlert.staleness ?? "recently verified",
                 ],
                 primaryLabel: primaryLabel(for: topAlert.destination),
                 primaryAction: { navigateTo(topAlert.destination) },
@@ -325,11 +328,14 @@ public struct DashboardView: View {
             return Recommendation(
                 eyebrow: "NO URGENT CLEANUP DETECTED",
                 title: "Quick Scan did not find actionable cleanup",
-                detail: "Nothing safe or review-tier stood out in the last pass. You can run another scan later or inspect the system manually if disk pressure keeps climbing.",
+                detail: """
+                Nothing safe or review-tier stood out in the last pass. You can run another scan later or inspect the \
+                system manually if disk pressure keeps climbing.
+                """,
                 evidence: [
                     "\(freeDiskGB) GB free",
                     healthSummaryText,
-                    thermalTitle
+                    thermalTitle,
                 ],
                 primaryLabel: "Run Quick Scan Again",
                 primaryAction: startQuickScan,
@@ -341,11 +347,14 @@ public struct DashboardView: View {
         return Recommendation(
             eyebrow: "BUILD RECOMMENDATIONS",
             title: "Run a quick scan before making cleanup decisions",
-            detail: "The dashboard can show evidence-backed cleanup priorities, but it needs one lightweight scan first. Gargantua will surface the biggest reclaimable groups and route you to the right tool.",
+            detail: """
+            The dashboard can show evidence-backed cleanup priorities, but it needs one lightweight scan first. \
+            Gargantua will surface the biggest reclaimable groups and route you to the right tool.
+            """,
             evidence: [
                 "\(freeDiskGB) GB free",
                 healthSummaryText,
-                "local scan only"
+                "local scan only",
             ],
             primaryLabel: "Run Quick Scan",
             primaryAction: startQuickScan,
@@ -353,24 +362,26 @@ public struct DashboardView: View {
             tone: GargantuaColors.accent
         )
     }
+}
 
-    private var freeDiskGB: Int {
+private extension DashboardView {
+    var freeDiskGB: Int {
         max(diskTotalGB - diskUsedGB, 0)
     }
 
-    private var diskBarColor: Color {
+    var diskBarColor: Color {
         if diskUsage > 0.9 { return GargantuaColors.protected_ }
         if diskUsage > 0.75 { return GargantuaColors.review }
         return GargantuaColors.safe
     }
 
-    private var memoryTone: Color {
+    var memoryTone: Color {
         if memoryPressure > 0.85 { return GargantuaColors.protected_ }
         if memoryPressure > 0.65 { return GargantuaColors.review }
         return GargantuaColors.safe
     }
 
-    private var thermalTone: Color {
+    var thermalTone: Color {
         switch thermalLevel {
         case .nominal: return GargantuaColors.safe
         case .fair: return GargantuaColors.review
@@ -378,7 +389,7 @@ public struct DashboardView: View {
         }
     }
 
-    private var healthLabel: String {
+    var healthLabel: String {
         switch HealthScoreRange(score: healthScore) {
         case .healthy: return "Healthy"
         case .moderate: return "Needs attention"
@@ -386,7 +397,7 @@ public struct DashboardView: View {
         }
     }
 
-    private var healthSummaryText: String {
+    var healthSummaryText: String {
         switch HealthScoreRange(score: healthScore) {
         case .healthy:
             return "System looks stable overall."
@@ -397,17 +408,17 @@ public struct DashboardView: View {
         }
     }
 
-    private var diskPressureSummary: String {
+    var diskPressureSummary: String {
         if diskUsage > 0.9 { return "Disk pressure is high." }
         if diskUsage > 0.75 { return "Free space is getting tight." }
         return "Enough headroom for normal work."
     }
 
-    private var thermalTitle: String {
+    var thermalTitle: String {
         thermalLevel.rawValue.capitalized
     }
 
-    private var thermalDetail: String {
+    var thermalDetail: String {
         switch thermalLevel {
         case .nominal: return "No thermal pressure."
         case .fair: return "Warm, but still stable."
@@ -416,7 +427,7 @@ public struct DashboardView: View {
         }
     }
 
-    private func destinationLabel(_ destination: AlertDestination) -> String {
+    func destinationLabel(_ destination: AlertDestination) -> String {
         switch destination {
         case .deepClean: return "Deep Clean"
         case .devPurge: return "Dev Artifact Purge"
@@ -424,11 +435,11 @@ public struct DashboardView: View {
         }
     }
 
-    private func primaryLabel(for destination: AlertDestination) -> String {
+    func primaryLabel(for destination: AlertDestination) -> String {
         "Open \(destinationLabel(destination))"
     }
 
-    private func tone(for destination: AlertDestination) -> Color {
+    func tone(for destination: AlertDestination) -> Color {
         switch destination {
         case .deepClean: return GargantuaColors.accent
         case .devPurge: return GargantuaColors.review

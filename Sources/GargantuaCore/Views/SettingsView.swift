@@ -38,6 +38,7 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: GargantuaSpacing.space6) {
                 headerView
                 modelSection
+                CloudAISettingsSection()
                 ScanRootsSettingsSection(
                     settings: settings,
                     persistence: persistence,
