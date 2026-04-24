@@ -1,0 +1,180 @@
+rules:
+  - id: quicklook_iconservices_caches
+    name: QuickLook and Icon Services Caches
+    paths:
+      - "~/Library/Caches/com.apple.QuickLook.thumbnailcache"
+      - "~/Library/Caches/Quick Look"
+      - "~/Library/Caches/com.apple.iconservices"
+      - "~/Library/Caches/com.apple.iconservices.store"
+    safety: safe
+    confidence: 96
+    explanation: "Finder thumbnail and icon caches. macOS rebuilds these when previews or icons are requested."
+    source:
+      name: macOS Finder
+      bundle_id: com.apple.finder
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - finder
+      - quicklook
+      - iconservices
+      - cache
+
+  - id: apple_media_analysis_caches
+    name: Apple Media Analysis Caches
+    paths:
+      - "~/Library/Caches/com.apple.photoanalysisd"
+      - "~/Library/Containers/com.apple.mediaanalysisd/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.mediaanalysisd/Data/tmp"
+    safety: safe
+    confidence: 94
+    explanation: "Generated media-analysis cache and temporary files. Apple services recreate them as needed."
+    source:
+      name: macOS media analysis services
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - media
+      - cache
+      - temp
+
+  - id: webkit_networking_cache
+    name: WebKit Networking Cache
+    paths:
+      - "~/Library/Caches/com.apple.WebKit.Networking"
+    safety: safe
+    confidence: 92
+    explanation: "WebKit network cache data. Apps using WebKit recreate cached responses on demand."
+    source:
+      name: WebKit
+      bundle_id: com.apple.WebKit.Networking
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - webkit
+      - network
+      - cache
+
+  - id: apple_account_identity_caches
+    name: Apple Account and Identity Caches
+    paths:
+      - "~/Library/Caches/com.apple.akd"
+      - "~/Library/IdentityCaches"
+    safety: review
+    confidence: 76
+    explanation: "Apple account and identity caches are regenerated, but they are account-adjacent and should be reviewed before removal."
+    source:
+      name: Apple account services
+      verify_signature: true
+    regenerates: true
+    category: app_data
+    tags:
+      - system
+      - apple
+      - account
+      - identity
+      - review
+
+  - id: apple_personal_metadata_caches
+    name: Apple Suggestions, Calendar, and Contacts Caches
+    paths:
+      - "~/Library/Suggestions"
+      - "~/Library/Calendars/Calendar Cache"
+      - "~/Library/Application Support/AddressBook/Sources/*/Photos.cache"
+    safety: review
+    confidence: 78
+    explanation: "Personal metadata caches for Siri suggestions, Calendar, and Contacts photos. Review before clearing user-adjacent state."
+    source:
+      name: macOS user services
+      verify_signature: true
+    regenerates: true
+    category: app_data
+    tags:
+      - system
+      - apple
+      - siri
+      - calendar
+      - contacts
+      - review
+
+  - id: apple_sandboxed_service_caches
+    name: Apple Sandboxed Service Caches
+    paths:
+      - "~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.AppStore/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.configurator.xpc.InternetService/Data/tmp"
+      - "~/Library/Containers/com.apple.wallpaper.extension.aerials/Data/tmp"
+      - "~/Library/Containers/com.apple.geod/Data/tmp"
+      - "~/Library/Containers/com.apple.stocks/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.AvatarUI.AvatarPickerMemojiPicker/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.AMPArtworkAgent/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.CoreDevice.CoreDeviceService/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.NeptuneOneExtension/Data/Library/Caches"
+      - "~/Library/Containers/com.apple.AppleMediaServicesUI.UtilityExtension/Data/tmp"
+      - "~/Library/Caches/com.apple.helpd"
+      - "~/Library/Caches/GeoServices"
+    safety: safe
+    confidence: 93
+    explanation: "Apple sandboxed service cache and temp directories. The owning system services recreate them."
+    source:
+      name: macOS sandboxed services
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - sandbox
+      - cache
+      - temp
+
+  - id: apple_wallpaper_asset_caches
+    name: Apple Wallpaper Asset Caches
+    paths:
+      - "~/Library/Application Support/com.apple.wallpaper/aerials/thumbnails/*"
+      - "~/Library/Application Support/com.apple.idleassetsd/**/*"
+    match_filters:
+      - "mtime > 30d"
+    safety: safe
+    confidence: 90
+    explanation: "Cached wallpaper thumbnails and idle assets older than 30 days. macOS can download or regenerate them again."
+    source:
+      name: macOS wallpaper services
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - wallpaper
+      - cache
+
+  - id: apple_silicon_user_caches
+    name: Apple Silicon User Caches
+    paths:
+      - "~/Library/Caches/com.apple.rosetta.update"
+      - "~/Library/Caches/com.apple.amp.mediasevicesd"
+      - "~/Library/Caches/com.apple.amp.mediaservicesd"
+    safety: safe
+    confidence: 93
+    explanation: "User-level Rosetta update and Apple media service caches. Apple Silicon services recreate these caches."
+    source:
+      name: Apple Silicon services
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - rosetta
+      - media
+      - cache

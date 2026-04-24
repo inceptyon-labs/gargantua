@@ -1,0 +1,63 @@
+rules:
+  - id: cached_ios_device_firmware
+    name: Cached iOS Device Firmware
+    paths:
+      - "~/Library/iTunes/iPhone Software Updates/*.ipsw"
+      - "~/Library/iTunes/iPad Software Updates/*.ipsw"
+      - "~/Library/iTunes/iPod Software Updates/*.ipsw"
+      - "~/Library/Group Containers/*.group.com.apple.configurator/**/*.ipsw"
+    safety: review
+    confidence: 82
+    explanation: "Cached IPSW firmware can usually be re-downloaded, but users may keep it for offline restores."
+    source:
+      name: Apple device firmware caches
+      verify_signature: true
+    regenerates: true
+    category: installers
+    tags:
+      - system
+      - apple
+      - mobile
+      - firmware
+      - installers
+      - review
+
+  - id: mobile_sync_backups
+    name: MobileSync Device Backups
+    paths:
+      - "~/Library/Application Support/MobileSync/Backup"
+    safety: protected
+    confidence: 96
+    explanation: "Local iPhone and iPad backups can contain irreplaceable user data. Gargantua must not treat them as cleanup."
+    source:
+      name: Apple MobileSync
+      verify_signature: true
+    regenerates: false
+    category: app_data
+    tags:
+      - system
+      - apple
+      - mobile
+      - backup
+      - protected
+
+  - id: user_macos_updates_cache
+    name: User macOS Updates Cache
+    paths:
+      - "~/Library/Updates/*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 78
+    explanation: "User-level macOS update cache entries can be large, but may be needed for pending update workflows."
+    source:
+      name: macOS Software Update
+      verify_signature: true
+    regenerates: true
+    category: installers
+    tags:
+      - system
+      - apple
+      - updates
+      - installers
+      - review

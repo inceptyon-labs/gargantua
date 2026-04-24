@@ -7,16 +7,16 @@ Mole commit date: 2026-04-24T08:02:08+08:00
 
 ## Summary
 
-Gargantua does not yet have full Mole rule parity. After the developer-tool rule port, the app ships this reviewed snapshot:
+Gargantua does not yet have full Mole rule parity. After the system/user rule port, the app ships this reviewed snapshot:
 
 | Area | Gargantua files | Gargantua rules |
 | --- | ---: | ---: |
 | App cleanup | 3 | 12 |
 | Browser cleanup | 15 | 54 |
 | Developer cleanup | 18 | 118 |
-| System cleanup | 4 | 12 |
+| System cleanup | 8 | 44 |
 | Uninstall/remnant cleanup | 2 | 12 |
-| Total | 42 | 208 |
+| Total | 46 | 240 |
 
 Mole's cleanup implementation is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count. As a conservative proxy, the current Mole source has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
@@ -38,7 +38,7 @@ Bundled cleanup rule files:
 - Apps: Dropbox, Slack, Spotify.
 - Browsers: Arc, Brave, Chrome, Chromium, Comet, Dia, Edge, Firefox, Helium, Opera, Orion, Safari, Vivaldi, Yandex, Zen.
 - Developer tools: Docker, Go, Homebrew, Node/frontend, Python/data, Rust, Xcode/mobile, JVM, editors, cloud CLIs, containers/Kubernetes, Ruby/PHP/.NET, Bazel/Zig/Deno/Terraform, CI caches, database/API tools, shell/network support, and AI/dev assistant caches.
-- System cleanup: caches, logs, temp files, Trash, downloaded installer/archive filters.
+- System cleanup: caches, logs, temp files, Trash, downloaded installer/archive filters, Finder metadata, Apple service caches, recent items, saved/autosave state, Mail Downloads, MobileSync backup protection, cached device firmware, privileged diagnostics/logs/updates/installers, and Rosetta/Apple Silicon caches.
 
 Bundled remnant rule files:
 
@@ -107,19 +107,19 @@ Pre-port classification:
 
 ### System And User Cleanup
 
-Missing or partial Mole coverage:
+Ported from Mole in `gargantua-72rh`:
 
-- User cleanup: `.DS_Store`, resource forks, recent items, saved application state, QuickLook/iconservices, photoanalysisd, akd, WebKit networking, Autosave, identity caches, Siri suggestions, Calendar cache, AddressBook photo cache.
-- User Library cleanup: generic Application Support logs/caches, Group Container caches/logs, Mail Downloads, MobileSync backups, cached device firmware.
-- System cleanup: `/Library/Logs/DiagnosticReports`, `/private/var/log` logs, third-party system logs, `/Library/Updates`, `/macOS Install Data`, macOS installer apps, `/private/var/folders` code-sign clones, `/private/var/db/diagnostics`, DiagnosticPipeline, powerlog, memory exception reports.
-- Platform caches: Rosetta update bundle, Rosetta user cache, Apple Silicon media service cache.
+- Finder and user state: `.DS_Store`, AppleDouble sidecars as review, recent item lists, saved application state, autosave information, and stale incomplete downloads.
+- Apple user services: QuickLook/iconservices, photoanalysisd/mediaanalysisd, WebKit networking, account/identity caches as review, Siri suggestions, Calendar cache, AddressBook photo cache, sandboxed Apple service caches, wallpaper/idle assets, Rosetta user cache, and Apple media service caches.
+- User Library cleanup: Mail Downloads as review, generic Application Support logs/caches as review, Group Container logs/caches/tmp as review with Apple shared containers excluded, cached device firmware as review, and MobileSync backups as protected.
+- System cleanup: privileged `/Library` and `/private` cache/log/temp/diagnostic/update/installer paths as review, including `/Library/Logs/DiagnosticReports`, `/private/var/log`, Adobe/CreativeCloud system logs, `/Library/Updates`, `/macOS Install Data`, macOS installer apps, code-sign clone caches, diagnostic stores, power logs, memory exception reports, and the system Rosetta update bundle.
 
-Pre-port classification:
+Classification posture used for the port:
 
-- `safe`: old logs, temp files, crash reports, diagnostic reports, generated previews, code-sign clone caches, regenerated icon/QuickLook caches.
-- `review`: installers, `/Library/Updates`, MobileSync backups, Mail Downloads, cached device firmware, saved state, recent items, user Library support caches.
-- `protected`: Time Machine snapshots/backups, OS-critical stores, SIP/restricted paths, active installer data, user documents, system databases.
-- `out-of-scope until privileged-helper policy is explicit`: sudo-required system cleanup that Mole can perform from a CLI but Gargantua must route through the helper and Trust Layer.
+- `safe`: regenerated user-level caches such as Finder/QuickLook/iconservices, WebKit networking cache, Apple media analysis caches, Apple sandboxed service caches, wallpaper thumbnails after age filtering, and user-level Rosetta/media service caches.
+- `review`: AppleDouble metadata, recent items, saved state, autosave recovery files, incomplete downloads, Mail Downloads, cached firmware, generic Application Support and Group Container caches, system updates/installers, privileged logs/temp/cache/diagnostic stores, and system Rosetta cache.
+- `protected`: MobileSync device backups and any Mole cleanup path representing backups, user documents, OS-critical stores, SIP/restricted data, credentials, active installer state, or system databases without a narrow stale-log/cache match.
+- `out-of-scope until dedicated policy/support`: Time Machine snapshots and failed backups, external-volume top-level stores such as `.Spotlight-V100`/`.fseventsd`, active-download lsof checks, current macOS installer version checks, unrestricted group-container pruning, and any sudo-required deletion that should be mediated by explicit privileged-helper Trust Layer UX.
 
 ### Uninstall And Remnant Rules
 
@@ -139,32 +139,25 @@ Pre-port classification:
 
 ## Rule Engine And Schema Gaps
 
-The current YAML schema is strong for static path rules: it supports paths, single-segment and recursive globs, child filename patterns, excludes, safety/confidence/explanation, source attribution, regenerate metadata, categories, tags, and profile-aware safety overrides.
+The current YAML schema is strong for static path rules: it supports paths, single-segment and recursive globs, hidden recursive matches when the pattern asks for hidden segments, child filename patterns, excludes, process guards, presence/content guards, match filters, safety/confidence/explanation, source attribution, regenerate metadata, categories, tags, and profile-aware safety overrides. Remnant scanning also supports app-name variants and sensitive-data preflight.
 
-Full Mole parity needs additional modeling:
+Remaining gaps for full Mole parity:
 
-1. Process-aware guards: Mole skips some cleanups while apps such as Firefox, Xcode, Simulator, or Spotify are running. Gargantua rules currently cannot express `skip_if_process_running`.
-2. Presence/content guards: Mole protects Spotify offline media and Raycast clipboard history by inspecting sentinel files or specific subdirectories. Gargantua needs rule-level guard predicates before those paths can be safe.
-3. Age filters as match filters: Gargantua can downgrade/upgrade safety by age, but many Mole system rules only match files older than a threshold. The scanner needs rule-level age filters so new logs/temp/installers are not surfaced as cleanable.
-4. Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools. Some belong in Developer Tools rather than YAML path cleanup.
-5. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints, not ported as ordinary path rules.
-6. Dynamic app-name variants: Mole expands names into no-space, hyphen, underscore, lowercase, base-channel, and bundle-derived variants for uninstall remnants. Remnant rules currently support `{bundleID}`, `{appName}`, and `{teamID}`, but not name transforms.
-7. Hidden recursive matches: `PathExpander` uses `.skipsHiddenFiles` during recursive walking. Patterns such as `**/.venv`, `**/.pytest_cache`, `**/.tox`, and `**/.cache` can be missed unless the expander learns to descend hidden directories when the rule asks for a hidden segment.
-8. Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.
-9. Sensitive-data preflight: Mole checks candidate uninstall files for credentials, documents, preferences, cookies, and config markers. Gargantua should add equivalent preflight before broad variant/remnant expansion.
+1. Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools. Some belong in Developer Tools rather than YAML path cleanup.
+2. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints and UX before they can be more than review-gated path findings.
+3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup.
+4. Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.
+5. External-volume policy: Mole can target external-volume `.Trashes`, `.TemporaryItems`, `.Spotlight-V100`, `.fseventsd`, and AppleDouble files with protocol checks. Gargantua should define an explicit external-volume scan/cleanup UX before porting those broadly.
 
 ## Recommended Port Order
 
-1. Fix hidden recursive matching before adding more project-local dot-directory dev rules.
-2. Port browser cache-only gaps first: Edge, Chromium, Opera, Vivaldi, Orion, Zen, plus expanded Chrome/Arc/Brave cache families.
-3. Port developer cache-only gaps next, starting with high-value package/build caches that are clearly regenerated.
-4. Add system/user cleanup only where the existing non-privileged scanner and Trust Layer can represent the risk honestly.
-5. Expand app/cloud/office caches in narrow batches with app-specific review/protected classification for sync/offline data.
-6. Expand remnant rules after adding name-transform and sensitive-data preflight support.
-7. Defer command-backed and privileged system cleanup to dedicated engine/helper tasks.
+1. Keep porting in narrow batches with conservative safety levels and explicit review/protected classifications.
+2. Expand app/cloud/office caches in narrow batches with app-specific review/protected classification for sync/offline data.
+3. Expand remnant rules using name-transform and sensitive-data preflight support.
+4. Defer command-backed cleanup to dedicated adapters or Developer Tools flows.
+5. Defer privileged cleanup escalation beyond review findings until helper UX and Trust Layer policy are explicit.
+6. Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.
 
 ## Follow-Up Tasks
 
-The parent epic already has child tasks for browser, developer, app/cloud/office, system/user, remnant, and sync/docs work. This audit adds one additional required implementation concern for the porting sequence:
-
-- Add rule-engine support for hidden recursive matches, process/presence guards, age match filters, and dynamic remnant name variants before claiming full Mole parity.
+The parent epic already has child tasks for app/cloud/office, remnant expansion, and public rule sync/docs work. Browser, developer, rule-engine support, and system/user batches are now represented in the bundled rule snapshot.

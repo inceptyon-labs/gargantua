@@ -35,8 +35,9 @@ struct RuleSetIntegrationTests {
         // developer: xcode, node, docker, homebrew, python, rust, go,
         // plus Mole parity batches for frontend, cloud, mobile, JVM, editors,
         // AI tools, languages, CI, database/API tools, shell/network, project caches
-        // system: caches, logs, temp, trash
-        #expect(result.filesLoaded == 40)
+        // system: caches, logs, temp, trash, plus Mole parity batches for
+        // Apple services, user state, mobile installers/backups, and privileged paths
+        #expect(result.filesLoaded == 44)
     }
 
     // MARK: - Rule Completeness
@@ -171,6 +172,25 @@ struct RuleSetIntegrationTests {
         #expect(categories.contains("system_logs"), "Missing system_logs category")
         #expect(categories.contains("temp_files"), "Missing temp_files category")
         #expect(categories.contains("trash"), "Missing trash category")
+    }
+
+    @Test("System rules cover Mole-backed user and privileged cleanup families")
+    func moleSystemUserCoverage() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let rulesByID = Dictionary(uniqueKeysWithValues: result.rules.map { ($0.id, $0) })
+
+        #expect(rulesByID["finder_ds_store_files"]?.safety == .safe, "Missing safe Finder metadata rule")
+        #expect(rulesByID["quicklook_iconservices_caches"]?.safety == .safe, "Missing QuickLook/IconServices caches")
+        #expect(rulesByID["recent_items_lists"]?.safety == .review, "Recent items should require review")
+        #expect(rulesByID["saved_application_states"]?.safety == .review, "Saved app state should require review")
+        #expect(rulesByID["autosave_information"]?.safety == .review, "Autosave recovery state should require review")
+        #expect(rulesByID["mail_downloads_old"]?.safety == .review, "Mail downloads should require review")
+        #expect(rulesByID["cached_ios_device_firmware"]?.safety == .review, "Cached firmware should require review")
+        #expect(rulesByID["mobile_sync_backups"]?.safety == .protected_, "MobileSync backups must stay protected")
+        #expect(rulesByID["system_diagnostic_reports"]?.safety == .review, "Privileged diagnostics should require review")
+        #expect(rulesByID["system_updates_cache"]?.safety == .review, "System updates should require review")
+        #expect(rulesByID["rosetta_system_cache"]?.safety == .review, "Privileged Rosetta cache should require review")
+        #expect(rulesByID["apple_silicon_user_caches"]?.safety == .safe, "User-level Apple Silicon caches should be safe")
     }
 
     // MARK: - Safety Distribution

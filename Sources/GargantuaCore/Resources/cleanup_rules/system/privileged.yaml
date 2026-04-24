@@ -1,0 +1,212 @@
+rules:
+  - id: system_library_cache_files
+    name: System Library Cache Files
+    paths:
+      - "/Library/Caches/**/*.cache"
+      - "/Library/Caches/**/*.tmp"
+      - "/Library/Caches/**/*.log"
+    match_filters:
+      - "mtime > 7d"
+    safety: review
+    confidence: 78
+    explanation: "Stale files inside /Library/Caches. These are regenerated, but may require privileged cleanup."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - cache
+      - privileged
+      - review
+
+  - id: privileged_temp_files
+    name: Privileged Temporary Files
+    paths:
+      - "/private/tmp/*"
+      - "/private/var/tmp/*"
+    match_filters:
+      - "mtime > 7d"
+    safety: review
+    confidence: 80
+    explanation: "System temporary files older than 7 days. Review because these locations may require elevated permissions."
+    source:
+      name: macOS
+    regenerates: true
+    category: temp_files
+    tags:
+      - system
+      - temp
+      - privileged
+      - review
+
+  - id: system_diagnostic_reports
+    name: System Diagnostic Reports
+    paths:
+      - "/Library/Logs/DiagnosticReports/*"
+    match_filters:
+      - "mtime > 7d"
+    safety: review
+    confidence: 82
+    explanation: "System crash and diagnostic reports. Useful for troubleshooting and may require privileged cleanup."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs
+      - crash_reports
+      - privileged
+      - review
+
+  - id: private_var_logs
+    name: Private var Log Archives
+    paths:
+      - "/private/var/log/**/*.log"
+      - "/private/var/log/**/*.gz"
+      - "/private/var/log/**/*.asl"
+    match_filters:
+      - "mtime > 7d"
+    safety: review
+    confidence: 80
+    explanation: "Stale system log and archive files under /private/var/log. Review before privileged cleanup."
+    source:
+      name: macOS
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs
+      - privileged
+      - review
+
+  - id: third_party_system_logs
+    name: Third-Party System Logs
+    paths:
+      - "/Library/Logs/Adobe/**/*"
+      - "/Library/Logs/CreativeCloud/**/*"
+      - "/Library/Logs/adobegc.log"
+    match_filters:
+      - "mtime > 7d"
+    safety: review
+    confidence: 80
+    explanation: "Third-party logs stored in /Library/Logs. They are diagnostic-only but live in a privileged location."
+    source:
+      name: Third-party system logs
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs
+      - adobe
+      - privileged
+      - review
+
+  - id: system_updates_cache
+    name: System Updates Cache
+    paths:
+      - "/Library/Updates/*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 76
+    explanation: "System update cache entries can be large, but may belong to an active or recent update."
+    source:
+      name: macOS Software Update
+      verify_signature: true
+    regenerates: true
+    category: installers
+    tags:
+      - system
+      - updates
+      - installers
+      - privileged
+      - review
+
+  - id: macos_installer_payloads
+    name: macOS Installer Payloads
+    paths:
+      - "/macOS Install Data"
+      - "/Applications/Install macOS*.app"
+    match_filters:
+      - "mtime > 14d"
+    safety: review
+    confidence: 74
+    explanation: "macOS installer payloads may be obsolete, but active installers or current-version recovery media must be preserved."
+    source:
+      name: macOS Installer
+      verify_signature: true
+    regenerates: true
+    category: installers
+    tags:
+      - system
+      - apple
+      - macos
+      - installers
+      - privileged
+      - review
+
+  - id: code_sign_clone_caches
+    name: Code Signature Clone Caches
+    paths:
+      - "/private/var/folders/*/*/X/*.code_sign_clone"
+    safety: review
+    confidence: 84
+    explanation: "Generated code-signature clone caches under /private/var/folders. Review because these live in system-managed temp space."
+    source:
+      name: macOS code signing
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - cache
+      - code_signing
+      - privileged
+      - review
+
+  - id: system_diagnostic_databases
+    name: System Diagnostic Databases
+    paths:
+      - "/private/var/db/diagnostics/**/*"
+      - "/private/var/db/DiagnosticPipeline/**/*"
+      - "/private/var/db/powerlog/**/*"
+      - "/private/var/db/reportmemoryexception/MemoryLimitViolations/**/*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 78
+    explanation: "System diagnostic, power, and memory exception logs. Review and route through privileged cleanup policy."
+    source:
+      name: macOS diagnostics
+      verify_signature: true
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs
+      - diagnostics
+      - powerlog
+      - privileged
+      - review
+
+  - id: rosetta_system_cache
+    name: Rosetta System Cache
+    paths:
+      - "/Library/Apple/usr/share/rosetta/rosetta_update_bundle"
+    safety: review
+    confidence: 82
+    explanation: "Rosetta update bundle cache. Regenerated by Apple services but located in a privileged system path."
+    source:
+      name: Rosetta 2
+      verify_signature: true
+    regenerates: true
+    category: system_cache
+    tags:
+      - system
+      - apple
+      - rosetta
+      - cache
+      - privileged
+      - review
