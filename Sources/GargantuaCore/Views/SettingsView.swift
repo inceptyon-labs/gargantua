@@ -56,6 +56,7 @@ public struct SettingsView: View {
                     persistence: persistence,
                     onSettingsChanged: { settings = $0 }
                 )
+                PathExclusionSettingsSection(persistence: persistence)
                 generalSection
             }
             .padding(GargantuaSpacing.space6)

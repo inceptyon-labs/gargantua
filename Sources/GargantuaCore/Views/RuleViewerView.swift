@@ -13,8 +13,6 @@ public struct RuleViewerView: View {
     @State private var categories: [RuleCategory] = []
     @State private var selectedCategory: String?
     @State private var selectedRuleID: String?
-    @State private var whitelistEntries: [PersistedWhitelistEntry] = []
-    @State private var newWhitelistPattern = ""
     @State private var isLoading = true
 
     public init(persistence: PersistenceController) {
@@ -50,7 +48,6 @@ public struct RuleViewerView: View {
         .background(GargantuaColors.void_)
         .task {
             await loadRules()
-            loadWhitelist()
         }
     }
 
@@ -151,7 +148,7 @@ public struct RuleViewerView: View {
                         ruleMetadata(rule)
                         rulePaths(rule)
                         ruleYAML(rule)
-                        whitelistSection
+                        pathExclusionSection
                     }
                     .padding(GargantuaSpacing.space6)
                 }
@@ -276,12 +273,13 @@ public struct RuleViewerView: View {
 
     // MARK: - Whitelist Section
 
-    private var whitelistSection: some View {
-        WhitelistManagementView(
-            whitelistEntries: whitelistEntries,
-            newWhitelistPattern: $newWhitelistPattern,
-            onAddEntry: addWhitelistEntry,
-            onRemoveEntry: removeWhitelistEntry
+    private var pathExclusionSection: some View {
+        PathExclusionSettingsSection(
+            persistence: persistence,
+            title: "Whitelist",
+            subtitle: "Whitelisted paths are excluded from cleanup scans.",
+            showsDivider: true,
+            titleFont: GargantuaFonts.heading
         )
     }
 
@@ -322,23 +320,6 @@ public struct RuleViewerView: View {
             categories = []
         }
         isLoading = false
-    }
-
-    private func loadWhitelist() {
-        whitelistEntries = (try? persistence.fetchWhitelistEntries()) ?? []
-    }
-
-    private func addWhitelistEntry() {
-        let pattern = newWhitelistPattern.trimmingCharacters(in: .whitespaces)
-        guard !pattern.isEmpty else { return }
-        _ = try? persistence.addWhitelistEntry(pattern: pattern)
-        newWhitelistPattern = ""
-        loadWhitelist()
-    }
-
-    private func removeWhitelistEntry(_ pattern: String) {
-        try? persistence.removeWhitelistEntry(pattern: pattern)
-        loadWhitelist()
     }
 
     // MARK: - YAML Rendering
@@ -409,73 +390,6 @@ public struct RuleViewerView: View {
         case .safe: GargantuaColors.safe
         case .review: GargantuaColors.review
         case .protected_: GargantuaColors.protected_
-        }
-    }
-}
-
-// MARK: - Whitelist Management
-
-private struct WhitelistManagementView: View {
-    let whitelistEntries: [PersistedWhitelistEntry]
-    @Binding var newWhitelistPattern: String
-    let onAddEntry: () -> Void
-    let onRemoveEntry: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
-
-            Text("Whitelist")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text("Whitelisted paths are excluded from cleanup scans.")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-
-            // Add entry
-            HStack(spacing: GargantuaSpacing.space2) {
-                TextField("Path or pattern (e.g. ~/Library/Caches/MyApp)", text: $newWhitelistPattern)
-                    .textFieldStyle(.plain)
-                    .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(GargantuaSpacing.space2)
-                    .background(GargantuaColors.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                    .onSubmit { onAddEntry() }
-
-                Button(action: onAddEntry) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(
-                            newWhitelistPattern.trimmingCharacters(in: .whitespaces).isEmpty
-                                ? GargantuaColors.ink4
-                                : GargantuaColors.accent
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(newWhitelistPattern.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-
-            // Existing entries
-            if whitelistEntries.isEmpty {
-                Text("No whitelist entries yet.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-            } else {
-                VStack(spacing: 1) {
-                    ForEach(whitelistEntries, id: \.pattern) { entry in
-                        WhitelistEntryRow(
-                            entry: entry,
-                            onRemove: { onRemoveEntry(entry.pattern) }
-                        )
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
-            }
         }
     }
 }
@@ -594,47 +508,6 @@ private struct RuleRow: View {
         case .review: GargantuaColors.review
         case .protected_: GargantuaColors.protected_
         }
-    }
-}
-
-// MARK: - Whitelist Entry Row
-
-private struct WhitelistEntryRow: View {
-    let entry: PersistedWhitelistEntry
-    let onRemove: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "shield.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(GargantuaColors.ink3)
-
-            Text(entry.pattern)
-                .font(GargantuaFonts.monoPath)
-                .foregroundStyle(GargantuaColors.ink)
-                .lineLimit(1)
-                .textSelection(.enabled)
-
-            Spacer()
-
-            Text(entry.createdAt, style: .date)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink4)
-
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(isHovered ? GargantuaColors.protected_ : GargantuaColors.ink4)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, GargantuaSpacing.space3)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .background(isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2)
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
     }
 }
 
