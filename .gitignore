@@ -19,6 +19,24 @@ Package.resolved
 .idea/
 *.xcworkspace/xcuserdata/
 
+# Local agent/task tooling
+.beans/
+.beans.yml
+.claude/
+.interface-design/
+.pasiv.yml
+.impeccable.md
+.impeccible.md
+impeccable.md
+impeccible.md
+CLAUDE.md
+Gargantua-PRD-*.md
+docs/design-brief-*.md
+docs/designs/
+docs/handoffs/
+docs/plans/
+docs/scans/
+
 # App artifacts
 *.ipa
 *.dSYM.zip

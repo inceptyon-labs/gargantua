@@ -44,13 +44,13 @@ Scripts/validate-rules.sh
 ## What This Does Mean
 
 - Gargantua ships a native YAML-driven cleanup engine.
-- The PRD's named example cleanup families are now represented in the repo.
+- The major cleanup families currently targeted by the app are represented in the repo.
 - Community contributors have a documented path to add and validate rule changes.
 
 ## What This Does Not Mean Yet
 
 - Full historical Mole database parity is not proven.
-- The PRD's note about `remnant_locations.yaml` carrying `52+ locations from Mole` is not satisfied yet.
+- `remnant_locations.yaml` is intentionally small today and does not yet cover every app-remnant family.
 - There is no direct Mole-to-Gargantua parity harness in the repo because `mo` was intentionally removed from the runtime architecture.
 
 ## Public Rules Repository

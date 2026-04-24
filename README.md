@@ -11,74 +11,181 @@
   <img src="https://img.shields.io/badge/MCP-compatible-6e40c9.svg" alt="MCP compatible">
 </p>
 
-Gargantua is a native macOS cleaner focused on trust, explainability, and developer-heavy cleanup workflows.
+Gargantua is a native macOS cleaner for developers and power users. It scans common cache, build-artifact, duplicate-file, and app-remnant locations, classifies findings by risk, explains why each item is considered safe or risky, and only removes files through explicit user-controlled flows.
 
-The cleanup engine is driven by bundled YAML rules under `Sources/GargantuaCore/Resources/`. Those rules are the authoritative source for safety classification; AI can explain them, but it cannot lower a rule's safety level.
+The project is built as a Swift Package with three executables:
 
-## Current Rule Inventory
+- `Gargantua`: the SwiftUI macOS app
+- `GargantuaMCP`: a local Model Context Protocol server for automation-driven scans and guarded cleanups
+- `GargantuaPrivilegedHelper`: an SMAppService/XPC helper for operations that require elevated trust
 
-- Cleanup rules: 19 files / 83 rules
-- Uninstall remnant rules: 2 files / 12 rules
+## Why Gargantua Exists
 
-See [Community Rules](docs/rules/README.md) for authoring docs and [Rule Status](docs/rules/status.md) for current scope and known parity gaps.
+Most cleaner apps optimize for big numbers and vague confidence. Gargantua optimizes for traceability:
 
-The public home for rule-only collaboration is [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules). This app vendors reviewed snapshots under `Sources/GargantuaCore/Resources/` so releases keep a deterministic safety model while community rule work can move independently.
+- Every finding comes from a rule, parser, or local scanner path that can be tested.
+- Every result is classified as `safe`, `review`, or `protected`.
+- Protected items are visible, but destructive paths reject them.
+- Cleanup actions prefer Trash and write audit records for destructive workflows.
+- Optional local explanations can summarize why a rule exists, but they cannot downgrade a safety classification.
 
-## Repo Highlights
+## Features
 
-- [PRD](Gargantua-PRD-v5-FINAL.md)
-- [Contributing](CONTRIBUTING.md)
-- [Community Rules](docs/rules/README.md)
-- [Public Rules Repo](https://github.com/inceptyon-labs/gargantua-rules)
-- [Rule Schema](docs/rules/schema.md)
-- [Design Brief](docs/design-brief-app-shell.md)
+- **Deep Clean:** YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, and language build caches.
+- **File Health:** duplicate, empty-file, big-file, similar-image, and broken-symlink scans through bundled helper binaries.
+- **Smart Uninstaller:** app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state.
+- **Cleanup Profiles:** built-in and custom profiles that decide which rule categories run and which safety overrides apply.
+- **Explainability:** per-item explanations sourced from rules, metadata, and optional local model inference.
+- **Audit Trail:** MCP-triggered cleanup attempts are written to `~/Library/Logs/Gargantua/audit.json`.
+- **Release Pipeline:** scripts for assembling, signing, notarizing, stapling, and packaging the app as a DMG.
+
+## Safety Model
+
+Gargantua's trust layer uses three safety levels:
+
+| Level | Meaning | Default Behavior |
+| --- | --- | --- |
+| `safe` | Disposable files that are expected to regenerate or have no user-owned state. | Preselected in cleanup flows. |
+| `review` | Files that may be removable, but could contain preferences, sync state, offline data, or context the user should inspect. | Shown, explained, not silently selected. |
+| `protected` | Files with system impact, privilege implications, or high risk of data loss. | Visible for transparency; destructive flows hard-reject them. |
+
+Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/` and `Sources/GargantuaCore/Resources/uninstall_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime.
 
 ## MCP Server
 
-Gargantua ships an MCP (Model Context Protocol) server so agents like Claude Code can ask the app to scan for cleanable files, explain what it found, and — with opt-in guardrails — clean them.
+`GargantuaMCP` exposes local tools for MCP clients over newline-delimited JSON-RPC 2.0 on stdin/stdout. Logs go to stderr.
 
-The server is split into two surfaces:
-
-- **Phase 2 (read-only):** `scan`, `analyze`, `status`, `explain`, `list_profiles`. Always available; safe to expose to any client.
-- **Phase 3 (destructive):** `clean`. Only call with `item_ids` from a prior `scan`, `confirm: true`, and an initiated handshake.
-
-Phase 3 safety guardrails (PRD §7.4), enforced by the server on every call:
-
-- **Protected hard-reject.** Any item classified `protected` aborts the whole request; the server never removes a protected path over MCP.
-- **Rate limit.** One clean operation per 60 seconds per client. Exceeding it returns `invalidParams` with a retry-after hint.
-- **Audit trail.** Every attempted clean — success, failure, or user-cancelled — appends an entry to `~/Library/Logs/Gargantua/audit.json` tagged `transport: "mcp"` with the client identifier.
-- **User notification.** Before any files move, macOS posts a local notification with a `Cancel` action. If the user taps Cancel within 5 seconds, the clean is short-circuited and the attempt is still audited (`bytes_freed: 0`). If they don't, the clean proceeds. The notification requires the user to have granted local notification permission to the Gargantua app in System Settings; on an unbundled CLI or with permission denied, the post fails silently and the grace period elapses — the rate limit and audit trail still apply, but the per-clean cancel guardrail is skipped.
-
-Client identification is read from the JSON-RPC `initialize` handshake's `clientInfo.name`. A client that skips `initialize`, sends a blank name, or re-initializes with a blank name is audited under the sentinel `"unknown"` and shares that bucket's rate-limit budget — it cannot bypass attribution by omitting its name.
-
-Run the server standalone:
+Run it locally:
 
 ```bash
 swift run GargantuaMCP
 ```
 
-It reads newline-delimited JSON-RPC 2.0 on stdin and writes responses on stdout; log output goes to stderr.
+Read-only tools:
 
-## Validation
+- `scan`: dry-run scan for reclaimable items
+- `analyze`: health score, disk usage, and recommendations
+- `status`: current system health metrics
+- `explain`: explain a filesystem path or prior scan item
+- `list_profiles`: list built-in and custom cleanup profiles
 
-Run the focused rule checks:
+Destructive tool:
+
+- `clean`: clean item IDs returned by a prior `scan`
+
+`clean` is guarded by server-side checks:
+
+- `confirm: true` is required.
+- Unknown item IDs are rejected.
+- Any `protected` item aborts the whole request.
+- Each MCP client gets one clean operation per 60 seconds.
+- Every non-dry-run attempt writes an audit entry with the client identifier.
+- The app attempts a local notification with a short cancel window before files move.
+
+## Build From Source
+
+Requirements:
+
+- macOS 14 or newer
+- Xcode 15 or newer with Swift 5.10
+- Apple Silicon is the primary development and test target
+
+Clone and build:
 
 ```bash
-Scripts/validate-rules.sh
+git clone https://github.com/inceptyon-labs/gargantua.git
+cd gargantua
+swift build
 ```
 
-Run the full test suite:
+Run the app target:
+
+```bash
+swift run Gargantua
+```
+
+Run the MCP server:
+
+```bash
+swift run GargantuaMCP
+```
+
+Run tests:
 
 ```bash
 swift test
 ```
 
+For the local helper binaries and MLX shader setup used by the test/release scripts, prefer:
+
+```bash
+Scripts/test.sh
+```
+
+## Release Builds
+
+The release pipeline is script-based and keeps `Package.swift` as the source of truth.
+
+```bash
+git tag v0.1.0
+Scripts/release.sh
+```
+
+Release signing and notarization use local environment values from `.env.release`, which is intentionally ignored. See `Scripts/release/README.md` for the required variables and release flow.
+
+Useful supporting scripts:
+
+- `Scripts/fetch-vendored-bins.sh`: refresh pinned helper binaries
+- `Scripts/build-metallib.sh`: build the MLX Metal shader library used by local inference
+- `Scripts/smoke/verify-vendored-bins.sh`: confirm an installed app resolves its bundled helpers
+- `Scripts/smoke/privileged-helper.sh`: smoke-test privileged helper installation and status
+
+## Rule Contributions
+
+Rule authoring docs live in [docs/rules](docs/rules/README.md):
+
+- [Rule Schema](docs/rules/schema.md)
+- [Rule Status](docs/rules/status.md)
+- [Cleanup Rule Template](docs/rules/templates/cleanup-rule.yaml)
+- [Remnant Rule Template](docs/rules/templates/remnant-rule.yaml)
+
+Validate bundled rules before opening a rule PR:
+
+```bash
+Scripts/validate-rules.sh
+```
+
+The public home for rule-only collaboration is [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules). This app repository vendors reviewed snapshots so releases remain deterministic.
+
+## Development Notes
+
+After cloning, activate the versioned pre-commit hook if you plan to commit:
+
+```bash
+git config core.hooksPath .githooks
+brew install gitleaks
+```
+
+The hook runs `gitleaks` against staged changes to reduce the chance of committing API keys or credentials.
+
+The following are intentionally local-only and ignored by Git:
+
+- task trackers and handoff archives
+- local assistant instructions
+- design-system scratch files
+- release secrets and environment files
+- downloaded local model files
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR expectations, and rule contribution guidance.
+
 ## Security
 
-If you discover a security issue — especially anything involving the privileged helper, an MCP guardrail bypass, or a rules-engine path that could remove a `protected`-classified file — please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
+If you discover a security issue, especially anything involving the privileged helper, MCP guardrails, audit trails, or a path that could remove a `protected` item, please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
 
 ## License
 
-Gargantua is licensed under the [GNU Affero General Public License v3.0](LICENSE). Network/SaaS use triggers the share-alike clause — if you run a modified version and expose it over a network, you must offer source to your users.
+Gargantua is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
-YAML cleanup and uninstall rules under `Sources/GargantuaCore/Resources/` are sourced from the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; see that repo's LICENSE for rule-specific terms.
+YAML cleanup and uninstall rules under `Sources/GargantuaCore/Resources/` are sourced from the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; see that repo's license for rule-specific terms.
