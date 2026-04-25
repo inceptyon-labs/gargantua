@@ -18,6 +18,23 @@ enum ProcessSpawnerError: Error, Equatable {
 /// kernel sets the new pgroup in the child *before* the child ever runs user
 /// code, so the guarantee holds for every descendant.
 enum ProcessSpawner {
+    /// The four file descriptors a stdout/stderr pipe pair contributes to a
+    /// spawn — both write ends (which become the child's stdout/stderr after
+    /// dup2) and both read ends (which the child must not inherit).
+    private struct SpawnPipes {
+        let outWrite: Int32
+        let errWrite: Int32
+        let outRead: Int32
+        let errRead: Int32
+
+        init(stdout: Pipe, stderr: Pipe) {
+            self.outWrite = stdout.fileHandleForWriting.fileDescriptor
+            self.errWrite = stderr.fileHandleForWriting.fileDescriptor
+            self.outRead = stdout.fileHandleForReading.fileDescriptor
+            self.errRead = stderr.fileHandleForReading.fileDescriptor
+        }
+    }
+
     /// Spawn `executable` with `arguments`, redirecting stdout and stderr to
     /// the write ends of the given pipes. The child is placed in a new
     /// process group whose pgid equals its pid (it becomes the group leader).
@@ -43,36 +60,6 @@ enum ProcessSpawner {
         }
         defer { posix_spawn_file_actions_destroy(&fileActions) }
 
-        let outWriteFd = stdoutPipe.fileHandleForWriting.fileDescriptor
-        let errWriteFd = stderrPipe.fileHandleForWriting.fileDescriptor
-        let outReadFd = stdoutPipe.fileHandleForReading.fileDescriptor
-        let errReadFd = stderrPipe.fileHandleForReading.fileDescriptor
-
-        // Redirect child's stdout/stderr to pipe write ends. Guard each
-        // posix_spawn_* return value: ignoring them lets a failed file_action
-        // silently drop out of the list, which would leave the child with
-        // undirected stdio while posix_spawn still reports success.
-        try check(posix_spawn_file_actions_adddup2(&fileActions, outWriteFd, 1))
-        try check(posix_spawn_file_actions_adddup2(&fileActions, errWriteFd, 2))
-
-        // Close the source pipe fds in the child. dup2 leaves the source fd
-        // open, and the read ends are only useful to the parent. Critical:
-        // skip `addclose(fd)` when `fd` aliases the stdio slot we just
-        // dup2'd into (e.g. parent had fd 1 closed and Pipe() reused it) —
-        // otherwise we'd close our own redirected stdout/stderr.
-        if outWriteFd != 1 && outWriteFd != 2 {
-            try check(posix_spawn_file_actions_addclose(&fileActions, outWriteFd))
-        }
-        if errWriteFd != 1 && errWriteFd != 2 {
-            try check(posix_spawn_file_actions_addclose(&fileActions, errWriteFd))
-        }
-        if outReadFd != 1 && outReadFd != 2 {
-            try check(posix_spawn_file_actions_addclose(&fileActions, outReadFd))
-        }
-        if errReadFd != 1 && errReadFd != 2 {
-            try check(posix_spawn_file_actions_addclose(&fileActions, errReadFd))
-        }
-
         var attrs: posix_spawnattr_t?
         let attrInit = posix_spawnattr_init(&attrs)
         guard attrInit == 0 else {
@@ -80,42 +67,16 @@ enum ProcessSpawner {
         }
         defer { posix_spawnattr_destroy(&attrs) }
 
-        // POSIX_SPAWN_SETPGROUP + pgroup=0 makes the child its own pgroup
-        // leader atomically, before the exec'd program runs. This is the
-        // whole point of this helper.
-        try check(posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP)))
-        try check(posix_spawnattr_setpgroup(&attrs, 0))
+        let pipes = SpawnPipes(stdout: stdoutPipe, stderr: stderrPipe)
+        try configureFileActions(&fileActions, pipes: pipes)
+        try configureSpawnAttributes(&attrs)
 
-        // Build argv: [executable.path, args..., NULL]. strdup can return
-        // NULL on ENOMEM; a NULL in the middle of argv would make posix_spawn
-        // treat it as end-of-array, silently truncating arguments — fail
-        // cleanly instead.
-        let argvStrings = [executable.path] + arguments
-        var argv: [UnsafeMutablePointer<CChar>?] = []
-        argv.reserveCapacity(argvStrings.count + 1)
-        for s in argvStrings {
-            guard let dup = strdup(s) else {
-                argv.forEach { if let p = $0 { free(p) } }
-                throw ProcessSpawnerError.spawnFailed(errno: ENOMEM)
-            }
-            argv.append(dup)
-        }
-        argv.append(nil)
-        defer { argv.forEach { if let p = $0 { free(p) } } }
-
-        // Build envp from the parent's environment, same NULL-guard pattern.
-        let envStrings = ProcessInfo.processInfo.environment.map { "\($0.key)=\($0.value)" }
-        var envp: [UnsafeMutablePointer<CChar>?] = []
-        envp.reserveCapacity(envStrings.count + 1)
-        for s in envStrings {
-            guard let dup = strdup(s) else {
-                envp.forEach { if let p = $0 { free(p) } }
-                throw ProcessSpawnerError.spawnFailed(errno: ENOMEM)
-            }
-            envp.append(dup)
-        }
-        envp.append(nil)
-        defer { envp.forEach { if let p = $0 { free(p) } } }
+        var argv = try buildCStringArray([executable.path] + arguments)
+        defer { freeCStringArray(argv) }
+        var envp = try buildCStringArray(
+            ProcessInfo.processInfo.environment.map { "\($0.key)=\($0.value)" }
+        )
+        defer { freeCStringArray(envp) }
 
         var pid: pid_t = 0
         let result = argv.withUnsafeMutableBufferPointer { argvBuf in
@@ -126,7 +87,7 @@ enum ProcessSpawner {
                     &fileActions,
                     &attrs,
                     argvBuf.baseAddress,
-                    envpBuf.baseAddress
+                    envpBuf.baseAddress,
                 )
             }
         }
@@ -135,6 +96,55 @@ enum ProcessSpawner {
             throw ProcessSpawnerError.spawnFailed(errno: result)
         }
         return pid
+    }
+
+    /// Redirect the child's stdout/stderr to the pipe write ends, then close
+    /// the source pipe fds in the child so it doesn't hold extra copies that
+    /// would delay EOF on the parent side. Skip `addclose(fd)` when `fd`
+    /// aliases the stdio slot we just dup2'd into (e.g. parent had fd 1
+    /// closed and Pipe() reused it) — otherwise we'd close our own
+    /// redirected stdout/stderr.
+    private static func configureFileActions(
+        _ fileActions: inout posix_spawn_file_actions_t?,
+        pipes: SpawnPipes
+    ) throws {
+        try check(posix_spawn_file_actions_adddup2(&fileActions, pipes.outWrite, 1))
+        try check(posix_spawn_file_actions_adddup2(&fileActions, pipes.errWrite, 2))
+
+        for fd in [pipes.outWrite, pipes.errWrite, pipes.outRead, pipes.errRead] where fd != 1 && fd != 2 {
+            try check(posix_spawn_file_actions_addclose(&fileActions, fd))
+        }
+    }
+
+    /// POSIX_SPAWN_SETPGROUP + pgroup=0 makes the child its own pgroup
+    /// leader atomically, before the exec'd program runs. This is the
+    /// whole point of this helper.
+    private static func configureSpawnAttributes(_ attrs: inout posix_spawnattr_t?) throws {
+        try check(posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP)))
+        try check(posix_spawnattr_setpgroup(&attrs, 0))
+    }
+
+    /// Build a NULL-terminated argv/envp array from a Swift string array.
+    /// strdup can return NULL on ENOMEM; a NULL in the middle of argv would
+    /// make posix_spawn treat it as end-of-array, silently truncating —
+    /// fail cleanly instead, freeing any partial allocations first.
+    /// Caller owns the result and must free it via `freeCStringArray`.
+    private static func buildCStringArray(_ strings: [String]) throws -> [UnsafeMutablePointer<CChar>?] {
+        var result: [UnsafeMutablePointer<CChar>?] = []
+        result.reserveCapacity(strings.count + 1)
+        for string in strings {
+            guard let dup = strdup(string) else {
+                freeCStringArray(result)
+                throw ProcessSpawnerError.spawnFailed(errno: ENOMEM)
+            }
+            result.append(dup)
+        }
+        result.append(nil)
+        return result
+    }
+
+    private static func freeCStringArray(_ array: [UnsafeMutablePointer<CChar>?]) {
+        for pointer in array { if let pointer { free(pointer) } }
     }
 
     /// Translate a non-zero POSIX return value into a thrown spawn error.
