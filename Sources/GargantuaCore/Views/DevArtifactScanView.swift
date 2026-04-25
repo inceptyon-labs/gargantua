@@ -441,9 +441,16 @@ public struct DevArtifactScanView: View {
         }
     }
 
-    // MARK: - Actions
+}
 
-    private func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
+// MARK: - Actions
+//
+// Extracted into an in-file extension so DevArtifactScanView's
+// primary body stays under the 350-line type_body_length threshold.
+
+extension DevArtifactScanView {
+
+    fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         showConfirmation = false
         isCleaning = true
         activeCleanupMethod = method

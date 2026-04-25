@@ -356,9 +356,16 @@ public struct DashboardView: View {
         try? persistence?.acknowledgeScheduledScanSummary()
     }
 
-    // MARK: - Recommendation Model
+}
 
-    private struct Recommendation {
+// MARK: - Recommendation Model
+//
+// Extracted into an in-file extension so DashboardView's primary
+// body stays under the 350-line type_body_length threshold.
+
+extension DashboardView {
+
+    fileprivate struct Recommendation {
         let eyebrow: String
         let title: String
         let detail: String
@@ -369,7 +376,7 @@ public struct DashboardView: View {
         let tone: Color
     }
 
-    private var dashboardRecommendation: Recommendation {
+    fileprivate var dashboardRecommendation: Recommendation {
         if let topAlert = alerts.first {
             return Recommendation(
                 eyebrow: "RECOMMENDED NEXT STEP",

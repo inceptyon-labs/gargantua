@@ -472,7 +472,16 @@ public struct ScanBucketListView: View {
         return "Protected items stay locked. Select the safe items you want to include in the cleanup plan."
     }
 
-    private func reviewMetaPill(_ text: String) -> some View {
+}
+
+// MARK: - Keyboard navigation, selection, and presentation helpers
+//
+// Extracted into an in-file extension so ScanBucketListView's
+// primary body stays under the 350-line type_body_length threshold.
+
+extension ScanBucketListView {
+
+    fileprivate func reviewMetaPill(_ text: String) -> some View {
         Text(text)
             .font(GargantuaFonts.monoData)
             .foregroundStyle(GargantuaColors.review)
@@ -606,7 +615,7 @@ public struct ScanBucketListView: View {
 
     // MARK: - Keyboard Actions
 
-    private func moveFocus(direction: Int) {
+    fileprivate func moveFocus(direction: Int) {
         let items = navigableItemIDs
         guard !items.isEmpty else { return }
 
