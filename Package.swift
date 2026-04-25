@@ -1,6 +1,12 @@
 // swift-tools-version: 5.10
 
+import Foundation
 import PackageDescription
+
+let schedulerInfoPlistPath = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent("Sources/GargantuaScheduler/Info.plist")
+    .path
 
 let package = Package(
     name: "Gargantua",
@@ -37,7 +43,20 @@ let package = Package(
         .executableTarget(
             name: "GargantuaScheduler",
             dependencies: ["GargantuaCore"],
-            path: "Sources/GargantuaScheduler"
+            path: "Sources/GargantuaScheduler",
+            exclude: ["Info.plist"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker",
+                    "-sectcreate",
+                    "-Xlinker",
+                    "__TEXT",
+                    "-Xlinker",
+                    "__info_plist",
+                    "-Xlinker",
+                    schedulerInfoPlistPath
+                ])
+            ]
         ),
         .executableTarget(
             name: "GargantuaPrivilegedHelper",

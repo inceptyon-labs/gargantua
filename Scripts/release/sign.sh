@@ -97,7 +97,11 @@ while IFS= read -r -d '' CODE_ASSET; do
         *) _is_macho "$CODE_ASSET" || continue ;;
     esac
     log "  $CODE_ASSET"
-    _sign --sign "$SIGNING_IDENTITY" "$CODE_ASSET"
+    if [ "$(basename "$CODE_ASSET")" = "GargantuaScheduler" ]; then
+        _sign --sign "$SIGNING_IDENTITY" --identifier "com.inceptyonlabs.gargantua.scheduler" "$CODE_ASSET"
+    else
+        _sign --sign "$SIGNING_IDENTITY" "$CODE_ASSET"
+    fi
     phase2_count=$((phase2_count + 1))
 done < <(find "$APP_BUNDLE/Contents/MacOS" -type f -print0 2>/dev/null || true)
 log "  signed $phase2_count code assets"
