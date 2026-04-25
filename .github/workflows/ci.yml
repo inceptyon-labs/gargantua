@@ -10,9 +10,6 @@ jobs:
   lint:
     name: SwiftLint
     runs-on: macos-14
-    # Advisory until the existing 14 type_body_length / line_length
-    # errors are resolved or allow-listed. Flip to blocking after.
-    continue-on-error: true
 
     steps:
       - name: Checkout
