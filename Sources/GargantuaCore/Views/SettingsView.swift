@@ -19,6 +19,9 @@ public struct SettingsView: View {
     @StateObject private var ownedUpdateSettingsViewModel: AppUpdateSettingsViewModel
     @ObservedObject private var updateSettingsViewModel: AppUpdateSettingsViewModel
     @State private var settings: PersistedSettings?
+    @State private var availableProfiles: [CleanupProfile] = CleanupProfile.builtIn
+    @State private var scheduledScanAgentStatus: ScheduledScanAgentStatus = .notRegistered
+    @State private var scheduledScanError: String?
 
     public init(persistence: PersistenceController) {
         let manager = ModelDownloadManager()
@@ -52,6 +55,7 @@ public struct SettingsView: View {
                 CloudAISettingsSection()
                 MCPTransportSettingsSection()
                 updatesSection
+                schedulingSection
                 ScanRootsSettingsSection(
                     settings: settings,
                     persistence: persistence,
@@ -66,6 +70,9 @@ public struct SettingsView: View {
         .background(GargantuaColors.void_)
         .task {
             settings = try? persistence.fetchSettings()
+            availableProfiles = ((try? persistence.fetchProfiles()) ?? CleanupProfile.builtIn)
+                .filter { !$0.categories.isEmpty }
+            scheduledScanAgentStatus = ScheduledScanController().status()
         }
     }
 
@@ -225,7 +232,128 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - General Section
+    // MARK: - Scheduling Section
+
+    private var schedulingSection: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
+            sectionHeader("Scheduling")
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 20))
+                        .foregroundStyle(GargantuaColors.accent)
+                        .frame(width: 24, alignment: .center)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Background Scans")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text(scheduledScanStatusLine)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(scheduledScanStatusColor)
+                    }
+
+                    Spacer(minLength: GargantuaSpacing.space3)
+
+                    Toggle("Background Scans", isOn: scheduledScansEnabledBinding)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+
+                Divider()
+                    .overlay(GargantuaColors.border)
+
+                schedulingPickerRow(
+                    icon: "clock",
+                    title: "Interval",
+                    detail: scheduledInterval.detail
+                ) {
+                    Picker("Interval", selection: scheduledIntervalBinding) {
+                        ForEach(ScheduledScanInterval.allCases) { interval in
+                            Text(interval.label).tag(interval)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 220)
+                }
+
+                if scheduledInterval == .custom {
+                    HStack(spacing: GargantuaSpacing.space3) {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 16))
+                            .foregroundStyle(GargantuaColors.ink3)
+                            .frame(width: 24, alignment: .center)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Cron")
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(GargantuaColors.ink)
+
+                            Text("Five fields: minute hour day month weekday")
+                                .font(GargantuaFonts.caption)
+                                .foregroundStyle(customScheduleIsValid ? GargantuaColors.ink3 : GargantuaColors.review)
+                        }
+
+                        Spacer(minLength: GargantuaSpacing.space3)
+
+                        TextField("0 9 * * *", text: customScheduleBinding)
+                            .font(GargantuaFonts.monoData)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, GargantuaSpacing.space3)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .background(GargantuaColors.surface3)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                    .stroke(customScheduleIsValid ? GargantuaColors.border : GargantuaColors.review, lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                            .frame(width: 170)
+                    }
+                }
+
+                schedulingPickerRow(
+                    icon: "person.crop.circle",
+                    title: "Profile",
+                    detail: "Default is Light for low-impact background runs."
+                ) {
+                    Picker("Profile", selection: scheduledProfileBinding) {
+                        ForEach(availableProfiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 190)
+                }
+
+                updateToggleRow(
+                    icon: "battery.50",
+                    label: "Skip on Battery",
+                    isOn: skipScheduledScansOnBatteryBinding
+                )
+
+                if let scheduledScanError {
+                    HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.review)
+
+                        Text(scheduledScanError)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.review)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(GargantuaSpacing.space4)
+            .background(GargantuaColors.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
+    }
+
+    // MARK: - Updates Section
 
     private var updatesSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
@@ -316,6 +444,8 @@ public struct SettingsView: View {
         }
     }
 
+    // MARK: - General Section
+
     private var generalSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
             sectionHeader("General")
@@ -335,8 +465,8 @@ public struct SettingsView: View {
 
                 settingsRow(
                     icon: "arrow.triangle.2.circlepath",
-                    label: "Auto Scan",
-                    value: (settings?.autoScanEnabled ?? false) ? "Enabled" : "Disabled"
+                    label: "Scheduled Scans",
+                    value: (settings?.autoScanEnabled ?? false) ? scheduledInterval.label : "Disabled"
                 )
 
                 if let lastScan = settings?.lastScanDate {
@@ -431,6 +561,35 @@ public struct SettingsView: View {
         .padding(.vertical, GargantuaSpacing.space1)
     }
 
+    private func schedulingPickerRow<Control: View>(
+        icon: String,
+        title: String,
+        detail: String,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(GargantuaColors.ink3)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(detail)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            control()
+        }
+    }
+
     private func actionButton(label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: GargantuaSpacing.space2) {
@@ -495,6 +654,103 @@ public struct SettingsView: View {
             return "No checks yet"
         }
         return "Last checked \(date.formatted(date: .abbreviated, time: .shortened))"
+    }
+
+    private var scheduledInterval: ScheduledScanInterval {
+        ScheduledScanInterval(rawValue: settings?.scheduledScanIntervalRaw ?? "") ?? .daily
+    }
+
+    private var customScheduleIsValid: Bool {
+        scheduledInterval != .custom
+            || ScheduledScanCronExpression(settings?.scheduledScanCustomSchedule ?? "") != nil
+    }
+
+    private var scheduledScanStatusLine: String {
+        if settings?.autoScanEnabled != true {
+            return "Off"
+        }
+        return scheduledScanAgentStatus.description
+    }
+
+    private var scheduledScanStatusColor: Color {
+        guard settings?.autoScanEnabled == true else { return GargantuaColors.ink4 }
+        switch scheduledScanAgentStatus {
+        case .enabled: return GargantuaColors.safe
+        case .requiresApproval: return GargantuaColors.review
+        case .notRegistered, .notFound, .unavailable, .unknown: return GargantuaColors.review
+        }
+    }
+
+    private var scheduledScansEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { settings?.autoScanEnabled ?? false },
+            set: { enabled in
+                updateSchedulingSettings { settings in
+                    settings.autoScanEnabled = enabled
+                }
+            }
+        )
+    }
+
+    private var scheduledIntervalBinding: Binding<ScheduledScanInterval> {
+        Binding(
+            get: { scheduledInterval },
+            set: { interval in
+                updateSchedulingSettings { settings in
+                    settings.scheduledScanIntervalRaw = interval.rawValue
+                }
+            }
+        )
+    }
+
+    private var customScheduleBinding: Binding<String> {
+        Binding(
+            get: { settings?.scheduledScanCustomSchedule ?? "0 9 * * *" },
+            set: { value in
+                updateSchedulingSettings { settings in
+                    settings.scheduledScanCustomSchedule = value
+                }
+            }
+        )
+    }
+
+    private var scheduledProfileBinding: Binding<String> {
+        Binding(
+            get: { settings?.scheduledScanProfileID ?? "light" },
+            set: { profileID in
+                updateSchedulingSettings { settings in
+                    settings.scheduledScanProfileID = profileID
+                }
+            }
+        )
+    }
+
+    private var skipScheduledScansOnBatteryBinding: Binding<Bool> {
+        Binding(
+            get: { settings?.scheduledScanSkipWhenOnBattery ?? true },
+            set: { skip in
+                updateSchedulingSettings { settings in
+                    settings.scheduledScanSkipWhenOnBattery = skip
+                }
+            }
+        )
+    }
+
+    private func updateSchedulingSettings(_ update: (PersistedSettings) -> Void) {
+        do {
+            try persistence.updateSettings(update)
+            let fetched = try persistence.fetchSettings()
+            settings = fetched
+            let configuration = ScheduledScanConfiguration(settings: fetched)
+            if configuration.canSynchronizeLaunchAgent {
+                scheduledScanAgentStatus = try ScheduledScanController().synchronize(configuration: configuration)
+                scheduledScanError = nil
+            } else {
+                scheduledScanError = "Custom schedule is not valid."
+            }
+        } catch {
+            scheduledScanError = error.localizedDescription
+        }
     }
 
     private var modelSizeLabel: some View {

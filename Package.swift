@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "GargantuaCore", targets: ["GargantuaCore"]),
         .executable(name: "Gargantua", targets: ["Gargantua"]),
+        .executable(name: "GargantuaScheduler", targets: ["GargantuaScheduler"]),
         .executable(name: "GargantuaMCP", targets: ["GargantuaMCP"]),
         .executable(name: "GargantuaPrivilegedHelper", targets: ["GargantuaPrivilegedHelper"])
     ],
@@ -32,6 +33,11 @@ let package = Package(
             name: "GargantuaMCP",
             dependencies: ["GargantuaCore"],
             path: "Sources/GargantuaMCP"
+        ),
+        .executableTarget(
+            name: "GargantuaScheduler",
+            dependencies: ["GargantuaCore"],
+            path: "Sources/GargantuaScheduler"
         ),
         .executableTarget(
             name: "GargantuaPrivilegedHelper",

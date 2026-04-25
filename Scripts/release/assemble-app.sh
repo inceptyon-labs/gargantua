@@ -7,7 +7,9 @@
 #       Info.plist              (rendered from AppShell/Info.plist.in)
 #       PkgInfo                 (APPL????)
 #       MacOS/Gargantua         (the executable)
+#       MacOS/GargantuaScheduler (LaunchAgent background scan entry point)
 #       Frameworks/Sparkle.framework
+#       Library/LaunchAgents/   (SMAppService per-user LaunchAgent plist)
 #       Library/LaunchDaemons/  (SMAppService launch daemon plist)
 #       Library/LaunchServices/ (privileged helper executable)
 #       Resources/
@@ -44,6 +46,7 @@ log "Assembling $APP_BUNDLE..."
 run rm -rf "$APP_BUNDLE"
 run mkdir -p "$APP_BUNDLE/Contents/MacOS"
 run mkdir -p "$APP_BUNDLE/Contents/Frameworks"
+run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchAgents"
 run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchDaemons"
 run mkdir -p "$APP_BUNDLE/Contents/Library/LaunchServices"
 run mkdir -p "$APP_BUNDLE/Contents/Resources"
@@ -83,6 +86,8 @@ fi
 # ----- Executable -----------------------------------------------------------
 run cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 run chmod 0755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+run cp "$SWIFT_BIN_DIR/GargantuaScheduler" "$APP_BUNDLE/Contents/MacOS/GargantuaScheduler"
+run chmod 0755 "$APP_BUNDLE/Contents/MacOS/GargantuaScheduler"
 
 # SwiftPM links Sparkle with @rpath/Sparkle.framework and gives the CLI
 # executable @loader_path as its only local rpath. App bundles conventionally
@@ -102,6 +107,17 @@ if [ "${DRY_RUN:-0}" != "1" ] && [ ! -d "$SPARKLE_FRAMEWORK_SRC" ]; then
     die "missing Sparkle.framework at $SPARKLE_FRAMEWORK_SRC (did swift build copy binary artifacts?)"
 fi
 run ditto "$SPARKLE_FRAMEWORK_SRC" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+
+# ----- Scheduled scan LaunchAgent ------------------------------------------
+SCHEDULER_PLIST_SRC="$APPSHELL_DIR/LaunchAgents/com.inceptyonlabs.gargantua.scheduler.plist.in"
+SCHEDULER_PLIST_DST="$APP_BUNDLE/Contents/Library/LaunchAgents/com.inceptyonlabs.gargantua.scheduler.plist"
+[ -f "$SCHEDULER_PLIST_SRC" ] || die "missing scheduler launch agent plist template at $SCHEDULER_PLIST_SRC"
+
+if [ "${DRY_RUN:-0}" != "1" ]; then
+    cp "$SCHEDULER_PLIST_SRC" "$SCHEDULER_PLIST_DST"
+else
+    log "DRY-RUN: copy $SCHEDULER_PLIST_SRC -> $SCHEDULER_PLIST_DST"
+fi
 
 # ----- Privileged helper ----------------------------------------------------
 HELPER_EXECUTABLE="$APP_BUNDLE/Contents/Library/LaunchServices/$HELPER_BUNDLE_ID"

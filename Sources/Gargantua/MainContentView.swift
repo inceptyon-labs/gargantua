@@ -65,7 +65,7 @@ struct MainContentView: View {
                         Group {
                             switch sidebarSelection {
                             case "dashboard":
-                                DashboardView(sidebarSelection: $sidebarSelection)
+                                DashboardView(sidebarSelection: $sidebarSelection, persistence: persistence)
                             case "profiles":
                                 if let persistence {
                                     ProfileContainerView(persistence: persistence)

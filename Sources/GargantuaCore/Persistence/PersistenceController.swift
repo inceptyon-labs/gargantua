@@ -124,6 +124,42 @@ public final class PersistenceController {
         try context.save()
     }
 
+    /// Persist the latest background scheduled-scan summary for the next dashboard launch.
+    public func recordScheduledScanSummary(_ summary: ScheduledScanSummary) throws {
+        try updateSettings { settings in
+            settings.scheduledScanLastRunDate = summary.date
+            settings.lastScanDate = summary.date
+            settings.scheduledScanLastSummaryDate = summary.date
+            settings.scheduledScanLastSummaryItemCount = summary.itemCount
+            settings.scheduledScanLastSummaryReclaimableBytes = summary.reclaimableBytes
+            settings.scheduledScanLastSummaryProfileID = summary.profileID
+            settings.scheduledScanLastSummaryError = summary.errorMessage
+            settings.scheduledScanLastSummaryAcknowledged = false
+        }
+    }
+
+    /// Return the latest unacknowledged scheduled-scan summary, if any.
+    public func fetchPendingScheduledScanSummary() throws -> ScheduledScanSummary? {
+        let settings = try fetchSettings()
+        guard settings.scheduledScanLastSummaryAcknowledged == false,
+              let date = settings.scheduledScanLastSummaryDate
+        else { return nil }
+
+        return ScheduledScanSummary(
+            date: date,
+            profileID: settings.scheduledScanLastSummaryProfileID,
+            itemCount: settings.scheduledScanLastSummaryItemCount,
+            reclaimableBytes: settings.scheduledScanLastSummaryReclaimableBytes,
+            errorMessage: settings.scheduledScanLastSummaryError
+        )
+    }
+
+    public func acknowledgeScheduledScanSummary() throws {
+        try updateSettings { settings in
+            settings.scheduledScanLastSummaryAcknowledged = true
+        }
+    }
+
     // MARK: - Audit Entries
 
     /// Record an audit entry to the SwiftData store.

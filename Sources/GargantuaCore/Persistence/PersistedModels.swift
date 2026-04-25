@@ -113,6 +113,18 @@ public final class PersistedSettings {
     public var retentionDays: Int
     public var lastScanDate: Date?
     public var autoScanEnabled: Bool
+    // Defaults keep lightweight migration compatible with settings rows written before scheduling existed.
+    public var scheduledScanIntervalRaw: String = "daily"
+    public var scheduledScanCustomSchedule: String = "0 9 * * *"
+    public var scheduledScanProfileID: String = "light"
+    public var scheduledScanSkipWhenOnBattery: Bool = true
+    public var scheduledScanLastRunDate: Date?
+    public var scheduledScanLastSummaryDate: Date?
+    public var scheduledScanLastSummaryItemCount: Int = 0
+    public var scheduledScanLastSummaryReclaimableBytes: Int64 = 0
+    public var scheduledScanLastSummaryProfileID: String = "light"
+    public var scheduledScanLastSummaryError: String?
+    public var scheduledScanLastSummaryAcknowledged: Bool = true
     /// User-configurable project roots for Dev Purge scans (parity with `mo purge --paths`).
     /// Empty means "use `PathExpander.defaultScanRoots()`".
     public var scanRoots: [String] = []
@@ -122,6 +134,17 @@ public final class PersistedSettings {
         retentionDays: Int = 90,
         lastScanDate: Date? = nil,
         autoScanEnabled: Bool = false,
+        scheduledScanIntervalRaw: String = "daily",
+        scheduledScanCustomSchedule: String = "0 9 * * *",
+        scheduledScanProfileID: String = "light",
+        scheduledScanSkipWhenOnBattery: Bool = true,
+        scheduledScanLastRunDate: Date? = nil,
+        scheduledScanLastSummaryDate: Date? = nil,
+        scheduledScanLastSummaryItemCount: Int = 0,
+        scheduledScanLastSummaryReclaimableBytes: Int64 = 0,
+        scheduledScanLastSummaryProfileID: String = "light",
+        scheduledScanLastSummaryError: String? = nil,
+        scheduledScanLastSummaryAcknowledged: Bool = true,
         scanRoots: [String] = []
     ) {
         self.key = "default"
@@ -129,6 +152,17 @@ public final class PersistedSettings {
         self.retentionDays = retentionDays
         self.lastScanDate = lastScanDate
         self.autoScanEnabled = autoScanEnabled
+        self.scheduledScanIntervalRaw = scheduledScanIntervalRaw
+        self.scheduledScanCustomSchedule = scheduledScanCustomSchedule
+        self.scheduledScanProfileID = scheduledScanProfileID
+        self.scheduledScanSkipWhenOnBattery = scheduledScanSkipWhenOnBattery
+        self.scheduledScanLastRunDate = scheduledScanLastRunDate
+        self.scheduledScanLastSummaryDate = scheduledScanLastSummaryDate
+        self.scheduledScanLastSummaryItemCount = scheduledScanLastSummaryItemCount
+        self.scheduledScanLastSummaryReclaimableBytes = scheduledScanLastSummaryReclaimableBytes
+        self.scheduledScanLastSummaryProfileID = scheduledScanLastSummaryProfileID
+        self.scheduledScanLastSummaryError = scheduledScanLastSummaryError
+        self.scheduledScanLastSummaryAcknowledged = scheduledScanLastSummaryAcknowledged
         self.scanRoots = scanRoots
     }
 }
