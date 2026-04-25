@@ -8,10 +8,14 @@ import Foundation
 /// with `dry_run: false` fails, enforcing the PRD §7.4 guardrail at the type
 /// boundary rather than relying on the dispatcher to remember.
 public struct MCPScanInput: Codable, Sendable, Equatable {
+    /// Optional cleanup profile identifier to use for the scan.
     public let profile: String?
+    /// Optional category filters requested by the caller.
     public let categories: [String]?
+    /// Guardrail flag that must remain `true` for MCP scan requests.
     public let dryRun: Bool
 
+    /// Creates a scan request, defaulting to the required dry-run mode.
     public init(profile: String? = nil, categories: [String]? = nil, dryRun: Bool = true) {
         self.profile = profile
         self.categories = categories
@@ -23,6 +27,7 @@ public struct MCPScanInput: Codable, Sendable, Equatable {
         case dryRun = "dry_run"
     }
 
+    /// Decodes a scan request while rejecting attempts to disable dry-run mode.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.profile = try c.decodeIfPresent(String.self, forKey: .profile)
@@ -46,17 +51,28 @@ public struct MCPScanInput: Codable, Sendable, Equatable {
 /// matches the PRD example payload exactly; byte counts remain available on
 /// the richer in-process `ScanResult` for UI consumers.
 public struct MCPScanItem: Codable, Sendable, Equatable {
+    /// Stable item identifier used by later MCP tool calls.
     public let id: String
+    /// Display name for the scanned item.
     public let name: String
+    /// Filesystem path for the scanned item.
     public let path: String
+    /// Human-readable size string exposed in tool output.
     public let size: String
+    /// Safety classification string for the item.
     public let safety: String
+    /// Confidence score assigned by the scanner or rule.
     public let confidence: Int
+    /// User-facing explanation for why the item was found.
     public let explanation: String
+    /// Source rule or scanner label that produced the item.
     public let source: String
+    /// Last access timestamp when available from the scanner.
     public let lastAccessed: Date?
+    /// Cleanup category associated with the item.
     public let category: String
 
+    /// Creates a scan item row for MCP responses.
     public init(
         id: String,
         name: String,
@@ -89,12 +105,18 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
 
 /// Summary block returned alongside the scan item list.
 public struct MCPScanSummary: Codable, Sendable, Equatable {
+    /// Number of items classified as safe to clean.
     public let safeCount: Int
+    /// Human-readable total size for safe items.
     public let safeSize: String
+    /// Number of items that require review before cleanup.
     public let reviewCount: Int
+    /// Human-readable total size for review items.
     public let reviewSize: String
+    /// Number of protected items excluded from cleanup.
     public let protectedCount: Int
 
+    /// Creates the aggregate scan summary shown beside scan results.
     public init(
         safeCount: Int,
         safeSize: String,
@@ -118,11 +140,16 @@ public struct MCPScanSummary: Codable, Sendable, Equatable {
     }
 }
 
+/// Complete MCP `scan` response payload.
 public struct MCPScanOutput: Codable, Sendable, Equatable {
+    /// Human-readable total reclaimable size across actionable items.
     public let totalReclaimable: String
+    /// Individual scan rows returned to the MCP client.
     public let items: [MCPScanItem]
+    /// Aggregate counts and sizes for the scan.
     public let summary: MCPScanSummary
 
+    /// Creates a scan output payload.
     public init(totalReclaimable: String, items: [MCPScanItem], summary: MCPScanSummary) {
         self.totalReclaimable = totalReclaimable
         self.items = items
@@ -137,15 +164,22 @@ public struct MCPScanOutput: Codable, Sendable, Equatable {
 
 // MARK: - analyze
 
+/// Empty input payload for the MCP `analyze` tool.
 public struct MCPAnalyzeInput: Codable, Sendable, Equatable {
+    /// Creates an empty analyze input.
     public init() {}
 }
 
+/// Human-readable disk usage values returned by `analyze`.
 public struct MCPDiskUsage: Codable, Sendable, Equatable {
+    /// Total capacity string for the analyzed disk.
     public let total: String
+    /// Used capacity string for the analyzed disk.
     public let used: String
+    /// Free capacity string for the analyzed disk.
     public let free: String
 
+    /// Creates a disk usage block for MCP output.
     public init(total: String, used: String, free: String) {
         self.total = total
         self.used = used
@@ -153,11 +187,16 @@ public struct MCPDiskUsage: Codable, Sendable, Equatable {
     }
 }
 
+/// Large filesystem consumer surfaced by the MCP analyzer.
 public struct MCPTopConsumer: Codable, Sendable, Equatable {
+    /// Display name for the consumer.
     public let name: String
+    /// Filesystem path for the consumer.
     public let path: String
+    /// Human-readable size string for the consumer.
     public let size: String
 
+    /// Creates a top-consumer row.
     public init(name: String, path: String, size: String) {
         self.name = name
         self.path = path
@@ -165,12 +204,18 @@ public struct MCPTopConsumer: Codable, Sendable, Equatable {
     }
 }
 
+/// Complete MCP `analyze` response payload.
 public struct MCPAnalyzeOutput: Codable, Sendable, Equatable {
+    /// Overall file-health score returned to MCP clients.
     public let healthScore: Int
+    /// Disk usage summary for the current system.
     public let disk: MCPDiskUsage
+    /// Largest consumers found by the analyzer.
     public let topConsumers: [MCPTopConsumer]
+    /// User-facing recommendations derived from the analysis.
     public let recommendations: [String]
 
+    /// Creates an analyze output payload.
     public init(
         healthScore: Int,
         disk: MCPDiskUsage,
@@ -194,9 +239,12 @@ public struct MCPAnalyzeOutput: Codable, Sendable, Equatable {
 
 /// Input for `explain`: exactly one of `path` or `itemId` must be supplied.
 public struct MCPExplainInput: Codable, Sendable, Equatable {
+    /// Filesystem path to explain when addressing an item by path.
     public let path: String?
+    /// Scan item identifier to explain when addressing a previous result.
     public let itemId: String?
 
+    /// Creates an explain input before validation.
     public init(path: String? = nil, itemId: String? = nil) {
         self.path = path
         self.itemId = itemId
@@ -207,6 +255,7 @@ public struct MCPExplainInput: Codable, Sendable, Equatable {
         case itemId = "item_id"
     }
 
+    /// Decodes and validates that exactly one lookup key is present.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let path = try c.decodeIfPresent(String.self, forKey: .path)
@@ -231,14 +280,22 @@ public struct MCPExplainInput: Codable, Sendable, Equatable {
     }
 }
 
+/// Explanation details returned for one scan item or path.
 public struct MCPExplainOutput: Codable, Sendable, Equatable {
+    /// Display name for the explained item.
     public let name: String
+    /// Safety classification string for the item.
     public let safety: String
+    /// Confidence score for the explanation.
     public let confidence: Int
+    /// Human-readable explanation text.
     public let explanation: String
+    /// Optional human-readable size string.
     public let size: String?
+    /// Optional last access timestamp.
     public let lastAccessed: Date?
 
+    /// Creates an explanation output payload.
     public init(
         name: String,
         safety: String,
@@ -263,15 +320,22 @@ public struct MCPExplainOutput: Codable, Sendable, Equatable {
 
 // MARK: - list_profiles
 
+/// Empty input payload for the MCP `list_profiles` tool.
 public struct MCPListProfilesInput: Codable, Sendable, Equatable {
+    /// Creates an empty list-profiles input.
     public init() {}
 }
 
+/// Short profile description returned by `list_profiles`.
 public struct MCPProfileSummary: Codable, Sendable, Equatable {
+    /// Profile identifier or display name.
     public let name: String
+    /// Categories enabled by the profile.
     public let categories: [String]
+    /// User-facing profile description.
     public let description: String
 
+    /// Creates a profile summary row.
     public init(name: String, categories: [String], description: String) {
         self.name = name
         self.categories = categories
@@ -279,10 +343,14 @@ public struct MCPProfileSummary: Codable, Sendable, Equatable {
     }
 }
 
+/// Complete MCP `list_profiles` response payload.
 public struct MCPListProfilesOutput: Codable, Sendable, Equatable {
+    /// Profiles available to MCP callers.
     public let profiles: [MCPProfileSummary]
+    /// Active profile identifier.
     public let active: String
 
+    /// Creates a list-profiles output payload.
     public init(profiles: [MCPProfileSummary], active: String) {
         self.profiles = profiles
         self.active = active
@@ -291,25 +359,36 @@ public struct MCPListProfilesOutput: Codable, Sendable, Equatable {
 
 // MARK: - status
 
+/// Empty input payload for the MCP `status` tool.
 public struct MCPStatusInput: Codable, Sendable, Equatable {
+    /// Creates an empty status input.
     public init() {}
 }
 
+/// CPU usage fields returned by the MCP `status` tool.
 public struct MCPStatusCPU: Codable, Sendable, Equatable {
+    /// Current CPU usage percentage.
     public let usage: Double
+    /// Number of logical cores reported by the system.
     public let cores: Int
 
+    /// Creates a CPU status block.
     public init(usage: Double, cores: Int) {
         self.usage = usage
         self.cores = cores
     }
 }
 
+/// Memory usage fields returned by the MCP `status` tool.
 public struct MCPStatusMemory: Codable, Sendable, Equatable {
+    /// Human-readable used-memory string.
     public let used: String
+    /// Human-readable total-memory string.
     public let total: String
+    /// Used-memory percentage.
     public let percent: Double
 
+    /// Creates a memory status block.
     public init(used: String, total: String, percent: Double) {
         self.used = used
         self.total = total
@@ -317,11 +396,16 @@ public struct MCPStatusMemory: Codable, Sendable, Equatable {
     }
 }
 
+/// Disk usage fields returned by the MCP `status` tool.
 public struct MCPStatusDisk: Codable, Sendable, Equatable {
+    /// Human-readable used-disk string.
     public let used: String
+    /// Human-readable total-disk string.
     public let total: String
+    /// Used-disk percentage.
     public let percent: Double
 
+    /// Creates a disk status block.
     public init(used: String, total: String, percent: Double) {
         self.used = used
         self.total = total
@@ -329,13 +413,20 @@ public struct MCPStatusDisk: Codable, Sendable, Equatable {
     }
 }
 
+/// Complete MCP `status` response payload.
 public struct MCPStatusOutput: Codable, Sendable, Equatable {
+    /// Overall health score for the current system state.
     public let healthScore: Int
+    /// CPU usage summary.
     public let cpu: MCPStatusCPU
+    /// Memory usage summary.
     public let memory: MCPStatusMemory
+    /// Disk usage summary.
     public let disk: MCPStatusDisk
+    /// Human-readable process or system uptime.
     public let uptime: String
 
+    /// Creates a status output payload.
     public init(
         healthScore: Int,
         cpu: MCPStatusCPU,

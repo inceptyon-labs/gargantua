@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Added Mole-backed app cleanup coverage for cloud-sync, Office/mail, communication, virtualization, creative/media, productivity, launcher, game, utility, and remote desktop caches.
 - Expanded Smart Uninstaller remnant rules with Mole-backed WebKit, HTTP storage, app script, plug-in, XDG config, app extension, system-level, and protected receipt templates.
 - Synced the reviewed Mole-expanded rule snapshot to the public `gargantua-rules` repository and documented that the snapshot is not yet full Mole parity.
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-04-23
 
 ### Added
+
 - Initial public release.
 - YAML-driven cleanup and uninstall rules (19 cleanup files / 83 rules, 2 uninstall files / 12 rules).
 - MCP server (`GargantuaMCP`) with Phase 2 read-only tools (`scan`, `analyze`, `status`, `explain`, `list_profiles`) and Phase 3 destructive `clean` tool protected by protected-path hard-reject, 60s-per-client rate limit, audit trail, and cancel-notification grace period.

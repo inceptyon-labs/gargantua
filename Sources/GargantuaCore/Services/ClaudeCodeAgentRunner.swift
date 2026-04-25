@@ -1,18 +1,29 @@
 import Foundation
 
+/// Output stream categories captured from a Claude Code agent session.
 public enum ClaudeCodeAgentTranscriptStream: String, Codable, Sendable {
+    /// Internal status messages emitted by Gargantua.
     case system
+    /// Standard output emitted by the Claude Code process.
     case stdout
+    /// Standard error emitted by the Claude Code process.
     case stderr
+    /// Audit-specific session events.
     case audit
 }
 
+/// Timestamped transcript event for an agent session.
 public struct ClaudeCodeAgentTranscriptEvent: Identifiable, Codable, Equatable, Sendable {
+    /// Stable event identifier.
     public let id: UUID
+    /// Time when the event was captured.
     public let timestamp: Date
+    /// Stream that produced the event.
     public let stream: ClaudeCodeAgentTranscriptStream
+    /// Event text.
     public let message: String
 
+    /// Creates a transcript event.
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -26,21 +37,34 @@ public struct ClaudeCodeAgentTranscriptEvent: Identifiable, Codable, Equatable, 
     }
 }
 
+/// Approval decision state for destructive agent actions.
 public enum ClaudeCodeAgentApprovalStatus: String, Codable, Equatable, Sendable {
+    /// The action is awaiting a user decision.
     case pending
+    /// The user approved the action.
     case approved
+    /// The user denied the action.
     case denied
 }
 
+/// User approval gate raised when Claude Code requests destructive MCP tools.
 public struct ClaudeCodeAgentApprovalGate: Identifiable, Codable, Equatable, Sendable {
+    /// Stable approval gate identifier.
     public let id: UUID
+    /// Agent session that produced the gate.
     public let sessionID: UUID
+    /// Time when the gate was requested.
     public let requestedAt: Date
+    /// Time when the gate was decided.
     public var decidedAt: Date?
+    /// Current approval status.
     public var status: ClaudeCodeAgentApprovalStatus
+    /// Short user-facing summary of the requested action.
     public let summary: String
+    /// Raw transcript line that triggered the gate.
     public let rawTranscript: String
 
+    /// Creates an approval gate for a detected destructive action.
     public init(
         id: UUID = UUID(),
         sessionID: UUID,
@@ -60,18 +84,26 @@ public struct ClaudeCodeAgentApprovalGate: Identifiable, Codable, Equatable, Sen
     }
 }
 
+/// High-level lifecycle state for a Claude Code agent session.
 public enum ClaudeCodeAgentSessionStatus: Equatable, Sendable {
+    /// No session is currently active.
     case idle
+    /// A session process is currently running.
     case running
+    /// The session completed successfully.
     case completed
+    /// The session failed with a message.
     case failed(String)
+    /// The session was cancelled by the user.
     case cancelled
 
+    /// Whether the status represents an active running session.
     public var isRunning: Bool {
         if case .running = self { return true }
         return false
     }
 
+    /// Short user-facing status label.
     public var label: String {
         switch self {
         case .idle: "Ready"
@@ -83,14 +115,22 @@ public enum ClaudeCodeAgentSessionStatus: Equatable, Sendable {
     }
 }
 
+/// Resolved process launch details for a Claude Code agent session.
 public struct ClaudeCodeAgentLaunchPlan: Equatable, Sendable {
+    /// Session identifier passed to the agent environment.
     public let sessionID: UUID
+    /// Resolved Claude Code executable URL.
     public let executableURL: URL
+    /// Command-line arguments for the process.
     public let arguments: [String]
+    /// Environment variables for the process.
     public let environment: [String: String]
+    /// Optional working directory for the process.
     public let workingDirectory: URL?
+    /// Temporary MCP configuration file URL.
     public let mcpConfigURL: URL
 
+    /// Creates a resolved launch plan.
     public init(
         sessionID: UUID,
         executableURL: URL,
@@ -108,13 +148,19 @@ public struct ClaudeCodeAgentLaunchPlan: Equatable, Sendable {
     }
 }
 
+/// Terminal result for a Claude Code agent session.
 public struct ClaudeCodeAgentSessionResult: Equatable, Sendable {
+    /// Session identifier associated with the result.
     public let sessionID: UUID
+    /// Process exit code.
     public let exitCode: Int32
+    /// Approval gates detected during the session.
     public let approvalGates: [ClaudeCodeAgentApprovalGate]
 }
 
+/// Builds and runs Claude Code sessions against Gargantua's MCP server.
 public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
+    /// Comma-separated read-only tool allowlist used by default.
     public static let defaultAllowedTools = ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.joined(separator: ",")
 
     private let configurationStore: ClaudeCodeAgentConfigurationStore
@@ -125,6 +171,7 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
     private let tempDirectory: URL
     private let fileManager: FileManager
 
+    /// Creates a session runner with injected stores, resolver, process executor, and filesystem dependencies.
     public init(
         configurationStore: ClaudeCodeAgentConfigurationStore = ClaudeCodeAgentConfigurationStore(),
         cliResolver: ClaudeCodeCLIResolver = ClaudeCodeCLIResolver(),
@@ -143,6 +190,7 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
         self.fileManager = fileManager
     }
 
+    /// Resolves configuration and writes the temporary MCP config needed to start a session.
     public func makeLaunchPlan(
         prompt: String,
         sessionID: UUID = UUID(),
@@ -202,6 +250,7 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
         )
     }
 
+    /// Starts Claude Code, streams transcript events, and captures destructive-action gates.
     public func run(
         prompt: String,
         sessionID: UUID = UUID(),
@@ -265,10 +314,12 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
         }
     }
 
+    /// Cancels the active process through the configured executor.
     public func cancel() {
         processExecutor.cancel()
     }
 
+    /// Writes an audit event for the agent session.
     public func recordAgentAudit(command: String, sessionID: UUID) {
         let entry = AuditEntry(
             tool: "claude-code",
@@ -285,19 +336,25 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
     }
 }
 
+/// Hook that can run follow-up agent work after scheduled scans.
 public protocol ScheduledScanAgentAuditHook: Sendable {
     func run(summary: ScheduledScanSummary) async
 }
 
+/// Scheduled scan audit hook that performs no work.
 public struct NoopScheduledScanAgentAuditHook: ScheduledScanAgentAuditHook {
+    /// Creates a no-op scheduled scan audit hook.
     public init() {}
+    /// Ignores the scheduled scan summary.
     public func run(summary: ScheduledScanSummary) async {}
 }
 
+/// Runs a read-only Claude Code audit after scheduled scans when enabled.
 public struct ClaudeCodeScheduledAgentAuditHook: ScheduledScanAgentAuditHook {
     private let configurationStore: ClaudeCodeAgentConfigurationStore
     private let runner: ClaudeCodeAgentSessionRunner
 
+    /// Creates an audit hook with optional runner injection.
     public init(
         configurationStore: ClaudeCodeAgentConfigurationStore = ClaudeCodeAgentConfigurationStore(),
         runner: ClaudeCodeAgentSessionRunner? = nil
@@ -306,6 +363,7 @@ public struct ClaudeCodeScheduledAgentAuditHook: ScheduledScanAgentAuditHook {
         self.runner = runner ?? ClaudeCodeAgentSessionRunner(configurationStore: configurationStore)
     }
 
+    /// Runs the scheduled-scan prompt when the Claude Code integration allows it.
     public func run(summary: ScheduledScanSummary) async {
         let configuration = configurationStore.load()
         guard configuration.isEnabled, configuration.runAfterScheduledScans else { return }
@@ -320,13 +378,17 @@ public struct ClaudeCodeScheduledAgentAuditHook: ScheduledScanAgentAuditHook {
     }
 }
 
+/// Detects transcript lines where Claude Code requested destructive MCP cleanup.
 public struct ClaudeCodeDestructiveActionDetector: Sendable {
+    /// Session identifier to attach to approval gates.
     public let sessionID: UUID
 
+    /// Creates a detector for a specific agent session.
     public init(sessionID: UUID) {
         self.sessionID = sessionID
     }
 
+    /// Returns an approval gate when the transcript line mentions MCP cleanup with item IDs.
     public func detect(_ line: String) -> ClaudeCodeAgentApprovalGate? {
         let normalized = line.lowercased()
         let mentionsCleanTool = normalized.contains("mcp__gargantua__clean")
