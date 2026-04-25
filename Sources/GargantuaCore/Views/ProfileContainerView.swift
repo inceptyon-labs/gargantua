@@ -9,6 +9,7 @@ public struct ProfileContainerView: View {
     @State private var activeProfileID: String = "developer"
     @State private var editingProfile: CleanupProfile?
     @State private var isCreatingCustom = false
+    @State private var persistenceErrorMessage: String?
 
     public init(persistence: PersistenceController) {
         self.persistence = persistence
@@ -20,10 +21,7 @@ public struct ProfileContainerView: View {
                 ProfileEditorView(
                     profile: editing,
                     onSave: { updated in
-                        try? persistence.saveProfile(updated)
-                        editingProfile = nil
-                        isCreatingCustom = false
-                        loadProfiles()
+                        saveProfile(updated)
                     },
                     onCancel: {
                         if isCreatingCustom {
@@ -33,14 +31,7 @@ public struct ProfileContainerView: View {
                         editingProfile = nil
                     },
                     onDelete: editing.isCustom ? {
-                        try? persistence.deleteProfile(id: editing.id)
-                        if activeProfileID == editing.id {
-                            activeProfileID = "developer"
-                            try? persistence.updateSettings { $0.activeProfileID = "developer" }
-                        }
-                        editingProfile = nil
-                        isCreatingCustom = false
-                        loadProfiles()
+                        deleteProfile(id: editing.id, closeEditor: true)
                     } : nil
                 )
             } else {
@@ -48,8 +39,7 @@ public struct ProfileContainerView: View {
                     profiles: profiles,
                     activeProfileID: activeProfileID,
                     onSetActive: { id in
-                        activeProfileID = id
-                        try? persistence.updateSettings { $0.activeProfileID = id }
+                        setActiveProfile(id)
                     },
                     onEdit: { profile in
                         editingProfile = profile
@@ -67,23 +57,112 @@ public struct ProfileContainerView: View {
                         editingProfile = custom
                     },
                     onDelete: { id in
-                        try? persistence.deleteProfile(id: id)
-                        if activeProfileID == id {
-                            activeProfileID = "developer"
-                            try? persistence.updateSettings { $0.activeProfileID = "developer" }
-                        }
-                        loadProfiles()
+                        deleteProfile(id: id, closeEditor: false)
                     }
                 )
             }
         }
         .onAppear { loadProfiles() }
+        .alert(
+            "Profile Change Failed",
+            isPresented: Binding(
+                get: { persistenceErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        persistenceErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                persistenceErrorMessage = nil
+            }
+        } message: {
+            Text(persistenceErrorMessage ?? "The profile change could not be saved.")
+        }
     }
 
     private func loadProfiles() {
-        profiles = (try? persistence.fetchProfiles()) ?? CleanupProfile.builtIn
-        if let settings = try? persistence.fetchSettings() {
-            activeProfileID = settings.activeProfileID
+        do {
+            profiles = try persistence.fetchProfiles()
+        } catch {
+            PersistenceDiagnostics.logFailure("fetchProfiles", error: error)
+            profiles = CleanupProfile.builtIn
         }
+
+        do {
+            let settings = try persistence.fetchSettings()
+            activeProfileID = settings.activeProfileID
+        } catch {
+            PersistenceDiagnostics.logFailure("fetchSettings", error: error)
+        }
+    }
+
+    private func saveProfile(_ updated: CleanupProfile) {
+        do {
+            try persistence.saveProfile(updated)
+            editingProfile = nil
+            isCreatingCustom = false
+            loadProfiles()
+        } catch {
+            reportPersistenceFailure(
+                operation: "saveProfile",
+                message: "Gargantua could not save this profile.",
+                error: error
+            )
+        }
+    }
+
+    private func deleteProfile(id: String, closeEditor: Bool) {
+        do {
+            try persistence.deleteProfile(id: id)
+            if activeProfileID == id {
+                persistActiveProfileFallback()
+            }
+            if closeEditor {
+                editingProfile = nil
+                isCreatingCustom = false
+            }
+            loadProfiles()
+        } catch {
+            reportPersistenceFailure(
+                operation: "deleteProfile",
+                message: "Gargantua could not delete this profile.",
+                error: error
+            )
+        }
+    }
+
+    private func setActiveProfile(_ id: String) {
+        let previousID = activeProfileID
+        activeProfileID = id
+        do {
+            try persistence.updateSettings { $0.activeProfileID = id }
+        } catch {
+            activeProfileID = previousID
+            reportPersistenceFailure(
+                operation: "updateSettings activeProfileID",
+                message: "Gargantua could not save the active profile change.",
+                error: error
+            )
+        }
+    }
+
+    private func persistActiveProfileFallback() {
+        activeProfileID = "developer"
+        do {
+            try persistence.updateSettings { $0.activeProfileID = "developer" }
+        } catch {
+            reportPersistenceFailure(
+                operation: "updateSettings activeProfileID",
+                message: "The profile was deleted, but Gargantua could not save the active profile fallback.",
+                error: error
+            )
+        }
+    }
+
+    private func reportPersistenceFailure(operation: String, message: String, error: Error) {
+        PersistenceDiagnostics.logFailure(operation, error: error)
+        persistenceErrorMessage = "\(message) \(error.localizedDescription)"
     }
 }

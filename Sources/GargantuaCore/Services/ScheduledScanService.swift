@@ -548,7 +548,11 @@ public final class ScheduledScanRunner {
                 reclaimableBytes: 0,
                 errorMessage: error.localizedDescription
             )
-            try? persistence.recordScheduledScanSummary(summary)
+            do {
+                try persistence.recordScheduledScanSummary(summary)
+            } catch {
+                PersistenceDiagnostics.logFailure("recordScheduledScanSummary", error: error)
+            }
             await notifier.deliver(summary: summary)
             return .failed(summary)
         }

@@ -151,10 +151,16 @@ public final class MenuBarStatusModel: ObservableObject {
 
             quickScanSummary = summary
             defaults.removeObject(forKey: MenuBarPreferences.alertsSnoozedUntilKey)
-            try? persistence.updateSettings { settings in
-                settings.lastScanDate = runDate
+            var persistenceErrorMessage: String?
+            do {
+                try persistence.updateSettings { settings in
+                    settings.lastScanDate = runDate
+                }
+            } catch {
+                PersistenceDiagnostics.logFailure("updateSettings lastScanDate", error: error)
+                persistenceErrorMessage = error.localizedDescription
             }
-            snapshot = makeSnapshot(summary: summary, isScanning: false, errorMessage: nil)
+            snapshot = makeSnapshot(summary: summary, isScanning: false, errorMessage: persistenceErrorMessage)
         } catch {
             snapshot = makeSnapshot(summary: quickScanSummary, isScanning: false, errorMessage: error.localizedDescription)
         }

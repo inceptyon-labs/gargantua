@@ -75,9 +75,19 @@ public struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(GargantuaColors.void_)
         .task {
-            settings = try? persistence.fetchSettings()
-            availableProfiles = ((try? persistence.fetchProfiles()) ?? CleanupProfile.builtIn)
-                .filter { !$0.categories.isEmpty }
+            do {
+                settings = try persistence.fetchSettings()
+            } catch {
+                PersistenceDiagnostics.logFailure("fetchSettings", error: error)
+            }
+
+            do {
+                availableProfiles = try persistence.fetchProfiles()
+                    .filter { !$0.categories.isEmpty }
+            } catch {
+                PersistenceDiagnostics.logFailure("fetchProfiles", error: error)
+                availableProfiles = CleanupProfile.builtIn.filter { !$0.categories.isEmpty }
+            }
             scheduledScanAgentStatus = ScheduledScanController().status()
             launchAtLoginStatus = LaunchAtLoginController().status()
             launchAtLoginEnabled = launchAtLoginStatus == .enabled || launchAtLoginStatus == .requiresApproval

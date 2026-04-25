@@ -1,4 +1,5 @@
 import GargantuaCore
+import Foundation
 import SwiftUI
 
 /// Root content view for the Gargantua window.
@@ -138,10 +139,7 @@ struct MainContentView: View {
                 }
                 .environment(\.cleanupNarrator, narrateHandler)
                 .onAppear {
-                    if persistence == nil {
-                        persistence = try? PersistenceController()
-                        try? persistence?.bootstrap()
-                    }
+                    initializePersistenceIfNeeded()
                     refreshAIEngineSelection()
                 }
                 .onChange(of: preferredAIEngineRawValue) { _, _ in
@@ -199,6 +197,24 @@ struct MainContentView: View {
         { result in await aiService.narrate(cleanup: result) }
     }
 
+    /// Initialize persistence once at app boot. The app cannot provide a
+    /// trustworthy data UI without the store, so fail loudly instead of running
+    /// with every persistence operation effectively disabled.
+    private func initializePersistenceIfNeeded() {
+        guard persistence == nil else { return }
+
+        let controller: PersistenceController
+        do {
+            controller = try PersistenceController()
+            try controller.bootstrap()
+        } catch {
+            FileHandle.standardError.write(Data("persistence init failed: \(error)\n".utf8))
+            fatalError("Persistence layer failed to initialize: \(error.localizedDescription)")
+        }
+
+        persistence = controller
+    }
+
     /// Reconcile the long-lived AI service with the persisted preference and
     /// current model availability. This lets Settings changes take effect
     /// without replacing the controllers that already hold the service.
@@ -221,11 +237,32 @@ struct MainContentView: View {
     /// persistence isn't ready yet or the stored ID doesn't match anything so
     /// Deep Clean always has a safe, broad default.
     private var activeDeepCleanProfile: CleanupProfile {
-        guard let persistence,
-              let settings = try? persistence.fetchSettings()
-        else { return .deep }
+        guard let persistence else { return .deep }
 
-        let persisted = (try? persistence.fetchProfiles()) ?? []
+        let settings: PersistedSettings
+        do {
+            settings = try persistence.fetchSettings()
+        } catch {
+            PersistenceDiagnostics.logFallback(
+                "fetchSettings activeDeepCleanProfile",
+                fallback: ".deep",
+                error: error
+            )
+            return .deep
+        }
+
+        let persisted: [CleanupProfile]
+        do {
+            persisted = try persistence.fetchProfiles()
+        } catch {
+            PersistenceDiagnostics.logFallback(
+                "fetchProfiles activeDeepCleanProfile",
+                fallback: "built-in profiles only",
+                error: error
+            )
+            persisted = []
+        }
+
         return CleanupProfile.resolve(
             activeProfileID: settings.activeProfileID,
             persisted: persisted,
@@ -241,9 +278,19 @@ struct MainContentView: View {
     /// or a bare `~` is dropped to prevent accidentally widening scan scope to
     /// the whole filesystem or home directory.
     private var resolvedScanRoots: [URL]? {
-        guard let persistence,
-              let stored = try? persistence.fetchSettings().scanRoots
-        else { return nil }
+        guard let persistence else { return nil }
+
+        let stored: [String]
+        do {
+            stored = try persistence.fetchSettings().scanRoots
+        } catch {
+            PersistenceDiagnostics.logFallback(
+                "fetchSettings scanRoots",
+                fallback: "auto-detected scan roots",
+                error: error
+            )
+            return nil
+        }
 
         let urls = ScanRootSettings.resolvedURLs(from: stored)
         return urls.isEmpty ? nil : urls
