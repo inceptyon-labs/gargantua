@@ -9,7 +9,6 @@ xcuserdata/
 # Swift Package Manager
 .build/
 Packages/
-Package.resolved
 
 # macOS
 .DS_Store
@@ -51,6 +50,7 @@ docs/scans/
 .env.local
 .env.release
 test_output.log
+coverage.lcov
 
 # Release artifacts
 /dist/

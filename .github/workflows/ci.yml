@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: SwiftLint
+    runs-on: macos-14
+    # Advisory until the existing 14 type_body_length / line_length
+    # errors are resolved or allow-listed. Flip to blocking after.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
+
+  test:
+    name: Swift Tests
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test with coverage
+        run: swift test --enable-code-coverage
+
+      - name: Export lcov
+        run: |
+          test_binary=".build/debug/GargantuaPackageTests.xctest/Contents/MacOS/GargantuaPackageTests"
+          if [[ ! -x "$test_binary" ]]; then
+            test_binary="$(find .build/debug -path '*.xctest/Contents/MacOS/*' -type f | head -n 1)"
+          fi
+          if [[ -z "$test_binary" || ! -x "$test_binary" ]]; then
+            echo "Unable to locate SwiftPM test executable under .build/debug" >&2
+            exit 1
+          fi
+
+          xcrun llvm-cov export \
+            -format=lcov \
+            "$test_binary" \
+            -instr-profile .build/debug/codecov/default.profdata \
+            -ignore-filename-regex='.build|Tests' > coverage.lcov
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage.lcov
