@@ -53,11 +53,13 @@ jobs:
         #   IS_DRY_RUN: 'true' for workflow_dispatch with dry_run=true (default)
         #   RELEASE_FLAGS: flags to pass to ./Scripts/release.sh
         #   VERSION: cleaned-up version string (no leading 'v')
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN_INPUT: ${{ github.event.inputs.dry_run }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            DRY="${{ github.event.inputs.dry_run }}"
-            if [ "$DRY" = "true" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DRY_RUN_INPUT" = "true" ]; then
               echo "IS_DRY_RUN=true" >> "$GITHUB_ENV"
               echo "RELEASE_FLAGS=--ci --dry-run --snapshot" >> "$GITHUB_ENV"
               SHORT_SHA=$(git rev-parse --short HEAD)
