@@ -19,9 +19,10 @@ semgrep     = "auto"
 trufflehog  = "auto"
 
 # ── Dependency scanning ────────────────────────────────────────────────────
-# trivy can scan Package.resolved for Swift dependency CVEs
+# trivy can scan Package.resolved for Swift dependency CVEs.
+# trivy.yaml excludes SwiftPM build artifacts under .build.
 trivy       = "auto"
-osv_scanner = "off"     # no Go/Python deps
+osv_scanner = "auto"    # OSV-backed Package.resolved coverage
 npm_audit   = "off"     # no package.json
 pip_audit   = "off"     # no Python source
 

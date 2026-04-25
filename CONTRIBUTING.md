@@ -55,6 +55,36 @@ Scripts/validate-rules.sh cleanup
 Scripts/validate-rules.sh uninstall
 ```
 
+For code changes, run Swift tests with coverage and inspect the lowest-covered
+service/model files before adding broad new surface area:
+
+```bash
+swift test --enable-code-coverage
+
+test_binary=".build/debug/GargantuaPackageTests.xctest/Contents/MacOS/GargantuaPackageTests"
+xcrun llvm-cov export \
+  -format=lcov \
+  "$test_binary" \
+  -instr-profile .build/debug/codecov/default.profdata \
+  -ignore-filename-regex='.build|Tests' > coverage.lcov
+
+Scripts/coverage-priorities.sh coverage.lcov --limit 20 --min-lines 20
+```
+
+Prioritize low-covered files under `Sources/GargantuaCore/Services/` and
+`Sources/GargantuaCore/Models/`, especially safety, cleanup, permission,
+signature, and agent lifecycle paths. CI reports these priorities but does not
+fail on a coverage percentage yet. Once the team agrees on a baseline that the
+suite reliably exceeds, enable the same script as a gate with `--fail-under`.
+
+Dependency scanning uses Trivy for SwiftPM lockfile CVEs and an OSV wrapper for
+OSV-backed checks against the pinned Git revisions in `Package.resolved`:
+
+```bash
+trivy fs --config trivy.yaml .
+Scripts/osv-spm-scan.sh -- --all-packages
+```
+
 ## Safety Guidelines
 
 - Use `safe` only when the files are clearly disposable or trivially regenerated.

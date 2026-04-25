@@ -3,68 +3,66 @@ import Testing
 
 @testable import GargantuaCore
 
+private struct StubEnumerator: AppBundleEnumerating {
+    let urls: [URL]
+    func enumerateBundles() -> [URL] { urls }
+}
+
+private struct StubReader: AppBundleReading {
+    let metadata: [String: AppBundleMetadata]
+    let sizes: [String: Int64]
+
+    func readMetadata(bundleURL: URL) -> AppBundleMetadata? {
+        metadata[bundleURL.path]
+    }
+
+    func sizeOnDisk(bundleURL: URL) -> Int64? {
+        sizes[bundleURL.path]
+    }
+}
+
+private struct StubRunningChecker: RunningAppChecking {
+    let running: Set<String>
+    func isRunning(bundleID: String) -> Bool { running.contains(bundleID) }
+}
+
+private struct StubVerifier: CodeSignatureVerifying {
+    let infos: [String: CodeSignatureInfo]
+    let defaultInfo: CodeSignatureInfo
+
+    init(infos: [String: CodeSignatureInfo], defaultInfo: CodeSignatureInfo = .unknown) {
+        self.infos = infos
+        self.defaultInfo = defaultInfo
+    }
+
+    func verify(bundleURL: URL) -> CodeSignatureInfo {
+        infos[bundleURL.path] ?? defaultInfo
+    }
+}
+
+private func appMetadata(
+    bundleID: String,
+    name: String,
+    path: String,
+    displayName: String? = nil,
+    shortVersion: String? = "1.0",
+    bundleVersion: String? = "100"
+) -> AppBundleMetadata {
+    AppBundleMetadata(
+        bundleID: bundleID,
+        name: name,
+        displayName: displayName,
+        shortVersion: shortVersion,
+        bundleVersion: bundleVersion,
+        bundlePath: path,
+        executablePath: "\(path)/Contents/MacOS/\(name)",
+        installDate: Date(timeIntervalSince1970: 1_700_000_000),
+        lastUsedDate: Date(timeIntervalSince1970: 1_750_000_000)
+    )
+}
+
 @Suite("AppScanner")
 struct AppScannerTests {
-
-    // MARK: - Stubs
-
-    private struct StubEnumerator: AppBundleEnumerating {
-        let urls: [URL]
-        func enumerateBundles() -> [URL] { urls }
-    }
-
-    private struct StubReader: AppBundleReading {
-        let metadata: [String: AppBundleMetadata]
-        let sizes: [String: Int64]
-
-        func readMetadata(bundleURL: URL) -> AppBundleMetadata? {
-            metadata[bundleURL.path]
-        }
-
-        func sizeOnDisk(bundleURL: URL) -> Int64? {
-            sizes[bundleURL.path]
-        }
-    }
-
-    private struct StubRunningChecker: RunningAppChecking {
-        let running: Set<String>
-        func isRunning(bundleID: String) -> Bool { running.contains(bundleID) }
-    }
-
-    private struct StubVerifier: CodeSignatureVerifying {
-        let infos: [String: CodeSignatureInfo]
-        let defaultInfo: CodeSignatureInfo
-
-        init(infos: [String: CodeSignatureInfo], defaultInfo: CodeSignatureInfo = .unknown) {
-            self.infos = infos
-            self.defaultInfo = defaultInfo
-        }
-
-        func verify(bundleURL: URL) -> CodeSignatureInfo {
-            infos[bundleURL.path] ?? defaultInfo
-        }
-    }
-
-    private static func meta(
-        bundleID: String,
-        name: String,
-        path: String,
-        displayName: String? = nil,
-        shortVersion: String? = "1.0",
-        bundleVersion: String? = "100"
-    ) -> AppBundleMetadata {
-        AppBundleMetadata(
-            bundleID: bundleID,
-            name: name,
-            displayName: displayName,
-            shortVersion: shortVersion,
-            bundleVersion: bundleVersion,
-            bundlePath: path,
-            executablePath: "\(path)/Contents/MacOS/\(name)",
-            installDate: Date(timeIntervalSince1970: 1_700_000_000),
-            lastUsedDate: Date(timeIntervalSince1970: 1_750_000_000)
-        )
-    }
 
     // MARK: - Happy path
 
@@ -77,12 +75,12 @@ struct AppScannerTests {
             enumerator: StubEnumerator(urls: [chromeURL, xcodeURL]),
             reader: StubReader(
                 metadata: [
-                    chromeURL.path: Self.meta(
+                    chromeURL.path: appMetadata(
                         bundleID: "com.google.Chrome",
                         name: "Google Chrome",
                         path: chromeURL.path
                     ),
-                    xcodeURL.path: Self.meta(
+                    xcodeURL.path: appMetadata(
                         bundleID: "com.apple.dt.Xcode",
                         name: "Xcode",
                         path: xcodeURL.path
@@ -138,8 +136,8 @@ struct AppScannerTests {
             enumerator: StubEnumerator(urls: [goodURL, brokenURL]),
             reader: StubReader(
                 metadata: [
-                    goodURL.path: Self.meta(bundleID: "com.good", name: "Good", path: goodURL.path),
-                    brokenURL.path: Self.meta(
+                    goodURL.path: appMetadata(bundleID: "com.good", name: "Good", path: goodURL.path),
+                    brokenURL.path: appMetadata(
                         bundleID: "com.broken",
                         name: "Broken",
                         path: brokenURL.path
@@ -166,7 +164,7 @@ struct AppScannerTests {
         let scanner = DefaultAppScanner(
             enumerator: StubEnumerator(urls: [url]),
             reader: StubReader(
-                metadata: [url.path: Self.meta(bundleID: "com.tampered", name: "Tampered", path: url.path)],
+                metadata: [url.path: appMetadata(bundleID: "com.tampered", name: "Tampered", path: url.path)],
                 sizes: [:]
             ),
             runningChecker: StubRunningChecker(running: []),
@@ -187,7 +185,7 @@ struct AppScannerTests {
         let scanner = DefaultAppScanner(
             enumerator: StubEnumerator(urls: [url]),
             reader: StubReader(
-                metadata: [url.path: Self.meta(bundleID: "com.opaque", name: "Opaque", path: url.path)],
+                metadata: [url.path: appMetadata(bundleID: "com.opaque", name: "Opaque", path: url.path)],
                 sizes: [:]
             ),
             runningChecker: StubRunningChecker(running: []),
@@ -208,7 +206,7 @@ struct AppScannerTests {
         let scanner = DefaultAppScanner(
             enumerator: StubEnumerator(urls: [url]),
             reader: StubReader(
-                metadata: [url.path: Self.meta(bundleID: "com.apple.mail", name: "Mail", path: url.path)],
+                metadata: [url.path: appMetadata(bundleID: "com.apple.mail", name: "Mail", path: url.path)],
                 sizes: [:]
             ),
             runningChecker: StubRunningChecker(running: []),
@@ -231,7 +229,7 @@ struct AppScannerTests {
             enumerator: StubEnumerator(urls: [url]),
             reader: StubReader(
                 metadata: [
-                    url.path: Self.meta(
+                    url.path: appMetadata(
                         bundleID: "com.apple.iWork.Keynote",
                         name: "Keynote",
                         path: url.path
@@ -260,12 +258,12 @@ struct AppScannerTests {
             enumerator: StubEnumerator(urls: [primaryURL, duplicateURL]),
             reader: StubReader(
                 metadata: [
-                    primaryURL.path: Self.meta(
+                    primaryURL.path: appMetadata(
                         bundleID: "com.tinyspeck.slackmacgap",
                         name: "Slack",
                         path: primaryURL.path
                     ),
-                    duplicateURL.path: Self.meta(
+                    duplicateURL.path: appMetadata(
                         bundleID: "com.tinyspeck.slackmacgap",
                         name: "Slack",
                         path: duplicateURL.path
@@ -293,7 +291,7 @@ struct AppScannerTests {
             enumerator: StubEnumerator(urls: [goodURL, brokenURL]),
             reader: StubReader(
                 metadata: [
-                    goodURL.path: Self.meta(bundleID: "com.good", name: "Good", path: goodURL.path)
+                    goodURL.path: appMetadata(bundleID: "com.good", name: "Good", path: goodURL.path)
                     // brokenURL has no metadata entry → reader returns nil
                 ],
                 sizes: [:]

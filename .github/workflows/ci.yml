@@ -62,6 +62,9 @@ jobs:
             -instr-profile .build/debug/codecov/default.profdata \
             -ignore-filename-regex='.build|Tests' > coverage.lcov
 
+      - name: Summarize low-coverage service and model files
+        run: Scripts/coverage-priorities.sh coverage.lcov --limit 20 --min-lines 20
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
