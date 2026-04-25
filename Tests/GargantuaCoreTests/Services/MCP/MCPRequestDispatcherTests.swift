@@ -598,12 +598,12 @@ struct MCPRequestDispatcherTests {
     @Test("notification for tools/call does not invoke registered handler")
     func notificationDoesNotInvokeHandler() {
         final class Box: @unchecked Sendable {
-            var count = 0
+            var invocations = 0
         }
         let box = Box()
         let dispatcher = makeDispatcher()
         dispatcher.register(tool: .status) { _ in
-            box.count += 1
+            box.invocations += 1
             return .text("ok")
         }
         let req = MCPRequest(
@@ -612,7 +612,7 @@ struct MCPRequestDispatcherTests {
             params: .object(["name": .string("status")])
         )
         #expect(dispatcher.dispatch(req) == nil)
-        #expect(box.count == 0)
+        #expect(box.invocations == 0)
     }
 
     // MARK: Response encodability

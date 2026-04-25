@@ -37,7 +37,14 @@ struct MLXBackendPerformanceSmokeTests {
         var allLatencies: [Double] = []
 
         print("""
-            MLX_PERF_SUMMARY model_dir=\(modelDirectory.path) cases=\(cases.count) runs_per_case=\(runsPerCase) max_new_tokens=\(maxNewTokens) cold_load_s=\(Self.formatSeconds(coldLoadSeconds)) memory_bytes=\(memoryAfterLoad) memory_mib=\(Self.formatMiB(memoryAfterLoad))
+            MLX_PERF_SUMMARY \
+            model_dir=\(modelDirectory.path) \
+            cases=\(cases.count) \
+            runs_per_case=\(runsPerCase) \
+            max_new_tokens=\(maxNewTokens) \
+            cold_load_s=\(Self.formatSeconds(coldLoadSeconds)) \
+            memory_bytes=\(memoryAfterLoad) \
+            memory_mib=\(Self.formatMiB(memoryAfterLoad))
             """)
 
         for smokeCase in cases {
@@ -57,7 +64,13 @@ struct MLXBackendPerformanceSmokeTests {
             }
 
             print("""
-                MLX_PERF_CASE id=\(smokeCase.rule.id) category=\(smokeCase.rule.category) safety=\(smokeCase.rule.safety.rawValue) p50_s=\(Self.formatSeconds(Self.percentile(latencies, 0.50))) p95_s=\(Self.formatSeconds(Self.percentile(latencies, 0.95))) token_counts=\(tokenCounts.map(String.init).joined(separator: ","))
+                MLX_PERF_CASE \
+                id=\(smokeCase.rule.id) \
+                category=\(smokeCase.rule.category) \
+                safety=\(smokeCase.rule.safety.rawValue) \
+                p50_s=\(Self.formatSeconds(Self.percentile(latencies, 0.50))) \
+                p95_s=\(Self.formatSeconds(Self.percentile(latencies, 0.95))) \
+                token_counts=\(tokenCounts.map(String.init).joined(separator: ","))
                 """)
         }
 
@@ -125,7 +138,7 @@ struct MLXBackendPerformanceSmokeTests {
 
     private static func representativeCases() -> [SmokeCase] {
         [
-            makeCase(
+            makeCase(SmokeCaseSpec(
                 id: "chrome_cache",
                 name: "Chrome Browser Cache",
                 path: "/Users/smoke/Library/Caches/Google/Chrome",
@@ -137,8 +150,8 @@ struct MLXBackendPerformanceSmokeTests {
                 regenerates: true,
                 category: "browser_cache",
                 tags: ["browser", "cache"]
-            ),
-            makeCase(
+            )),
+            makeCase(SmokeCaseSpec(
                 id: "chrome_local_storage",
                 name: "Chrome Local Storage",
                 path: "/Users/smoke/Library/Application Support/Google/Chrome/Default/Local Storage",
@@ -150,8 +163,8 @@ struct MLXBackendPerformanceSmokeTests {
                 regenerates: false,
                 category: "browser_data",
                 tags: ["browser", "user_data"]
-            ),
-            makeCase(
+            )),
+            makeCase(SmokeCaseSpec(
                 id: "xcode_derived_data",
                 name: "Xcode Derived Data",
                 path: "/Users/smoke/Library/Developer/Xcode/DerivedData",
@@ -164,8 +177,8 @@ struct MLXBackendPerformanceSmokeTests {
                 regenerateCommand: "xcodebuild",
                 category: "dev_artifacts",
                 tags: ["developer", "build_cache"]
-            ),
-            makeCase(
+            )),
+            makeCase(SmokeCaseSpec(
                 id: "docker_data",
                 name: "Docker Application Data",
                 path: "/Users/smoke/Library/Containers/com.docker.docker/Data",
@@ -177,8 +190,8 @@ struct MLXBackendPerformanceSmokeTests {
                 regenerates: false,
                 category: "docker",
                 tags: ["developer", "containers"]
-            ),
-            makeCase(
+            )),
+            makeCase(SmokeCaseSpec(
                 id: "system_logs",
                 name: "System Log Files",
                 path: "/Users/smoke/Library/Logs",
@@ -190,8 +203,8 @@ struct MLXBackendPerformanceSmokeTests {
                 regenerates: true,
                 category: "system_logs",
                 tags: ["system", "logs"]
-            ),
-            makeCase(
+            )),
+            makeCase(SmokeCaseSpec(
                 id: "generic_application_support",
                 name: "Application Support folder",
                 path: "/Users/smoke/Library/Application Support/Acme Notes",
@@ -203,50 +216,80 @@ struct MLXBackendPerformanceSmokeTests {
                 regenerates: true,
                 category: "support_files",
                 tags: ["generic", "support", "remnant"]
-            ),
+            )),
         ]
     }
 
-    private static func makeCase(
-        id: String,
-        name: String,
-        path: String,
-        size: Int64,
-        safety: SafetyLevel,
-        confidence: Int,
-        explanation: String,
-        source: SourceAttribution,
-        regenerates: Bool,
-        regenerateCommand: String? = nil,
-        category: String,
-        tags: [String]
-    ) -> SmokeCase {
+    private struct SmokeCaseSpec {
+        let id: String
+        let name: String
+        let path: String
+        let size: Int64
+        let safety: SafetyLevel
+        let confidence: Int
+        let explanation: String
+        let source: SourceAttribution
+        let regenerates: Bool
+        let regenerateCommand: String?
+        let category: String
+        let tags: [String]
+
+        init(
+            id: String,
+            name: String,
+            path: String,
+            size: Int64,
+            safety: SafetyLevel,
+            confidence: Int,
+            explanation: String,
+            source: SourceAttribution,
+            regenerates: Bool,
+            regenerateCommand: String? = nil,
+            category: String,
+            tags: [String]
+        ) {
+            self.id = id
+            self.name = name
+            self.path = path
+            self.size = size
+            self.safety = safety
+            self.confidence = confidence
+            self.explanation = explanation
+            self.source = source
+            self.regenerates = regenerates
+            self.regenerateCommand = regenerateCommand
+            self.category = category
+            self.tags = tags
+        }
+    }
+
+    private static func makeCase(_ spec: SmokeCaseSpec) -> SmokeCase {
         let rule = ScanRule(
-            id: id,
-            name: name,
-            paths: [path],
-            safety: safety,
-            confidence: confidence,
-            explanation: explanation,
-            source: source,
-            regenerates: regenerates,
-            regenerateCommand: regenerateCommand,
-            category: category,
-            tags: tags
+            id: spec.id,
+            name: spec.name,
+            paths: [spec.path],
+            safety: spec.safety,
+            confidence: spec.confidence,
+            explanation: spec.explanation,
+            source: spec.source,
+            regenerates: spec.regenerates,
+            regenerateCommand: spec.regenerateCommand,
+            category: spec.category,
+            tags: spec.tags
         )
         let result = ScanResult(
-            id: "\(id)_smoke",
-            name: name,
-            path: path,
-            size: size,
-            safety: safety,
-            confidence: confidence,
-            explanation: explanation,
-            source: source,
-            category: category,
-            tags: tags,
-            regenerates: regenerates,
-            regenerateCommand: regenerateCommand
+            id: "\(spec.id)_smoke",
+            name: spec.name,
+            path: spec.path,
+            size: spec.size,
+            safety: spec.safety,
+            confidence: spec.confidence,
+            explanation: spec.explanation,
+            source: spec.source,
+            category: spec.category,
+            tags: spec.tags,
+            regenerates: spec.regenerates,
+            regenerateCommand: spec.regenerateCommand
         )
         return SmokeCase(rule: rule, result: result)
     }
