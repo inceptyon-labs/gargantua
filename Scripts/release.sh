@@ -121,8 +121,11 @@ fi
 if [ "$DRY_RUN" != "1" ]; then
     [ -n "${SIGNING_IDENTITY:-}" ] \
         || die "SIGNING_IDENTITY not set. Copy .env.release.example to .env.release and fill in, or export SIGNING_IDENTITY."
-    [ -n "${NOTARY_PROFILE:-}" ] \
-        || die "NOTARY_PROFILE not set. See .env.release.example for setup."
+    if [ -z "${NOTARY_PROFILE:-}" ] && [ -z "${NOTARY_API_KEY_PATH:-}" ]; then
+        die "Neither NOTARY_PROFILE nor NOTARY_API_KEY_PATH set. Either:
+  - set NOTARY_API_KEY_PATH/NOTARY_API_KEY_ID/NOTARY_API_ISSUER_ID (App Store Connect API key, recommended for CI), or
+  - set NOTARY_PROFILE (notarytool keychain profile, see .env.release.example)."
+    fi
     [ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ] \
         || die "SPARKLE_PUBLIC_ED_KEY not set. Generate once with Sparkle's generate_keys and keep the private key in Keychain/CI secrets."
     case "$SPARKLE_FEED_URL" in

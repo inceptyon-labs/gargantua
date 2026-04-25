@@ -73,8 +73,19 @@ else
     log "DRY-RUN: render markdown release notes to $RELEASE_NOTES_HTML_PATH when cmark/pandoc is available"
 fi
 
+# Optional CI hooks: pass the EdDSA private key explicitly (rather than
+# relying on Keychain) and set the absolute download URL prefix that the
+# generated appcast should embed for each item.
+GENERATE_APPCAST_FLAGS=()
+if [ -n "${SPARKLE_ED_KEY_FILE:-}" ]; then
+    GENERATE_APPCAST_FLAGS+=(--ed-key-file "$SPARKLE_ED_KEY_FILE")
+fi
+if [ -n "${SPARKLE_DOWNLOAD_URL_PREFIX:-}" ]; then
+    GENERATE_APPCAST_FLAGS+=(--download-url-prefix "$SPARKLE_DOWNLOAD_URL_PREFIX")
+fi
+
 log "Generating signed appcast ($APPCAST_NAME)..."
-run "$GENERATE_APPCAST" "$UPDATES_DIR"
+run "$GENERATE_APPCAST" "${GENERATE_APPCAST_FLAGS[@]}" "$UPDATES_DIR"
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
     [ -f "$UPDATES_DIR/$APPCAST_NAME" ] \

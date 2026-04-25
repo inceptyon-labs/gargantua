@@ -33,12 +33,33 @@ case "$TARGET" in
     *) die "unsupported notarize target (expected .app or .dmg): $TARGET" ;;
 esac
 
-[ -n "${NOTARY_PROFILE:-}" ] \
-    || die "NOTARY_PROFILE not set. Create one with:
-  xcrun notarytool store-credentials \"gargantua-notary\" \\
-    --apple-id <you@example.com> \\
-    --team-id \$TEAM_ID \\
-    --password <app-specific-password>"
+# Auth: prefer App Store Connect API key (CI-friendly, no keychain),
+# fall back to a stored notarytool keychain profile.
+NOTARY_AUTH_FLAGS=()
+NOTARY_AUTH_DESC=""
+if [ -n "${NOTARY_API_KEY_PATH:-}" ]; then
+    [ -n "${NOTARY_API_KEY_ID:-}" ] \
+        || die "NOTARY_API_KEY_ID required when NOTARY_API_KEY_PATH is set"
+    [ -n "${NOTARY_API_ISSUER_ID:-}" ] \
+        || die "NOTARY_API_ISSUER_ID required when NOTARY_API_KEY_PATH is set"
+    [ -f "$NOTARY_API_KEY_PATH" ] || [ "${DRY_RUN:-0}" = "1" ] \
+        || die "NOTARY_API_KEY_PATH does not point at a readable file: $NOTARY_API_KEY_PATH"
+    NOTARY_AUTH_FLAGS=(
+        --key "$NOTARY_API_KEY_PATH"
+        --key-id "$NOTARY_API_KEY_ID"
+        --issuer "$NOTARY_API_ISSUER_ID"
+    )
+    NOTARY_AUTH_DESC="API key $NOTARY_API_KEY_ID"
+elif [ -n "${NOTARY_PROFILE:-}" ]; then
+    NOTARY_AUTH_FLAGS=(--keychain-profile "$NOTARY_PROFILE")
+    NOTARY_AUTH_DESC="profile: $NOTARY_PROFILE"
+else
+    die "Neither NOTARY_API_KEY_PATH nor NOTARY_PROFILE set. Either:
+  - export NOTARY_API_KEY_PATH/NOTARY_API_KEY_ID/NOTARY_API_ISSUER_ID (App Store Connect API key), OR
+  - run: xcrun notarytool store-credentials \"gargantua-notary\" \\
+      --apple-id <you@example.com> --team-id \$TEAM_ID \\
+      --password <app-specific-password>"
+fi
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
     case "$NOTARIZE_KIND" in
@@ -68,14 +89,14 @@ esac
 
 SUBMIT_LOG="$DIST_DIR/notarize-$(basename "$TARGET").json"
 
-log "Submitting $(basename "$TARGET") to notarytool (profile: $NOTARY_PROFILE, timeout: 30m)..."
+log "Submitting $(basename "$TARGET") to notarytool ($NOTARY_AUTH_DESC, timeout: 30m)..."
 log "This typically takes 2-10 minutes but can be longer under load."
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
-    log "DRY-RUN: xcrun notarytool submit \"$SUBMIT_PATH\" --keychain-profile \"$NOTARY_PROFILE\" --wait --timeout 30m --output-format json"
+    log "DRY-RUN: xcrun notarytool submit \"$SUBMIT_PATH\" ${NOTARY_AUTH_FLAGS[*]} --wait --timeout 30m --output-format json"
 else
     if ! xcrun notarytool submit "$SUBMIT_PATH" \
-        --keychain-profile "$NOTARY_PROFILE" \
+        "${NOTARY_AUTH_FLAGS[@]}" \
         --wait \
         --timeout 30m \
         --output-format json \
@@ -87,7 +108,7 @@ else
         if [ -n "$SUB_ID" ]; then
             warn "Submission ID: $SUB_ID"
             warn "Fetch detailed Apple log with:"
-            warn "  xcrun notarytool log \"$SUB_ID\" --keychain-profile \"$NOTARY_PROFILE\""
+            warn "  xcrun notarytool log \"$SUB_ID\" ${NOTARY_AUTH_FLAGS[*]}"
         fi
         warn "Submission output saved at: $SUBMIT_LOG"
         [ -n "$SUBMIT_CLEANUP" ] && warn "Submission artifact retained: $SUBMIT_CLEANUP"
