@@ -160,6 +160,27 @@ struct AppScannerTests {
         #expect(apps.first(where: { $0.bundleID == "com.good" })?.signatureValid == true)
     }
 
+    @Test("invalid signatures preserve verifier metadata on the scanned app")
+    func invalidSignaturePreservesMetadata() async throws {
+        let url = URL(fileURLWithPath: "/Applications/Tampered.app")
+        let scanner = DefaultAppScanner(
+            enumerator: StubEnumerator(urls: [url]),
+            reader: StubReader(
+                metadata: [url.path: Self.meta(bundleID: "com.tampered", name: "Tampered", path: url.path)],
+                sizes: [:]
+            ),
+            runningChecker: StubRunningChecker(running: []),
+            signatureVerifier: StubVerifier(infos: [
+                url.path: CodeSignatureInfo(valid: false, teamIdentifier: "TEAMID1234")
+            ])
+        )
+
+        let app = try #require(await scanner.scanApps().first)
+        #expect(app.signatureValid == false)
+        #expect(app.teamIdentifier == "TEAMID1234")
+        #expect(app.isSystemApp == false)
+    }
+
     @Test("verifier returning .unknown produces signatureValid nil")
     func unknownSignature() async {
         let url = URL(fileURLWithPath: "/Applications/Opaque.app")

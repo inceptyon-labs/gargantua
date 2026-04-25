@@ -25,7 +25,7 @@ public enum MCPServerBindScope: String, Codable, Sendable, CaseIterable, Identif
         case .localhost:
             return "Binds to 127.0.0.1 only."
         case .lan:
-            return "Binds to all interfaces and requires a bearer token."
+            return "Binds to all interfaces; use a bearer token and TLS reverse proxy for remote clients."
         }
     }
 

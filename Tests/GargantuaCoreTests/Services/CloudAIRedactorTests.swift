@@ -36,6 +36,29 @@ struct CloudAIRedactorTests {
         #expect(CloudAIRedactor.sanitizeContent(input) == "a b c d")
     }
 
+    @Test("Sensitive credential patterns are redacted before content leaves the trust boundary")
+    func sanitizeRedactsSensitivePatterns() {
+        let input = """
+        Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456
+        api_key="sk-abcdefghijklmnopqrstuvwxyz123456"
+        github=ghp_abcdefghijklmnopqrstuvwxyz123456
+        aws=AKIA1234567890ABCDEF
+        -----BEGIN PRIVATE KEY-----
+        very secret material
+        -----END PRIVATE KEY-----
+        """
+
+        let output = CloudAIRedactor.sanitizeContent(input)
+
+        #expect(output.contains("Authorization: Bearer [REDACTED]"))
+        #expect(output.contains("api_key=[REDACTED]"))
+        #expect(output.contains("github=[REDACTED_GITHUB_TOKEN]"))
+        #expect(output.contains("aws=[REDACTED_AWS_ACCESS_KEY]"))
+        #expect(output.contains("[REDACTED_PRIVATE_KEY]"))
+        #expect(!output.contains("abcdefghijklmnopqrstuvwxyz123456"))
+        #expect(!output.contains("very secret material"))
+    }
+
     @Test("Tabs and newlines are preserved as whitespace and collapsed")
     func sanitizePreservesTabAndNewline() {
         #expect(CloudAIRedactor.sanitizeContent("a\tb\nc") == "a b c")
@@ -79,6 +102,39 @@ struct CloudAIRedactorTests {
         )
         #expect(items.count == 1)
         #expect(items[0].contentPreview == "raw content")
+    }
+
+    @Test("items() redacts sensitive patterns in names, explanations, tags, commands, and previews")
+    func itemsRedactsSensitiveStringFields() throws {
+        let raw = ScanResult(
+            id: "secret",
+            name: "token ghp_abcdefghijklmnopqrstuvwxyz123456",
+            path: "/Users/test/Library/Caches/secret",
+            size: 100,
+            safety: .review,
+            confidence: 80,
+            explanation: "password=hunter2-with-enough-length",
+            source: SourceAttribution(name: "Source sk-abcdefghijklmnopqrstuvwxyz123456", bundleID: nil),
+            lastAccessed: nil,
+            category: "test_cache",
+            tags: ["Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"],
+            regenerates: true,
+            regenerateCommand: "API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456"
+        )
+
+        let items = try CloudAIRedactor.items(
+            from: [raw],
+            allowsFileContents: true,
+            contentProvider: { _ in "access_token=super-secret-token-value" }
+        )
+
+        let item = try #require(items.first)
+        #expect(item.name == "token [REDACTED_GITHUB_TOKEN]")
+        #expect(item.explanation == "password=[REDACTED]")
+        #expect(item.sourceName == "Source [REDACTED_API_KEY]")
+        #expect(item.tags == ["Authorization: Bearer [REDACTED]"])
+        #expect(item.regenerateCommand == "API_KEY=[REDACTED]")
+        #expect(item.contentPreview == "access_token=[REDACTED]")
     }
 
     @Test("items() applies sanitizeContent to name, explanation, sourceName, tags")

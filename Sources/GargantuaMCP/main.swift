@@ -427,6 +427,12 @@ private func printRuntimeHelp() {
       --port 7493                  Override the SSE port.
       --bind localhost|lan         Bind SSE to 127.0.0.1 or all interfaces.
       --token TOKEN                Bearer token override for LAN SSE.
+
+    Security:
+      GargantuaMCP serves plain HTTP. For network clients, keep --bind localhost
+      and terminate HTTPS in a reverse proxy that forwards to 127.0.0.1:7493.
+      Use --bind lan only on trusted networks, with a bearer token and a TLS
+      proxy in front of the port.
     """
     FileHandle.standardError.write(Data("\(help)\n".utf8))
 }

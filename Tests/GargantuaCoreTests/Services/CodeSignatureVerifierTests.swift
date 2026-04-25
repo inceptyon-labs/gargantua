@@ -29,6 +29,15 @@ struct CodeSignatureVerifierTests {
         #expect(e == .unknown)
     }
 
+    @Test("Invalid signatures are represented distinctly from unknown signatures")
+    func invalidSignatureInfoIsDistinctFromUnknown() {
+        let invalid = CodeSignatureInfo(valid: false, teamIdentifier: "TEAMID1234")
+
+        #expect(invalid.valid == false)
+        #expect(invalid.teamIdentifier == "TEAMID1234")
+        #expect(invalid != .unknown)
+    }
+
     // MARK: - DefaultCodeSignatureVerifier
 
     @Test("Apple-signed system binary verifies as valid")

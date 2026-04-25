@@ -81,6 +81,30 @@ SSE binds to `127.0.0.1` by default. Binding to LAN uses `--bind lan` or the app
 http://127.0.0.1:7493/sse
 ```
 
+### SSE TLS for LAN Clients
+
+`GargantuaMCP` serves the SSE transport over plain HTTP. For LAN or remote clients, the supported TLS pattern is to keep Gargantua bound to localhost and terminate HTTPS in a reverse proxy running on the same Mac:
+
+```bash
+swift run GargantuaMCP -- --transport sse --port 7493 --bind localhost
+```
+
+Then configure the proxy to listen on the LAN-facing interface with a certificate trusted by your client and forward to `127.0.0.1:7493`. For example, a Caddy route can be shaped like this:
+
+```caddyfile
+gargantua.example.lan {
+    reverse_proxy 127.0.0.1:7493
+}
+```
+
+Clients should connect to the HTTPS proxy endpoint:
+
+```text
+https://gargantua.example.lan/sse
+```
+
+If you choose `--bind lan`, treat it as an advanced trusted-network mode: Gargantua still requires a bearer token, but the app does not terminate TLS itself. Put a TLS reverse proxy in front of the port before exposing it beyond the local machine.
+
 Example client entries:
 
 ```json

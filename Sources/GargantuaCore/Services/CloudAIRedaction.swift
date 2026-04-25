@@ -91,7 +91,8 @@ public enum CloudAIRedactor {
     }
 
     public static func sanitizeContent(_ value: String) -> String {
-        let scalars = value.unicodeScalars.map { scalar -> Character in
+        let redacted = redactSensitivePatterns(value)
+        let scalars = redacted.unicodeScalars.map { scalar -> Character in
             if CharacterSet.controlCharacters.contains(scalar), scalar != "\n", scalar != "\t" {
                 return " "
             }
@@ -106,6 +107,25 @@ public enum CloudAIRedactor {
         }
         let end = collapsed.index(collapsed.startIndex, offsetBy: maxContentPreviewCharacters)
         return String(collapsed[..<end])
+    }
+
+    private static func redactSensitivePatterns(_ value: String) -> String {
+        let rules = [
+            (#"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----"#, "[REDACTED_PRIVATE_KEY]"),
+            (#"(?i)\b(authorization:\s*bearer)\s+[A-Za-z0-9._~+/=-]{16,}"#, "$1 [REDACTED]"),
+            (#"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|secret|password)\s*[:=]\s*["']?[^"',\s;]+"#, "$1=[REDACTED]"),
+            (#"\bAKIA[0-9A-Z]{16}\b"#, "[REDACTED_AWS_ACCESS_KEY]"),
+            (#"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"#, "[REDACTED_GITHUB_TOKEN]"),
+            (#"\bsk-[A-Za-z0-9_-]{20,}\b"#, "[REDACTED_API_KEY]"),
+        ]
+
+        return rules.reduce(value) { output, rule in
+            output.replacingOccurrences(
+                of: rule.0,
+                with: rule.1,
+                options: .regularExpression
+            )
+        }
     }
 }
 
