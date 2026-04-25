@@ -102,9 +102,19 @@ public struct SettingsView: View {
             .foregroundStyle(GargantuaColors.ink)
     }
 
+}
+
+// MARK: - Sections, helpers, and bindings
+//
+// Extracted into an in-file extension so SettingsView's primary
+// body stays under the 350-line type_body_length threshold. Same
+// file → @State setters and @StateObject access remain available.
+
+extension SettingsView {
+
     // MARK: - AI Model Section
 
-    private var modelSection: some View {
+    fileprivate var modelSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
             sectionHeader("AI Model")
 
