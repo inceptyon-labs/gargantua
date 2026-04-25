@@ -1,0 +1,314 @@
+import Foundation
+import os
+import Testing
+@testable import GargantuaCore
+
+@Suite("Claude Code Agent Tier 3")
+struct ClaudeCodeAgentTests {
+    @Test("CLI resolver uses configured executable path")
+    func cliResolverUsesConfiguredPath() throws {
+        let executable = try makeExecutable(named: "claude")
+        let configuration = ClaudeCodeAgentConfiguration(isEnabled: true, cliPath: executable.path)
+        let resolved = try ClaudeCodeCLIResolver(environment: [:]).resolve(configuration: configuration)
+
+        #expect(resolved == executable)
+    }
+
+    @Test("CLI resolver falls back to PATH")
+    func cliResolverFallsBackToPath() throws {
+        let executable = try makeExecutable(named: "claude")
+        let resolver = ClaudeCodeCLIResolver(environment: [
+            "PATH": executable.deletingLastPathComponent().path,
+        ])
+
+        let resolved = try resolver.resolve(configuration: ClaudeCodeAgentConfiguration(isEnabled: true))
+
+        #expect(resolved == executable)
+    }
+
+    @Test("Launch plan uses strict MCP config and read-only tools by default")
+    func launchPlanUsesStrictMCPConfigAndReadOnlyTools() throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(isEnabled: true, cliPath: executable.path, maxTurns: 7))
+        let tempDirectory = try makeTemporaryDirectory()
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            mcpServerLaunch: ClaudeCodeMCPServerLaunch(
+                command: "/usr/local/bin/GargantuaMCP",
+                args: ["--stdio"],
+                env: ["GARGANTUA_TEST": "1"]
+            ),
+            processExecutor: FakeClaudeCodeProcessExecutor(),
+            auditWriter: AuditWriter(logDirectory: tempDirectory.appendingPathComponent("audit")),
+            tempDirectory: tempDirectory
+        )
+
+        let sessionID = UUID()
+        let plan = try runner.makeLaunchPlan(
+            prompt: "inspect",
+            sessionID: sessionID,
+            workingDirectory: URL(fileURLWithPath: "/tmp")
+        )
+
+        #expect(plan.executableURL == executable)
+        #expect(plan.arguments.contains("--strict-mcp-config"))
+        #expect(plan.arguments.contains("--output-format"))
+        #expect(plan.arguments.contains("stream-json"))
+        #expect(plan.arguments.contains("--max-turns"))
+        #expect(plan.arguments.contains("7"))
+        #expect(plan.arguments.contains("--disallowedTools"))
+        #expect(plan.arguments.contains("mcp__gargantua__clean"))
+        #expect(plan.arguments.contains("--allowedTools"))
+        let allowedToolsIndex = try #require(plan.arguments.firstIndex(of: "--allowedTools"))
+        let allowedTools = plan.arguments[allowedToolsIndex + 1]
+        #expect(allowedTools.contains("mcp__gargantua__scan"))
+        #expect(allowedTools.contains("mcp__gargantua__analyze"))
+        #expect(!allowedTools.contains("mcp__gargantua__clean"))
+
+        let configText = try String(contentsOf: plan.mcpConfigURL, encoding: .utf8)
+        #expect(configText.contains(#""gargantua""#))
+        #expect(configText.contains(#""type" : "stdio""#))
+        #expect(configText.contains("GargantuaMCP"))
+        #expect(configText.contains(#""GARGANTUA_TEST" : "1""#))
+        #expect(plan.environment["GARGANTUA_AGENT_SESSION_ID"] == sessionID.uuidString)
+    }
+
+    @Test("Prompt builder pins MCP and safety-floor instructions")
+    func promptBuilderPinsSafetyInstructions() {
+        let prompt = ClaudeCodeAgentPromptBuilder.prompt(
+            template: .investigateSpace,
+            userContext: "Find stale Docker and Xcode artifacts."
+        )
+
+        #expect(prompt.contains("Gargantua MCP server"))
+        #expect(prompt.contains("Never delete"))
+        #expect(prompt.contains("Protected items are not eligible"))
+        #expect(prompt.contains("MCP clean tool"))
+        #expect(prompt.contains("Find stale Docker and Xcode artifacts."))
+    }
+
+    @Test("Configuration decodes older stored payloads with scheduled audits off")
+    func configurationDecodesOlderPayloads() throws {
+        let data = Data(#"{"isEnabled":true,"cliPath":"/bin/claude","maxTurns":3,"allowDestructiveMCPTools":true}"#.utf8)
+        let configuration = try JSONDecoder().decode(ClaudeCodeAgentConfiguration.self, from: data)
+
+        #expect(configuration.isEnabled)
+        #expect(configuration.runAfterScheduledScans == false)
+    }
+
+    @Test("Scheduled audit prompt includes scan summary and forbids automatic cleanup")
+    func scheduledAuditPromptIncludesSummary() {
+        let summary = ScheduledScanSummary(
+            date: Date(timeIntervalSince1970: 200_000),
+            profileID: "light",
+            itemCount: 3,
+            reclaimableBytes: 42_000
+        )
+
+        let prompt = ClaudeCodeAgentPromptBuilder.scheduledAuditPrompt(summary: summary)
+
+        #expect(prompt.contains("Scheduled scan completed"))
+        #expect(prompt.contains("Profile: light"))
+        #expect(prompt.contains("Actionable items: 3"))
+        #expect(prompt.contains("Do not clean anything automatically"))
+    }
+
+    @Test("Scheduled audit sessions stay read-only even when clean tool is globally allowed")
+    func scheduledAuditForcesReadOnlyLaunch() async throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(
+            isEnabled: true,
+            cliPath: executable.path,
+            allowDestructiveMCPTools: true,
+            runAfterScheduledScans: true
+        ))
+        let fakeExecutor = FakeClaudeCodeProcessExecutor()
+        let tempDirectory = try makeTemporaryDirectory()
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            processExecutor: fakeExecutor,
+            auditWriter: AuditWriter(logDirectory: tempDirectory.appendingPathComponent("audit")),
+            tempDirectory: tempDirectory
+        )
+        let hook = ClaudeCodeScheduledAgentAuditHook(configurationStore: configStore, runner: runner)
+
+        await hook.run(summary: ScheduledScanSummary(
+            date: Date(timeIntervalSince1970: 200_000),
+            profileID: "light",
+            itemCount: 3,
+            reclaimableBytes: 42_000
+        ))
+
+        let arguments = fakeExecutor.lastArguments
+        let allowedToolsIndex = try #require(arguments.firstIndex(of: "--allowedTools"))
+        let allowedTools = arguments[allowedToolsIndex + 1]
+        #expect(!allowedTools.contains("mcp__gargantua__clean"))
+        #expect(arguments.contains("--disallowedTools"))
+        #expect(arguments.contains("mcp__gargantua__clean"))
+    }
+
+    @Test("Destructive action detector creates default-deny approval gate")
+    func destructiveActionDetectorCreatesGate() {
+        let sessionID = UUID()
+        let detector = ClaudeCodeDestructiveActionDetector(sessionID: sessionID)
+        let line = #"{"type":"tool_use","name":"mcp__gargantua__clean","input":{"item_ids":["safe-1"],"confirm":true}}"#
+
+        let gate = detector.detect(line)
+
+        #expect(gate?.sessionID == sessionID)
+        #expect(gate?.status == .pending)
+        #expect(gate?.rawTranscript == line)
+    }
+
+    @Test("Runner streams transcript, detects clean gates, and writes audit entries")
+    func runnerStreamsAndAudits() async throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(isEnabled: true, cliPath: executable.path))
+        let tempDirectory = try makeTemporaryDirectory()
+        let auditDirectory = tempDirectory.appendingPathComponent("audit")
+        let auditWriter = AuditWriter(logDirectory: auditDirectory)
+        let fakeExecutor = FakeClaudeCodeProcessExecutor(outputs: [
+            .stdout("hello\n"),
+            .stdout(#"{"name":"mcp__gargantua__clean","input":{"item_ids":["safe-1"]}}"# + "\n"),
+            .stderr("warning\n"),
+        ])
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            mcpServerLaunch: ClaudeCodeMCPServerLaunch(command: "swift", args: ["run", "GargantuaMCP"]),
+            processExecutor: fakeExecutor,
+            auditWriter: auditWriter,
+            tempDirectory: tempDirectory
+        )
+        let events = LockedArray<ClaudeCodeAgentTranscriptEvent>()
+        let gates = LockedArray<ClaudeCodeAgentApprovalGate>()
+
+        let result = try await runner.run(
+            prompt: "inspect",
+            onEvent: { events.append($0) },
+            onGate: { gates.append($0) }
+        )
+
+        #expect(result.exitCode == 0)
+        #expect(events.all().contains { $0.stream == .stdout && $0.message.contains("hello") })
+        #expect(events.all().contains { $0.stream == .stderr && $0.message.contains("warning") })
+        #expect(gates.all().count == 1)
+        #expect(result.approvalGates.count == 1)
+
+        let commands = try auditWriter.readEntries().map(\.command)
+        #expect(commands.contains("agent_start"))
+        #expect(commands.contains("agent_gate_detected"))
+        #expect(commands.contains("agent_complete"))
+    }
+
+    @Test("Runner cancellation forwards to process executor")
+    func runnerCancellationForwardsToExecutor() throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        configStore.save(ClaudeCodeAgentConfiguration(isEnabled: true))
+        let fakeExecutor = FakeClaudeCodeProcessExecutor()
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            processExecutor: fakeExecutor,
+            auditWriter: AuditWriter(logDirectory: try makeTemporaryDirectory())
+        )
+
+        runner.cancel()
+
+        #expect(fakeExecutor.didCancel)
+    }
+
+    private func makeDefaults() throws -> UserDefaults {
+        let suite = "gargantua-claude-code-agent-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    private func makeExecutable(named name: String) throws -> URL {
+        let directory = try makeTemporaryDirectory()
+        let url = directory.appendingPathComponent(name)
+        try "#!/bin/sh\nexit 0\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o755))],
+            ofItemAtPath: url.path
+        )
+        return url
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gargantua-claude-code-agent-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+}
+
+private final class FakeClaudeCodeProcessExecutor: ClaudeCodeAgentProcessExecuting, @unchecked Sendable {
+    private struct State {
+        var didCancel = false
+        var lastArguments: [String] = []
+    }
+
+    private let lock = OSAllocatedUnfairLock(initialState: State())
+    private let outputs: [ClaudeCodeProcessOutput]
+    private let exitCode: Int32
+
+    init(outputs: [ClaudeCodeProcessOutput] = [], exitCode: Int32 = 0) {
+        self.outputs = outputs
+        self.exitCode = exitCode
+    }
+
+    var didCancel: Bool {
+        lock.withLock { $0.didCancel }
+    }
+
+    var lastArguments: [String] {
+        lock.withLock { $0.lastArguments }
+    }
+
+    func start(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        workingDirectory: URL?,
+        onOutput: @escaping @Sendable (ClaudeCodeProcessOutput) -> Void
+    ) async throws -> Int32 {
+        lock.withLock { $0.lastArguments = arguments }
+
+        for output in outputs {
+            onOutput(output)
+        }
+        return exitCode
+    }
+
+    func cancel() {
+        lock.withLock { $0.didCancel = true }
+    }
+}
+
+private final class LockedArray<Element>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [Element] = []
+
+    func append(_ element: Element) {
+        lock.lock()
+        values.append(element)
+        lock.unlock()
+    }
+
+    func all() -> [Element] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
+}

@@ -37,6 +37,7 @@ struct SidebarSectionTests {
         #expect(allIDs.contains("duplicateFinder"))
         #expect(allIDs.contains("diskExplorer"))
         #expect(allIDs.contains("devPurge"))
+        #expect(allIDs.contains("agentSessions"))
         #expect(allIDs.contains("settings"))
     }
 

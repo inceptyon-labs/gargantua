@@ -57,6 +57,7 @@ public struct SettingsView: View {
                 headerView
                 modelSection
                 CloudAISettingsSection()
+                ClaudeCodeAgentSettingsSection()
                 MCPTransportSettingsSection()
                 updatesSection
                 menuBarSection

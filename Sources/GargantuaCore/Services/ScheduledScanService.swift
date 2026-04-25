@@ -472,6 +472,7 @@ public final class ScheduledScanRunner {
     private let scanner: any ScheduledScanScanning
     private let notifier: any ScheduledScanNotificationDelivering
     private let powerStateProvider: any ScheduledScanPowerStateProviding
+    private let agentAuditHook: any ScheduledScanAgentAuditHook
     private let now: () -> Date
 
     public convenience init(persistence: PersistenceController) {
@@ -480,6 +481,7 @@ public final class ScheduledScanRunner {
             scanner: NativeScheduledScanScanner(),
             notifier: defaultScheduledScanNotifier(),
             powerStateProvider: SystemScheduledScanPowerStateProvider(),
+            agentAuditHook: ClaudeCodeScheduledAgentAuditHook(),
             now: Date.init
         )
     }
@@ -489,12 +491,14 @@ public final class ScheduledScanRunner {
         scanner: any ScheduledScanScanning,
         notifier: any ScheduledScanNotificationDelivering,
         powerStateProvider: any ScheduledScanPowerStateProviding,
+        agentAuditHook: any ScheduledScanAgentAuditHook = NoopScheduledScanAgentAuditHook(),
         now: @escaping () -> Date
     ) {
         self.persistence = persistence
         self.scanner = scanner
         self.notifier = notifier
         self.powerStateProvider = powerStateProvider
+        self.agentAuditHook = agentAuditHook
         self.now = now
     }
 
@@ -533,6 +537,7 @@ public final class ScheduledScanRunner {
             )
             try persistence.recordScheduledScanSummary(summary)
             await notifier.deliver(summary: summary)
+            await agentAuditHook.run(summary: summary)
             return .completed(summary)
         } catch {
             let runDate = now()

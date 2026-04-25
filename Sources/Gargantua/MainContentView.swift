@@ -116,6 +116,8 @@ struct MainContentView: View {
                                 )
                             case "devTools":
                                 DeveloperToolsView()
+                            case "agentSessions":
+                                ClaudeCodeAgentView()
                             case "settings":
                                 if let persistence {
                                     SettingsView(

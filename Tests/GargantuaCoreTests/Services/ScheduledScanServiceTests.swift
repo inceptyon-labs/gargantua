@@ -199,6 +199,40 @@ struct ScheduledScanServiceTests {
         #expect(notifier.delivered.isEmpty)
     }
 
+    @Test("runner invokes agent audit hook after completed scheduled scan")
+    @MainActor
+    func runnerInvokesAgentAuditHook() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        try persistence.updateSettings { settings in
+            settings.autoScanEnabled = true
+            settings.scheduledScanIntervalRaw = "daily"
+            settings.scheduledScanProfileID = "light"
+            settings.scheduledScanLastRunDate = Date(timeIntervalSince1970: 0)
+        }
+
+        let hook = SpyScheduledAgentAuditHook()
+        let runDate = Date(timeIntervalSince1970: 200_000)
+        let runner = ScheduledScanRunner(
+            persistence: persistence,
+            scanner: StubScheduledScanScanner(results: [
+                makeResult(id: "safe", size: 10_000, safety: .safe),
+            ]),
+            notifier: SpyScheduledScanNotifier(),
+            powerStateProvider: FixedScheduledScanPowerStateProvider(isOnBattery: false),
+            agentAuditHook: hook,
+            now: { runDate }
+        )
+
+        let result = await runner.runIfDue()
+        guard case .completed(let summary) = result else {
+            Issue.record("expected completed result")
+            return
+        }
+
+        #expect(hook.summaries == [summary])
+    }
+
     private func makeResult(id: String, size: Int64, safety: SafetyLevel) -> ScanResult {
         ScanResult(
             id: id,
@@ -257,5 +291,13 @@ private final class SpyScheduledScanNotifier: ScheduledScanNotificationDeliverin
 
     func deliver(summary: ScheduledScanSummary) async {
         delivered.append(summary)
+    }
+}
+
+private final class SpyScheduledAgentAuditHook: ScheduledScanAgentAuditHook, @unchecked Sendable {
+    var summaries: [ScheduledScanSummary] = []
+
+    func run(summary: ScheduledScanSummary) async {
+        summaries.append(summary)
     }
 }
