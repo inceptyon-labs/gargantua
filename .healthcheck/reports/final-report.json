@@ -1,0 +1,438 @@
+{
+  "project": {
+    "slug": "gargantua",
+    "name": "Gargantua",
+    "repo_url": "git@github.com:inceptyon-labs/gargantua.git",
+    "commit": "6e0acb3",
+    "branch": "main"
+  },
+  "run": {
+    "started_at": "2026-04-24T21:12:00Z",
+    "completed_at": "2026-04-25T02:14:52Z",
+    "orchestrator_version": "1.0.0",
+    "dimensions_run": [
+      "secrets",
+      "security",
+      "dependencies",
+      "complexity",
+      "errors",
+      "solid",
+      "debt",
+      "testing",
+      "docs",
+      "observability",
+      "performance"
+    ],
+    "dimensions_skipped": "accessibility (off in config), api_contract (off in config), build_ci (no CI config)",
+    "toolchain_summary": {
+      "tools_ran": "semgrep, gitleaks, trivy, swiftlint",
+      "tools_skipped": "trufflehog, markdownlint, swiftformat",
+      "tools_failed": ""
+    }
+  },
+  "composite_score": 98,
+  "severity_counts": {
+    "critical": 0,
+    "major": 3,
+    "minor": 13,
+    "info": 10
+  },
+  "dimensions": [
+    {
+      "key": "complexity",
+      "score": 88,
+      "weight": 1.1,
+      "notes": "Analyzed 291 Swift files. SwiftLint provides deterministic cyclomatic complexity scores. 1 major finding: ProcessSpawner (complexity 15). 6 minor cyclomatic violations in the 10-14 range. 12 production files exceed 500 lines (minor); SettingsView.swift at 897 lines is the largest concern. No critical complexity violations (no function reached 20+ or file reached 1000+). The large-file pattern is concentrated in SwiftUI views, which tend to inflate line counts via @ViewBuilder closures \u2014 splitting these requires care to preserve SwiftUI's state propagation semantics."
+    },
+    {
+      "key": "debt",
+      "score": 100,
+      "weight": 1.1,
+      "notes": "Exceptional technical debt hygiene. Zero TODO/FIXME/HACK/XXX markers across all 291 Swift source files, shell scripts, YAML, and markdown. Zero commented-out code blocks. Zero deprecated API usage. Zero stub implementations in production code. No long-lived feature flags. 447 `// MARK: -` section markers demonstrate active organizational discipline. The `unsafeFlags` linker workaround in Package.swift (for embedding the scheduler's Info.plist as a Mach-O section) is 0 days old and well-documented \u2014 well below the 90-day debt threshold. `#if os(macOS)` conditionals in ScheduledScanService and LaunchAtLoginService are correct platform-guard idioms, not conditional debt. `#if DEBUG` wraps a `#Preview` \u2014 idiomatic SwiftUI."
+    },
+    {
+      "key": "dependencies",
+      "score": 98,
+      "weight": 1.3,
+      "notes": "Swift Package Manager project with 4 direct and 13 transitive dependencies. No CVEs found in any Swift packages. Trivy flagged 5 CVEs but all are in '.build/checkouts/Yams/Gemfile.lock' \u2014 Ruby gems used by the Yams maintainers' own test toolchain, not compiled into Gargantua. These are build-scan false positives: adding '.build/' to trivy's skip list eliminates all findings. No unmaintained, duplicate, or severely outdated Swift packages detected. One minor: osv-scanner not installed so SPM dependencies lack a second CVE check pass."
+    },
+    {
+      "key": "docs",
+      "score": 100,
+      "weight": 0.8,
+      "notes": "Strong documentation posture for a Swift macOS app. README present, comprehensive (9,152 bytes, updated today), with all required sections: Overview ('Why Gargantua Exists'), Setup ('Build From Source'), Deployment ('Release Builds'), and Contributing. CHANGELOG.md present and updated today. CONTRIBUTING.md and SECURITY.md present. Architecture design docs exist in docs/designs/ (3 docs: release pipeline, vendored binaries, MLX backend). Session handoffs in docs/handoffs/. One minor: inline doc coverage at 39% (1796 public symbols, 707 documented, 1089 undocumented) \u2014 below the 80% threshold but reasonable for a rapidly evolving Swift codebase where models and protocols are self-documenting via naming conventions."
+    },
+    {
+      "key": "errors",
+      "score": 97,
+      "weight": 1.3,
+      "notes": "Strong overall error-handling discipline. 125 catch blocks in production, 0 empty catches, 0 print()-and-ignore patterns, 0 try! force-tries, 0 fatalError calls in production paths. Custom error enums are defined throughout (RuleParseError, RemnantRuleParseError, MCPToolError, CloudAIError, etc.). AsyncThrowingStream usage correctly propagates via continuation.finish(throwing:). Timeouts are explicitly configured for tool execution paths (DeveloperToolExecutionAdapter: 60s, DeveloperToolPreviewAdapter: 15s, DirectorySizeScanner: 15s). One concern is a cluster of `try? persistence.save/delete/updateSettings` writes that silently swallow data-mutation failures \u2014 a saveProfile that fails will not surface to the user."
+    },
+    {
+      "key": "observability",
+      "score": 100,
+      "weight": 1.0,
+      "notes": "Strong observability for a macOS app + MCP server. Structured logging via Apple's os.Logger in 14 service files (all using a consistent 'com.gargantua.core' subsystem with per-component category labels \u2014 visible in Console.app, feeds the unified logging system). Correlation IDs propagated for both cloud AI (requestID across CloudAIModels/Transport/RequestLogger) and MCP JSON-RPC (request.id through MCPRequestDispatcher). MCP-level health is implemented the protocol-native way via MCPStatusToolHandler. GargantuaMCP's stdio transport handles client-disconnect (EOF on stdin) by calling serverStatusStore.markStopped() + exit(0) \u2014 clean shutdown. ProcessRunner uses a textbook SIGTERM-then-SIGKILL-escalation pattern for child processes. Gap: SSE transport mode has no SIGTERM handler, so a systemd/launchd-driven shutdown of the SSE server won't update MCPServerStatusStore state."
+    },
+    {
+      "key": "performance",
+      "score": 100,
+      "weight": 1.0,
+      "notes": "Strong performance discipline for a Swift/SwiftUI + SwiftData app. Zero main-thread blocking (no DispatchQueue.main.sync, no Thread.sleep, no usleep; all Task.sleep calls are cooperative await). 24 [weak self] captures vs 0 [unowned] and 0 unchecked [self] in closures \u2014 careful retain-cycle discipline. SwiftData FetchDescriptor used with explicit fetchLimit where appropriate (e.g., PersistenceController.swift:240). DirectorySizeScanner has explicit 15s timeout to bound recursion. No N+1 classical pattern (SwiftData is reference-based). No unbounded list fetches in hot paths. Bundle/React re-render checks not applicable (native SwiftUI, not web frontend)."
+    },
+    {
+      "key": "secrets",
+      "score": 100,
+      "weight": 1.5,
+      "notes": "No real secrets detected. Gitleaks flagged 1 string as a generic-secret-assignment, but it is a clear test placeholder ('gtua_test_token_12345678901234567890' \u2014 sequential digits) used as a `private static let validToken` in MCPSSETransportTests.swift. Per spec, known test/example values are not flagged. .env files are properly gitignored and none are committed. Git history (453 commits) scanned \u2014 no history-only secrets found."
+    },
+    {
+      "key": "security",
+      "score": 100,
+      "weight": 1.5,
+      "notes": "Strong security posture for a Swift macOS app. No injection, weak-crypto, or auth-bypass findings. Defensive code is in evidence: (1) the MCP SSE bearer-token check uses an explicit constant-time byte comparison (constantTimeEquals in MCPTransportSettings.swift:325), (2) Process exec uses an argument array (no shell interpolation), (3) LAN binding (0.0.0.0) auto-requires a bearer token, (4) no MD5/SHA1/arc4random in security paths, (5) no TLS-bypass or arbitrary-loads opt-outs. Two informational notes are below \u2014 neither affects the score."
+    },
+    {
+      "key": "solid",
+      "score": 100,
+      "weight": 1.1,
+      "notes": "Strong SOLID adherence throughout. The codebase defines 35 protocols with focused, role-specific names (the Swift '-ing' suffix convention: AppScanning, RunningAppChecking, ClaudeCodeAgentProcessExecuting, LaunchAtLoginInstalling, CodeSignatureVerifying, etc.) which is direct evidence of good ISP and DIP. No god classes \u2014 files with high method counts (ScheduledScanService.swift, MCPServerStatusStore.swift) contain MULTIPLE small types (protocol + default-impl extension + concrete impl + auxiliary types), not single oversized types. No type-switching OCP violations. No LSP violations (no fatalError('not implemented')). The Models layer is clean: only CleanupNarrative.swift imports SwiftUI, and only because it owns an EnvironmentKey/EnvironmentValues extension \u2014 which is the canonical SwiftUI pattern for that type, not a layering violation."
+    },
+    {
+      "key": "testing",
+      "score": 98,
+      "weight": 1.1,
+      "notes": "Strong test suite using Swift Testing framework (104 files using @Test/@Suite/#expect \u2014 the modern Swift 5.9+ framework). 105 test files against 178 GargantuaCore source files gives a 0.59 test-to-source ratio (healthy, > 0.5). Integration and smoke tests exist (RemnantRuleSetIntegrationTests, DefaultProcessRunnerIntegrationTests, MCPCleanToolHandlerIntegrationTests, MCPStdioPhase3IntegrationTests, AppScannerSmokeTests, MLXBackendPerformanceSmokeTests). Zero skip markers. No .only markers. No coverage report available so exact line/branch coverage is unknown."
+    }
+  ],
+  "findings": [
+    {
+      "id": "complexity.cyclomatic-major-processspawner",
+      "title": "Cyclomatic complexity 15 in ProcessSpawner",
+      "severity": "major",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Services/ProcessSpawner.swift",
+      "line": 33,
+      "rule_id": "cyclomatic_complexity",
+      "description": "The posix_spawn wrapper function has cyclomatic complexity 15 (major threshold: 15-19). It orchestrates POSIX file actions, spawn attributes, argv/envp array construction, and process group setup in one function \u2014 each with multiple guard/defer/free chains. High complexity here increases the risk of resource-leak bugs.",
+      "snippet": "// posixSpawn function starting at line 33 with nested guard/if chains for fa_init, attr_init, argv/envp construction",
+      "fix_prompt": "# Fix: Reduce cyclomatic complexity in posixSpawn function\n\n## Context\nThe `posixSpawn` function in `ProcessSpawner.swift` has cyclomatic complexity 15 (tenet major threshold: 15-19). It combines POSIX file-action setup, spawn attribute configuration, argv/envp array construction, and posix_spawn invocation \u2014 each phase with its own error-check branches.\n\n## Location\n- File: Sources/GargantuaCore/Services/ProcessSpawner.swift\n- Line: 33\n- Dimension: complexity / major\n\n## Required change\n1. Extract argv/envp construction into a dedicated `buildCStringArray(_ strings: [String]) throws -> [UnsafeMutablePointer<CChar>?]` helper that handles the strdup/free resource lifecycle.\n2. Extract POSIX file-action setup into `configureFileActions(_ fa: posix_spawn_file_actions_t, pipes: SpawnPipes) throws`.\n3. Extract spawn attribute setup into `configureSpawnAttributes(_ attr: posix_spawnattr_t) throws`.\n4. The main function becomes: build arrays \u2192 configure fa \u2192 configure attr \u2192 call posix_spawn \u2192 await termination.\n\n## Constraints\n- The helper functions must not change the observable behavior of the spawn: same process group, same fd redirection, same argv/envp.\n- Memory management (strdup/free) must remain correct \u2014 use defer blocks in the extracted helpers.\n- All tests in `ProcessSpawnerTests` (if any) must still pass.\n\n## Verification\n- Run: `swiftlint lint --config .swiftlint.yml Sources/GargantuaCore/Services/ProcessSpawner.swift` \u2014 should report 0 cyclomatic_complexity violations.\n- Run: `swift test --filter ProcessSpawner`.",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.cyclomatic-minor-mcp-transport",
+      "title": "Cyclomatic complexity 14 in MCPSSETransport",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+      "line": 102,
+      "rule_id": "cyclomatic_complexity",
+      "description": "MCPSSETransport has a function with cyclomatic complexity 14. The SSE transport handles connection setup, bearer-auth, event dispatch, and error recovery in interleaved branches.",
+      "snippet": "// function at line 102 \u2014 handles SSE connection lifecycle with ~14 distinct paths",
+      "fix_prompt": "# Fix: Reduce cyclomatic complexity in MCPSSETransport\n\n## Context\nA function in MCPSSETransport.swift:102 has cyclomatic complexity 14. For an MCP server transport, high complexity here risks edge-case connection-handling bugs.\n\n## Location\n- File: Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift\n- Line: 102\n- Dimension: complexity / minor\n\n## Required change\nExtract the auth-check path into a dedicated `authorize(connection:) -> AuthResult` function, and extract per-event dispatch into `handleIncomingData(_ data: Data, connection: NWConnection) async throws`. Use early returns for error paths to flatten the nesting.\n\n## Constraints\n- Do not change the NWListener setup or the async concurrency structure.\n- Preserve the 401 response path for unauthorized connections.\n\n## Verification\n- Run: `swiftlint lint Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift` \u2014 cyclomatic_complexity violations should clear.\n- Run: `swift test --filter MCPSSETransportTests`.",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.cyclomatic-minor-rulesparser",
+      "title": "Cyclomatic complexity 14 in RuleViewerView / ConditionEvaluator",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Views/RuleViewerView.swift",
+      "line": 327,
+      "rule_id": "cyclomatic_complexity",
+      "description": "RuleViewerView:327 (complexity 14) and ConditionEvaluator:78 (complexity 14) both exceed the minor threshold. ConditionEvaluator's high complexity is expected (it evaluates rule conditions), but a lookup table or visitor pattern would reduce branch count significantly.",
+      "snippet": "// RuleViewerView:327 and ConditionEvaluator:78 \u2014 both at complexity 14",
+      "fix_prompt": "# Fix: Reduce cyclomatic complexity in ConditionEvaluator\n\n## Context\nConditionEvaluator.swift:78 has cyclomatic complexity 14. Rule condition evaluation with a large switch or if-chain is a common pattern; replacing it with a dispatch table reduces complexity significantly.\n\n## Location\n- File: Sources/GargantuaCore/Services/ConditionEvaluator.swift\n- Line: 78\n- Dimension: complexity / minor\n\n## Required change\nReplace the large switch/if chain with a dictionary of evaluator closures keyed by condition type. Each evaluator closure handles exactly one condition type and returns a Bool.\n\n```swift\nstatic let evaluators: [ConditionType: (Condition, Context) -> Bool] = [\n    .fileExtension: evaluateExtension,\n    .fileSize:      evaluateSize,\n    // ...\n]\n\nfunc evaluate(_ condition: Condition, context: Context) -> Bool {\n    evaluators[condition.type]?(condition, context) ?? false\n}\n```\n\n## Constraints\n- All condition types currently handled must continue to work.\n- The public `evaluate(_:context:)` signature must not change.\n\n## Verification\n- Run: `swift test --filter ConditionEvaluatorTests`\n- Run: `swiftlint lint Sources/GargantuaCore/Services/ConditionEvaluator.swift`",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.cyclomatic-minor-remaining",
+      "title": "4 additional functions with cyclomatic complexity 11-14",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaMCP/main.swift",
+      "line": 353,
+      "rule_id": "cyclomatic_complexity",
+      "description": "4 more functions between complexity 11-14: main.swift:353 (14), EventHorizonConsoleView:123 (11), MCPCleanToolHandler:123 (11). All are minor violations. The MCP main.swift complexity stems from CLI argument parsing; the view complexity from SwiftUI conditional rendering.",
+      "snippet": "// main.swift:353, EventHorizonConsoleView.swift:123, MCPCleanToolHandler.swift:123",
+      "fix_prompt": "# Fix: Reduce complexity in MCP main.swift CLI argument parsing\n\n## Context\nmain.swift:353 has cyclomatic complexity 14 from CLI argument dispatch. CLI parsers with many flags tend to grow as features are added.\n\n## Location\n- File: Sources/GargantuaMCP/main.swift\n- Line: 353\n- Dimension: complexity / minor\n\n## Required change\nConsider migrating CLI argument parsing to ArgumentParser (already available as a transitive dep via swift-tools-support-core or add it directly). ArgumentParser uses declarative syntax that reduces manual branching to near zero and generates help automatically.\n\nAlternatively, extract each argument handler into a dedicated named function.\n\n## Constraints\n- Preserve all existing CLI flags and their semantics.\n\n## Verification\n- Run: `swift run GargantuaMCP --help` \u2014 all flags documented and functional.",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.file-length-settingsview",
+      "title": "SettingsView.swift is 897 lines",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Views/SettingsView.swift",
+      "line": 1,
+      "description": "SettingsView.swift at 897 lines is the largest production file. A single SwiftUI View struct with 742 non-blank/non-comment lines makes it difficult to navigate and onboard new contributors to specific settings panes.",
+      "snippet": "// Sources/GargantuaCore/Views/SettingsView.swift \u2014 897 total lines",
+      "fix_prompt": "# Fix: Split SettingsView.swift into per-pane files\n\n## Context\nSettingsView.swift is 897 lines. SwiftUI settings screens are natural candidates for file splitting since each settings pane (General, MCP, Whitelist, etc.) is an independent SwiftUI view with its own @State and @Binding variables.\n\n## Location\n- File: Sources/GargantuaCore/Views/SettingsView.swift\n- Line: 1\n- Dimension: complexity / minor\n\n## Required change\n1. Identify each tab/pane in the TabView (General, MCP, Whitelist, etc.).\n2. Extract each pane into its own file: `SettingsGeneralPane.swift`, `SettingsMCPPane.swift`, `SettingsWhitelistPane.swift`, etc.\n3. SettingsView.swift becomes a thin coordinator: the TabView + tab labels only.\n4. Target: SettingsView.swift under 100 lines; each pane file under 300 lines.\n\n## Constraints\n- Preserve all @AppStorage, @State, @Binding, and @EnvironmentObject annotations.\n- Do not change any settings key names (AppStorage keys) \u2014 these persist user data.\n- Pane files should live alongside the parent in Sources/GargantuaCore/Views/Settings/.\n\n## Verification\n- Run: `swift build` to confirm no type errors.\n- Run: `swift test` to confirm tests pass.\n- Open the app and verify all settings panes render correctly.",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.file-length-scanbucketview",
+      "title": "ScanBucketView.swift is 832 lines (type body 652 lines)",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Views/ScanBucketView.swift",
+      "line": 73,
+      "description": "ScanBucketView.swift at 832 lines contains a type body spanning 652 non-whitespace lines. This is the second-largest view. Scan result rendering, empty-state handling, and action sheets are likely separable subviews.",
+      "snippet": "// ScanBucketView.swift \u2014 832 total lines",
+      "fix_prompt": "# Fix: Extract subviews from ScanBucketView\n\n## Context\nScanBucketView.swift is 832 lines. Large scan-result views can be split into focused subviews (row cell, empty-state, action sheet) without changing the parent's data model.\n\n## Location\n- File: Sources/GargantuaCore/Views/ScanBucketView.swift\n- Line: 73\n- Dimension: complexity / minor\n\n## Required change\n1. Extract the scan-result row view into `ScanResultRowView.swift`.\n2. Extract the empty-state placeholder into `ScanBucketEmptyView.swift`.\n3. Extract any action sheets / confirmation dialogs into local subview structs.\n4. Keep all @Binding and state coordination in the parent ScanBucketView.\n\n## Constraints\n- Preserve @Binding connections for parent-driven state.\n- Keep extracted views in the same Sources/GargantuaCore/Views/ directory.\n\n## Verification\n- Run: `swift build && swift test`.",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.file-length-cluster",
+      "title": "10 more production files between 500-832 lines",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Views/DashboardView.swift",
+      "line": 1,
+      "description": "10 additional production source files fall in the 500-832 line range (minor threshold 500+): DashboardView.swift (680), RuleViewerView.swift (626), SmartUninstallerViewModel.swift (601), DevArtifactScanView.swift (588), ScheduledScanService.swift (564), DiskExplorerView.swift (563), MCPRequestDispatcher.swift (538), ModelDownloadManager.swift (534), NativeScanAdapter.swift (520), MCPSSETransport.swift (508). None are critical (no file exceeds 1000 lines).",
+      "snippet": "// 10 files: DashboardView, RuleViewerView, SmartUninstallerViewModel, DevArtifactScanView, ScheduledScanService, DiskExplorerView, MCPRequestDispatcher, ModelDownloadManager, NativeScanAdapter, MCPSSETransport",
+      "fix_prompt": "# Fix: Incrementally split large production files as they are touched\n\n## Context\n10 production files are in the 500-832 line range. Rather than a single large refactor, a sustainable approach is to split a file whenever it is touched during normal feature work.\n\n## Required change\nFor each file: identify the dominant subcomponent (e.g., a large inner view, a large switch block, a cluster of related helper methods) and extract it into a dedicated file. No single split should take more than 30 minutes.\n\nPriority order (by line count): DashboardView \u2192 RuleViewerView \u2192 SmartUninstallerViewModel \u2192 DevArtifactScanView \u2192 ScheduledScanService \u2192 DiskExplorerView \u2192 MCPRequestDispatcher \u2192 ModelDownloadManager \u2192 NativeScanAdapter \u2192 MCPSSETransport.\n\n## Constraints\n- Only split when touching a file for another reason. Do not do a large-scale refactor.\n- Each extracted file should have a clear single responsibility.\n\n## Verification\n- Run: `swift build` after each split.",
+      "dimension": "complexity"
+    },
+    {
+      "id": "complexity.function-body-mcp-clean",
+      "title": "MCPCleanToolHandler function body is 82 lines",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift",
+      "line": 123,
+      "rule_id": "function_body_length",
+      "description": "A function in MCPCleanToolHandler.swift at line 123 spans 82 lines of code, slightly over the 80-line warning threshold. Combined with its cyclomatic complexity of 11, this is the highest-priority refactoring target in the MCP layer.",
+      "snippet": "// MCPCleanToolHandler.swift:123 \u2014 82-line function with complexity 11",
+      "fix_prompt": "# Fix: Split long function in MCPCleanToolHandler\n\n## Context\nMCPCleanToolHandler.swift:123 is an 82-line function with cyclomatic complexity 11. It handles cleanup tool dispatch but is doing validation, execution, and response formatting in one body.\n\n## Location\n- File: Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift\n- Line: 123\n- Dimension: complexity / minor\n\n## Required change\n1. Extract input validation into `validateCleanRequest(_ params: CleanParams) throws -> ValidatedRequest`.\n2. Extract cleanup execution into `executeClean(_ request: ValidatedRequest) async throws -> CleanResult`.\n3. Extract response formatting into `buildCleanResponse(_ result: CleanResult) -> MCPToolResponse`.\n4. The main function becomes a 3-line pipeline.\n\n## Constraints\n- Do not change the function's external signature or return type.\n- Preserve all error handling \u2014 the validation function should throw the same errors the current function throws.\n\n## Verification\n- Run: `swift test --filter MCPCleanToolHandlerTests`\n- Run: `swiftlint lint Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift`",
+      "dimension": "complexity"
+    },
+    {
+      "id": "debt.unsafe-flags-spm",
+      "title": "unsafeFlags linker workaround in Package.swift (0 days old \u2014 informational)",
+      "severity": "info",
+      "confidence": "deterministic",
+      "file": "Package.swift",
+      "line": 49,
+      "description": "The GargantuaScheduler target uses `unsafeFlags` to pass raw linker arguments (-Xlinker -sectcreate) to embed the Info.plist as a Mach-O __TEXT/__info_plist section. This is a known SPM workaround for macOS helper tools. It is 0 days old and documented in the package header. Not debt yet \u2014 flagged for awareness so it can be migrated to a first-class SPM feature when one becomes available.",
+      "snippet": ".unsafeFlags([\"-Xlinker\", \"-sectcreate\", \"-Xlinker\", \"__TEXT\", \"-Xlinker\", \"__info_plist\", ...])",
+      "fix_prompt": "# Note: unsafeFlags linker workaround in Package.swift\n\n## Context\nSPM does not yet support embedding arbitrary Mach-O sections natively. The `-sectcreate __TEXT __info_plist <path>` linker flag is needed to embed the scheduler's Info.plist so launchd can inspect it. This is a well-established workaround. Track it so it can be migrated if SPM gains native support.\n\n## Location\n- File: Package.swift\n- Line: 49\n- Dimension: debt / info\n\n## Required change\nNo change needed now. When Swift Package Manager adds a first-class way to embed Info.plists (e.g., via `resources` with a type that handles embedding), migrate to that API and remove the `unsafeFlags` block.\n\nMonitor: https://forums.swift.org/t/property-list-embedding-support-for-spm/\n\n## Constraints\n- Do NOT remove the unsafeFlags block without a working alternative \u2014 the scheduler won't be recognized by launchd without its embedded plist.\n\n## Verification\n- Run: `swift build -c release --target GargantuaScheduler`\n- Run: `otool -s __TEXT __info_plist .build/release/GargantuaScheduler` \u2014 should print the embedded plist XML.",
+      "dimension": "debt"
+    },
+    {
+      "id": "deps.trivy-build-artifact-false-positives",
+      "title": "Trivy scanned .build/ checkouts and flagged Ruby gem CVEs in Yams' dev toolchain",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "category": "scan_config",
+      "file": ".build/checkouts/Yams/Gemfile.lock",
+      "line": null,
+      "description": "Trivy found 5 CVEs (1 HIGH: CVE-2026-35611 addressable; 4 MEDIUM: activesupport x3, rexml) \u2014 all in Ruby gems inside '.build/checkouts/Yams/Gemfile.lock'. This is Yams' own Ruby development toolchain (used to run Yams' tests and generate documentation), not code compiled into Gargantua. These gems are NOT part of Gargantua's binary. Trivy should be configured to skip '.build/' to avoid this class of false positive in future scans.",
+      "snippet": "Gemfile.lock in .build/checkouts/Yams/ \u2014 Ruby deps of a Swift package's dev toolchain",
+      "fix_prompt": "# Fix: Exclude .build/ from trivy scans to eliminate false positives\n\n## Context\nTrivy is scanning the Swift Package Manager checkout directory (`.build/`), which contains the source code of all resolved packages including their own build toolchains. Yams includes a Gemfile.lock with Ruby gems for its CI. These Ruby gems are never compiled into Gargantua and do not affect the app's security posture. Trivy should be scoped to skip `.build/`.\n\n## Location\n- File: .healthcheck.toml (trivy configuration)\n- Dimension: dependencies / minor\n\n## Required change\nCreate a `.trivyignore` file or add a trivy skip-dirs configuration:\n\n**Option 1 \u2014 .trivyignore file (recommended for local scans):**\n```\n# .trivyignore\n# Yams Ruby dev toolchain \u2014 not compiled into Gargantua\n.build/checkouts/Yams/Gemfile.lock\n.build/index-build/checkouts/Yams/Gemfile.lock\n```\n\n**Option 2 \u2014 skip-dirs flag in toolchain:**\nUpdate the trivy command in the tenet-toolchain to pass `--skip-dirs .build`:\n```bash\ntrivy fs --format json --quiet --skip-dirs .build .\n```\n\n**Option 3 \u2014 update .healthcheck.toml to pass extra flags:**\nAdd a `[toolchain.trivy_flags]` entry when the toolchain skill supports it.\n\n## Constraints\n- Do not skip trivy on `.build/` binaries \u2014 if Gargantua ever vendors pre-built binaries there, those SHOULD be scanned.\n- Only suppress the specific lockfile paths, not the entire `.build/` tree.\n\n## Verification\n- Run: `trivy fs --format json --quiet --skip-dirs .build . | jq '.Results[].Vulnerabilities | length'` \u2014 should return 0.\n- Run: `trivy fs --format json --quiet . | jq '[.Results[].Vulnerabilities] | flatten | length'` \u2014 should show 0 findings after adding .trivyignore.",
+      "dimension": "dependencies"
+    },
+    {
+      "id": "deps.osv-scanner-missing",
+      "title": "osv-scanner not installed \u2014 no second-pass CVE check on Swift packages",
+      "severity": "info",
+      "confidence": "heuristic",
+      "category": "scan_coverage",
+      "file": ".healthcheck.toml",
+      "line": null,
+      "description": "osv-scanner can scan Package.resolved against the OSV vulnerability database for Swift packages. It is not currently installed (set to 'off' in .healthcheck.toml). Trivy does not have native SPM support; it only scanned the Ruby gem lockfile inside the Yams checkout. Installing osv-scanner would add a proper CVE check on all 17 resolved Swift packages.",
+      "snippet": "osv_scanner = \"off\"  # in .healthcheck.toml",
+      "fix_prompt": "# Optional: Install osv-scanner for SPM dependency CVE scanning\n\n## Context\nThe project uses Swift Package Manager. Trivy does not natively scan Package.resolved for Swift CVEs. osv-scanner does support SPM and would provide a proper vulnerability check against the OSV database for all 17 resolved Swift packages.\n\n## Required change\n1. Install osv-scanner:\n   ```bash\n   brew install osv-scanner\n   ```\n2. Update .healthcheck.toml:\n   ```toml\n   osv_scanner = \"auto\"  # was \"off\"\n   ```\n3. Re-run `/tenet-skills:tenet-toolchain-setup` to update the inventory.\n\n## Constraints\n- This is a coverage improvement, not a fix for a known vulnerability.\n- osv-scanner's SPM support may require `go.sum` / `Package.resolved` \u2014 confirm with `osv-scanner --help`.\n\n## Verification\n- Run: `osv-scanner --format json -r . | jq '.results[].packages | length'` \u2014 should enumerate SPM packages.",
+      "dimension": "dependencies"
+    },
+    {
+      "id": "docs.inline-coverage-below-threshold",
+      "title": "Inline doc coverage at 39% \u2014 1,089 public symbols undocumented",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/",
+      "line": 1,
+      "description": "Of 1796 public symbols in GargantuaCore, 1089 (61%) lack a `///` doc comment block. The 39% coverage is below the 80% threshold. The gap is concentrated in secondary fields of model enums, non-obvious protocol requirements, and internal extensions. Well-named public APIs require minimal documentation; the most impactful investments are on non-obvious parameters and protocol requirements.",
+      "snippet": "// Example undocumented public symbol:\npublic func runIfDue() async -> ScheduledScanRunResult",
+      "fix_prompt": "# Fix: Improve inline doc coverage from 39% toward 80%\n\n## Context\n1,089 public symbols in Sources/GargantuaCore/ lack `///` doc comments. The project uses a protocol-heavy, descriptive naming convention that makes many symbols self-documenting, so the most impactful targets are: (1) non-obvious function parameters, (2) protocol requirements, (3) public init parameters, and (4) types with domain-specific semantics.\n\n## Location\n- File: Sources/GargantuaCore/ (whole directory)\n- Dimension: docs / minor\n\n## Required change\nA pragmatic strategy to incrementally improve coverage:\n\n1. **Prioritize public protocols** \u2014 protocol requirements are consumed by callers; document each `func` requirement with its contract and expected behavior.\n2. **Prioritize public inits with multiple parameters** \u2014 callers shouldn't have to read the source to understand parameter meaning.\n3. **Skip self-documenting symbol names** \u2014 `public var id: String` in a `Codable` model doesn't need `/// The unique identifier`. Focus on non-obvious properties.\n4. **Use command-level doc generation** to find undocumented symbols:\n   ```bash\n   # Symbols missing doc comments:\n   grep -n 'public ' Sources/GargantuaCore/Services/*.swift | \\\n     grep -v '///' | \\\n     grep -E 'func|var|let|class|struct|enum|protocol' | \\\n     head -30\n   ```\n5. Work file-by-file, starting with the most-called services:\n   - ScheduledScanService.swift (30 methods)\n   - MCPRequestDispatcher.swift (17 methods)\n   - RemnantScanner.swift (22 methods)\n\n## Constraints\n- Do not add documentation that merely restates the name ('`var name: String` \u2014 the name').\n- Keep doc comments concise (1-3 lines for most symbols).\n- Use `/// - Parameters:` format for functions with multiple parameters.\n- Do NOT add doc comments to private symbols \u2014 the threshold applies to public API only.\n\n## Verification\n- Re-run the tenet-docs skill after adding doc comments to verify coverage improvement.\n- Run: `swift build` to confirm no syntax errors in doc comment formatting.",
+      "dimension": "docs"
+    },
+    {
+      "id": "docs.design-docs-not-adr-formatted",
+      "title": "Design docs in docs/designs/ are informal \u2014 consider formal ADR format",
+      "severity": "info",
+      "confidence": "heuristic",
+      "file": "docs/designs/",
+      "line": 1,
+      "description": "Three design documents exist (release-pipeline, vendored-helper-binaries, mlx-backend) but use an informal format without explicit Status/Context/Decision/Consequences structure. Formal ADR format makes it easier for future contributors to understand the current state of decisions (especially which ones have been superseded or are still active).",
+      "snippet": "docs/designs/2026-04-19-macos-release-pipeline.md\ndocs/designs/2026-04-20-vendored-helper-binaries.md\ndocs/designs/2026-04-20-mlx-backend.md",
+      "fix_prompt": "# Optional: Add ADR-style structure to existing design docs\n\n## Context\nThe project has good design documentation in docs/designs/. Adding a lightweight ADR-style header (Status, Context, Decision, Consequences) to each doc makes it easy to see which decisions are still active vs superseded.\n\n## Location\n- File: docs/designs/\n- Dimension: docs / info\n\n## Required change\n1. Create `docs/designs/README.md` listing all design docs and their current status:\n   ```markdown\n   # Design Documents\n   | Doc | Status | Summary |\n   |-----|--------|----------|\n   | 2026-04-19-macos-release-pipeline.md | Accepted | Release signing/notarizing flow |\n   | 2026-04-20-vendored-helper-binaries.md | Accepted | Bundled czkawka/fclones |\n   | 2026-04-20-mlx-backend.md | Accepted | MLX local inference engine |\n   ```\n2. Add a brief **Status:** line at the top of each existing doc.\n\n## Constraints\n- Do not restructure the content of existing design docs \u2014 just add the status header.\n- This is optional/informational \u2014 not required to maintain a high tenet-docs score.\n\n## Verification\n- `cat docs/designs/README.md` shows the status table.",
+      "dimension": "docs"
+    },
+    {
+      "id": "errors.silent-persistence-writes",
+      "title": "Persistence write failures are silently swallowed (try?) in 7 sites",
+      "severity": "major",
+      "confidence": "deterministic",
+      "category": "error_swallowing",
+      "file": "Sources/GargantuaCore/Views/ProfileContainerView.swift",
+      "line": 23,
+      "description": "User-initiated mutations against PersistenceController use `try?`, which discards the error and converts the result to Optional/Void. If a save or delete fails (disk full, permission error, schema mismatch), the operation appears successful from the UI but no record was written. Affected sites: ProfileContainerView.swift:23 (saveProfile), :36 (deleteProfile), :39 (updateSettings \u2192 activeProfileID), :52 (updateSettings), :70 (deleteProfile); MenuBarStatusModel.swift:154 (updateSettings); ScheduledScanService.swift:551 (recordScheduledScanSummary).",
+      "snippet": "try? persistence.saveProfile(updated)\ntry? persistence.deleteProfile(id: editing.id)\ntry? persistence.updateSettings { $0.activeProfileID = id }",
+      "fix_prompt": "# Fix: Surface persistence-write failures instead of silently swallowing them\n\n## Context\nSeven sites use `try? persistence.save\u2026/delete\u2026/updateSettings\u2026` which silently drops errors. For user-initiated data mutations, this is unsafe \u2014 a failed save looks identical to a successful save from the UI's perspective. If users notice their profile didn't persist, debugging is also harder because no error was logged.\n\n## Location\n- Files: Sources/GargantuaCore/Views/ProfileContainerView.swift (lines 23, 36, 39, 52, 70); Sources/GargantuaCore/Services/MenuBarStatusModel.swift (line 154); Sources/GargantuaCore/Services/ScheduledScanService.swift (line 551)\n- Dimension: errors / major\n\n## Required change\n1. Replace each `try?` with a do/catch that at minimum logs the error to stderr and ideally surfaces it via the existing alert/toast mechanism in the parent view.\n\n   Example for ProfileContainerView.swift:23:\n   ```swift\n   // Before\n   try? persistence.saveProfile(updated)\n   \n   // After\n   do {\n       try persistence.saveProfile(updated)\n   } catch {\n       FileHandle.standardError.write(Data(\"saveProfile failed: \\(error.localizedDescription)\\n\".utf8))\n       // Optionally surface to UI:\n       // saveError = error.localizedDescription\n   }\n   ```\n\n2. For ScheduledScanService.swift:551 (audit-only write), it is acceptable to log-and-continue rather than abort the scan, but the error MUST be logged.\n\n3. Consider promoting the persistence ViewModel layer to expose @Published `lastError` so views can surface failures with a small `.alert()` modifier.\n\n## Constraints\n- Do not block the UI on persistence errors (write failures should not freeze the app).\n- Do not change the persistence API signatures.\n- Audit/log writes (ScheduledScanService.recordScheduledScanSummary) may continue to be best-effort, but must log.\n\n## Verification\n- Run: `grep -nE 'try\\? (persistence|store)\\.' Sources/ -r` \u2014 should return 0 results after the migration.\n- Run: `swift test` \u2014 all tests pass.\n- Manually: temporarily make PersistenceController.saveProfile throw; verify the user sees an error indication or, at minimum, an entry in stderr.",
+      "dimension": "errors"
+    },
+    {
+      "id": "errors.silent-persistence-init",
+      "title": "PersistenceController init/bootstrap failures swallowed at app boot",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "category": "error_swallowing",
+      "file": "Sources/Gargantua/MainContentView.swift",
+      "line": 142,
+      "description": "MainContentView.swift:142-143 uses `persistence = try? PersistenceController()` followed by `try? persistence?.bootstrap()`. If the persistence layer fails to initialize at boot, the app silently continues with `persistence == nil`, after which most save operations also become silent no-ops (see related finding errors.silent-persistence-writes). Boot-time failures should be loud.",
+      "snippet": "persistence = try? PersistenceController()\ntry? persistence?.bootstrap()",
+      "fix_prompt": "# Fix: Surface PersistenceController init failure at app boot\n\n## Context\nIf the SQLite store can't open (permissions, disk corruption, sandbox issues), the app boots into a degraded state where every persistence operation silently does nothing. This makes user data invisible and hard to diagnose.\n\n## Location\n- File: Sources/Gargantua/MainContentView.swift\n- Line: 142\n- Dimension: errors / minor\n\n## Required change\nReplace the silent init with explicit error handling. Either:\n\n**Option A (preferred): show a startup error and refuse to proceed**\n```swift\nlet controller: PersistenceController\ndo {\n    controller = try PersistenceController()\n    try controller.bootstrap()\n} catch {\n    FileHandle.standardError.write(Data(\"persistence init failed: \\(error)\\n\".utf8))\n    fatalError(\"Persistence layer failed to initialize: \\(error.localizedDescription)\")\n}\nself.persistence = controller\n```\n\n**Option B: continue but show a banner**\n```swift\ndo {\n    let controller = try PersistenceController()\n    try controller.bootstrap()\n    self.persistence = controller\n} catch {\n    FileHandle.standardError.write(Data(\"persistence init failed: \\(error)\\n\".utf8))\n    self.persistenceInitError = error  // surface in UI\n}\n```\n\n## Constraints\n- Do not block the main thread on disk I/O for longer than necessary.\n- Coordinate with the related fix (errors.silent-persistence-writes).\n\n## Verification\n- Manually: rename the persistence directory to break init; confirm a clear error appears (stderr or UI).\n- Run: `swift test`.",
+      "dimension": "errors"
+    },
+    {
+      "id": "errors.silent-load-fallbacks",
+      "title": "Silent fetch fallbacks via try? in MainContentView load paths",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "category": "error_swallowing",
+      "file": "Sources/Gargantua/MainContentView.swift",
+      "line": 225,
+      "description": "MainContentView.swift:225, 228, 245 use `try? persistence.fetchSettings()` and similar to load persisted state. On failure, defaults are used silently. This is acceptable UX (the app remains usable) but it loses diagnostic info if the persistence file ever becomes unreadable.",
+      "snippet": "let settings = try? persistence.fetchSettings()\nlet persisted = (try? persistence.fetchProfiles()) ?? []\nlet stored = try? persistence.fetchSettings().scanRoots",
+      "fix_prompt": "# Fix: Log persistence-fetch failures even when defaults are acceptable\n\n## Context\nThe load paths fall back to defaults on error, which is good UX. The improvement is logging the original error so persistence problems are diagnosable from logs.\n\n## Location\n- File: Sources/Gargantua/MainContentView.swift\n- Lines: 225, 228, 245\n- Dimension: errors / minor\n\n## Required change\nWrap each fetch in a do/catch that logs and falls back:\n```swift\nlet settings: SettingsRecord\ndo {\n    settings = try persistence.fetchSettings()\n} catch {\n    FileHandle.standardError.write(Data(\"fetchSettings failed; using defaults: \\(error)\\n\".utf8))\n    settings = SettingsRecord.defaults\n}\n```\n\nOr add a thin helper on PersistenceController like `fetchSettingsOrDefaults() -> SettingsRecord` that internally logs and returns defaults.\n\n## Constraints\n- Do not change the user-visible behavior \u2014 defaults should still be used silently from the user's perspective.\n- Do not log on every read in a hot loop.\n\n## Verification\n- Run: `grep -n 'try? persistence.fetch' Sources/Gargantua/MainContentView.swift` \u2014 should return 0.\n- Run: `swift test`.",
+      "dimension": "errors"
+    },
+    {
+      "id": "errors.modeldownload-default-timeout",
+      "title": "ModelDownloadManager uses URLSessionConfiguration.default with no custom timeouts",
+      "severity": "info",
+      "confidence": "deterministic",
+      "category": "timeout_handling",
+      "file": "Sources/GargantuaCore/Services/ModelDownloadManager.swift",
+      "line": 225,
+      "description": "ModelDownloadManager.swift:225 builds a URLSession from URLSessionConfiguration.default. The default request timeout (60s) is fine for most calls, but the resource timeout (7 days) is intentionally permissive \u2014 appropriate for multi-GB model downloads where the user might pause. This is informational, not a defect: changing the resource timeout could break legitimate large downloads. Documented here so the trade-off is explicit.",
+      "snippet": "let config = URLSessionConfiguration.default\nsession = URLSession(configuration: config, delegate: self, delegateQueue: .main)",
+      "fix_prompt": "# Note: ModelDownloadManager URLSession timeout posture\n\n## Context\nThis is an informational finding \u2014 no fix required unless the team wants stricter download timeouts. URLSessionConfiguration.default uses a 60-second per-request timeout and a 7-day resource timeout. For LLM model downloads (often 1-8 GB), the long resource timeout is appropriate.\n\n## Required change (optional)\nIf the team wants explicit limits, document the choice:\n```swift\nlet config = URLSessionConfiguration.default\nconfig.timeoutIntervalForRequest = 60       // 60s for the connection / response start\nconfig.timeoutIntervalForResource = 24 * 3600 // 24h for the full download\n```\n\nThis documents the intent in code rather than relying on platform defaults that could change.\n\n## Constraints\n- Do not set the resource timeout below ~1 hour \u2014 large model files take time on slow connections.\n\n## Verification\n- Run: a download to completion of a large model still succeeds.\n- Run: `swift test`.",
+      "dimension": "errors"
+    },
+    {
+      "id": "obs.mcp-sse-no-sigterm-handler",
+      "title": "GargantuaMCP SSE mode has no SIGTERM handler \u2014 status store not updated on kill",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "category": "graceful_shutdown",
+      "file": "Sources/GargantuaMCP/main.swift",
+      "line": 246,
+      "description": "In stdio mode, GargantuaMCP detects client disconnect via EOF on stdin and calls `serverStatusStore.markStopped()` before exit. In SSE mode, the server runs under `dispatchMain()` indefinitely with no explicit signal handler. If systemd, launchd, or a user kills the process with SIGTERM, the process terminates without (a) stopping accepting new SSE connections cleanly, (b) flushing the status store to 'stopped', or (c) closing active SSE client connections. Next-launch status reads may show 'running' until the zombie-process heuristic in MCPServerStatusStore catches the stale PID.",
+      "snippet": "// No signal handler around `dispatchMain()` or transport.start()",
+      "fix_prompt": "# Fix: Add SIGTERM/SIGINT handler for graceful MCP SSE shutdown\n\n## Context\nThe MCP SSE transport runs indefinitely under `dispatchMain()`. A termination signal currently kills the process without stopping the NWListener cleanly or updating the persisted status store. Stdio mode has a clean shutdown path via EOF detection; SSE mode needs an equivalent.\n\n## Location\n- File: Sources/GargantuaMCP/main.swift\n- Line: near the SSE transport startup (around line 246-264) or just before `dispatchMain()`\n- Dimension: observability / minor\n\n## Required change\nRegister a DispatchSource signal handler that stops the transport, updates the status store, and exits cleanly:\n\n```swift\nlet sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)\nlet sigintSource  = DispatchSource.makeSignalSource(signal: SIGINT,  queue: .main)\n\nlet shutdown: @Sendable () -> Void = {\n    stderrLog(\"received shutdown signal\")\n    sseTransport?.stop()           // stop NWListener + drain connections\n    serverStatusStore.markStopped()\n    exit(0)\n}\n\nsigtermSource.setEventHandler(handler: shutdown)\nsigintSource.setEventHandler(handler: shutdown)\nsigtermSource.resume()\nsigintSource.resume()\n\n// Ignore default signal handlers so DispatchSource can capture:\nsignal(SIGTERM, SIG_IGN)\nsignal(SIGINT,  SIG_IGN)\n```\n\nAdd a `stop()` method to MCPSSETransport (if not already present) that cancels the NWListener and signals each active client connection to close.\n\n## Constraints\n- Do NOT install signal handlers before Darwin's default handlers are in place \u2014 this is why `signal(SIGTERM, SIG_IGN)` is called AFTER `DispatchSource` registration.\n- Do not break the stdio path \u2014 the EOF-on-stdin shutdown must continue to work.\n- Preserve the `exit(0)` behavior so launchd/systemd sees a clean exit code.\n\n## Verification\n- Start `swift run GargantuaMCP --mode sse` in a terminal.\n- From another terminal: `kill -TERM $(pgrep GargantuaMCP)`.\n- Confirm the first terminal logs 'received shutdown signal' and exits.\n- Confirm MCPServerStatusStore reports stopped on the next read.",
+      "dimension": "observability"
+    },
+    {
+      "id": "perf.fetch-first-no-limit",
+      "title": "SwiftData fetch().first calls would benefit from explicit fetchLimit = 1",
+      "severity": "info",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Persistence/PersistenceController.swift",
+      "line": 88,
+      "description": "Four fetch() calls take `.first` from the result array (lines 88, 100, 111, 271) without setting `descriptor.fetchLimit = 1`. SwiftData's query planner likely optimizes this under the hood (the predicate limits the result set naturally), but adding an explicit fetchLimit of 1 makes the intent clear and guarantees the SQL-level LIMIT 1 for Core Data-backed stores. One call site (line 240) already does this \u2014 applying the pattern consistently is a micro-optimization.",
+      "snippet": "let descriptor = FetchDescriptor(predicate: predicate)\nif let existing = try context.fetch(descriptor).first { ... }",
+      "fix_prompt": "# Optional: Add explicit fetchLimit = 1 on .first calls\n\n## Context\nFour PersistenceController call sites use `.first` on fetch results without setting fetchLimit. The unique-by-id predicates mean the result will be 0-or-1 row, but adding an explicit fetchLimit makes the intent unambiguous and removes any query-planner dependency.\n\n## Location\n- File: Sources/GargantuaCore/Persistence/PersistenceController.swift\n- Lines: 88, 100, 111, 271\n- Dimension: performance / info\n\n## Required change\nFor each `.first` call, add `var` binding and set fetchLimit:\n\n```swift\n// Before\nlet descriptor = FetchDescriptor(predicate: predicate)\nif let existing = try context.fetch(descriptor).first { ... }\n\n// After\nvar descriptor = FetchDescriptor(predicate: predicate)\ndescriptor.fetchLimit = 1\nif let existing = try context.fetch(descriptor).first { ... }\n```\n\n## Constraints\n- Do not change predicates or sort descriptors.\n- Keep the `.first` \u2014 it preserves the optional-unwrap pattern.\n\n## Verification\n- Run: `swift test --filter PersistenceControllerTests` \u2014 all tests pass.\n- No behavioral change expected.",
+      "dimension": "performance"
+    },
+    {
+      "id": "perf.unbounded-audit-fetch",
+      "title": "fetchAuditEntries has no fetchLimit \u2014 could slow down as audit log grows",
+      "severity": "info",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Persistence/PersistenceController.swift",
+      "line": 171,
+      "description": "fetchAuditEntries(from:to:) returns all audit entries in a date range with no row cap. For short windows (a day or two) and moderate usage this is fine, but an ever-growing audit log could eventually slow down this call. Given that the audit table has a `purgeOldAuditEntries` companion, the risk is low. Flagging for awareness.",
+      "snippet": "let descriptor = FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\\.timestamp, order: .reverse)])\nreturn try context.fetch(descriptor).compactMap { $0.toDomain() }",
+      "fix_prompt": "# Optional: Add pagination or cap to fetchAuditEntries\n\n## Context\nThe audit-entry fetch is bounded by date range but not by row count. As the audit log grows, this could become slow.\n\n## Location\n- File: Sources/GargantuaCore/Persistence/PersistenceController.swift\n- Line: 171\n- Dimension: performance / info\n\n## Required change\nEither (a) add a default max (e.g., 10,000 rows) or (b) expose a limit parameter:\n\n```swift\npublic func fetchAuditEntries(\n    from startDate: Date,\n    to endDate: Date = Date(),\n    limit: Int = 10_000\n) throws -> [AuditEntry] {\n    let predicate = #Predicate<PersistedAuditEntry> {\n        $0.timestamp >= startDate && $0.timestamp <= endDate\n    }\n    var descriptor = FetchDescriptor(\n        predicate: predicate,\n        sortBy: [SortDescriptor(\\.timestamp, order: .reverse)]\n    )\n    descriptor.fetchLimit = limit\n    return try context.fetch(descriptor).compactMap { $0.toDomain() }\n}\n```\n\n## Constraints\n- Keep the existing default parameter for `endDate` for backward compatibility.\n- Callers that need older-than-limit entries should do date-window pagination instead.\n\n## Verification\n- Run: `swift test --filter PersistenceControllerTests`.",
+      "dimension": "performance"
+    },
+    {
+      "id": "secrets.test-token-placeholder",
+      "title": "Gitleaks flagged a test fixture token",
+      "severity": "info",
+      "confidence": "deterministic",
+      "category": "test_fixture",
+      "file": "Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+      "line": 130,
+      "rule_id": "generic-secret-assignment",
+      "description": "Gitleaks detected a long opaque value assigned to a 'Token' variable. The value 'gtua_****' is a clear test placeholder (a `private static let validToken` constant in a test file) using sequential-digit padding, not a real secret. Treated as info-only per the 'never flag known test/example values' rule. If desired, suppress this in .gitleaks.toml via an [allowlist] regex on the literal value.",
+      "snippet": "private static let validToken = \"gtua_****REDACTED****\"",
+      "fix_prompt": "# Suppress: gitleaks false positive on test fixture token\n\n## Context\nGitleaks flagged a test placeholder used by the MCP SSE transport bearer-auth tests as a generic secret. The token is a hardcoded test constant (`gtua_test_token_12345678901234567890`) \u2014 clearly synthetic, not a real credential. The test relies on the literal value to verify the bearer-auth handshake. Removing or changing it would break the test for no security benefit.\n\n## Location\n- File: Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift\n- Line: 130\n- Dimension: secrets / info\n\n## Required change\nAdd an allowlist entry to `.gitleaks.toml` so future scans no longer flag this fixture:\n\n```toml\n[allowlist]\ndescription = \"MCP SSE transport test fixtures\"\npaths = [\n  '''Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests\\.swift''',\n]\nregexes = [\n  '''gtua_test_token_\\d+''',\n]\n```\n\n## Constraints\n- Do not change the test fixture value \u2014 tests assert on this exact token.\n- Scope the allowlist as narrowly as possible (path + regex), not a global ignore.\n\n## Verification\n- Run: `gitleaks detect --source=. --report-format=json --report-path=- --config=.gitleaks.toml` \u2014 should report 0 leaks.\n- Run: `swift test --filter MCPSSETransportTests` \u2014 bearer-auth tests still pass.",
+      "dimension": "secrets"
+    },
+    {
+      "id": "security.mcp-sse-cleartext-lan",
+      "title": "MCP SSE LAN transport is HTTP, not HTTPS",
+      "severity": "info",
+      "confidence": "heuristic",
+      "category": "config",
+      "file": "Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+      "line": 381,
+      "description": "When the MCP SSE server is configured with bindScope=.lan it listens on 0.0.0.0 in plaintext HTTP. Bearer-token auth IS enforced (and uses constant-time comparison), so an attacker without the token cannot drive tool calls. However, anyone with network capture can see the bearer token on the wire and observe scanned/cleaned file paths. The default bindScope is .localhost, which mitigates this for typical use.",
+      "snippet": "host: NWEndpoint.Host(configuration.bindHost)  // 0.0.0.0 when bindScope == .lan, plaintext HTTP",
+      "fix_prompt": "# Optional hardening: TLS for MCP SSE LAN bind\n\n## Context\nThe MCP SSE transport is plaintext HTTP. This is correct for the default `.localhost` bind, but when a user opts into `.lan` binding the bearer token and tool-call payloads travel unencrypted across the LAN. Treat this as defense-in-depth, not a vulnerability \u2014 bearer auth still prevents unauthorized access. The mitigation is to layer TLS on top.\n\n## Location\n- File: Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift\n- Line: 381\n- Dimension: security / info\n\n## Required change\nWhen bindScope is `.lan`, require TLS and reject startup without a configured certificate.\n\nOptions:\n1. Wrap the NWListener parameters with `tls(...)` using a self-signed certificate the user generates locally.\n2. Document that LAN users should front the SSE server with a reverse proxy (Caddy, nginx) that terminates TLS.\n3. Restrict LAN bind to `tcp_options` parameters with a TLS configuration block.\n\nMinimal in-process approach using NWProtocolTLS:\n```swift\nlet parameters: NWParameters\nif configuration.bindScope == .lan {\n    parameters = NWParameters(tls: makeTLSOptions(), tcp: .init())\n} else {\n    parameters = NWParameters(tls: nil, tcp: .init())\n}\n```\n\n## Constraints\n- Do not require TLS for the default `.localhost` bind \u2014 it would break dev ergonomics.\n- The certificate provisioning UX is non-trivial; if you skip in-process TLS, document the proxy pattern in README.\n\n## Verification\n- With `.lan` bind and no TLS configured, server start should fail with a clear error.\n- With TLS configured, `curl --cacert <ca> https://<host>:7493/...` succeeds; plain `http://...` fails or redirects.",
+      "dimension": "security"
+    },
+    {
+      "id": "security.app-not-sandboxed",
+      "title": "App entitlements file is empty (no App Sandbox)",
+      "severity": "info",
+      "confidence": "heuristic",
+      "category": "config",
+      "file": "AppShell/Gargantua.entitlements",
+      "line": 1,
+      "description": "Gargantua.entitlements declares no entitlements, meaning the app is NOT App-Sandboxed. For a disk-cleanup utility that walks /Applications, ~/Library, and arbitrary user-selected roots, sandboxing would block its core function \u2014 so this is likely an intentional design choice for the notarization (Developer ID) distribution path rather than the App Store. Noted here so the trade-off is explicit: the app runs with full user privileges and can read/delete anything the user can. Mitigation lives elsewhere (the cleanup engine's safety levels and confirmation flow).",
+      "snippet": "<plist version=\"1.0\"><dict></dict></plist>",
+      "fix_prompt": "# Decision: App Sandbox vs full-user-disk access\n\n## Context\nThe entitlements file is empty, so Gargantua runs un-sandboxed. This is a deliberate posture for a disk-cleanup tool that must scan arbitrary filesystem locations. App Store distribution would require the sandbox plus `com.apple.security.files.user-selected.read-write` and would prevent the directory-tree scans that are the product. This finding documents the trade-off \u2014 no code change is required unless distribution strategy changes.\n\n## Location\n- File: AppShell/Gargantua.entitlements\n- Dimension: security / info\n\n## Required change\nNone, unless the app is being prepared for the Mac App Store. If so:\n1. Add `<key>com.apple.security.app-sandbox</key><true/>`.\n2. Add `<key>com.apple.security.files.user-selected.read-write</key><true/>` and use NSOpenPanel to obtain user-selected scan roots.\n3. Persist security-scoped bookmarks for re-access across launches.\n4. Re-test all scan/cleanup flows \u2014 many will fail the first time.\n\n## Verification\n- `codesign -d --entitlements - dist/Gargantua.app` reflects the chosen entitlements.\n- Notarization continues to succeed.",
+      "dimension": "security"
+    },
+    {
+      "id": "testing.no-coverage-report",
+      "title": "No test coverage report generated \u2014 actual line/branch coverage unknown",
+      "severity": "major",
+      "confidence": "deterministic",
+      "file": "Package.swift",
+      "line": 1,
+      "description": "The test suite has 105 files and a healthy 0.59 test-to-source ratio, but no code coverage report exists in the repo. Without a coverage report it is impossible to verify which source lines are actually exercised. Swift's built-in coverage support (`--enable-code-coverage` in `swift test`) can generate LLVM coverage data that can be converted to lcov format for CI reporting.",
+      "snippet": "# No coverage report found at: coverage/lcov.info, .build/**/*.profdata, etc.",
+      "fix_prompt": "# Fix: Enable and collect test coverage data in CI\n\n## Context\nThe project has a healthy test suite but generates no coverage report. Adding `--enable-code-coverage` to `swift test` produces LLVM profiling data that can be converted to lcov for dashboards and CI enforcement.\n\n## Location\n- File: Package.swift (project-wide configuration)\n- Dimension: testing / major\n\n## Required change\n1. Run tests with coverage:\n   ```bash\n   swift test --enable-code-coverage\n   ```\n   This writes `.build/debug/codecov/*.profraw` and `.build/debug/codecov/*.profdata` files.\n\n2. Convert to lcov format:\n   ```bash\n   xcrun llvm-cov export \\\n     -format=lcov \\\n     .build/debug/GargantuaPackageTests.xctest/Contents/MacOS/GargantuaPackageTests \\\n     -instr-profile .build/debug/codecov/default.profdata \\\n     -ignore-filename-regex='.build|Tests' \\\n     > coverage.lcov\n   ```\n\n3. Add to CI pipeline (GitHub Actions or the existing `.githooks/pre-commit`):\n   ```yaml\n   - name: Test with coverage\n     run: swift test --enable-code-coverage\n   - name: Export lcov\n     run: |\n       xcrun llvm-cov export \\\n         -format=lcov \\\n         .build/debug/GargantuaPackageTests.xctest/Contents/MacOS/GargantuaPackageTests \\\n         -instr-profile .build/debug/codecov/default.profdata \\\n         -ignore-filename-regex='.build|Tests' > coverage.lcov\n   ```\n\n4. Add `coverage.lcov` to `.gitignore` (it's an artifact, not source).\n\n## Constraints\n- This is build/CI configuration, not source code. Do not change any source files.\n- The exact `.xctest` bundle name may differ; check `.build/debug/` for the correct name.\n- On Apple Silicon Macs, `xcrun llvm-cov` is provided by Xcode Command Line Tools.\n\n## Verification\n- Run: `swift test --enable-code-coverage && ls .build/debug/codecov/`\n- Run the lcov export command and verify the file is non-empty.\n- Run: `/tenet-skills:tenet-toolchain` to pick up the new coverage file.",
+      "dimension": "testing"
+    },
+    {
+      "id": "testing.security-services-untested",
+      "title": "4 security/privacy services lack unit tests: CodeSignatureVerifier, CloudAIRedaction, PermissionChecker, ClaudeCodeAgentSessionController",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Services/CodeSignatureVerifier.swift",
+      "line": 1,
+      "description": "Four services without dedicated test files have elevated security or privacy relevance: (1) CodeSignatureVerifier \u2014 validates executable code signatures before running (security invariant); (2) CloudAIRedaction \u2014 strips sensitive data before sending to cloud AI (privacy invariant); (3) PermissionChecker \u2014 validates OS entitlements; (4) ClaudeCodeAgentSessionController \u2014 manages the AI agent lifecycle including process spawning. All four are covered by higher-level integration tests but lack unit tests that could catch regressions in edge cases.",
+      "snippet": "// CodeSignatureVerifier.swift, CloudAIRedaction.swift, PermissionChecker.swift, ClaudeCodeAgentSessionController.swift \u2014 no *Tests.swift counterpart in Tests/",
+      "fix_prompt": "# Fix: Add unit tests for security/privacy-critical services\n\n## Context\nFour services with security or privacy relevance lack dedicated unit tests. Higher-level integration tests provide some coverage, but unit tests provide faster feedback and explicit documentation of expected behavior (including edge cases and failure modes).\n\n## Location\n- Files: Sources/GargantuaCore/Services/CodeSignatureVerifier.swift, CloudAIRedaction.swift, PermissionChecker.swift, ClaudeCodeAgentSessionController.swift\n- Dimension: testing / minor\n\n## Required change\n1. **CodeSignatureVerifier** \u2014 test with a known-good binary (e.g., `/bin/ls`) and a known-invalid signature (a modified copy):\n   ```swift\n   @Test func verifySystemBinary() {\n       let verifier = CodeSignatureVerifier()\n       #expect(verifier.verify(URL(fileURLWithPath: \"/bin/ls\")) == true)\n   }\n   ```\n\n2. **CloudAIRedaction** \u2014 test that sensitive patterns are redacted, and non-sensitive content is passed through:\n   ```swift\n   @Test func redactsAPIKeys() {\n       let text = \"My token is ghp_ABCDEF123456\"\n       #expect(!CloudAIRedaction.redact(text).contains(\"ghp_ABCDEF\"))\n   }\n   ```\n\n3. **PermissionChecker** \u2014 test the happy path (checking accessible permissions) and verify the result type structure.\n\n4. **ClaudeCodeAgentSessionController** \u2014 unit test init/lifecycle state transitions using a mock `ClaudeCodeAgentProcessExecuting`.\n\n## Constraints\n- Do not require special OS permissions in the test target (no full disk access, etc.).\n- Mock system calls where needed using the existing protocol abstractions.\n- Use the Swift Testing framework (`@Test`, `#expect`) consistent with the rest of the suite.\n\n## Verification\n- Run: `swift test --filter CodeSignatureVerifierTests`\n- Run: `swift test --filter CloudAIRedactionTests`\n- Run: `swift test --filter PermissionCheckerTests`\n- Run: `swift test --filter ClaudeCodeAgentSessionControllerTests`",
+      "dimension": "testing"
+    },
+    {
+      "id": "testing.views-test-coverage",
+      "title": "Views layer has a 0.33 test-to-source ratio (18 tests / 55 view files)",
+      "severity": "info",
+      "confidence": "heuristic",
+      "file": "Tests/GargantuaCoreTests/Views/",
+      "line": 1,
+      "description": "The Views/ directory has 55 source files but only 18 test files (0.33 ratio, below the 0.5 healthy threshold). This is expected for SwiftUI \u2014 `@ViewBuilder` bodies and declarative layout code are architecturally difficult to unit test. ViewModels appear to be tested separately. Flagged as info so the team can consciously decide how much view testing is appropriate versus relying on manual testing or integration tests for UI flows.",
+      "snippet": "Tests/GargantuaCoreTests/Views/ = 18 test files\nSources/GargantuaCore/Views/ = 55 source files",
+      "fix_prompt": "# Optional: Increase SwiftUI view test coverage\n\n## Context\nSwiftUI views are architecturally hard to unit test. The 0.33 ratio for the Views layer is lower than the healthy 0.5 threshold but acceptable given SwiftUI's design. The highest-value improvements are:\n\n1. Ensure all ViewModels have test coverage (SmartUninstallerViewModel has tests \u2713).\n2. For complex computed properties in views (e.g., color logic, enabled states), extract them to testable helper functions or ViewModels.\n3. Consider ViewInspector (https://github.com/nalexn/ViewInspector) for selective view unit testing.\n\n## Required change\n- No change required \u2014 this is a documentation of the posture.\n- If the team wants higher confidence: audit the most logic-heavy views (SettingsView, DashboardView, ScanBucketView) for any computed logic that can be extracted to a testable pure function.\n\n## Verification\n- Run: `swift test --filter Views` to see current view test count and results.",
+      "dimension": "testing"
+    }
+  ]
+}

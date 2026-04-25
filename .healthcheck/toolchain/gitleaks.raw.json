@@ -1,0 +1,23 @@
+[
+ {
+  "RuleID": "generic-secret-assignment",
+  "Description": "Long opaque value assigned to a secret-looking variable (catchall)",
+  "StartLine": 130,
+  "EndLine": 130,
+  "StartColumn": 30,
+  "EndColumn": 75,
+  "Match": "Token = \"gtua_test_token_12345678901234567890\"",
+  "Secret": "gtua_test_token_12345678901234567890",
+  "File": "Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+  "SymlinkFile": "",
+  "Commit": "6265671a8f872c9385cfad94ec3380df28922ba5",
+  "Link": "https://github.com/inceptyon-labs/gargantua/blob/6265671a8f872c9385cfad94ec3380df28922ba5/Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift#L130",
+  "Entropy": 4.2045116,
+  "Author": "jnew00",
+  "Email": "jnew00@gmail.com",
+  "Date": "2026-04-24T23:57:18Z",
+  "Message": "feat: add MCP SSE transport and bearer auth",
+  "Tags": [],
+  "Fingerprint": "6265671a8f872c9385cfad94ec3380df28922ba5:Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift:generic-secret-assignment:130"
+ }
+]

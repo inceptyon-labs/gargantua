@@ -1,0 +1,875 @@
+[
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Persistence/PersistenceControllerTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 260 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Parsing/RemnantRuleParserTests.swift",
+    "line" : 403,
+    "reason" : "File should contain 400 lines or less: currently contains 403",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/LocalAIServiceTests.swift",
+    "line" : 567,
+    "reason" : "File should contain 400 lines or less: currently contains 567",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/LocalAIServiceTests.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 355 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/CleanupNarrativeTests.swift",
+    "line" : 465,
+    "reason" : "File should contain 400 lines or less: currently contains 465",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 68,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/CleanupEngineTests.swift",
+    "line" : 180,
+    "reason" : "Tuples should have at most 2 members",
+    "rule_id" : "large_tuple",
+    "severity" : "Warning",
+    "type" : "Large Tuple"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/AuditWriterTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 285 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/ModelDownloadManagerTests.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 264 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/CzkawkaAdapterTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 251 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/RemnantScannerTests.swift",
+    "line" : 416,
+    "reason" : "File should contain 400 lines or less: currently contains 416",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/RemnantScannerTests.swift",
+    "line" : 47,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 330 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/SafetyClassifierTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 304 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 20,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MLXBackendPerformanceSmokeTests.swift",
+    "line" : 126,
+    "reason" : "Function body should span 80 lines or less excluding comments and whitespace: currently spans 81 lines",
+    "rule_id" : "function_body_length",
+    "severity" : "Warning",
+    "type" : "Function Body Length"
+  },
+  {
+    "character" : 20,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MLXBackendPerformanceSmokeTests.swift",
+    "line" : 210,
+    "reason" : "Function should have 5 parameters or less: it currently has 11",
+    "rule_id" : "function_parameter_count",
+    "severity" : "Error",
+    "type" : "Function Parameter Count"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MLXBackendPerformanceSmokeTests.swift",
+    "line" : 40,
+    "reason" : "Line should be 200 characters or less; currently it has 271 characters",
+    "rule_id" : "line_length",
+    "severity" : "Error",
+    "type" : "Line Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MLXBackendPerformanceSmokeTests.swift",
+    "line" : 60,
+    "reason" : "Line should be 200 characters or less; currently it has 322 characters",
+    "rule_id" : "line_length",
+    "severity" : "Error",
+    "type" : "Line Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MLXBackendPerformanceSmokeTests.swift",
+    "line" : 65,
+    "reason" : "Line should be 150 characters or less; currently it has 186 characters",
+    "rule_id" : "line_length",
+    "severity" : "Warning",
+    "type" : "Line Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/NativeScanAdapterTests.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 315 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MLXInferenceEngineTests.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 282 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/UninstallExecutorTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 267 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/LocalAIServiceAdvisoryTests.swift",
+    "line" : 417,
+    "reason" : "File should contain 400 lines or less: currently contains 417",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/LocalAIServiceAdvisoryTests.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 273 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPAnalyzeToolHandlerTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 277 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPCleanToolHandlerAuditTests.swift",
+    "line" : 11,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 291 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPScanToolHandlerTests.swift",
+    "line" : 584,
+    "reason" : "File should contain 400 lines or less: currently contains 584",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPScanToolHandlerTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 472 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPExplainToolHandlerTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 287 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+    "line" : 453,
+    "reason" : "File should contain 400 lines or less: currently contains 453",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 36,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+    "line" : 106,
+    "reason" : "Prefer failable `String(bytes:encoding:)` initializer when converting `Data` to `String`",
+    "rule_id" : "optional_data_string_conversion",
+    "severity" : "Warning",
+    "type" : "Optional Data -> String Conversion"
+  },
+  {
+    "character" : 44,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+    "line" : 119,
+    "reason" : "Prefer failable `String(bytes:encoding:)` initializer when converting `Data` to `String`",
+    "rule_id" : "optional_data_string_conversion",
+    "severity" : "Warning",
+    "type" : "Optional Data -> String Conversion"
+  },
+  {
+    "character" : 20,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+    "line" : 200,
+    "reason" : "Prefer failable `String(bytes:encoding:)` initializer when converting `Data` to `String`",
+    "rule_id" : "optional_data_string_conversion",
+    "severity" : "Warning",
+    "type" : "Optional Data -> String Conversion"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 387 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPStatusToolHandlerTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 253 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 21,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPRequestDispatcherTests.swift",
+    "line" : 615,
+    "reason" : "Prefer checking `isEmpty` over comparing `count` to zero",
+    "rule_id" : "empty_count",
+    "severity" : "Error",
+    "type" : "Empty Count"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPRequestDispatcherTests.swift",
+    "line" : 662,
+    "reason" : "File should contain 400 lines or less: currently contains 662",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPRequestDispatcherTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 568 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPCleanToolHandlerTests.swift",
+    "line" : 719,
+    "reason" : "File should contain 400 lines or less: currently contains 719",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Tests/GargantuaCoreTests/Services/MCP/MCPCleanToolHandlerTests.swift",
+    "line" : 6,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 602 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 14,
+    "file" : "/Users/Jason/Development/gargantua/Sources/Gargantua/AppUpdateController.swift",
+    "line" : 67,
+    "reason" : "Multi-line collection literals should have trailing commas",
+    "rule_id" : "trailing_comma",
+    "severity" : "Warning",
+    "type" : "Trailing Comma"
+  },
+  {
+    "character" : 9,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaMCP/main.swift",
+    "line" : 353,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 14",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaMCP/main.swift",
+    "line" : 454,
+    "reason" : "File should contain 400 lines or less: currently contains 454",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaPrivilegedHelper/main.swift",
+    "line" : 176,
+    "reason" : "Line should be 150 characters or less; currently it has 156 characters",
+    "rule_id" : "line_length",
+    "severity" : "Warning",
+    "type" : "Line Length"
+  },
+  {
+    "character" : 99,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaPrivilegedHelper/main.swift",
+    "line" : 145,
+    "reason" : "nil coalescing operator is only evaluated if the lhs is nil, coalescing operator with nil as rhs is redundant",
+    "rule_id" : "redundant_nil_coalescing",
+    "severity" : "Warning",
+    "type" : "Redundant Nil Coalescing"
+  },
+  {
+    "character" : 20,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Persistence/PersistedModels.swift",
+    "line" : 205,
+    "reason" : "Declaration PersistedWhitelistEntry contains the term \"whitelist\" which is not considered inclusive",
+    "rule_id" : "inclusive_language",
+    "severity" : "Warning",
+    "type" : "Inclusive Language"
+  },
+  {
+    "character" : 17,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Persistence/PersistenceController.swift",
+    "line" : 247,
+    "reason" : "Declaration fetchWhitelistEntries contains the term \"whitelist\" which is not considered inclusive",
+    "rule_id" : "inclusive_language",
+    "severity" : "Warning",
+    "type" : "Inclusive Language"
+  },
+  {
+    "character" : 17,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Persistence/PersistenceController.swift",
+    "line" : 256,
+    "reason" : "Declaration addWhitelistEntry contains the term \"whitelist\" which is not considered inclusive",
+    "rule_id" : "inclusive_language",
+    "severity" : "Warning",
+    "type" : "Inclusive Language"
+  },
+  {
+    "character" : 17,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Persistence/PersistenceController.swift",
+    "line" : 268,
+    "reason" : "Declaration removeWhitelistEntry contains the term \"whitelist\" which is not considered inclusive",
+    "rule_id" : "inclusive_language",
+    "severity" : "Warning",
+    "type" : "Inclusive Language"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/DashboardView.swift",
+    "line" : 680,
+    "reason" : "File should contain 400 lines or less: currently contains 680",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/DashboardView.swift",
+    "line" : 11,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 368 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/CleanupSummaryView.swift",
+    "line" : 12,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 302 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/DiskExplorerView.swift",
+    "line" : 563,
+    "reason" : "File should contain 400 lines or less: currently contains 563",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 83,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/PermissionRequestFlowView.swift",
+    "line" : 71,
+    "reason" : "Multi-line collection literals should have trailing commas",
+    "rule_id" : "trailing_comma",
+    "severity" : "Warning",
+    "type" : "Trailing Comma"
+  },
+  {
+    "character" : 81,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/PermissionRequestFlowView.swift",
+    "line" : 115,
+    "reason" : "Multi-line collection literals should have trailing commas",
+    "rule_id" : "trailing_comma",
+    "severity" : "Warning",
+    "type" : "Trailing Comma"
+  },
+  {
+    "character" : 13,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/RuleViewerView.swift",
+    "line" : 327,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 14",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/RuleViewerView.swift",
+    "line" : 626,
+    "reason" : "File should contain 400 lines or less: currently contains 626",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/RuleViewerView.swift",
+    "line" : 10,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 330 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/ScanBucketView.swift",
+    "line" : 832,
+    "reason" : "File should contain 400 lines or less: currently contains 832",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 16,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/ScanBucketView.swift",
+    "line" : 80,
+    "reason" : "Declaration onAddToWhitelist contains the term \"whitelist\" which is not considered inclusive",
+    "rule_id" : "inclusive_language",
+    "severity" : "Warning",
+    "type" : "Inclusive Language"
+  },
+  {
+    "character" : 9,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/ScanBucketView.swift",
+    "line" : 102,
+    "reason" : "Declaration onAddToWhitelist contains the term \"whitelist\" which is not considered inclusive",
+    "rule_id" : "inclusive_language",
+    "severity" : "Warning",
+    "type" : "Inclusive Language"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/ScanBucketView.swift",
+    "line" : 73,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 652 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/ScanBucketView.swift",
+    "line" : 444,
+    "reason" : "Don't include vertical whitespace (empty line) before closing braces",
+    "rule_id" : "vertical_whitespace_closing_braces",
+    "severity" : "Warning",
+    "type" : "Vertical Whitespace before Closing Braces"
+  },
+  {
+    "character" : 43,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/AlertListView.swift",
+    "line" : 70,
+    "reason" : "Trailing closure syntax should not be used when passing more than one closure argument",
+    "rule_id" : "multiple_closures_with_trailing_closure",
+    "severity" : "Warning",
+    "type" : "Multiple Closures with Trailing Closure"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/DevArtifactScanView.swift",
+    "line" : 588,
+    "reason" : "File should contain 400 lines or less: currently contains 588",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/DevArtifactScanView.swift",
+    "line" : 45,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 408 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SmartUninstaller/UninstallAppPickerView.swift",
+    "line" : 403,
+    "reason" : "File should contain 400 lines or less: currently contains 403",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 13,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SmartUninstaller/EventHorizonConsoleView.swift",
+    "line" : 123,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 11",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SmartUninstaller/EventHorizonConsoleView.swift",
+    "line" : 499,
+    "reason" : "File should contain 400 lines or less: currently contains 499",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SmartUninstaller/SmartUninstallerViewModel.swift",
+    "line" : 601,
+    "reason" : "File should contain 400 lines or less: currently contains 601",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 14,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SmartUninstaller/SmartUninstallerViewModel.swift",
+    "line" : 53,
+    "reason" : "Class body should span 350 lines or less excluding comments and whitespace: currently spans 362 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/DeepCleanView.swift",
+    "line" : 12,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 264 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 14,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/CloudAIService.swift",
+    "line" : 86,
+    "reason" : "Class body should span 250 lines or less excluding comments and whitespace: currently spans 252 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ProcessRunner.swift",
+    "line" : 406,
+    "reason" : "File should contain 400 lines or less: currently contains 406",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 21,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ProcessRunner.swift",
+    "line" : 291,
+    "reason" : "Prefer failable `String(bytes:encoding:)` initializer when converting `Data` to `String`",
+    "rule_id" : "optional_data_string_conversion",
+    "severity" : "Warning",
+    "type" : "Optional Data -> String Conversion"
+  },
+  {
+    "character" : 21,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ProcessRunner.swift",
+    "line" : 292,
+    "reason" : "Prefer failable `String(bytes:encoding:)` initializer when converting `Data` to `String`",
+    "rule_id" : "optional_data_string_conversion",
+    "severity" : "Warning",
+    "type" : "Optional Data -> String Conversion"
+  },
+  {
+    "character" : 5,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ProcessSpawner.swift",
+    "line" : 33,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 15",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ModelDownloadManager.swift",
+    "line" : 534,
+    "reason" : "File should contain 400 lines or less: currently contains 534",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/NativeScanAdapter.swift",
+    "line" : 520,
+    "reason" : "File should contain 400 lines or less: currently contains 520",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 20,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/NativeScanAdapter.swift",
+    "line" : 194,
+    "reason" : "Function should have 5 parameters or less: it currently has 6",
+    "rule_id" : "function_parameter_count",
+    "severity" : "Warning",
+    "type" : "Function Parameter Count"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/NativeScanAdapter.swift",
+    "line" : 44,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 322 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SidebarView.swift",
+    "line" : 420,
+    "reason" : "File should contain 400 lines or less: currently contains 420",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 12,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/AppUpdateSettings.swift",
+    "line" : 84,
+    "reason" : "Function should have 5 parameters or less: it currently has 6",
+    "rule_id" : "function_parameter_count",
+    "severity" : "Warning",
+    "type" : "Function Parameter Count"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/RemnantScanner.swift",
+    "line" : 489,
+    "reason" : "File should contain 400 lines or less: currently contains 489",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/RemnantScanner.swift",
+    "line" : 13,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 340 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 5,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ConditionEvaluator.swift",
+    "line" : 78,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 14",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 12,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+    "line" : 102,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 14",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 41,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+    "line" : 459,
+    "reason" : "Arguments can be omitted when matching enums with associated values if they are not used",
+    "rule_id" : "empty_enum_arguments",
+    "severity" : "Warning",
+    "type" : "Empty Enum Arguments"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+    "line" : 508,
+    "reason" : "File should contain 400 lines or less: currently contains 508",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 50,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+    "line" : 447,
+    "reason" : "nil coalescing operator is only evaluated if the lhs is nil, coalescing operator with nil as rhs is redundant",
+    "rule_id" : "redundant_nil_coalescing",
+    "severity" : "Warning",
+    "type" : "Redundant Nil Coalescing"
+  },
+  {
+    "character" : 12,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift",
+    "line" : 123,
+    "reason" : "Function should have complexity 10 or less; currently complexity is 11",
+    "rule_id" : "cyclomatic_complexity",
+    "severity" : "Warning",
+    "type" : "Cyclomatic Complexity"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift",
+    "line" : 465,
+    "reason" : "File should contain 400 lines or less: currently contains 465",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 12,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift",
+    "line" : 123,
+    "reason" : "Function body should span 80 lines or less excluding comments and whitespace: currently spans 82 lines",
+    "rule_id" : "function_body_length",
+    "severity" : "Warning",
+    "type" : "Function Body Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift",
+    "line" : 44,
+    "reason" : "Struct body should span 250 lines or less excluding comments and whitespace: currently spans 284 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Warning",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPRequestDispatcher.swift",
+    "line" : 538,
+    "reason" : "File should contain 400 lines or less: currently contains 538",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/MCP/MCPRequestDispatcher.swift",
+    "line" : 525,
+    "reason" : "Prefer `private` over `fileprivate` declarations",
+    "rule_id" : "private_over_fileprivate",
+    "severity" : "Warning",
+    "type" : "Private over Fileprivate"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SettingsView.swift",
+    "line" : 897,
+    "reason" : "File should contain 400 lines or less: currently contains 897",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  },
+  {
+    "character" : 8,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Views/SettingsView.swift",
+    "line" : 7,
+    "reason" : "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 742 lines",
+    "rule_id" : "type_body_length",
+    "severity" : "Error",
+    "type" : "Type Body Length"
+  },
+  {
+    "character" : 1,
+    "file" : "/Users/Jason/Development/gargantua/Sources/GargantuaCore/Services/ScheduledScanService.swift",
+    "line" : 564,
+    "reason" : "File should contain 400 lines or less: currently contains 564",
+    "rule_id" : "file_length",
+    "severity" : "Warning",
+    "type" : "File Length"
+  }
+]

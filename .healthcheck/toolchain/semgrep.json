@@ -1,0 +1,10 @@
+{
+  "tool": "semgrep",
+  "version": "1.144.0",
+  "ran_at": "2026-04-25T01:53:06Z",
+  "duration_ms": 6000,
+  "exit_code": 0,
+  "finding_count": 0,
+  "findings": [],
+  "raw_path": "/Users/Jason/Development/gargantua/.healthcheck/toolchain/semgrep.raw.json"
+}

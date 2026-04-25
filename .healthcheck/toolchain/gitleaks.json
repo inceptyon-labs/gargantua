@@ -1,0 +1,22 @@
+{
+  "tool": "gitleaks",
+  "version": "8.29.1",
+  "ran_at": "2026-04-25T01:53:06Z",
+  "duration_ms": 1140,
+  "exit_code": 1,
+  "finding_count": 1,
+  "findings": [
+    {
+      "rule_id": "generic-secret-assignment",
+      "message": "Long opaque value assigned to a secret-looking variable (catchall)",
+      "file": "Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift",
+      "line": 130,
+      "severity": "critical",
+      "category": "secrets",
+      "match": "Token = \"gtua_test_token_12345678901234567890\"",
+      "commit": "6265671a8f872c9385cfad94ec3380df28922ba5",
+      "fingerprint": "6265671a8f872c9385cfad94ec3380df28922ba5:Tests/GargantuaCoreTests/Services/MCP/MCPSSETransportTests.swift:generic-secret-assignment:130"
+    }
+  ],
+  "raw_path": "/Users/Jason/Development/gargantua/.healthcheck/toolchain/gitleaks.raw.json"
+}

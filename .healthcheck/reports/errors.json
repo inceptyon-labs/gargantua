@@ -1,0 +1,73 @@
+{
+  "key": "errors",
+  "score": 97,
+  "weight": 1.3,
+  "skill_version": "1.0.0",
+  "applicable": true,
+  "notes": "Strong overall error-handling discipline. 125 catch blocks in production, 0 empty catches, 0 print()-and-ignore patterns, 0 try! force-tries, 0 fatalError calls in production paths. Custom error enums are defined throughout (RuleParseError, RemnantRuleParseError, MCPToolError, CloudAIError, etc.). AsyncThrowingStream usage correctly propagates via continuation.finish(throwing:). Timeouts are explicitly configured for tool execution paths (DeveloperToolExecutionAdapter: 60s, DeveloperToolPreviewAdapter: 15s, DirectorySizeScanner: 15s). One concern is a cluster of `try? persistence.save/delete/updateSettings` writes that silently swallow data-mutation failures — a saveProfile that fails will not surface to the user.",
+  "metrics": {
+    "catch_blocks_production": 125,
+    "empty_catches": 0,
+    "force_try_usages": 0,
+    "try_optional_usages": 126,
+    "try_optional_idiomatic_decode": 14,
+    "try_optional_persistence_writes": 7,
+    "fatal_error_in_production": 0,
+    "precondition_failure_in_production": 2,
+    "custom_error_types_defined": 20,
+    "url_session_with_timeout_config": 1,
+    "explicit_timeout_call_sites": 12,
+    "for_try_await_with_catch": 1,
+    "languages_analyzed": ["swift"]
+  },
+  "findings": [
+    {
+      "id": "errors.silent-persistence-writes",
+      "title": "Persistence write failures are silently swallowed (try?) in 7 sites",
+      "severity": "major",
+      "confidence": "native",
+      "category": "error_swallowing",
+      "file": "Sources/GargantuaCore/Views/ProfileContainerView.swift",
+      "line": 23,
+      "description": "User-initiated mutations against PersistenceController use `try?`, which discards the error and converts the result to Optional/Void. If a save or delete fails (disk full, permission error, schema mismatch), the operation appears successful from the UI but no record was written. Affected sites: ProfileContainerView.swift:23 (saveProfile), :36 (deleteProfile), :39 (updateSettings → activeProfileID), :52 (updateSettings), :70 (deleteProfile); MenuBarStatusModel.swift:154 (updateSettings); ScheduledScanService.swift:551 (recordScheduledScanSummary).",
+      "snippet": "try? persistence.saveProfile(updated)\ntry? persistence.deleteProfile(id: editing.id)\ntry? persistence.updateSettings { $0.activeProfileID = id }",
+      "fix_prompt": "# Fix: Surface persistence-write failures instead of silently swallowing them\n\n## Context\nSeven sites use `try? persistence.save…/delete…/updateSettings…` which silently drops errors. For user-initiated data mutations, this is unsafe — a failed save looks identical to a successful save from the UI's perspective. If users notice their profile didn't persist, debugging is also harder because no error was logged.\n\n## Location\n- Files: Sources/GargantuaCore/Views/ProfileContainerView.swift (lines 23, 36, 39, 52, 70); Sources/GargantuaCore/Services/MenuBarStatusModel.swift (line 154); Sources/GargantuaCore/Services/ScheduledScanService.swift (line 551)\n- Dimension: errors / major\n\n## Required change\n1. Replace each `try?` with a do/catch that at minimum logs the error to stderr and ideally surfaces it via the existing alert/toast mechanism in the parent view.\n\n   Example for ProfileContainerView.swift:23:\n   ```swift\n   // Before\n   try? persistence.saveProfile(updated)\n   \n   // After\n   do {\n       try persistence.saveProfile(updated)\n   } catch {\n       FileHandle.standardError.write(Data(\"saveProfile failed: \\(error.localizedDescription)\\n\".utf8))\n       // Optionally surface to UI:\n       // saveError = error.localizedDescription\n   }\n   ```\n\n2. For ScheduledScanService.swift:551 (audit-only write), it is acceptable to log-and-continue rather than abort the scan, but the error MUST be logged.\n\n3. Consider promoting the persistence ViewModel layer to expose @Published `lastError` so views can surface failures with a small `.alert()` modifier.\n\n## Constraints\n- Do not block the UI on persistence errors (write failures should not freeze the app).\n- Do not change the persistence API signatures.\n- Audit/log writes (ScheduledScanService.recordScheduledScanSummary) may continue to be best-effort, but must log.\n\n## Verification\n- Run: `grep -nE 'try\\? (persistence|store)\\.' Sources/ -r` — should return 0 results after the migration.\n- Run: `swift test` — all tests pass.\n- Manually: temporarily make PersistenceController.saveProfile throw; verify the user sees an error indication or, at minimum, an entry in stderr."
+    },
+    {
+      "id": "errors.silent-persistence-init",
+      "title": "PersistenceController init/bootstrap failures swallowed at app boot",
+      "severity": "minor",
+      "confidence": "native",
+      "category": "error_swallowing",
+      "file": "Sources/Gargantua/MainContentView.swift",
+      "line": 142,
+      "description": "MainContentView.swift:142-143 uses `persistence = try? PersistenceController()` followed by `try? persistence?.bootstrap()`. If the persistence layer fails to initialize at boot, the app silently continues with `persistence == nil`, after which most save operations also become silent no-ops (see related finding errors.silent-persistence-writes). Boot-time failures should be loud.",
+      "snippet": "persistence = try? PersistenceController()\ntry? persistence?.bootstrap()",
+      "fix_prompt": "# Fix: Surface PersistenceController init failure at app boot\n\n## Context\nIf the SQLite store can't open (permissions, disk corruption, sandbox issues), the app boots into a degraded state where every persistence operation silently does nothing. This makes user data invisible and hard to diagnose.\n\n## Location\n- File: Sources/Gargantua/MainContentView.swift\n- Line: 142\n- Dimension: errors / minor\n\n## Required change\nReplace the silent init with explicit error handling. Either:\n\n**Option A (preferred): show a startup error and refuse to proceed**\n```swift\nlet controller: PersistenceController\ndo {\n    controller = try PersistenceController()\n    try controller.bootstrap()\n} catch {\n    FileHandle.standardError.write(Data(\"persistence init failed: \\(error)\\n\".utf8))\n    fatalError(\"Persistence layer failed to initialize: \\(error.localizedDescription)\")\n}\nself.persistence = controller\n```\n\n**Option B: continue but show a banner**\n```swift\ndo {\n    let controller = try PersistenceController()\n    try controller.bootstrap()\n    self.persistence = controller\n} catch {\n    FileHandle.standardError.write(Data(\"persistence init failed: \\(error)\\n\".utf8))\n    self.persistenceInitError = error  // surface in UI\n}\n```\n\n## Constraints\n- Do not block the main thread on disk I/O for longer than necessary.\n- Coordinate with the related fix (errors.silent-persistence-writes).\n\n## Verification\n- Manually: rename the persistence directory to break init; confirm a clear error appears (stderr or UI).\n- Run: `swift test`."
+    },
+    {
+      "id": "errors.silent-load-fallbacks",
+      "title": "Silent fetch fallbacks via try? in MainContentView load paths",
+      "severity": "minor",
+      "confidence": "native",
+      "category": "error_swallowing",
+      "file": "Sources/Gargantua/MainContentView.swift",
+      "line": 225,
+      "description": "MainContentView.swift:225, 228, 245 use `try? persistence.fetchSettings()` and similar to load persisted state. On failure, defaults are used silently. This is acceptable UX (the app remains usable) but it loses diagnostic info if the persistence file ever becomes unreadable.",
+      "snippet": "let settings = try? persistence.fetchSettings()\nlet persisted = (try? persistence.fetchProfiles()) ?? []\nlet stored = try? persistence.fetchSettings().scanRoots",
+      "fix_prompt": "# Fix: Log persistence-fetch failures even when defaults are acceptable\n\n## Context\nThe load paths fall back to defaults on error, which is good UX. The improvement is logging the original error so persistence problems are diagnosable from logs.\n\n## Location\n- File: Sources/Gargantua/MainContentView.swift\n- Lines: 225, 228, 245\n- Dimension: errors / minor\n\n## Required change\nWrap each fetch in a do/catch that logs and falls back:\n```swift\nlet settings: SettingsRecord\ndo {\n    settings = try persistence.fetchSettings()\n} catch {\n    FileHandle.standardError.write(Data(\"fetchSettings failed; using defaults: \\(error)\\n\".utf8))\n    settings = SettingsRecord.defaults\n}\n```\n\nOr add a thin helper on PersistenceController like `fetchSettingsOrDefaults() -> SettingsRecord` that internally logs and returns defaults.\n\n## Constraints\n- Do not change the user-visible behavior — defaults should still be used silently from the user's perspective.\n- Do not log on every read in a hot loop.\n\n## Verification\n- Run: `grep -n 'try? persistence.fetch' Sources/Gargantua/MainContentView.swift` — should return 0.\n- Run: `swift test`."
+    },
+    {
+      "id": "errors.modeldownload-default-timeout",
+      "title": "ModelDownloadManager uses URLSessionConfiguration.default with no custom timeouts",
+      "severity": "info",
+      "confidence": "native",
+      "category": "timeout_handling",
+      "file": "Sources/GargantuaCore/Services/ModelDownloadManager.swift",
+      "line": 225,
+      "description": "ModelDownloadManager.swift:225 builds a URLSession from URLSessionConfiguration.default. The default request timeout (60s) is fine for most calls, but the resource timeout (7 days) is intentionally permissive — appropriate for multi-GB model downloads where the user might pause. This is informational, not a defect: changing the resource timeout could break legitimate large downloads. Documented here so the trade-off is explicit.",
+      "snippet": "let config = URLSessionConfiguration.default\nsession = URLSession(configuration: config, delegate: self, delegateQueue: .main)",
+      "fix_prompt": "# Note: ModelDownloadManager URLSession timeout posture\n\n## Context\nThis is an informational finding — no fix required unless the team wants stricter download timeouts. URLSessionConfiguration.default uses a 60-second per-request timeout and a 7-day resource timeout. For LLM model downloads (often 1-8 GB), the long resource timeout is appropriate.\n\n## Required change (optional)\nIf the team wants explicit limits, document the choice:\n```swift\nlet config = URLSessionConfiguration.default\nconfig.timeoutIntervalForRequest = 60       // 60s for the connection / response start\nconfig.timeoutIntervalForResource = 24 * 3600 // 24h for the full download\n```\n\nThis documents the intent in code rather than relying on platform defaults that could change.\n\n## Constraints\n- Do not set the resource timeout below ~1 hour — large model files take time on slow connections.\n\n## Verification\n- Run: a download to completion of a large model still succeeds.\n- Run: `swift test`."
+    }
+  ]
+}

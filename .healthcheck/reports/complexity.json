@@ -1,0 +1,121 @@
+{
+  "key": "complexity",
+  "score": 88,
+  "weight": 1.1,
+  "skill_version": "1.0.0",
+  "applicable": true,
+  "notes": "Analyzed 291 Swift files. SwiftLint provides deterministic cyclomatic complexity scores. 1 major finding: ProcessSpawner (complexity 15). 6 minor cyclomatic violations in the 10-14 range. 12 production files exceed 500 lines (minor); SettingsView.swift at 897 lines is the largest concern. No critical complexity violations (no function reached 20+ or file reached 1000+). The large-file pattern is concentrated in SwiftUI views, which tend to inflate line counts via @ViewBuilder closures — splitting these requires care to preserve SwiftUI's state propagation semantics.",
+  "metrics": {
+    "total_files_analyzed": 291,
+    "total_lines_of_code": 61347,
+    "functions_exceeding_cyclomatic_10": 7,
+    "functions_exceeding_cyclomatic_15": 1,
+    "functions_exceeding_cyclomatic_20": 0,
+    "max_cyclomatic_complexity": 15,
+    "max_cyclomatic_function": "func posixSpawn (ProcessSpawner.swift:33)",
+    "max_nesting_depth_observed": 3,
+    "files_over_500_lines": 12,
+    "files_over_1000_lines": 0,
+    "function_body_over_80_lines": 1,
+    "function_body_over_120_lines": 0,
+    "confidence_breakdown": {
+      "deterministic": 7,
+      "heuristic": 12
+    }
+  },
+  "findings": [
+    {
+      "id": "complexity.cyclomatic-major-processspawner",
+      "title": "Cyclomatic complexity 15 in ProcessSpawner",
+      "severity": "major",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Services/ProcessSpawner.swift",
+      "line": 33,
+      "rule_id": "cyclomatic_complexity",
+      "description": "The posix_spawn wrapper function has cyclomatic complexity 15 (major threshold: 15-19). It orchestrates POSIX file actions, spawn attributes, argv/envp array construction, and process group setup in one function — each with multiple guard/defer/free chains. High complexity here increases the risk of resource-leak bugs.",
+      "snippet": "// posixSpawn function starting at line 33 with nested guard/if chains for fa_init, attr_init, argv/envp construction",
+      "fix_prompt": "# Fix: Reduce cyclomatic complexity in posixSpawn function\n\n## Context\nThe `posixSpawn` function in `ProcessSpawner.swift` has cyclomatic complexity 15 (tenet major threshold: 15-19). It combines POSIX file-action setup, spawn attribute configuration, argv/envp array construction, and posix_spawn invocation — each phase with its own error-check branches.\n\n## Location\n- File: Sources/GargantuaCore/Services/ProcessSpawner.swift\n- Line: 33\n- Dimension: complexity / major\n\n## Required change\n1. Extract argv/envp construction into a dedicated `buildCStringArray(_ strings: [String]) throws -> [UnsafeMutablePointer<CChar>?]` helper that handles the strdup/free resource lifecycle.\n2. Extract POSIX file-action setup into `configureFileActions(_ fa: posix_spawn_file_actions_t, pipes: SpawnPipes) throws`.\n3. Extract spawn attribute setup into `configureSpawnAttributes(_ attr: posix_spawnattr_t) throws`.\n4. The main function becomes: build arrays → configure fa → configure attr → call posix_spawn → await termination.\n\n## Constraints\n- The helper functions must not change the observable behavior of the spawn: same process group, same fd redirection, same argv/envp.\n- Memory management (strdup/free) must remain correct — use defer blocks in the extracted helpers.\n- All tests in `ProcessSpawnerTests` (if any) must still pass.\n\n## Verification\n- Run: `swiftlint lint --config .swiftlint.yml Sources/GargantuaCore/Services/ProcessSpawner.swift` — should report 0 cyclomatic_complexity violations.\n- Run: `swift test --filter ProcessSpawner`."
+    },
+    {
+      "id": "complexity.cyclomatic-minor-mcp-transport",
+      "title": "Cyclomatic complexity 14 in MCPSSETransport",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+      "line": 102,
+      "rule_id": "cyclomatic_complexity",
+      "description": "MCPSSETransport has a function with cyclomatic complexity 14. The SSE transport handles connection setup, bearer-auth, event dispatch, and error recovery in interleaved branches.",
+      "snippet": "// function at line 102 — handles SSE connection lifecycle with ~14 distinct paths",
+      "fix_prompt": "# Fix: Reduce cyclomatic complexity in MCPSSETransport\n\n## Context\nA function in MCPSSETransport.swift:102 has cyclomatic complexity 14. For an MCP server transport, high complexity here risks edge-case connection-handling bugs.\n\n## Location\n- File: Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift\n- Line: 102\n- Dimension: complexity / minor\n\n## Required change\nExtract the auth-check path into a dedicated `authorize(connection:) -> AuthResult` function, and extract per-event dispatch into `handleIncomingData(_ data: Data, connection: NWConnection) async throws`. Use early returns for error paths to flatten the nesting.\n\n## Constraints\n- Do not change the NWListener setup or the async concurrency structure.\n- Preserve the 401 response path for unauthorized connections.\n\n## Verification\n- Run: `swiftlint lint Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift` — cyclomatic_complexity violations should clear.\n- Run: `swift test --filter MCPSSETransportTests`."
+    },
+    {
+      "id": "complexity.cyclomatic-minor-rulesparser",
+      "title": "Cyclomatic complexity 14 in RuleViewerView / ConditionEvaluator",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Views/RuleViewerView.swift",
+      "line": 327,
+      "rule_id": "cyclomatic_complexity",
+      "description": "RuleViewerView:327 (complexity 14) and ConditionEvaluator:78 (complexity 14) both exceed the minor threshold. ConditionEvaluator's high complexity is expected (it evaluates rule conditions), but a lookup table or visitor pattern would reduce branch count significantly.",
+      "snippet": "// RuleViewerView:327 and ConditionEvaluator:78 — both at complexity 14",
+      "fix_prompt": "# Fix: Reduce cyclomatic complexity in ConditionEvaluator\n\n## Context\nConditionEvaluator.swift:78 has cyclomatic complexity 14. Rule condition evaluation with a large switch or if-chain is a common pattern; replacing it with a dispatch table reduces complexity significantly.\n\n## Location\n- File: Sources/GargantuaCore/Services/ConditionEvaluator.swift\n- Line: 78\n- Dimension: complexity / minor\n\n## Required change\nReplace the large switch/if chain with a dictionary of evaluator closures keyed by condition type. Each evaluator closure handles exactly one condition type and returns a Bool.\n\n```swift\nstatic let evaluators: [ConditionType: (Condition, Context) -> Bool] = [\n    .fileExtension: evaluateExtension,\n    .fileSize:      evaluateSize,\n    // ...\n]\n\nfunc evaluate(_ condition: Condition, context: Context) -> Bool {\n    evaluators[condition.type]?(condition, context) ?? false\n}\n```\n\n## Constraints\n- All condition types currently handled must continue to work.\n- The public `evaluate(_:context:)` signature must not change.\n\n## Verification\n- Run: `swift test --filter ConditionEvaluatorTests`\n- Run: `swiftlint lint Sources/GargantuaCore/Services/ConditionEvaluator.swift`"
+    },
+    {
+      "id": "complexity.cyclomatic-minor-remaining",
+      "title": "4 additional functions with cyclomatic complexity 11-14",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaMCP/main.swift",
+      "line": 353,
+      "rule_id": "cyclomatic_complexity",
+      "description": "4 more functions between complexity 11-14: main.swift:353 (14), EventHorizonConsoleView:123 (11), MCPCleanToolHandler:123 (11). All are minor violations. The MCP main.swift complexity stems from CLI argument parsing; the view complexity from SwiftUI conditional rendering.",
+      "snippet": "// main.swift:353, EventHorizonConsoleView.swift:123, MCPCleanToolHandler.swift:123",
+      "fix_prompt": "# Fix: Reduce complexity in MCP main.swift CLI argument parsing\n\n## Context\nmain.swift:353 has cyclomatic complexity 14 from CLI argument dispatch. CLI parsers with many flags tend to grow as features are added.\n\n## Location\n- File: Sources/GargantuaMCP/main.swift\n- Line: 353\n- Dimension: complexity / minor\n\n## Required change\nConsider migrating CLI argument parsing to ArgumentParser (already available as a transitive dep via swift-tools-support-core or add it directly). ArgumentParser uses declarative syntax that reduces manual branching to near zero and generates help automatically.\n\nAlternatively, extract each argument handler into a dedicated named function.\n\n## Constraints\n- Preserve all existing CLI flags and their semantics.\n\n## Verification\n- Run: `swift run GargantuaMCP --help` — all flags documented and functional."
+    },
+    {
+      "id": "complexity.file-length-settingsview",
+      "title": "SettingsView.swift is 897 lines",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Views/SettingsView.swift",
+      "line": 1,
+      "description": "SettingsView.swift at 897 lines is the largest production file. A single SwiftUI View struct with 742 non-blank/non-comment lines makes it difficult to navigate and onboard new contributors to specific settings panes.",
+      "snippet": "// Sources/GargantuaCore/Views/SettingsView.swift — 897 total lines",
+      "fix_prompt": "# Fix: Split SettingsView.swift into per-pane files\n\n## Context\nSettingsView.swift is 897 lines. SwiftUI settings screens are natural candidates for file splitting since each settings pane (General, MCP, Whitelist, etc.) is an independent SwiftUI view with its own @State and @Binding variables.\n\n## Location\n- File: Sources/GargantuaCore/Views/SettingsView.swift\n- Line: 1\n- Dimension: complexity / minor\n\n## Required change\n1. Identify each tab/pane in the TabView (General, MCP, Whitelist, etc.).\n2. Extract each pane into its own file: `SettingsGeneralPane.swift`, `SettingsMCPPane.swift`, `SettingsWhitelistPane.swift`, etc.\n3. SettingsView.swift becomes a thin coordinator: the TabView + tab labels only.\n4. Target: SettingsView.swift under 100 lines; each pane file under 300 lines.\n\n## Constraints\n- Preserve all @AppStorage, @State, @Binding, and @EnvironmentObject annotations.\n- Do not change any settings key names (AppStorage keys) — these persist user data.\n- Pane files should live alongside the parent in Sources/GargantuaCore/Views/Settings/.\n\n## Verification\n- Run: `swift build` to confirm no type errors.\n- Run: `swift test` to confirm tests pass.\n- Open the app and verify all settings panes render correctly."
+    },
+    {
+      "id": "complexity.file-length-scanbucketview",
+      "title": "ScanBucketView.swift is 832 lines (type body 652 lines)",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Views/ScanBucketView.swift",
+      "line": 73,
+      "description": "ScanBucketView.swift at 832 lines contains a type body spanning 652 non-whitespace lines. This is the second-largest view. Scan result rendering, empty-state handling, and action sheets are likely separable subviews.",
+      "snippet": "// ScanBucketView.swift — 832 total lines",
+      "fix_prompt": "# Fix: Extract subviews from ScanBucketView\n\n## Context\nScanBucketView.swift is 832 lines. Large scan-result views can be split into focused subviews (row cell, empty-state, action sheet) without changing the parent's data model.\n\n## Location\n- File: Sources/GargantuaCore/Views/ScanBucketView.swift\n- Line: 73\n- Dimension: complexity / minor\n\n## Required change\n1. Extract the scan-result row view into `ScanResultRowView.swift`.\n2. Extract the empty-state placeholder into `ScanBucketEmptyView.swift`.\n3. Extract any action sheets / confirmation dialogs into local subview structs.\n4. Keep all @Binding and state coordination in the parent ScanBucketView.\n\n## Constraints\n- Preserve @Binding connections for parent-driven state.\n- Keep extracted views in the same Sources/GargantuaCore/Views/ directory.\n\n## Verification\n- Run: `swift build && swift test`."
+    },
+    {
+      "id": "complexity.file-length-cluster",
+      "title": "10 more production files between 500-832 lines",
+      "severity": "minor",
+      "confidence": "heuristic",
+      "file": "Sources/GargantuaCore/Views/DashboardView.swift",
+      "line": 1,
+      "description": "10 additional production source files fall in the 500-832 line range (minor threshold 500+): DashboardView.swift (680), RuleViewerView.swift (626), SmartUninstallerViewModel.swift (601), DevArtifactScanView.swift (588), ScheduledScanService.swift (564), DiskExplorerView.swift (563), MCPRequestDispatcher.swift (538), ModelDownloadManager.swift (534), NativeScanAdapter.swift (520), MCPSSETransport.swift (508). None are critical (no file exceeds 1000 lines).",
+      "snippet": "// 10 files: DashboardView, RuleViewerView, SmartUninstallerViewModel, DevArtifactScanView, ScheduledScanService, DiskExplorerView, MCPRequestDispatcher, ModelDownloadManager, NativeScanAdapter, MCPSSETransport",
+      "fix_prompt": "# Fix: Incrementally split large production files as they are touched\n\n## Context\n10 production files are in the 500-832 line range. Rather than a single large refactor, a sustainable approach is to split a file whenever it is touched during normal feature work.\n\n## Required change\nFor each file: identify the dominant subcomponent (e.g., a large inner view, a large switch block, a cluster of related helper methods) and extract it into a dedicated file. No single split should take more than 30 minutes.\n\nPriority order (by line count): DashboardView → RuleViewerView → SmartUninstallerViewModel → DevArtifactScanView → ScheduledScanService → DiskExplorerView → MCPRequestDispatcher → ModelDownloadManager → NativeScanAdapter → MCPSSETransport.\n\n## Constraints\n- Only split when touching a file for another reason. Do not do a large-scale refactor.\n- Each extracted file should have a clear single responsibility.\n\n## Verification\n- Run: `swift build` after each split."
+    },
+    {
+      "id": "complexity.function-body-mcp-clean",
+      "title": "MCPCleanToolHandler function body is 82 lines",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "file": "Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift",
+      "line": 123,
+      "rule_id": "function_body_length",
+      "description": "A function in MCPCleanToolHandler.swift at line 123 spans 82 lines of code, slightly over the 80-line warning threshold. Combined with its cyclomatic complexity of 11, this is the highest-priority refactoring target in the MCP layer.",
+      "snippet": "// MCPCleanToolHandler.swift:123 — 82-line function with complexity 11",
+      "fix_prompt": "# Fix: Split long function in MCPCleanToolHandler\n\n## Context\nMCPCleanToolHandler.swift:123 is an 82-line function with cyclomatic complexity 11. It handles cleanup tool dispatch but is doing validation, execution, and response formatting in one body.\n\n## Location\n- File: Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift\n- Line: 123\n- Dimension: complexity / minor\n\n## Required change\n1. Extract input validation into `validateCleanRequest(_ params: CleanParams) throws -> ValidatedRequest`.\n2. Extract cleanup execution into `executeClean(_ request: ValidatedRequest) async throws -> CleanResult`.\n3. Extract response formatting into `buildCleanResponse(_ result: CleanResult) -> MCPToolResponse`.\n4. The main function becomes a 3-line pipeline.\n\n## Constraints\n- Do not change the function's external signature or return type.\n- Preserve all error handling — the validation function should throw the same errors the current function throws.\n\n## Verification\n- Run: `swift test --filter MCPCleanToolHandlerTests`\n- Run: `swiftlint lint Sources/GargantuaCore/Services/MCP/MCPCleanToolHandler.swift`"
+    }
+  ]
+}

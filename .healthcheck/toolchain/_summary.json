@@ -1,0 +1,14 @@
+{
+  "ran_at": "2026-04-24T21:12:00Z",
+  "total_duration_ms": 29140,
+  "tools_ran": ["semgrep", "gitleaks", "trivy", "swiftlint"],
+  "tools_skipped": ["trufflehog", "markdownlint", "swiftformat"],
+  "tools_failed": [],
+  "tools_missing_required": [],
+  "skip_reasons": {
+    "trufflehog":   "auto, not installed",
+    "markdownlint": "auto, not installed",
+    "swiftformat":  "auto, not installed"
+  },
+  "config_source": ".healthcheck.toml"
+}

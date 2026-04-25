@@ -1,0 +1,67 @@
+{
+  "key": "dependencies",
+  "score": 98,
+  "weight": 1.3,
+  "skill_version": "1.0.0",
+  "applicable": true,
+  "notes": "Swift Package Manager project with 4 direct and 13 transitive dependencies. No CVEs found in any Swift packages. Trivy flagged 5 CVEs but all are in '.build/checkouts/Yams/Gemfile.lock' — Ruby gems used by the Yams maintainers' own test toolchain, not compiled into Gargantua. These are build-scan false positives: adding '.build/' to trivy's skip list eliminates all findings. No unmaintained, duplicate, or severely outdated Swift packages detected. One minor: osv-scanner not installed so SPM dependencies lack a second CVE check pass.",
+  "metrics": {
+    "ecosystems_scanned": ["swift-pm"],
+    "manifest_files": ["Package.swift", "Package.resolved"],
+    "direct_dependencies": 4,
+    "total_resolved_packages": 17,
+    "cve_critical": 0,
+    "cve_major": 0,
+    "cve_minor": 0,
+    "trivy_scan_artifacts_only": 5,
+    "unmaintained_count": 0,
+    "duplicate_groups": 0,
+    "outdated_major_count": 0,
+    "toolchain_sources": ["trivy.json"]
+  },
+  "packages": [
+    { "name": "Yams",             "version": "5.4.0",    "status": "ok",  "note": "YAML 1.2 parser, actively maintained" },
+    { "name": "mlx-swift-lm",     "version": "3.31.3",   "status": "ok",  "note": "Apple MLX LLM framework" },
+    { "name": "Sparkle",          "version": "2.9.1",    "status": "ok",  "note": "Auto-update framework, version 2.x is current" },
+    { "name": "swift-transformers","version": "1.3.0",   "status": "ok",  "note": "HuggingFace Swift port" },
+    { "name": "mlx-swift",        "version": "0.31.3",   "status": "ok",  "note": "Transitive: Apple MLX for Apple Silicon" },
+    { "name": "swift-nio",        "version": "2.98.0",   "status": "ok",  "note": "Transitive: Apple async networking" },
+    { "name": "swift-crypto",     "version": "4.4.0",    "status": "ok",  "note": "Transitive: Apple crypto primitives" },
+    { "name": "swift-collections","version": "1.4.1",    "status": "ok",  "note": "Transitive: Apple collections" },
+    { "name": "swift-atomics",    "version": "1.3.0",    "status": "ok",  "note": "Transitive: Apple atomics" },
+    { "name": "swift-asn1",       "version": "1.7.0",    "status": "ok",  "note": "Transitive: Apple ASN.1 parser" },
+    { "name": "swift-system",     "version": "1.6.4",    "status": "ok",  "note": "Transitive: Apple system calls" },
+    { "name": "swift-numerics",   "version": "1.1.1",    "status": "ok",  "note": "Transitive: Apple numeric algorithms" },
+    { "name": "swift-syntax",     "version": "600.0.1",  "status": "ok",  "note": "Transitive: Swift compiler syntax tree" },
+    { "name": "swift-huggingface","version": "0.9.0",    "status": "ok",  "note": "Transitive: HuggingFace hub client" },
+    { "name": "swift-jinja",      "version": "2.3.5",    "status": "ok",  "note": "Transitive: Jinja2 template engine in Swift" },
+    { "name": "eventsource",      "version": "1.4.1",    "status": "ok",  "note": "Transitive: SSE client (mattt/EventSource)" },
+    { "name": "yyjson",           "version": "0.12.0",   "status": "ok",  "note": "Transitive: high-perf C JSON parser" }
+  ],
+  "findings": [
+    {
+      "id": "deps.trivy-build-artifact-false-positives",
+      "title": "Trivy scanned .build/ checkouts and flagged Ruby gem CVEs in Yams' dev toolchain",
+      "severity": "minor",
+      "confidence": "deterministic",
+      "category": "scan_config",
+      "file": ".build/checkouts/Yams/Gemfile.lock",
+      "line": null,
+      "description": "Trivy found 5 CVEs (1 HIGH: CVE-2026-35611 addressable; 4 MEDIUM: activesupport x3, rexml) — all in Ruby gems inside '.build/checkouts/Yams/Gemfile.lock'. This is Yams' own Ruby development toolchain (used to run Yams' tests and generate documentation), not code compiled into Gargantua. These gems are NOT part of Gargantua's binary. Trivy should be configured to skip '.build/' to avoid this class of false positive in future scans.",
+      "snippet": "Gemfile.lock in .build/checkouts/Yams/ — Ruby deps of a Swift package's dev toolchain",
+      "fix_prompt": "# Fix: Exclude .build/ from trivy scans to eliminate false positives\n\n## Context\nTrivy is scanning the Swift Package Manager checkout directory (`.build/`), which contains the source code of all resolved packages including their own build toolchains. Yams includes a Gemfile.lock with Ruby gems for its CI. These Ruby gems are never compiled into Gargantua and do not affect the app's security posture. Trivy should be scoped to skip `.build/`.\n\n## Location\n- File: .healthcheck.toml (trivy configuration)\n- Dimension: dependencies / minor\n\n## Required change\nCreate a `.trivyignore` file or add a trivy skip-dirs configuration:\n\n**Option 1 — .trivyignore file (recommended for local scans):**\n```\n# .trivyignore\n# Yams Ruby dev toolchain — not compiled into Gargantua\n.build/checkouts/Yams/Gemfile.lock\n.build/index-build/checkouts/Yams/Gemfile.lock\n```\n\n**Option 2 — skip-dirs flag in toolchain:**\nUpdate the trivy command in the tenet-toolchain to pass `--skip-dirs .build`:\n```bash\ntrivy fs --format json --quiet --skip-dirs .build .\n```\n\n**Option 3 — update .healthcheck.toml to pass extra flags:**\nAdd a `[toolchain.trivy_flags]` entry when the toolchain skill supports it.\n\n## Constraints\n- Do not skip trivy on `.build/` binaries — if Gargantua ever vendors pre-built binaries there, those SHOULD be scanned.\n- Only suppress the specific lockfile paths, not the entire `.build/` tree.\n\n## Verification\n- Run: `trivy fs --format json --quiet --skip-dirs .build . | jq '.Results[].Vulnerabilities | length'` — should return 0.\n- Run: `trivy fs --format json --quiet . | jq '[.Results[].Vulnerabilities] | flatten | length'` — should show 0 findings after adding .trivyignore."
+    },
+    {
+      "id": "deps.osv-scanner-missing",
+      "title": "osv-scanner not installed — no second-pass CVE check on Swift packages",
+      "severity": "info",
+      "confidence": "heuristic",
+      "category": "scan_coverage",
+      "file": ".healthcheck.toml",
+      "line": null,
+      "description": "osv-scanner can scan Package.resolved against the OSV vulnerability database for Swift packages. It is not currently installed (set to 'off' in .healthcheck.toml). Trivy does not have native SPM support; it only scanned the Ruby gem lockfile inside the Yams checkout. Installing osv-scanner would add a proper CVE check on all 17 resolved Swift packages.",
+      "snippet": "osv_scanner = \"off\"  # in .healthcheck.toml",
+      "fix_prompt": "# Optional: Install osv-scanner for SPM dependency CVE scanning\n\n## Context\nThe project uses Swift Package Manager. Trivy does not natively scan Package.resolved for Swift CVEs. osv-scanner does support SPM and would provide a proper vulnerability check against the OSV database for all 17 resolved Swift packages.\n\n## Required change\n1. Install osv-scanner:\n   ```bash\n   brew install osv-scanner\n   ```\n2. Update .healthcheck.toml:\n   ```toml\n   osv_scanner = \"auto\"  # was \"off\"\n   ```\n3. Re-run `/tenet-skills:tenet-toolchain-setup` to update the inventory.\n\n## Constraints\n- This is a coverage improvement, not a fix for a known vulnerability.\n- osv-scanner's SPM support may require `go.sum` / `Package.resolved` — confirm with `osv-scanner --help`.\n\n## Verification\n- Run: `osv-scanner --format json -r . | jq '.results[].packages | length'` — should enumerate SPM packages."
+    }
+  ]
+}

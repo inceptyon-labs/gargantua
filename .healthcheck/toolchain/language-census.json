@@ -1,0 +1,12 @@
+{
+  "primary_language": "swift",
+  "languages": [
+    { "lang": "swift",  "loc": 61347, "files": 291, "support": "native" },
+    { "lang": "yaml",   "loc": 5941,  "files": 52,  "support": "config" },
+    { "lang": "shell",  "loc": 1775,  "files": 17,  "support": "partial" },
+    { "lang": "markdown","loc": 867,  "files": 11,  "support": "docs" },
+    { "lang": "json",   "loc": 122,   "files": 2,   "support": "config" },
+    { "lang": "toml",   "loc": 58,    "files": 1,   "support": "config" }
+  ],
+  "manifests": ["Package.swift", "Package.resolved"]
+}

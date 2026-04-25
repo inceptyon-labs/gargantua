@@ -1,0 +1,41 @@
+{
+  "key": "observability",
+  "score": 100,
+  "weight": 1.0,
+  "skill_version": "1.0.0",
+  "applicable": true,
+  "notes": "Strong observability for a macOS app + MCP server. Structured logging via Apple's os.Logger in 14 service files (all using a consistent 'com.gargantua.core' subsystem with per-component category labels — visible in Console.app, feeds the unified logging system). Correlation IDs propagated for both cloud AI (requestID across CloudAIModels/Transport/RequestLogger) and MCP JSON-RPC (request.id through MCPRequestDispatcher). MCP-level health is implemented the protocol-native way via MCPStatusToolHandler. GargantuaMCP's stdio transport handles client-disconnect (EOF on stdin) by calling serverStatusStore.markStopped() + exit(0) — clean shutdown. ProcessRunner uses a textbook SIGTERM-then-SIGKILL-escalation pattern for child processes. Gap: SSE transport mode has no SIGTERM handler, so a systemd/launchd-driven shutdown of the SSE server won't update MCPServerStatusStore state.",
+  "metrics": {
+    "structured_logger": "os.Logger (OSLog)",
+    "oslog_instrumented_files": 14,
+    "oslog_subsystem": "com.gargantua.core",
+    "bare_print_in_production": 6,
+    "bare_print_scope": "CLI operator commands (--selfcheck, --register, --smoke) — appropriate stdout use",
+    "stderr_logging_helpers": ["stderrLog in GargantuaMCP/main.swift"],
+    "has_correlation_ids": true,
+    "correlation_id_types": ["requestID (CloudAI)", "request.id (MCP JSON-RPC)"],
+    "has_metrics": false,
+    "metrics_applicable": false,
+    "metrics_applicable_reason": "Desktop app with embedded MCP server — not a typical metrics-exporting service",
+    "has_health_endpoint": true,
+    "health_endpoint_type": "MCP protocol-native (MCPStatusToolHandler)",
+    "has_graceful_shutdown_stdio": true,
+    "has_graceful_shutdown_sse": false,
+    "child_process_shutdown_pattern": "SIGTERM -> wait -> SIGKILL escalation (ProcessRunner.swift)",
+    "languages_analyzed": ["swift"]
+  },
+  "findings": [
+    {
+      "id": "obs.mcp-sse-no-sigterm-handler",
+      "title": "GargantuaMCP SSE mode has no SIGTERM handler — status store not updated on kill",
+      "severity": "minor",
+      "confidence": "native",
+      "category": "graceful_shutdown",
+      "file": "Sources/GargantuaMCP/main.swift",
+      "line": 246,
+      "description": "In stdio mode, GargantuaMCP detects client disconnect via EOF on stdin and calls `serverStatusStore.markStopped()` before exit. In SSE mode, the server runs under `dispatchMain()` indefinitely with no explicit signal handler. If systemd, launchd, or a user kills the process with SIGTERM, the process terminates without (a) stopping accepting new SSE connections cleanly, (b) flushing the status store to 'stopped', or (c) closing active SSE client connections. Next-launch status reads may show 'running' until the zombie-process heuristic in MCPServerStatusStore catches the stale PID.",
+      "snippet": "// No signal handler around `dispatchMain()` or transport.start()",
+      "fix_prompt": "# Fix: Add SIGTERM/SIGINT handler for graceful MCP SSE shutdown\n\n## Context\nThe MCP SSE transport runs indefinitely under `dispatchMain()`. A termination signal currently kills the process without stopping the NWListener cleanly or updating the persisted status store. Stdio mode has a clean shutdown path via EOF detection; SSE mode needs an equivalent.\n\n## Location\n- File: Sources/GargantuaMCP/main.swift\n- Line: near the SSE transport startup (around line 246-264) or just before `dispatchMain()`\n- Dimension: observability / minor\n\n## Required change\nRegister a DispatchSource signal handler that stops the transport, updates the status store, and exits cleanly:\n\n```swift\nlet sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)\nlet sigintSource  = DispatchSource.makeSignalSource(signal: SIGINT,  queue: .main)\n\nlet shutdown: @Sendable () -> Void = {\n    stderrLog(\"received shutdown signal\")\n    sseTransport?.stop()           // stop NWListener + drain connections\n    serverStatusStore.markStopped()\n    exit(0)\n}\n\nsigtermSource.setEventHandler(handler: shutdown)\nsigintSource.setEventHandler(handler: shutdown)\nsigtermSource.resume()\nsigintSource.resume()\n\n// Ignore default signal handlers so DispatchSource can capture:\nsignal(SIGTERM, SIG_IGN)\nsignal(SIGINT,  SIG_IGN)\n```\n\nAdd a `stop()` method to MCPSSETransport (if not already present) that cancels the NWListener and signals each active client connection to close.\n\n## Constraints\n- Do NOT install signal handlers before Darwin's default handlers are in place — this is why `signal(SIGTERM, SIG_IGN)` is called AFTER `DispatchSource` registration.\n- Do not break the stdio path — the EOF-on-stdin shutdown must continue to work.\n- Preserve the `exit(0)` behavior so launchd/systemd sees a clean exit code.\n\n## Verification\n- Start `swift run GargantuaMCP --mode sse` in a terminal.\n- From another terminal: `kill -TERM $(pgrep GargantuaMCP)`.\n- Confirm the first terminal logs 'received shutdown signal' and exits.\n- Confirm MCPServerStatusStore reports stopped on the next read."
+    }
+  ]
+}

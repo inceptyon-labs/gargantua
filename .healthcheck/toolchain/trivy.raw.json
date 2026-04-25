@@ -1,0 +1,4594 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-04-24T21:52:13.486372-04:00",
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Metadata": {
+    "RepoURL": "git@github.com:inceptyon-labs/gargantua.git",
+    "Branch": "main",
+    "Commit": "6e0acb344334ffd2ab51278daeb538cfee3ae3c0",
+    "CommitMsg": "feat: add Claude Code agent sessions",
+    "Author": "jnew00 \u003cjnew00@gmail.com\u003e",
+    "Committer": "jnew00 \u003cjnew00@gmail.com\u003e"
+  },
+  "Results": [
+    {
+      "Target": ".build/checkouts/EventSource/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-algorithms@1.2.1",
+          "Name": "github.com/apple/swift-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-algorithms@1.2.1",
+            "UID": "191899e6a79d86c1"
+          },
+          "Version": "1.2.1",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-asn1@1.5.1",
+          "Name": "github.com/apple/swift-asn1",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-asn1@1.5.1",
+            "UID": "183c0d502a589388"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-async-algorithms@1.1.2",
+          "Name": "github.com/apple/swift-async-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-async-algorithms@1.1.2",
+            "UID": "c147ca36c0cf25f6"
+          },
+          "Version": "1.1.2",
+          "Locations": [
+            {
+              "StartLine": 31,
+              "EndLine": 39
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-atomics@1.3.0",
+          "Name": "github.com/apple/swift-atomics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-atomics@1.3.0",
+            "UID": "b586949360edb5b7"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 40,
+              "EndLine": 48
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-certificates@1.18.0",
+          "Name": "github.com/apple/swift-certificates",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-certificates@1.18.0",
+            "UID": "11c17c5c51218e40"
+          },
+          "Version": "1.18.0",
+          "Locations": [
+            {
+              "StartLine": 49,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections@1.3.0",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.3.0",
+            "UID": "50d0ef2822fcb32"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 58,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-configuration@1.1.0",
+          "Name": "github.com/apple/swift-configuration",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-configuration@1.1.0",
+            "UID": "768873ae4c3db38f"
+          },
+          "Version": "1.1.0",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-crypto@4.2.0",
+          "Name": "github.com/apple/swift-crypto",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-crypto@4.2.0",
+            "UID": "8383d573247390d4"
+          },
+          "Version": "4.2.0",
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 84
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-distributed-tracing@1.4.0",
+          "Name": "github.com/apple/swift-distributed-tracing",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-distributed-tracing@1.4.0",
+            "UID": "1deab3e26aee0a8"
+          },
+          "Version": "1.4.0",
+          "Locations": [
+            {
+              "StartLine": 85,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-structured-headers@1.6.0",
+          "Name": "github.com/apple/swift-http-structured-headers",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-structured-headers@1.6.0",
+            "UID": "47e321568a4836d"
+          },
+          "Version": "1.6.0",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-types@1.5.1",
+          "Name": "github.com/apple/swift-http-types",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-types@1.5.1",
+            "UID": "356eb0bc494d8f7b"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-log@1.10.1",
+          "Name": "github.com/apple/swift-log",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-log@1.10.1",
+            "UID": "f7de23057460e6ff"
+          },
+          "Version": "1.10.1",
+          "Locations": [
+            {
+              "StartLine": 112,
+              "EndLine": 120
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio@2.95.0",
+          "Name": "github.com/apple/swift-nio",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio@2.95.0",
+            "UID": "1f6c9851ec2a9436"
+          },
+          "Version": "2.95.0",
+          "Locations": [
+            {
+              "StartLine": 121,
+              "EndLine": 129
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-extras@1.32.1",
+          "Name": "github.com/apple/swift-nio-extras",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-extras@1.32.1",
+            "UID": "77be6eb37f142890"
+          },
+          "Version": "1.32.1",
+          "Locations": [
+            {
+              "StartLine": 130,
+              "EndLine": 138
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-http2@1.40.0",
+          "Name": "github.com/apple/swift-nio-http2",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-http2@1.40.0",
+            "UID": "8d56b9ac45fa1705"
+          },
+          "Version": "1.40.0",
+          "Locations": [
+            {
+              "StartLine": 139,
+              "EndLine": 147
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-ssl@2.36.0",
+          "Name": "github.com/apple/swift-nio-ssl",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-ssl@2.36.0",
+            "UID": "2992bf16e235386e"
+          },
+          "Version": "2.36.0",
+          "Locations": [
+            {
+              "StartLine": 148,
+              "EndLine": 156
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-transport-services@1.26.0",
+          "Name": "github.com/apple/swift-nio-transport-services",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-transport-services@1.26.0",
+            "UID": "1bc20fccf5ecea1a"
+          },
+          "Version": "1.26.0",
+          "Locations": [
+            {
+              "StartLine": 157,
+              "EndLine": 165
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-numerics@1.1.1",
+          "Name": "github.com/apple/swift-numerics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-numerics@1.1.1",
+            "UID": "166dba31c28ca95a"
+          },
+          "Version": "1.1.1",
+          "Locations": [
+            {
+              "StartLine": 166,
+              "EndLine": 174
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-service-context@1.3.0",
+          "Name": "github.com/apple/swift-service-context",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-service-context@1.3.0",
+            "UID": "da1c4772cfc43bbf"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 175,
+              "EndLine": 183
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.6.4",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.6.4",
+            "UID": "4cfe6bcc355529a6"
+          },
+          "Version": "1.6.4",
+          "Locations": [
+            {
+              "StartLine": 193,
+              "EndLine": 201
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/async-http-client@1.31.0",
+          "Name": "github.com/swift-server/async-http-client",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/async-http-client@1.31.0",
+            "UID": "5d6b4459006c363f"
+          },
+          "Version": "1.31.0",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/swift-service-lifecycle@2.9.1",
+          "Name": "github.com/swift-server/swift-service-lifecycle",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/swift-service-lifecycle@2.9.1",
+            "UID": "13fa958372583847"
+          },
+          "Version": "2.9.1",
+          "Locations": [
+            {
+              "StartLine": 184,
+              "EndLine": 192
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/Sparkle/Sparkle.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-argument-parser@0.4.4",
+          "Name": "github.com/apple/swift-argument-parser",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-argument-parser@0.4.4",
+            "UID": "27bac8de717dc8ca"
+          },
+          "Version": "0.4.4",
+          "Locations": [
+            {
+              "StartLine": 3,
+              "EndLine": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/Yams/Gemfile.lock",
+      "Class": "lang-pkgs",
+      "Type": "bundler",
+      "Packages": [
+        {
+          "ID": "cocoapods@1.15.2",
+          "Name": "cocoapods",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods@1.15.2",
+            "UID": "e4e9dd19fd0b5d5c"
+          },
+          "Version": "1.15.2",
+          "Relationship": "direct",
+          "DependsOn": [
+            "addressable@2.8.7",
+            "claide@1.1.0",
+            "cocoapods-core@1.15.2",
+            "cocoapods-deintegrate@1.0.5",
+            "cocoapods-downloader@2.1",
+            "cocoapods-plugins@1.0.0",
+            "cocoapods-search@1.0.1",
+            "cocoapods-trunk@1.6.0",
+            "cocoapods-try@1.2.0",
+            "colored2@3.1.2",
+            "escape@0.0.4",
+            "fourflusher@2.3.1",
+            "gh_inspector@1.1.3",
+            "molinillo@0.8.0",
+            "nap@1.1.0",
+            "ruby-macho@2.5.1",
+            "xcodeproj@1.25.1"
+          ],
+          "Locations": [
+            {
+              "StartLine": 27,
+              "EndLine": 27
+            }
+          ]
+        },
+        {
+          "ID": "jazzy@0.15.1",
+          "Name": "jazzy",
+          "Identifier": {
+            "PURL": "pkg:gem/jazzy@0.15.1",
+            "UID": "2d8ec99930fdf806"
+          },
+          "Version": "0.15.1",
+          "Relationship": "direct",
+          "DependsOn": [
+            "cocoapods@1.15.2",
+            "mustache@1.1.1",
+            "open4@1.3.4",
+            "redcarpet@3.6.0",
+            "rexml@3.3.9",
+            "rouge@4.3.0",
+            "sassc@2.4.0",
+            "sqlite3@1.7.3",
+            "xcinvoke@0.3.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 78,
+              "EndLine": 78
+            }
+          ]
+        },
+        {
+          "ID": "CFPropertyList@3.0.7",
+          "Name": "CFPropertyList",
+          "Identifier": {
+            "PURL": "pkg:gem/CFPropertyList@3.0.7",
+            "UID": "c1dc79b8d40cb7a1"
+          },
+          "Version": "3.0.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "base64@0.2.0",
+            "nkf@0.2.0",
+            "rexml@3.3.9"
+          ],
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 4
+            }
+          ]
+        },
+        {
+          "ID": "activesupport@7.1.3.4",
+          "Name": "activesupport",
+          "Identifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "785f3712c80783fc"
+          },
+          "Version": "7.1.3.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "base64@0.2.0",
+            "bigdecimal@3.1.8",
+            "concurrent-ruby@1.3.3",
+            "connection_pool@2.4.1",
+            "drb@2.2.1",
+            "i18n@1.14.5",
+            "minitest@5.24.1",
+            "mutex_m@0.2.0",
+            "tzinfo@2.0.6"
+          ],
+          "Locations": [
+            {
+              "StartLine": 8,
+              "EndLine": 8
+            }
+          ]
+        },
+        {
+          "ID": "addressable@2.8.7",
+          "Name": "addressable",
+          "Identifier": {
+            "PURL": "pkg:gem/addressable@2.8.7",
+            "UID": "9eed05793a9c1fed"
+          },
+          "Version": "2.8.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "public_suffix@4.0.7"
+          ],
+          "Locations": [
+            {
+              "StartLine": 18,
+              "EndLine": 18
+            }
+          ]
+        },
+        {
+          "ID": "algoliasearch@1.27.5",
+          "Name": "algoliasearch",
+          "Identifier": {
+            "PURL": "pkg:gem/algoliasearch@1.27.5",
+            "UID": "b2f816968db055f0"
+          },
+          "Version": "1.27.5",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "httpclient@2.8.3",
+            "json@2.7.2"
+          ],
+          "Locations": [
+            {
+              "StartLine": 20,
+              "EndLine": 20
+            }
+          ]
+        },
+        {
+          "ID": "atomos@0.1.3",
+          "Name": "atomos",
+          "Identifier": {
+            "PURL": "pkg:gem/atomos@0.1.3",
+            "UID": "c6d91b4ecf890664"
+          },
+          "Version": "0.1.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 23,
+              "EndLine": 23
+            }
+          ]
+        },
+        {
+          "ID": "base64@0.2.0",
+          "Name": "base64",
+          "Identifier": {
+            "PURL": "pkg:gem/base64@0.2.0",
+            "UID": "21391f9e3aaebd10"
+          },
+          "Version": "0.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 24,
+              "EndLine": 24
+            }
+          ]
+        },
+        {
+          "ID": "bigdecimal@3.1.8",
+          "Name": "bigdecimal",
+          "Identifier": {
+            "PURL": "pkg:gem/bigdecimal@3.1.8",
+            "UID": "99fbcc8df98a98ad"
+          },
+          "Version": "3.1.8",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 25,
+              "EndLine": 25
+            }
+          ]
+        },
+        {
+          "ID": "claide@1.1.0",
+          "Name": "claide",
+          "Identifier": {
+            "PURL": "pkg:gem/claide@1.1.0",
+            "UID": "5e5ba1d03f27a468"
+          },
+          "Version": "1.1.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 26,
+              "EndLine": 26
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-core@1.15.2",
+          "Name": "cocoapods-core",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-core@1.15.2",
+            "UID": "5c26ab0e05cbefa9"
+          },
+          "Version": "1.15.2",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "activesupport@7.1.3.4",
+            "addressable@2.8.7",
+            "algoliasearch@1.27.5",
+            "concurrent-ruby@1.3.3",
+            "fuzzy_match@2.0.4",
+            "nap@1.1.0",
+            "netrc@0.11.0",
+            "public_suffix@4.0.7",
+            "typhoeus@1.4.1"
+          ],
+          "Locations": [
+            {
+              "StartLine": 45,
+              "EndLine": 45
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-deintegrate@1.0.5",
+          "Name": "cocoapods-deintegrate",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-deintegrate@1.0.5",
+            "UID": "add72478a1b7c7ce"
+          },
+          "Version": "1.0.5",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 55,
+              "EndLine": 55
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-downloader@2.1",
+          "Name": "cocoapods-downloader",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-downloader@2.1",
+            "UID": "da18f94695feeb65"
+          },
+          "Version": "2.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 56,
+              "EndLine": 56
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-plugins@1.0.0",
+          "Name": "cocoapods-plugins",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-plugins@1.0.0",
+            "UID": "8613a78920afbf4a"
+          },
+          "Version": "1.0.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "nap@1.1.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 57,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-search@1.0.1",
+          "Name": "cocoapods-search",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-search@1.0.1",
+            "UID": "6937866f2f913905"
+          },
+          "Version": "1.0.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 59,
+              "EndLine": 59
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-trunk@1.6.0",
+          "Name": "cocoapods-trunk",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-trunk@1.6.0",
+            "UID": "14b2d4226b845b77"
+          },
+          "Version": "1.6.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "nap@1.1.0",
+            "netrc@0.11.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 60,
+              "EndLine": 60
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-try@1.2.0",
+          "Name": "cocoapods-try",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-try@1.2.0",
+            "UID": "4e0303746571121f"
+          },
+          "Version": "1.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 63,
+              "EndLine": 63
+            }
+          ]
+        },
+        {
+          "ID": "colored2@3.1.2",
+          "Name": "colored2",
+          "Identifier": {
+            "PURL": "pkg:gem/colored2@3.1.2",
+            "UID": "d5c2e11d9bdbe3ae"
+          },
+          "Version": "3.1.2",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 64,
+              "EndLine": 64
+            }
+          ]
+        },
+        {
+          "ID": "concurrent-ruby@1.3.3",
+          "Name": "concurrent-ruby",
+          "Identifier": {
+            "PURL": "pkg:gem/concurrent-ruby@1.3.3",
+            "UID": "bf914fd2fb99843f"
+          },
+          "Version": "1.3.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 65,
+              "EndLine": 65
+            }
+          ]
+        },
+        {
+          "ID": "connection_pool@2.4.1",
+          "Name": "connection_pool",
+          "Identifier": {
+            "PURL": "pkg:gem/connection_pool@2.4.1",
+            "UID": "7c253a1922d4c2cb"
+          },
+          "Version": "2.4.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 66,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "drb@2.2.1",
+          "Name": "drb",
+          "Identifier": {
+            "PURL": "pkg:gem/drb@2.2.1",
+            "UID": "ab2bf7a081504383"
+          },
+          "Version": "2.2.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 67
+            }
+          ]
+        },
+        {
+          "ID": "escape@0.0.4",
+          "Name": "escape",
+          "Identifier": {
+            "PURL": "pkg:gem/escape@0.0.4",
+            "UID": "df61dd3b188e0c64"
+          },
+          "Version": "0.0.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 68,
+              "EndLine": 68
+            }
+          ]
+        },
+        {
+          "ID": "ethon@0.16.0",
+          "Name": "ethon",
+          "Identifier": {
+            "PURL": "pkg:gem/ethon@0.16.0",
+            "UID": "e4a38163275f5036"
+          },
+          "Version": "0.16.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "ffi@1.17.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 69,
+              "EndLine": 69
+            }
+          ]
+        },
+        {
+          "ID": "ffi@1.17.0",
+          "Name": "ffi",
+          "Identifier": {
+            "PURL": "pkg:gem/ffi@1.17.0",
+            "UID": "b893d429df756090"
+          },
+          "Version": "1.17.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 71,
+              "EndLine": 71
+            }
+          ]
+        },
+        {
+          "ID": "fourflusher@2.3.1",
+          "Name": "fourflusher",
+          "Identifier": {
+            "PURL": "pkg:gem/fourflusher@2.3.1",
+            "UID": "9a8cf40e2ce32266"
+          },
+          "Version": "2.3.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 72,
+              "EndLine": 72
+            }
+          ]
+        },
+        {
+          "ID": "fuzzy_match@2.0.4",
+          "Name": "fuzzy_match",
+          "Identifier": {
+            "PURL": "pkg:gem/fuzzy_match@2.0.4",
+            "UID": "530645972ca4df00"
+          },
+          "Version": "2.0.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 73,
+              "EndLine": 73
+            }
+          ]
+        },
+        {
+          "ID": "gh_inspector@1.1.3",
+          "Name": "gh_inspector",
+          "Identifier": {
+            "PURL": "pkg:gem/gh_inspector@1.1.3",
+            "UID": "dd6640619a94825b"
+          },
+          "Version": "1.1.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 74,
+              "EndLine": 74
+            }
+          ]
+        },
+        {
+          "ID": "httpclient@2.8.3",
+          "Name": "httpclient",
+          "Identifier": {
+            "PURL": "pkg:gem/httpclient@2.8.3",
+            "UID": "e3fedf8f329f55ca"
+          },
+          "Version": "2.8.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 75,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "i18n@1.14.5",
+          "Name": "i18n",
+          "Identifier": {
+            "PURL": "pkg:gem/i18n@1.14.5",
+            "UID": "3d9fad9140c19d7b"
+          },
+          "Version": "1.14.5",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "concurrent-ruby@1.3.3"
+          ],
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 76
+            }
+          ]
+        },
+        {
+          "ID": "json@2.7.2",
+          "Name": "json",
+          "Identifier": {
+            "PURL": "pkg:gem/json@2.7.2",
+            "UID": "e2b78f08999ff995"
+          },
+          "Version": "2.7.2",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 88,
+              "EndLine": 88
+            }
+          ]
+        },
+        {
+          "ID": "liferaft@0.0.6",
+          "Name": "liferaft",
+          "Identifier": {
+            "PURL": "pkg:gem/liferaft@0.0.6",
+            "UID": "feaeb861fa58125b"
+          },
+          "Version": "0.0.6",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 89,
+              "EndLine": 89
+            }
+          ]
+        },
+        {
+          "ID": "mini_portile2@2.8.7",
+          "Name": "mini_portile2",
+          "Identifier": {
+            "PURL": "pkg:gem/mini_portile2@2.8.7",
+            "UID": "60b3b344d73b7e36"
+          },
+          "Version": "2.8.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 90,
+              "EndLine": 90
+            }
+          ]
+        },
+        {
+          "ID": "minitest@5.24.1",
+          "Name": "minitest",
+          "Identifier": {
+            "PURL": "pkg:gem/minitest@5.24.1",
+            "UID": "933b65b32b31950"
+          },
+          "Version": "5.24.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 91,
+              "EndLine": 91
+            }
+          ]
+        },
+        {
+          "ID": "molinillo@0.8.0",
+          "Name": "molinillo",
+          "Identifier": {
+            "PURL": "pkg:gem/molinillo@0.8.0",
+            "UID": "270f835c120b5c15"
+          },
+          "Version": "0.8.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 92,
+              "EndLine": 92
+            }
+          ]
+        },
+        {
+          "ID": "mustache@1.1.1",
+          "Name": "mustache",
+          "Identifier": {
+            "PURL": "pkg:gem/mustache@1.1.1",
+            "UID": "dd519fe838c46b3f"
+          },
+          "Version": "1.1.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 93,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "mutex_m@0.2.0",
+          "Name": "mutex_m",
+          "Identifier": {
+            "PURL": "pkg:gem/mutex_m@0.2.0",
+            "UID": "d92b13c47de92d38"
+          },
+          "Version": "0.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 94
+            }
+          ]
+        },
+        {
+          "ID": "nanaimo@0.3.0",
+          "Name": "nanaimo",
+          "Identifier": {
+            "PURL": "pkg:gem/nanaimo@0.3.0",
+            "UID": "2da548fa4047512f"
+          },
+          "Version": "0.3.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 95,
+              "EndLine": 95
+            }
+          ]
+        },
+        {
+          "ID": "nap@1.1.0",
+          "Name": "nap",
+          "Identifier": {
+            "PURL": "pkg:gem/nap@1.1.0",
+            "UID": "10c43d4f7825ff1a"
+          },
+          "Version": "1.1.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 96,
+              "EndLine": 96
+            }
+          ]
+        },
+        {
+          "ID": "netrc@0.11.0",
+          "Name": "netrc",
+          "Identifier": {
+            "PURL": "pkg:gem/netrc@0.11.0",
+            "UID": "da8b6d7bd4f08727"
+          },
+          "Version": "0.11.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 97,
+              "EndLine": 97
+            }
+          ]
+        },
+        {
+          "ID": "nkf@0.2.0",
+          "Name": "nkf",
+          "Identifier": {
+            "PURL": "pkg:gem/nkf@0.2.0",
+            "UID": "8932d3a79ceda9bf"
+          },
+          "Version": "0.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 98,
+              "EndLine": 98
+            }
+          ]
+        },
+        {
+          "ID": "open4@1.3.4",
+          "Name": "open4",
+          "Identifier": {
+            "PURL": "pkg:gem/open4@1.3.4",
+            "UID": "c5ccbb19b31898e2"
+          },
+          "Version": "1.3.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 99,
+              "EndLine": 99
+            }
+          ]
+        },
+        {
+          "ID": "public_suffix@4.0.7",
+          "Name": "public_suffix",
+          "Identifier": {
+            "PURL": "pkg:gem/public_suffix@4.0.7",
+            "UID": "e98645e843729833"
+          },
+          "Version": "4.0.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 100,
+              "EndLine": 100
+            }
+          ]
+        },
+        {
+          "ID": "redcarpet@3.6.0",
+          "Name": "redcarpet",
+          "Identifier": {
+            "PURL": "pkg:gem/redcarpet@3.6.0",
+            "UID": "4d4f9c410f9599ab"
+          },
+          "Version": "3.6.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 101,
+              "EndLine": 101
+            }
+          ]
+        },
+        {
+          "ID": "rexml@3.3.9",
+          "Name": "rexml",
+          "Identifier": {
+            "PURL": "pkg:gem/rexml@3.3.9",
+            "UID": "34028d0d1b7a4f4"
+          },
+          "Version": "3.3.9",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 102,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "rouge@4.3.0",
+          "Name": "rouge",
+          "Identifier": {
+            "PURL": "pkg:gem/rouge@4.3.0",
+            "UID": "2379ce8e40f2c208"
+          },
+          "Version": "4.3.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 103
+            }
+          ]
+        },
+        {
+          "ID": "ruby-macho@2.5.1",
+          "Name": "ruby-macho",
+          "Identifier": {
+            "PURL": "pkg:gem/ruby-macho@2.5.1",
+            "UID": "c0e55a3c07a059ac"
+          },
+          "Version": "2.5.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 104,
+              "EndLine": 104
+            }
+          ]
+        },
+        {
+          "ID": "sassc@2.4.0",
+          "Name": "sassc",
+          "Identifier": {
+            "PURL": "pkg:gem/sassc@2.4.0",
+            "UID": "c6eb03d496c53756"
+          },
+          "Version": "2.4.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "ffi@1.17.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 105,
+              "EndLine": 105
+            }
+          ]
+        },
+        {
+          "ID": "sqlite3@1.7.3",
+          "Name": "sqlite3",
+          "Identifier": {
+            "PURL": "pkg:gem/sqlite3@1.7.3",
+            "UID": "6150fea85008a659"
+          },
+          "Version": "1.7.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "mini_portile2@2.8.7"
+          ],
+          "Locations": [
+            {
+              "StartLine": 107,
+              "EndLine": 107
+            }
+          ]
+        },
+        {
+          "ID": "typhoeus@1.4.1",
+          "Name": "typhoeus",
+          "Identifier": {
+            "PURL": "pkg:gem/typhoeus@1.4.1",
+            "UID": "e7fc7af7dec58529"
+          },
+          "Version": "1.4.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "ethon@0.16.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 109,
+              "EndLine": 109
+            }
+          ]
+        },
+        {
+          "ID": "tzinfo@2.0.6",
+          "Name": "tzinfo",
+          "Identifier": {
+            "PURL": "pkg:gem/tzinfo@2.0.6",
+            "UID": "b77cfcbd8773f7ec"
+          },
+          "Version": "2.0.6",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "concurrent-ruby@1.3.3"
+          ],
+          "Locations": [
+            {
+              "StartLine": 111,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "xcinvoke@0.3.0",
+          "Name": "xcinvoke",
+          "Identifier": {
+            "PURL": "pkg:gem/xcinvoke@0.3.0",
+            "UID": "c53492c82f024f08"
+          },
+          "Version": "0.3.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "liferaft@0.0.6"
+          ],
+          "Locations": [
+            {
+              "StartLine": 113,
+              "EndLine": 113
+            }
+          ]
+        },
+        {
+          "ID": "xcodeproj@1.25.1",
+          "Name": "xcodeproj",
+          "Identifier": {
+            "PURL": "pkg:gem/xcodeproj@1.25.1",
+            "UID": "3fd32b638bae1c7f"
+          },
+          "Version": "1.25.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "CFPropertyList@3.0.7",
+            "atomos@0.1.3",
+            "claide@1.1.0",
+            "colored2@3.1.2",
+            "nanaimo@0.3.0",
+            "rexml@3.3.9"
+          ],
+          "Locations": [
+            {
+              "StartLine": 115,
+              "EndLine": 115
+            }
+          ]
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-33169",
+          "PkgID": "activesupport@7.1.3.4",
+          "PkgName": "activesupport",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "785f3712c80783fc"
+          },
+          "InstalledVersion": "7.1.3.4",
+          "FixedVersion": "8.1.2.1, 8.0.4.1, 7.2.3.1",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33169",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "rails: rails-activesupport: Active Support: Denial of Service via crafted long digit strings",
+          "Description": "Active Support is a toolkit of support libraries and Ruby core extensions extracted from the Rails framework. `NumberToDelimitedConverter` uses a lookahead-based regular expression with `gsub!` to insert thousands delimiters. Prior to versions 8.1.2.1, 8.0.4.1, and 7.2.3.1, the interaction between the repeated lookahead group and `gsub!` can produce quadratic time complexity on long digit strings. Versions 8.1.2.1, 8.0.4.1, and 7.2.3.1 contain a patch.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400",
+            "CWE-1333"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 2,
+            "photon": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+              "V40Score": 6.9
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33169",
+            "https://github.com/rails/rails",
+            "https://github.com/rails/rails/commit/29154f1097da13d48fdb3200760b3e3da66dcb11",
+            "https://github.com/rails/rails/commit/b54a4b373c6f042cab6ee2033246b1c9ecc38974",
+            "https://github.com/rails/rails/commit/ec1a0e215efd27a3b3911aae6df978a80f456a49",
+            "https://github.com/rails/rails/releases/tag/v7.2.3.1",
+            "https://github.com/rails/rails/releases/tag/v8.0.4.1",
+            "https://github.com/rails/rails/releases/tag/v8.1.2.1",
+            "https://github.com/rails/rails/security/advisories/GHSA-cg4j-q9v8-6v38",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33169",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33169"
+          ],
+          "PublishedDate": "2026-03-24T00:16:28.113Z",
+          "LastModifiedDate": "2026-03-24T18:01:08.873Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33170",
+          "PkgID": "activesupport@7.1.3.4",
+          "PkgName": "activesupport",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "785f3712c80783fc"
+          },
+          "InstalledVersion": "7.1.3.4",
+          "FixedVersion": "8.1.2.1, 8.0.4.1, 7.2.3.1",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33170",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "Rails: Active Support: Active Support: Cross-Site Scripting (XSS) due to improper HTML safety flag propagation in SafeBuffer#%",
+          "Description": "Active Support is a toolkit of support libraries and Ruby core extensions extracted from the Rails framework. Prior to versions 8.1.2.1, 8.0.4.1, and 7.2.3.1, `SafeBuffer#%` does not propagate the `@html_unsafe` flag to the newly created buffer. If a `SafeBuffer` is mutated in place (e.g. via `gsub!`) and then formatted with `%` using untrusted arguments, the result incorrectly reports `html_safe? == true`, bypassing ERB auto-escaping and possibly leading to XSS. Versions 8.1.2.1, 8.0.4.1, and 7.2.3.1 contain a patch.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-79"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 2,
+            "photon": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N",
+              "V40Score": 5.3
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+              "V3Score": 5.4
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33170",
+            "https://github.com/rails/rails",
+            "https://github.com/rails/rails/commit/50d732af3b7c8aaf63cbcca0becbc00279b215b7",
+            "https://github.com/rails/rails/commit/6e8a81108001d58043de9e54a06fca58962fc2db",
+            "https://github.com/rails/rails/commit/c1ad0e8e1972032f3395853a5e99cea035035beb",
+            "https://github.com/rails/rails/releases/tag/v7.2.3.1",
+            "https://github.com/rails/rails/releases/tag/v8.0.4.1",
+            "https://github.com/rails/rails/releases/tag/v8.1.2.1",
+            "https://github.com/rails/rails/security/advisories/GHSA-89vf-4333-qx8v",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33170",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33170"
+          ],
+          "PublishedDate": "2026-03-24T00:16:28.287Z",
+          "LastModifiedDate": "2026-03-24T18:00:00.08Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33176",
+          "PkgID": "activesupport@7.1.3.4",
+          "PkgName": "activesupport",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "785f3712c80783fc"
+          },
+          "InstalledVersion": "7.1.3.4",
+          "FixedVersion": "8.1.2.1, 8.0.4.1, 7.2.3.1",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33176",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "Rails: Active Support: Active Support: Denial of Service via large scientific notation strings",
+          "Description": "Active Support is a toolkit of support libraries and Ruby core extensions extracted from the Rails framework. Prior to versions 8.1.2.1, 8.0.4.1, and 7.2.3.1, Active Support number helpers accept strings containing scientific notation (e.g. `1e10000`), which `BigDecimal` expands into extremely large decimal representations. This can cause excessive memory allocation and CPU consumption when the expanded number is formatted, possibly resulting in a DoS vulnerability. Versions 8.1.2.1, 8.0.4.1, and 7.2.3.1 contain a patch.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 3,
+            "photon": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:U",
+              "V40Score": 6.6
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33176",
+            "https://github.com/rails/rails",
+            "https://github.com/rails/rails/commit/19dbab51ca086a657bb86458042bc44314916bcb",
+            "https://github.com/rails/rails/commit/ebd6be18120d1136511eb516338e27af25ac0a1a",
+            "https://github.com/rails/rails/commit/ee2c59e730e5b8faed502cd2c573109df093f856",
+            "https://github.com/rails/rails/releases/tag/v7.2.3.1",
+            "https://github.com/rails/rails/releases/tag/v8.0.4.1",
+            "https://github.com/rails/rails/releases/tag/v8.1.2.1",
+            "https://github.com/rails/rails/security/advisories/GHSA-2j26-frm8-cmj9",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33176",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33176"
+          ],
+          "PublishedDate": "2026-03-24T00:16:28.807Z",
+          "LastModifiedDate": "2026-03-24T17:55:27.437Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-35611",
+          "PkgID": "addressable@2.8.7",
+          "PkgName": "addressable",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/addressable@2.8.7",
+            "UID": "9eed05793a9c1fed"
+          },
+          "InstalledVersion": "2.8.7",
+          "FixedVersion": "2.9.0",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-35611",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "addressable: Addressable: Denial of Service via crafted URI templates",
+          "Description": "Addressable is an alternative implementation to the URI implementation that is part of Ruby's standard library. From 2.3.0 to before 2.9.0, within the URI template implementation in Addressable, two classes of URI template generate regular expressions vulnerable to catastrophic backtracking. Templates using the * (explode) modifier with any expansion operator (e.g., {foo*}, {+var*}, {#var*}, {/var*}, {.var*}, {;var*}, {?var*}, {\u0026var*}) generate patterns with nested unbounded quantifiers that are O(2^n) when matched against a maliciously crafted URI. Templates using multiple variables with the + or # operators (e.g., {+v1,v2,v3}) generate patterns with O(n^k) complexity due to the comma separator being within the matched character class, causing ambiguous backtracking across k variables. When matched against a maliciously crafted URI, this can result in catastrophic backtracking and uncontrolled resource consumption, leading to denial of service. This vulnerability is fixed in 2.9.0.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-1333"
+          ],
+          "VendorSeverity": {
+            "azure": 3,
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-35611",
+            "https://github.com/sporkmonger/addressable",
+            "https://github.com/sporkmonger/addressable/security/advisories/GHSA-h27x-rffw-24p4",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-35611",
+            "https://www.cve.org/CVERecord?id=CVE-2026-35611"
+          ],
+          "PublishedDate": "2026-04-07T17:16:35.427Z",
+          "LastModifiedDate": "2026-04-15T17:20:27.607Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-58767",
+          "PkgID": "rexml@3.3.9",
+          "PkgName": "rexml",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/rexml@3.3.9",
+            "UID": "34028d0d1b7a4f4"
+          },
+          "InstalledVersion": "3.3.9",
+          "FixedVersion": "\u003e= 3.4.2",
+          "Status": "fixed",
+          "SeveritySource": "nvd",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-58767",
+          "DataSource": {
+            "ID": "ruby-advisory-db",
+            "Name": "Ruby Advisory Database",
+            "URL": "https://github.com/rubysec/ruby-advisory-db"
+          },
+          "Title": "rexml: REXML denial of service",
+          "Description": "REXML is an XML toolkit for Ruby. The REXML gems from 3.3.3 to 3.4.1 has a DoS vulnerability when parsing XML containing multiple XML declarations. If you need to parse untrusted XMLs, you may be impacted to these vulnerabilities. The REXML gem 3.4.2 or later include the patches to fix these vulnerabilities.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "alma": 2,
+            "amazon": 1,
+            "azure": 1,
+            "ghsa": 1,
+            "nvd": 2,
+            "oracle-oval": 2,
+            "photon": 2,
+            "redhat": 2,
+            "rocky": 2,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N/E:U",
+              "V40Score": 1.2
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/errata/RHSA-2025:23063",
+            "https://access.redhat.com/security/cve/CVE-2025-58767",
+            "https://bugzilla.redhat.com/2379684",
+            "https://bugzilla.redhat.com/2396186",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2379684",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2396186",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2426336",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-24294",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-58767",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-61594",
+            "https://errata.almalinux.org/9/ALSA-2025-23063.html",
+            "https://errata.rockylinux.org/RLSA-2025:23063",
+            "https://github.com/advisories/GHSA-c2f4-jgmc-q2r5",
+            "https://github.com/ruby/rexml",
+            "https://github.com/ruby/rexml/commit/5859bdeac792687eaf93d8e8f0b7e3c1e2ed5c23",
+            "https://github.com/ruby/rexml/security/advisories/GHSA-c2f4-jgmc-q2r5",
+            "https://github.com/rubysec/ruby-advisory-db/blob/master/gems/rexml/CVE-2025-58767.yml",
+            "https://linux.oracle.com/cve/CVE-2025-58767.html",
+            "https://linux.oracle.com/errata/ELSA-2025-23141.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-58767",
+            "https://www.cve.org/CVERecord?id=CVE-2025-58767",
+            "https://www.ruby-lang.org/en/news/2025/09/18/dos-rexml-cve-2025-58767",
+            "https://www.ruby-lang.org/en/news/2025/09/18/dos-rexml-cve-2025-58767/"
+          ],
+          "PublishedDate": "2025-09-17T18:15:52.857Z",
+          "LastModifiedDate": "2025-09-30T13:07:07.207Z"
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/mlx-swift/Source/Cmlx/mlx/examples/extensions/requirements.txt",
+      "Class": "lang-pkgs",
+      "Type": "pip",
+      "Packages": [
+        {
+          "Name": "nanobind",
+          "Identifier": {
+            "PURL": "pkg:pypi/nanobind@2.10.2",
+            "UID": "9c9fa8e5fac63cd2"
+          },
+          "Version": "2.10.2",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/swift-collections/Benchmarks/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-argument-parser@1.6.2",
+          "Name": "github.com/apple/swift-argument-parser",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-argument-parser@1.6.2",
+            "UID": "bdc7b373305260a2"
+          },
+          "Version": "1.6.2",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections-benchmark@0.0.4",
+          "Name": "github.com/apple/swift-collections-benchmark",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections-benchmark@0.0.4",
+            "UID": "e8b6a51ba4baeb79"
+          },
+          "Version": "0.0.4",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.4.2",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.4.2",
+            "UID": "46cf2217c0de3746"
+          },
+          "Version": "1.4.2",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/swift-collections/Utils/swift-collections.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-argument-parser@1.5.0",
+          "Name": "github.com/apple/swift-argument-parser",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-argument-parser@1.5.0",
+            "UID": "4b041af7e2948d15"
+          },
+          "Version": "1.5.0",
+          "Locations": [
+            {
+              "StartLine": 3,
+              "EndLine": 11
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.4.2",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.4.2",
+            "UID": "127894c3f15ca4d9"
+          },
+          "Version": "1.4.2",
+          "Locations": [
+            {
+              "StartLine": 12,
+              "EndLine": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/swift-huggingface/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-algorithms@1.2.1",
+          "Name": "github.com/apple/swift-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-algorithms@1.2.1",
+            "UID": "809f22d390aa5efe"
+          },
+          "Version": "1.2.1",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-asn1@1.5.1",
+          "Name": "github.com/apple/swift-asn1",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-asn1@1.5.1",
+            "UID": "ae9a044447a93fd5"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 31,
+              "EndLine": 39
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-async-algorithms@1.1.3",
+          "Name": "github.com/apple/swift-async-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-async-algorithms@1.1.3",
+            "UID": "cae9e2855aae8d40"
+          },
+          "Version": "1.1.3",
+          "Locations": [
+            {
+              "StartLine": 40,
+              "EndLine": 48
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-atomics@1.3.0",
+          "Name": "github.com/apple/swift-atomics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-atomics@1.3.0",
+            "UID": "800f89eb78394cb"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 49,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-certificates@1.18.0",
+          "Name": "github.com/apple/swift-certificates",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-certificates@1.18.0",
+            "UID": "5ef4ca00db67d615"
+          },
+          "Version": "1.18.0",
+          "Locations": [
+            {
+              "StartLine": 58,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections@1.4.0",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.4.0",
+            "UID": "6d2628fe2adb982b"
+          },
+          "Version": "1.4.0",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-configuration@1.2.0",
+          "Name": "github.com/apple/swift-configuration",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-configuration@1.2.0",
+            "UID": "125e913f9b62851"
+          },
+          "Version": "1.2.0",
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 84
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-crypto@4.2.0",
+          "Name": "github.com/apple/swift-crypto",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-crypto@4.2.0",
+            "UID": "b41ae348a5f2bd93"
+          },
+          "Version": "4.2.0",
+          "Locations": [
+            {
+              "StartLine": 85,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-distributed-tracing@1.4.1",
+          "Name": "github.com/apple/swift-distributed-tracing",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-distributed-tracing@1.4.1",
+            "UID": "af290c8ed4d805c7"
+          },
+          "Version": "1.4.1",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-structured-headers@1.6.0",
+          "Name": "github.com/apple/swift-http-structured-headers",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-structured-headers@1.6.0",
+            "UID": "ec5f9e0b2b762cc6"
+          },
+          "Version": "1.6.0",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-types@1.5.1",
+          "Name": "github.com/apple/swift-http-types",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-types@1.5.1",
+            "UID": "4aad20025535cff7"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 112,
+              "EndLine": 120
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-log@1.10.1",
+          "Name": "github.com/apple/swift-log",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-log@1.10.1",
+            "UID": "e7248778e1f317d7"
+          },
+          "Version": "1.10.1",
+          "Locations": [
+            {
+              "StartLine": 121,
+              "EndLine": 129
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio@2.96.0",
+          "Name": "github.com/apple/swift-nio",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio@2.96.0",
+            "UID": "de3894362630e0a4"
+          },
+          "Version": "2.96.0",
+          "Locations": [
+            {
+              "StartLine": 130,
+              "EndLine": 138
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-extras@1.32.1",
+          "Name": "github.com/apple/swift-nio-extras",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-extras@1.32.1",
+            "UID": "a0598cd6dda309cf"
+          },
+          "Version": "1.32.1",
+          "Locations": [
+            {
+              "StartLine": 139,
+              "EndLine": 147
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-http2@1.40.0",
+          "Name": "github.com/apple/swift-nio-http2",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-http2@1.40.0",
+            "UID": "7e2db934394008f"
+          },
+          "Version": "1.40.0",
+          "Locations": [
+            {
+              "StartLine": 148,
+              "EndLine": 156
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-ssl@2.36.0",
+          "Name": "github.com/apple/swift-nio-ssl",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-ssl@2.36.0",
+            "UID": "648fe394a2c2a9ab"
+          },
+          "Version": "2.36.0",
+          "Locations": [
+            {
+              "StartLine": 157,
+              "EndLine": 165
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-transport-services@1.26.0",
+          "Name": "github.com/apple/swift-nio-transport-services",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-transport-services@1.26.0",
+            "UID": "d521133b375d365d"
+          },
+          "Version": "1.26.0",
+          "Locations": [
+            {
+              "StartLine": 166,
+              "EndLine": 174
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-numerics@1.1.1",
+          "Name": "github.com/apple/swift-numerics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-numerics@1.1.1",
+            "UID": "6ee542dff0471b75"
+          },
+          "Version": "1.1.1",
+          "Locations": [
+            {
+              "StartLine": 175,
+              "EndLine": 183
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-service-context@1.3.0",
+          "Name": "github.com/apple/swift-service-context",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-service-context@1.3.0",
+            "UID": "a2ba0de757a4d02b"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 184,
+              "EndLine": 192
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.6.4",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.6.4",
+            "UID": "cf976befe556a309"
+          },
+          "Version": "1.6.4",
+          "Locations": [
+            {
+              "StartLine": 202,
+              "EndLine": 210
+            }
+          ]
+        },
+        {
+          "ID": "github.com/huggingface/swift-xet@0.2.3",
+          "Name": "github.com/huggingface/swift-xet",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/huggingface/swift-xet@0.2.3",
+            "UID": "bf9ba3cf6b8785ce"
+          },
+          "Version": "0.2.3",
+          "Locations": [
+            {
+              "StartLine": 211,
+              "EndLine": 219
+            }
+          ]
+        },
+        {
+          "ID": "github.com/mattt/EventSource@1.4.1",
+          "Name": "github.com/mattt/EventSource",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/mattt/EventSource@1.4.1",
+            "UID": "1c3d479cf0fada5f"
+          },
+          "Version": "1.4.1",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/async-http-client@1.32.0",
+          "Name": "github.com/swift-server/async-http-client",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/async-http-client@1.32.0",
+            "UID": "4624da6d94471fdd"
+          },
+          "Version": "1.32.0",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/swift-service-lifecycle@2.10.1",
+          "Name": "github.com/swift-server/swift-service-lifecycle",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/swift-service-lifecycle@2.10.1",
+            "UID": "f9fb138e3f86896d"
+          },
+          "Version": "2.10.1",
+          "Locations": [
+            {
+              "StartLine": 193,
+              "EndLine": 201
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/checkouts/swift-jinja/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-collections@1.1.4",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.1.4",
+            "UID": "72ba84837dc1565f"
+          },
+          "Version": "1.1.4",
+          "Locations": [
+            {
+              "StartLine": 3,
+              "EndLine": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/EventSource/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-algorithms@1.2.1",
+          "Name": "github.com/apple/swift-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-algorithms@1.2.1",
+            "UID": "c69351b97f976fab"
+          },
+          "Version": "1.2.1",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-asn1@1.5.1",
+          "Name": "github.com/apple/swift-asn1",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-asn1@1.5.1",
+            "UID": "20074d13553fe102"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-async-algorithms@1.1.2",
+          "Name": "github.com/apple/swift-async-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-async-algorithms@1.1.2",
+            "UID": "5d15e874b453dd68"
+          },
+          "Version": "1.1.2",
+          "Locations": [
+            {
+              "StartLine": 31,
+              "EndLine": 39
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-atomics@1.3.0",
+          "Name": "github.com/apple/swift-atomics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-atomics@1.3.0",
+            "UID": "9c11b95f0dd54125"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 40,
+              "EndLine": 48
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-certificates@1.18.0",
+          "Name": "github.com/apple/swift-certificates",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-certificates@1.18.0",
+            "UID": "8be9108c21febaae"
+          },
+          "Version": "1.18.0",
+          "Locations": [
+            {
+              "StartLine": 49,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections@1.3.0",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.3.0",
+            "UID": "bfc3acfc508524e0"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 58,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-configuration@1.1.0",
+          "Name": "github.com/apple/swift-configuration",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-configuration@1.1.0",
+            "UID": "67bcc9efc009dbbd"
+          },
+          "Version": "1.1.0",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-crypto@4.2.0",
+          "Name": "github.com/apple/swift-crypto",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-crypto@4.2.0",
+            "UID": "e7d6c25f574e81c6"
+          },
+          "Version": "4.2.0",
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 84
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-distributed-tracing@1.4.0",
+          "Name": "github.com/apple/swift-distributed-tracing",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-distributed-tracing@1.4.0",
+            "UID": "3176cc47522aeba2"
+          },
+          "Version": "1.4.0",
+          "Locations": [
+            {
+              "StartLine": 85,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-structured-headers@1.6.0",
+          "Name": "github.com/apple/swift-http-structured-headers",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-structured-headers@1.6.0",
+            "UID": "6cbc48f76c0a7857"
+          },
+          "Version": "1.6.0",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-types@1.5.1",
+          "Name": "github.com/apple/swift-http-types",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-types@1.5.1",
+            "UID": "f3ec54a680092f1"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-log@1.10.1",
+          "Name": "github.com/apple/swift-log",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-log@1.10.1",
+            "UID": "fe8a2ea3640aa3b1"
+          },
+          "Version": "1.10.1",
+          "Locations": [
+            {
+              "StartLine": 112,
+              "EndLine": 120
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio@2.95.0",
+          "Name": "github.com/apple/swift-nio",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio@2.95.0",
+            "UID": "e48d51d518dfdcb8"
+          },
+          "Version": "2.95.0",
+          "Locations": [
+            {
+              "StartLine": 121,
+              "EndLine": 129
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-extras@1.32.1",
+          "Name": "github.com/apple/swift-nio-extras",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-extras@1.32.1",
+            "UID": "26bd618cda8629ea"
+          },
+          "Version": "1.32.1",
+          "Locations": [
+            {
+              "StartLine": 130,
+              "EndLine": 138
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-http2@1.40.0",
+          "Name": "github.com/apple/swift-nio-http2",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-http2@1.40.0",
+            "UID": "2bd689fc91f03187"
+          },
+          "Version": "1.40.0",
+          "Locations": [
+            {
+              "StartLine": 139,
+              "EndLine": 147
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-ssl@2.36.0",
+          "Name": "github.com/apple/swift-nio-ssl",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-ssl@2.36.0",
+            "UID": "1b35b8e7ed356b44"
+          },
+          "Version": "2.36.0",
+          "Locations": [
+            {
+              "StartLine": 148,
+              "EndLine": 156
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-transport-services@1.26.0",
+          "Name": "github.com/apple/swift-nio-transport-services",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-transport-services@1.26.0",
+            "UID": "be7e18d2cb00a900"
+          },
+          "Version": "1.26.0",
+          "Locations": [
+            {
+              "StartLine": 157,
+              "EndLine": 165
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-numerics@1.1.1",
+          "Name": "github.com/apple/swift-numerics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-numerics@1.1.1",
+            "UID": "96bb4faf9e5597c8"
+          },
+          "Version": "1.1.1",
+          "Locations": [
+            {
+              "StartLine": 166,
+              "EndLine": 174
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-service-context@1.3.0",
+          "Name": "github.com/apple/swift-service-context",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-service-context@1.3.0",
+            "UID": "d8a137c01292e0a9"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 175,
+              "EndLine": 183
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.6.4",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.6.4",
+            "UID": "18429f973f6d2a88"
+          },
+          "Version": "1.6.4",
+          "Locations": [
+            {
+              "StartLine": 193,
+              "EndLine": 201
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/async-http-client@1.31.0",
+          "Name": "github.com/swift-server/async-http-client",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/async-http-client@1.31.0",
+            "UID": "c894d2d92f84e169"
+          },
+          "Version": "1.31.0",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/swift-service-lifecycle@2.9.1",
+          "Name": "github.com/swift-server/swift-service-lifecycle",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/swift-service-lifecycle@2.9.1",
+            "UID": "a1499743beea0371"
+          },
+          "Version": "2.9.1",
+          "Locations": [
+            {
+              "StartLine": 184,
+              "EndLine": 192
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/Sparkle/Sparkle.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-argument-parser@0.4.4",
+          "Name": "github.com/apple/swift-argument-parser",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-argument-parser@0.4.4",
+            "UID": "6315cd06919f6d50"
+          },
+          "Version": "0.4.4",
+          "Locations": [
+            {
+              "StartLine": 3,
+              "EndLine": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/Yams/Gemfile.lock",
+      "Class": "lang-pkgs",
+      "Type": "bundler",
+      "Packages": [
+        {
+          "ID": "cocoapods@1.15.2",
+          "Name": "cocoapods",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods@1.15.2",
+            "UID": "506f5bf0fab10db3"
+          },
+          "Version": "1.15.2",
+          "Relationship": "direct",
+          "DependsOn": [
+            "addressable@2.8.7",
+            "claide@1.1.0",
+            "cocoapods-core@1.15.2",
+            "cocoapods-deintegrate@1.0.5",
+            "cocoapods-downloader@2.1",
+            "cocoapods-plugins@1.0.0",
+            "cocoapods-search@1.0.1",
+            "cocoapods-trunk@1.6.0",
+            "cocoapods-try@1.2.0",
+            "colored2@3.1.2",
+            "escape@0.0.4",
+            "fourflusher@2.3.1",
+            "gh_inspector@1.1.3",
+            "molinillo@0.8.0",
+            "nap@1.1.0",
+            "ruby-macho@2.5.1",
+            "xcodeproj@1.25.1"
+          ],
+          "Locations": [
+            {
+              "StartLine": 27,
+              "EndLine": 27
+            }
+          ]
+        },
+        {
+          "ID": "jazzy@0.15.1",
+          "Name": "jazzy",
+          "Identifier": {
+            "PURL": "pkg:gem/jazzy@0.15.1",
+            "UID": "d5d303846ba00ed1"
+          },
+          "Version": "0.15.1",
+          "Relationship": "direct",
+          "DependsOn": [
+            "cocoapods@1.15.2",
+            "mustache@1.1.1",
+            "open4@1.3.4",
+            "redcarpet@3.6.0",
+            "rexml@3.3.9",
+            "rouge@4.3.0",
+            "sassc@2.4.0",
+            "sqlite3@1.7.3",
+            "xcinvoke@0.3.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 78,
+              "EndLine": 78
+            }
+          ]
+        },
+        {
+          "ID": "CFPropertyList@3.0.7",
+          "Name": "CFPropertyList",
+          "Identifier": {
+            "PURL": "pkg:gem/CFPropertyList@3.0.7",
+            "UID": "21f15628b46f0c12"
+          },
+          "Version": "3.0.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "base64@0.2.0",
+            "nkf@0.2.0",
+            "rexml@3.3.9"
+          ],
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 4
+            }
+          ]
+        },
+        {
+          "ID": "activesupport@7.1.3.4",
+          "Name": "activesupport",
+          "Identifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "c059b3d375310ac3"
+          },
+          "Version": "7.1.3.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "base64@0.2.0",
+            "bigdecimal@3.1.8",
+            "concurrent-ruby@1.3.3",
+            "connection_pool@2.4.1",
+            "drb@2.2.1",
+            "i18n@1.14.5",
+            "minitest@5.24.1",
+            "mutex_m@0.2.0",
+            "tzinfo@2.0.6"
+          ],
+          "Locations": [
+            {
+              "StartLine": 8,
+              "EndLine": 8
+            }
+          ]
+        },
+        {
+          "ID": "addressable@2.8.7",
+          "Name": "addressable",
+          "Identifier": {
+            "PURL": "pkg:gem/addressable@2.8.7",
+            "UID": "6a7cfb33595a6aae"
+          },
+          "Version": "2.8.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "public_suffix@4.0.7"
+          ],
+          "Locations": [
+            {
+              "StartLine": 18,
+              "EndLine": 18
+            }
+          ]
+        },
+        {
+          "ID": "algoliasearch@1.27.5",
+          "Name": "algoliasearch",
+          "Identifier": {
+            "PURL": "pkg:gem/algoliasearch@1.27.5",
+            "UID": "ba6b81cdba96465b"
+          },
+          "Version": "1.27.5",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "httpclient@2.8.3",
+            "json@2.7.2"
+          ],
+          "Locations": [
+            {
+              "StartLine": 20,
+              "EndLine": 20
+            }
+          ]
+        },
+        {
+          "ID": "atomos@0.1.3",
+          "Name": "atomos",
+          "Identifier": {
+            "PURL": "pkg:gem/atomos@0.1.3",
+            "UID": "a140cb79f3825cc3"
+          },
+          "Version": "0.1.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 23,
+              "EndLine": 23
+            }
+          ]
+        },
+        {
+          "ID": "base64@0.2.0",
+          "Name": "base64",
+          "Identifier": {
+            "PURL": "pkg:gem/base64@0.2.0",
+            "UID": "bfe0bc282101e33"
+          },
+          "Version": "0.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 24,
+              "EndLine": 24
+            }
+          ]
+        },
+        {
+          "ID": "bigdecimal@3.1.8",
+          "Name": "bigdecimal",
+          "Identifier": {
+            "PURL": "pkg:gem/bigdecimal@3.1.8",
+            "UID": "2ed338073231225a"
+          },
+          "Version": "3.1.8",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 25,
+              "EndLine": 25
+            }
+          ]
+        },
+        {
+          "ID": "claide@1.1.0",
+          "Name": "claide",
+          "Identifier": {
+            "PURL": "pkg:gem/claide@1.1.0",
+            "UID": "a6c663750cbf9cfb"
+          },
+          "Version": "1.1.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 26,
+              "EndLine": 26
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-core@1.15.2",
+          "Name": "cocoapods-core",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-core@1.15.2",
+            "UID": "6218d764171e35ce"
+          },
+          "Version": "1.15.2",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "activesupport@7.1.3.4",
+            "addressable@2.8.7",
+            "algoliasearch@1.27.5",
+            "concurrent-ruby@1.3.3",
+            "fuzzy_match@2.0.4",
+            "nap@1.1.0",
+            "netrc@0.11.0",
+            "public_suffix@4.0.7",
+            "typhoeus@1.4.1"
+          ],
+          "Locations": [
+            {
+              "StartLine": 45,
+              "EndLine": 45
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-deintegrate@1.0.5",
+          "Name": "cocoapods-deintegrate",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-deintegrate@1.0.5",
+            "UID": "eeb903164afcdb81"
+          },
+          "Version": "1.0.5",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 55,
+              "EndLine": 55
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-downloader@2.1",
+          "Name": "cocoapods-downloader",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-downloader@2.1",
+            "UID": "e40d72e7e7343086"
+          },
+          "Version": "2.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 56,
+              "EndLine": 56
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-plugins@1.0.0",
+          "Name": "cocoapods-plugins",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-plugins@1.0.0",
+            "UID": "f296a66763a292d9"
+          },
+          "Version": "1.0.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "nap@1.1.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 57,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-search@1.0.1",
+          "Name": "cocoapods-search",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-search@1.0.1",
+            "UID": "768e468ea1e46806"
+          },
+          "Version": "1.0.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 59,
+              "EndLine": 59
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-trunk@1.6.0",
+          "Name": "cocoapods-trunk",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-trunk@1.6.0",
+            "UID": "270caa2320116cd8"
+          },
+          "Version": "1.6.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "nap@1.1.0",
+            "netrc@0.11.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 60,
+              "EndLine": 60
+            }
+          ]
+        },
+        {
+          "ID": "cocoapods-try@1.2.0",
+          "Name": "cocoapods-try",
+          "Identifier": {
+            "PURL": "pkg:gem/cocoapods-try@1.2.0",
+            "UID": "9b243e5811870ce0"
+          },
+          "Version": "1.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 63,
+              "EndLine": 63
+            }
+          ]
+        },
+        {
+          "ID": "colored2@3.1.2",
+          "Name": "colored2",
+          "Identifier": {
+            "PURL": "pkg:gem/colored2@3.1.2",
+            "UID": "cf0f6ca1d9a770a1"
+          },
+          "Version": "3.1.2",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 64,
+              "EndLine": 64
+            }
+          ]
+        },
+        {
+          "ID": "concurrent-ruby@1.3.3",
+          "Name": "concurrent-ruby",
+          "Identifier": {
+            "PURL": "pkg:gem/concurrent-ruby@1.3.3",
+            "UID": "35bc42a889e667ec"
+          },
+          "Version": "1.3.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 65,
+              "EndLine": 65
+            }
+          ]
+        },
+        {
+          "ID": "connection_pool@2.4.1",
+          "Name": "connection_pool",
+          "Identifier": {
+            "PURL": "pkg:gem/connection_pool@2.4.1",
+            "UID": "c79e6609e0f1d438"
+          },
+          "Version": "2.4.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 66,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "drb@2.2.1",
+          "Name": "drb",
+          "Identifier": {
+            "PURL": "pkg:gem/drb@2.2.1",
+            "UID": "58247ab453c6e218"
+          },
+          "Version": "2.2.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 67
+            }
+          ]
+        },
+        {
+          "ID": "escape@0.0.4",
+          "Name": "escape",
+          "Identifier": {
+            "PURL": "pkg:gem/escape@0.0.4",
+            "UID": "57149d2c58d768ab"
+          },
+          "Version": "0.0.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 68,
+              "EndLine": 68
+            }
+          ]
+        },
+        {
+          "ID": "ethon@0.16.0",
+          "Name": "ethon",
+          "Identifier": {
+            "PURL": "pkg:gem/ethon@0.16.0",
+            "UID": "a3bcb0c8d6dc24cd"
+          },
+          "Version": "0.16.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "ffi@1.17.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 69,
+              "EndLine": 69
+            }
+          ]
+        },
+        {
+          "ID": "ffi@1.17.0",
+          "Name": "ffi",
+          "Identifier": {
+            "PURL": "pkg:gem/ffi@1.17.0",
+            "UID": "25fb08abf238a4c7"
+          },
+          "Version": "1.17.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 71,
+              "EndLine": 71
+            }
+          ]
+        },
+        {
+          "ID": "fourflusher@2.3.1",
+          "Name": "fourflusher",
+          "Identifier": {
+            "PURL": "pkg:gem/fourflusher@2.3.1",
+            "UID": "384b102826679909"
+          },
+          "Version": "2.3.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 72,
+              "EndLine": 72
+            }
+          ]
+        },
+        {
+          "ID": "fuzzy_match@2.0.4",
+          "Name": "fuzzy_match",
+          "Identifier": {
+            "PURL": "pkg:gem/fuzzy_match@2.0.4",
+            "UID": "761bfbfe3247d017"
+          },
+          "Version": "2.0.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 73,
+              "EndLine": 73
+            }
+          ]
+        },
+        {
+          "ID": "gh_inspector@1.1.3",
+          "Name": "gh_inspector",
+          "Identifier": {
+            "PURL": "pkg:gem/gh_inspector@1.1.3",
+            "UID": "8aa3322df221ee44"
+          },
+          "Version": "1.1.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 74,
+              "EndLine": 74
+            }
+          ]
+        },
+        {
+          "ID": "httpclient@2.8.3",
+          "Name": "httpclient",
+          "Identifier": {
+            "PURL": "pkg:gem/httpclient@2.8.3",
+            "UID": "59dfe1910eb33d65"
+          },
+          "Version": "2.8.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 75,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "i18n@1.14.5",
+          "Name": "i18n",
+          "Identifier": {
+            "PURL": "pkg:gem/i18n@1.14.5",
+            "UID": "9a41c299b286d654"
+          },
+          "Version": "1.14.5",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "concurrent-ruby@1.3.3"
+          ],
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 76
+            }
+          ]
+        },
+        {
+          "ID": "json@2.7.2",
+          "Name": "json",
+          "Identifier": {
+            "PURL": "pkg:gem/json@2.7.2",
+            "UID": "8c0a421a2d724d9e"
+          },
+          "Version": "2.7.2",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 88,
+              "EndLine": 88
+            }
+          ]
+        },
+        {
+          "ID": "liferaft@0.0.6",
+          "Name": "liferaft",
+          "Identifier": {
+            "PURL": "pkg:gem/liferaft@0.0.6",
+            "UID": "f5b1f73ac618838c"
+          },
+          "Version": "0.0.6",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 89,
+              "EndLine": 89
+            }
+          ]
+        },
+        {
+          "ID": "mini_portile2@2.8.7",
+          "Name": "mini_portile2",
+          "Identifier": {
+            "PURL": "pkg:gem/mini_portile2@2.8.7",
+            "UID": "2e007d41c21106cd"
+          },
+          "Version": "2.8.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 90,
+              "EndLine": 90
+            }
+          ]
+        },
+        {
+          "ID": "minitest@5.24.1",
+          "Name": "minitest",
+          "Identifier": {
+            "PURL": "pkg:gem/minitest@5.24.1",
+            "UID": "b6bb43a5773d7313"
+          },
+          "Version": "5.24.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 91,
+              "EndLine": 91
+            }
+          ]
+        },
+        {
+          "ID": "molinillo@0.8.0",
+          "Name": "molinillo",
+          "Identifier": {
+            "PURL": "pkg:gem/molinillo@0.8.0",
+            "UID": "2d4c144d951ee006"
+          },
+          "Version": "0.8.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 92,
+              "EndLine": 92
+            }
+          ]
+        },
+        {
+          "ID": "mustache@1.1.1",
+          "Name": "mustache",
+          "Identifier": {
+            "PURL": "pkg:gem/mustache@1.1.1",
+            "UID": "d1b6ecf50d4909e8"
+          },
+          "Version": "1.1.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 93,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "mutex_m@0.2.0",
+          "Name": "mutex_m",
+          "Identifier": {
+            "PURL": "pkg:gem/mutex_m@0.2.0",
+            "UID": "3bfc60d1421b2e83"
+          },
+          "Version": "0.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 94
+            }
+          ]
+        },
+        {
+          "ID": "nanaimo@0.3.0",
+          "Name": "nanaimo",
+          "Identifier": {
+            "PURL": "pkg:gem/nanaimo@0.3.0",
+            "UID": "8aa9045ed75341b4"
+          },
+          "Version": "0.3.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 95,
+              "EndLine": 95
+            }
+          ]
+        },
+        {
+          "ID": "nap@1.1.0",
+          "Name": "nap",
+          "Identifier": {
+            "PURL": "pkg:gem/nap@1.1.0",
+            "UID": "8998628b72410e79"
+          },
+          "Version": "1.1.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 96,
+              "EndLine": 96
+            }
+          ]
+        },
+        {
+          "ID": "netrc@0.11.0",
+          "Name": "netrc",
+          "Identifier": {
+            "PURL": "pkg:gem/netrc@0.11.0",
+            "UID": "2cbc094bfb384e34"
+          },
+          "Version": "0.11.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 97,
+              "EndLine": 97
+            }
+          ]
+        },
+        {
+          "ID": "nkf@0.2.0",
+          "Name": "nkf",
+          "Identifier": {
+            "PURL": "pkg:gem/nkf@0.2.0",
+            "UID": "d1065d9152f9b850"
+          },
+          "Version": "0.2.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 98,
+              "EndLine": 98
+            }
+          ]
+        },
+        {
+          "ID": "open4@1.3.4",
+          "Name": "open4",
+          "Identifier": {
+            "PURL": "pkg:gem/open4@1.3.4",
+            "UID": "a82780cbc1fe1e29"
+          },
+          "Version": "1.3.4",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 99,
+              "EndLine": 99
+            }
+          ]
+        },
+        {
+          "ID": "public_suffix@4.0.7",
+          "Name": "public_suffix",
+          "Identifier": {
+            "PURL": "pkg:gem/public_suffix@4.0.7",
+            "UID": "55928f7232325dd4"
+          },
+          "Version": "4.0.7",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 100,
+              "EndLine": 100
+            }
+          ]
+        },
+        {
+          "ID": "redcarpet@3.6.0",
+          "Name": "redcarpet",
+          "Identifier": {
+            "PURL": "pkg:gem/redcarpet@3.6.0",
+            "UID": "e493c786e0b56ad0"
+          },
+          "Version": "3.6.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 101,
+              "EndLine": 101
+            }
+          ]
+        },
+        {
+          "ID": "rexml@3.3.9",
+          "Name": "rexml",
+          "Identifier": {
+            "PURL": "pkg:gem/rexml@3.3.9",
+            "UID": "ce31a0d13480edf"
+          },
+          "Version": "3.3.9",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 102,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "rouge@4.3.0",
+          "Name": "rouge",
+          "Identifier": {
+            "PURL": "pkg:gem/rouge@4.3.0",
+            "UID": "371205ba014b436f"
+          },
+          "Version": "4.3.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 103
+            }
+          ]
+        },
+        {
+          "ID": "ruby-macho@2.5.1",
+          "Name": "ruby-macho",
+          "Identifier": {
+            "PURL": "pkg:gem/ruby-macho@2.5.1",
+            "UID": "d661bcdf8172cd13"
+          },
+          "Version": "2.5.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "Locations": [
+            {
+              "StartLine": 104,
+              "EndLine": 104
+            }
+          ]
+        },
+        {
+          "ID": "sassc@2.4.0",
+          "Name": "sassc",
+          "Identifier": {
+            "PURL": "pkg:gem/sassc@2.4.0",
+            "UID": "22bd52dbce6bc395"
+          },
+          "Version": "2.4.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "ffi@1.17.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 105,
+              "EndLine": 105
+            }
+          ]
+        },
+        {
+          "ID": "sqlite3@1.7.3",
+          "Name": "sqlite3",
+          "Identifier": {
+            "PURL": "pkg:gem/sqlite3@1.7.3",
+            "UID": "d9643596d2ef1776"
+          },
+          "Version": "1.7.3",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "mini_portile2@2.8.7"
+          ],
+          "Locations": [
+            {
+              "StartLine": 107,
+              "EndLine": 107
+            }
+          ]
+        },
+        {
+          "ID": "typhoeus@1.4.1",
+          "Name": "typhoeus",
+          "Identifier": {
+            "PURL": "pkg:gem/typhoeus@1.4.1",
+            "UID": "2b52458718ae4452"
+          },
+          "Version": "1.4.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "ethon@0.16.0"
+          ],
+          "Locations": [
+            {
+              "StartLine": 109,
+              "EndLine": 109
+            }
+          ]
+        },
+        {
+          "ID": "tzinfo@2.0.6",
+          "Name": "tzinfo",
+          "Identifier": {
+            "PURL": "pkg:gem/tzinfo@2.0.6",
+            "UID": "d32254ba8f4f7a47"
+          },
+          "Version": "2.0.6",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "concurrent-ruby@1.3.3"
+          ],
+          "Locations": [
+            {
+              "StartLine": 111,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "xcinvoke@0.3.0",
+          "Name": "xcinvoke",
+          "Identifier": {
+            "PURL": "pkg:gem/xcinvoke@0.3.0",
+            "UID": "d3b64ad9967eb87b"
+          },
+          "Version": "0.3.0",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "liferaft@0.0.6"
+          ],
+          "Locations": [
+            {
+              "StartLine": 113,
+              "EndLine": 113
+            }
+          ]
+        },
+        {
+          "ID": "xcodeproj@1.25.1",
+          "Name": "xcodeproj",
+          "Identifier": {
+            "PURL": "pkg:gem/xcodeproj@1.25.1",
+            "UID": "55ba924505ac6688"
+          },
+          "Version": "1.25.1",
+          "Indirect": true,
+          "Relationship": "indirect",
+          "DependsOn": [
+            "CFPropertyList@3.0.7",
+            "atomos@0.1.3",
+            "claide@1.1.0",
+            "colored2@3.1.2",
+            "nanaimo@0.3.0",
+            "rexml@3.3.9"
+          ],
+          "Locations": [
+            {
+              "StartLine": 115,
+              "EndLine": 115
+            }
+          ]
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-33169",
+          "PkgID": "activesupport@7.1.3.4",
+          "PkgName": "activesupport",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "c059b3d375310ac3"
+          },
+          "InstalledVersion": "7.1.3.4",
+          "FixedVersion": "8.1.2.1, 8.0.4.1, 7.2.3.1",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33169",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "rails: rails-activesupport: Active Support: Denial of Service via crafted long digit strings",
+          "Description": "Active Support is a toolkit of support libraries and Ruby core extensions extracted from the Rails framework. `NumberToDelimitedConverter` uses a lookahead-based regular expression with `gsub!` to insert thousands delimiters. Prior to versions 8.1.2.1, 8.0.4.1, and 7.2.3.1, the interaction between the repeated lookahead group and `gsub!` can produce quadratic time complexity on long digit strings. Versions 8.1.2.1, 8.0.4.1, and 7.2.3.1 contain a patch.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400",
+            "CWE-1333"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 2,
+            "photon": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+              "V40Score": 6.9
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33169",
+            "https://github.com/rails/rails",
+            "https://github.com/rails/rails/commit/29154f1097da13d48fdb3200760b3e3da66dcb11",
+            "https://github.com/rails/rails/commit/b54a4b373c6f042cab6ee2033246b1c9ecc38974",
+            "https://github.com/rails/rails/commit/ec1a0e215efd27a3b3911aae6df978a80f456a49",
+            "https://github.com/rails/rails/releases/tag/v7.2.3.1",
+            "https://github.com/rails/rails/releases/tag/v8.0.4.1",
+            "https://github.com/rails/rails/releases/tag/v8.1.2.1",
+            "https://github.com/rails/rails/security/advisories/GHSA-cg4j-q9v8-6v38",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33169",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33169"
+          ],
+          "PublishedDate": "2026-03-24T00:16:28.113Z",
+          "LastModifiedDate": "2026-03-24T18:01:08.873Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33170",
+          "PkgID": "activesupport@7.1.3.4",
+          "PkgName": "activesupport",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "c059b3d375310ac3"
+          },
+          "InstalledVersion": "7.1.3.4",
+          "FixedVersion": "8.1.2.1, 8.0.4.1, 7.2.3.1",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33170",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "Rails: Active Support: Active Support: Cross-Site Scripting (XSS) due to improper HTML safety flag propagation in SafeBuffer#%",
+          "Description": "Active Support is a toolkit of support libraries and Ruby core extensions extracted from the Rails framework. Prior to versions 8.1.2.1, 8.0.4.1, and 7.2.3.1, `SafeBuffer#%` does not propagate the `@html_unsafe` flag to the newly created buffer. If a `SafeBuffer` is mutated in place (e.g. via `gsub!`) and then formatted with `%` using untrusted arguments, the result incorrectly reports `html_safe? == true`, bypassing ERB auto-escaping and possibly leading to XSS. Versions 8.1.2.1, 8.0.4.1, and 7.2.3.1 contain a patch.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-79"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 2,
+            "photon": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N",
+              "V40Score": 5.3
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+              "V3Score": 5.4
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33170",
+            "https://github.com/rails/rails",
+            "https://github.com/rails/rails/commit/50d732af3b7c8aaf63cbcca0becbc00279b215b7",
+            "https://github.com/rails/rails/commit/6e8a81108001d58043de9e54a06fca58962fc2db",
+            "https://github.com/rails/rails/commit/c1ad0e8e1972032f3395853a5e99cea035035beb",
+            "https://github.com/rails/rails/releases/tag/v7.2.3.1",
+            "https://github.com/rails/rails/releases/tag/v8.0.4.1",
+            "https://github.com/rails/rails/releases/tag/v8.1.2.1",
+            "https://github.com/rails/rails/security/advisories/GHSA-89vf-4333-qx8v",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33170",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33170"
+          ],
+          "PublishedDate": "2026-03-24T00:16:28.287Z",
+          "LastModifiedDate": "2026-03-24T18:00:00.08Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33176",
+          "PkgID": "activesupport@7.1.3.4",
+          "PkgName": "activesupport",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/activesupport@7.1.3.4",
+            "UID": "c059b3d375310ac3"
+          },
+          "InstalledVersion": "7.1.3.4",
+          "FixedVersion": "8.1.2.1, 8.0.4.1, 7.2.3.1",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33176",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "Rails: Active Support: Active Support: Denial of Service via large scientific notation strings",
+          "Description": "Active Support is a toolkit of support libraries and Ruby core extensions extracted from the Rails framework. Prior to versions 8.1.2.1, 8.0.4.1, and 7.2.3.1, Active Support number helpers accept strings containing scientific notation (e.g. `1e10000`), which `BigDecimal` expands into extremely large decimal representations. This can cause excessive memory allocation and CPU consumption when the expanded number is formatted, possibly resulting in a DoS vulnerability. Versions 8.1.2.1, 8.0.4.1, and 7.2.3.1 contain a patch.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 3,
+            "photon": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:U",
+              "V40Score": 6.6
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33176",
+            "https://github.com/rails/rails",
+            "https://github.com/rails/rails/commit/19dbab51ca086a657bb86458042bc44314916bcb",
+            "https://github.com/rails/rails/commit/ebd6be18120d1136511eb516338e27af25ac0a1a",
+            "https://github.com/rails/rails/commit/ee2c59e730e5b8faed502cd2c573109df093f856",
+            "https://github.com/rails/rails/releases/tag/v7.2.3.1",
+            "https://github.com/rails/rails/releases/tag/v8.0.4.1",
+            "https://github.com/rails/rails/releases/tag/v8.1.2.1",
+            "https://github.com/rails/rails/security/advisories/GHSA-2j26-frm8-cmj9",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33176",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33176"
+          ],
+          "PublishedDate": "2026-03-24T00:16:28.807Z",
+          "LastModifiedDate": "2026-03-24T17:55:27.437Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-35611",
+          "PkgID": "addressable@2.8.7",
+          "PkgName": "addressable",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/addressable@2.8.7",
+            "UID": "6a7cfb33595a6aae"
+          },
+          "InstalledVersion": "2.8.7",
+          "FixedVersion": "2.9.0",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-35611",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory RubyGems",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arubygems"
+          },
+          "Title": "addressable: Addressable: Denial of Service via crafted URI templates",
+          "Description": "Addressable is an alternative implementation to the URI implementation that is part of Ruby's standard library. From 2.3.0 to before 2.9.0, within the URI template implementation in Addressable, two classes of URI template generate regular expressions vulnerable to catastrophic backtracking. Templates using the * (explode) modifier with any expansion operator (e.g., {foo*}, {+var*}, {#var*}, {/var*}, {.var*}, {;var*}, {?var*}, {\u0026var*}) generate patterns with nested unbounded quantifiers that are O(2^n) when matched against a maliciously crafted URI. Templates using multiple variables with the + or # operators (e.g., {+v1,v2,v3}) generate patterns with O(n^k) complexity due to the comma separator being within the matched character class, causing ambiguous backtracking across k variables. When matched against a maliciously crafted URI, this can result in catastrophic backtracking and uncontrolled resource consumption, leading to denial of service. This vulnerability is fixed in 2.9.0.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-1333"
+          ],
+          "VendorSeverity": {
+            "azure": 3,
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-35611",
+            "https://github.com/sporkmonger/addressable",
+            "https://github.com/sporkmonger/addressable/security/advisories/GHSA-h27x-rffw-24p4",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-35611",
+            "https://www.cve.org/CVERecord?id=CVE-2026-35611"
+          ],
+          "PublishedDate": "2026-04-07T17:16:35.427Z",
+          "LastModifiedDate": "2026-04-15T17:20:27.607Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-58767",
+          "PkgID": "rexml@3.3.9",
+          "PkgName": "rexml",
+          "PkgIdentifier": {
+            "PURL": "pkg:gem/rexml@3.3.9",
+            "UID": "ce31a0d13480edf"
+          },
+          "InstalledVersion": "3.3.9",
+          "FixedVersion": "\u003e= 3.4.2",
+          "Status": "fixed",
+          "SeveritySource": "nvd",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-58767",
+          "DataSource": {
+            "ID": "ruby-advisory-db",
+            "Name": "Ruby Advisory Database",
+            "URL": "https://github.com/rubysec/ruby-advisory-db"
+          },
+          "Title": "rexml: REXML denial of service",
+          "Description": "REXML is an XML toolkit for Ruby. The REXML gems from 3.3.3 to 3.4.1 has a DoS vulnerability when parsing XML containing multiple XML declarations. If you need to parse untrusted XMLs, you may be impacted to these vulnerabilities. The REXML gem 3.4.2 or later include the patches to fix these vulnerabilities.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "alma": 2,
+            "amazon": 1,
+            "azure": 1,
+            "ghsa": 1,
+            "nvd": 2,
+            "oracle-oval": 2,
+            "photon": 2,
+            "redhat": 2,
+            "rocky": 2,
+            "ubuntu": 1
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N/E:U",
+              "V40Score": 1.2
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/errata/RHSA-2025:23063",
+            "https://access.redhat.com/security/cve/CVE-2025-58767",
+            "https://bugzilla.redhat.com/2379684",
+            "https://bugzilla.redhat.com/2396186",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2379684",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2396186",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2426336",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-24294",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-58767",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-61594",
+            "https://errata.almalinux.org/9/ALSA-2025-23063.html",
+            "https://errata.rockylinux.org/RLSA-2025:23063",
+            "https://github.com/advisories/GHSA-c2f4-jgmc-q2r5",
+            "https://github.com/ruby/rexml",
+            "https://github.com/ruby/rexml/commit/5859bdeac792687eaf93d8e8f0b7e3c1e2ed5c23",
+            "https://github.com/ruby/rexml/security/advisories/GHSA-c2f4-jgmc-q2r5",
+            "https://github.com/rubysec/ruby-advisory-db/blob/master/gems/rexml/CVE-2025-58767.yml",
+            "https://linux.oracle.com/cve/CVE-2025-58767.html",
+            "https://linux.oracle.com/errata/ELSA-2025-23141.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-58767",
+            "https://www.cve.org/CVERecord?id=CVE-2025-58767",
+            "https://www.ruby-lang.org/en/news/2025/09/18/dos-rexml-cve-2025-58767",
+            "https://www.ruby-lang.org/en/news/2025/09/18/dos-rexml-cve-2025-58767/"
+          ],
+          "PublishedDate": "2025-09-17T18:15:52.857Z",
+          "LastModifiedDate": "2025-09-30T13:07:07.207Z"
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/mlx-swift/Source/Cmlx/mlx/examples/extensions/requirements.txt",
+      "Class": "lang-pkgs",
+      "Type": "pip",
+      "Packages": [
+        {
+          "Name": "nanobind",
+          "Identifier": {
+            "PURL": "pkg:pypi/nanobind@2.10.2",
+            "UID": "59b56efe7fb4a2e4"
+          },
+          "Version": "2.10.2",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/swift-collections/Benchmarks/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-argument-parser@1.6.2",
+          "Name": "github.com/apple/swift-argument-parser",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-argument-parser@1.6.2",
+            "UID": "31291104a462d80a"
+          },
+          "Version": "1.6.2",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections-benchmark@0.0.4",
+          "Name": "github.com/apple/swift-collections-benchmark",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections-benchmark@0.0.4",
+            "UID": "dc2ab47855e1dda1"
+          },
+          "Version": "0.0.4",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.4.2",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.4.2",
+            "UID": "4bed85d36d561eca"
+          },
+          "Version": "1.4.2",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/swift-collections/Utils/swift-collections.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-argument-parser@1.5.0",
+          "Name": "github.com/apple/swift-argument-parser",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-argument-parser@1.5.0",
+            "UID": "63a902f947974456"
+          },
+          "Version": "1.5.0",
+          "Locations": [
+            {
+              "StartLine": 3,
+              "EndLine": 11
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.4.2",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.4.2",
+            "UID": "4bb9552386224e32"
+          },
+          "Version": "1.4.2",
+          "Locations": [
+            {
+              "StartLine": 12,
+              "EndLine": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/swift-huggingface/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-algorithms@1.2.1",
+          "Name": "github.com/apple/swift-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-algorithms@1.2.1",
+            "UID": "e19444262b93a8b6"
+          },
+          "Version": "1.2.1",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-asn1@1.5.1",
+          "Name": "github.com/apple/swift-asn1",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-asn1@1.5.1",
+            "UID": "9015ca816c29f54d"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 31,
+              "EndLine": 39
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-async-algorithms@1.1.3",
+          "Name": "github.com/apple/swift-async-algorithms",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-async-algorithms@1.1.3",
+            "UID": "84a6711f49d9e46c"
+          },
+          "Version": "1.1.3",
+          "Locations": [
+            {
+              "StartLine": 40,
+              "EndLine": 48
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-atomics@1.3.0",
+          "Name": "github.com/apple/swift-atomics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-atomics@1.3.0",
+            "UID": "40f8b9a8f999f857"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 49,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-certificates@1.18.0",
+          "Name": "github.com/apple/swift-certificates",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-certificates@1.18.0",
+            "UID": "ae0c2a1b158fefc5"
+          },
+          "Version": "1.18.0",
+          "Locations": [
+            {
+              "StartLine": 58,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections@1.4.0",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.4.0",
+            "UID": "87d9bec5a2b5994b"
+          },
+          "Version": "1.4.0",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-configuration@1.2.0",
+          "Name": "github.com/apple/swift-configuration",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-configuration@1.2.0",
+            "UID": "edbeb311601c2079"
+          },
+          "Version": "1.2.0",
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 84
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-crypto@4.2.0",
+          "Name": "github.com/apple/swift-crypto",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-crypto@4.2.0",
+            "UID": "76d7ca83c2350c6b"
+          },
+          "Version": "4.2.0",
+          "Locations": [
+            {
+              "StartLine": 85,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-distributed-tracing@1.4.1",
+          "Name": "github.com/apple/swift-distributed-tracing",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-distributed-tracing@1.4.1",
+            "UID": "5d5c292ac66b5b0b"
+          },
+          "Version": "1.4.1",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-structured-headers@1.6.0",
+          "Name": "github.com/apple/swift-http-structured-headers",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-structured-headers@1.6.0",
+            "UID": "355ce74fb12766de"
+          },
+          "Version": "1.6.0",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-http-types@1.5.1",
+          "Name": "github.com/apple/swift-http-types",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-http-types@1.5.1",
+            "UID": "35d162330644a397"
+          },
+          "Version": "1.5.1",
+          "Locations": [
+            {
+              "StartLine": 112,
+              "EndLine": 120
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-log@1.10.1",
+          "Name": "github.com/apple/swift-log",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-log@1.10.1",
+            "UID": "3969df898f02b7cf"
+          },
+          "Version": "1.10.1",
+          "Locations": [
+            {
+              "StartLine": 121,
+              "EndLine": 129
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio@2.96.0",
+          "Name": "github.com/apple/swift-nio",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio@2.96.0",
+            "UID": "b80c96f0b31f7630"
+          },
+          "Version": "2.96.0",
+          "Locations": [
+            {
+              "StartLine": 130,
+              "EndLine": 138
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-extras@1.32.1",
+          "Name": "github.com/apple/swift-nio-extras",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-extras@1.32.1",
+            "UID": "851aca05321075bb"
+          },
+          "Version": "1.32.1",
+          "Locations": [
+            {
+              "StartLine": 139,
+              "EndLine": 147
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-http2@1.40.0",
+          "Name": "github.com/apple/swift-nio-http2",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-http2@1.40.0",
+            "UID": "ccec4fc951277ad7"
+          },
+          "Version": "1.40.0",
+          "Locations": [
+            {
+              "StartLine": 148,
+              "EndLine": 156
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-ssl@2.36.0",
+          "Name": "github.com/apple/swift-nio-ssl",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-ssl@2.36.0",
+            "UID": "ca051317ac45f8f7"
+          },
+          "Version": "2.36.0",
+          "Locations": [
+            {
+              "StartLine": 157,
+              "EndLine": 165
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio-transport-services@1.26.0",
+          "Name": "github.com/apple/swift-nio-transport-services",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio-transport-services@1.26.0",
+            "UID": "cb8579f431eaae85"
+          },
+          "Version": "1.26.0",
+          "Locations": [
+            {
+              "StartLine": 166,
+              "EndLine": 174
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-numerics@1.1.1",
+          "Name": "github.com/apple/swift-numerics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-numerics@1.1.1",
+            "UID": "83b484062ebeb019"
+          },
+          "Version": "1.1.1",
+          "Locations": [
+            {
+              "StartLine": 175,
+              "EndLine": 183
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-service-context@1.3.0",
+          "Name": "github.com/apple/swift-service-context",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-service-context@1.3.0",
+            "UID": "8f1b5f0d46babe9f"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 184,
+              "EndLine": 192
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.6.4",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.6.4",
+            "UID": "8449f052de16cc65"
+          },
+          "Version": "1.6.4",
+          "Locations": [
+            {
+              "StartLine": 202,
+              "EndLine": 210
+            }
+          ]
+        },
+        {
+          "ID": "github.com/huggingface/swift-xet@0.2.3",
+          "Name": "github.com/huggingface/swift-xet",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/huggingface/swift-xet@0.2.3",
+            "UID": "dccd85be3711b4b6"
+          },
+          "Version": "0.2.3",
+          "Locations": [
+            {
+              "StartLine": 211,
+              "EndLine": 219
+            }
+          ]
+        },
+        {
+          "ID": "github.com/mattt/EventSource@1.4.1",
+          "Name": "github.com/mattt/EventSource",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/mattt/EventSource@1.4.1",
+            "UID": "df0e5a98193cd193"
+          },
+          "Version": "1.4.1",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/async-http-client@1.32.0",
+          "Name": "github.com/swift-server/async-http-client",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/async-http-client@1.32.0",
+            "UID": "c4e8602c95484829"
+          },
+          "Version": "1.32.0",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swift-server/swift-service-lifecycle@2.10.1",
+          "Name": "github.com/swift-server/swift-service-lifecycle",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swift-server/swift-service-lifecycle@2.10.1",
+            "UID": "3a30d215b527653d"
+          },
+          "Version": "2.10.1",
+          "Locations": [
+            {
+              "StartLine": 193,
+              "EndLine": 201
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": ".build/index-build/checkouts/swift-jinja/Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-collections@1.1.4",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.1.4",
+            "UID": "6d0c7f784c4e3cdf"
+          },
+          "Version": "1.1.4",
+          "Locations": [
+            {
+              "StartLine": 3,
+              "EndLine": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Target": "Package.resolved",
+      "Class": "lang-pkgs",
+      "Type": "swift",
+      "Packages": [
+        {
+          "ID": "github.com/apple/swift-asn1@1.7.0",
+          "Name": "github.com/apple/swift-asn1",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-asn1@1.7.0",
+            "UID": "38968c28ab54b4a9"
+          },
+          "Version": "1.7.0",
+          "Locations": [
+            {
+              "StartLine": 40,
+              "EndLine": 48
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-atomics@1.3.0",
+          "Name": "github.com/apple/swift-atomics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-atomics@1.3.0",
+            "UID": "f4c030cefe09c672"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 49,
+              "EndLine": 57
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-collections@1.4.1",
+          "Name": "github.com/apple/swift-collections",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-collections@1.4.1",
+            "UID": "49b09204e108f0c1"
+          },
+          "Version": "1.4.1",
+          "Locations": [
+            {
+              "StartLine": 58,
+              "EndLine": 66
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-crypto@4.4.0",
+          "Name": "github.com/apple/swift-crypto",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-crypto@4.4.0",
+            "UID": "17d262a4b451226b"
+          },
+          "Version": "4.4.0",
+          "Locations": [
+            {
+              "StartLine": 67,
+              "EndLine": 75
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-nio@2.98.0",
+          "Name": "github.com/apple/swift-nio",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-nio@2.98.0",
+            "UID": "581c923060fc555"
+          },
+          "Version": "2.98.0",
+          "Locations": [
+            {
+              "StartLine": 94,
+              "EndLine": 102
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-numerics@1.1.1",
+          "Name": "github.com/apple/swift-numerics",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-numerics@1.1.1",
+            "UID": "3464da0a009b8471"
+          },
+          "Version": "1.1.1",
+          "Locations": [
+            {
+              "StartLine": 103,
+              "EndLine": 111
+            }
+          ]
+        },
+        {
+          "ID": "github.com/apple/swift-system@1.6.4",
+          "Name": "github.com/apple/swift-system",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/apple/swift-system@1.6.4",
+            "UID": "ac21e8312e7fd03a"
+          },
+          "Version": "1.6.4",
+          "Locations": [
+            {
+              "StartLine": 121,
+              "EndLine": 129
+            }
+          ]
+        },
+        {
+          "ID": "github.com/huggingface/swift-huggingface@0.9.0",
+          "Name": "github.com/huggingface/swift-huggingface",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/huggingface/swift-huggingface@0.9.0",
+            "UID": "e94f5c34d88f255a"
+          },
+          "Version": "0.9.0",
+          "Locations": [
+            {
+              "StartLine": 76,
+              "EndLine": 84
+            }
+          ]
+        },
+        {
+          "ID": "github.com/huggingface/swift-jinja@2.3.5",
+          "Name": "github.com/huggingface/swift-jinja",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/huggingface/swift-jinja@2.3.5",
+            "UID": "bad110fab1f2bb98"
+          },
+          "Version": "2.3.5",
+          "Locations": [
+            {
+              "StartLine": 85,
+              "EndLine": 93
+            }
+          ]
+        },
+        {
+          "ID": "github.com/huggingface/swift-transformers@1.3.0",
+          "Name": "github.com/huggingface/swift-transformers",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/huggingface/swift-transformers@1.3.0",
+            "UID": "aaadb2465d3b7dc7"
+          },
+          "Version": "1.3.0",
+          "Locations": [
+            {
+              "StartLine": 130,
+              "EndLine": 138
+            }
+          ]
+        },
+        {
+          "ID": "github.com/ibireme/yyjson@0.12.0",
+          "Name": "github.com/ibireme/yyjson",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/ibireme/yyjson@0.12.0",
+            "UID": "6b5396bdd048a554"
+          },
+          "Version": "0.12.0",
+          "Locations": [
+            {
+              "StartLine": 148,
+              "EndLine": 156
+            }
+          ]
+        },
+        {
+          "ID": "github.com/jpsim/Yams@5.4.0",
+          "Name": "github.com/jpsim/Yams",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/jpsim/Yams@5.4.0",
+            "UID": "f2e3870a082e8336"
+          },
+          "Version": "5.4.0",
+          "Locations": [
+            {
+              "StartLine": 139,
+              "EndLine": 147
+            }
+          ]
+        },
+        {
+          "ID": "github.com/mattt/EventSource@1.4.1",
+          "Name": "github.com/mattt/EventSource",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/mattt/EventSource@1.4.1",
+            "UID": "9d39d58206d9ad20"
+          },
+          "Version": "1.4.1",
+          "Locations": [
+            {
+              "StartLine": 4,
+              "EndLine": 12
+            }
+          ]
+        },
+        {
+          "ID": "github.com/ml-explore/mlx-swift@0.31.3",
+          "Name": "github.com/ml-explore/mlx-swift",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/ml-explore/mlx-swift@0.31.3",
+            "UID": "2cfaf878b5feb6e0"
+          },
+          "Version": "0.31.3",
+          "Locations": [
+            {
+              "StartLine": 13,
+              "EndLine": 21
+            }
+          ]
+        },
+        {
+          "ID": "github.com/ml-explore/mlx-swift-lm@3.31.3",
+          "Name": "github.com/ml-explore/mlx-swift-lm",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/ml-explore/mlx-swift-lm@3.31.3",
+            "UID": "46cd6153f344885d"
+          },
+          "Version": "3.31.3",
+          "Locations": [
+            {
+              "StartLine": 22,
+              "EndLine": 30
+            }
+          ]
+        },
+        {
+          "ID": "github.com/sparkle-project/Sparkle@2.9.1",
+          "Name": "github.com/sparkle-project/Sparkle",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/sparkle-project/Sparkle@2.9.1",
+            "UID": "e257d49e0de8ec26"
+          },
+          "Version": "2.9.1",
+          "Locations": [
+            {
+              "StartLine": 31,
+              "EndLine": 39
+            }
+          ]
+        },
+        {
+          "ID": "github.com/swiftlang/swift-syntax@600.0.1",
+          "Name": "github.com/swiftlang/swift-syntax",
+          "Identifier": {
+            "PURL": "pkg:swift/github.com/swiftlang/swift-syntax@600.0.1",
+            "UID": "1e69c19e5d117b29"
+          },
+          "Version": "600.0.1",
+          "Locations": [
+            {
+              "StartLine": 112,
+              "EndLine": 120
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
