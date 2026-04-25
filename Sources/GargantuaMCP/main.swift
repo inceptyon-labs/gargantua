@@ -362,35 +362,13 @@ private func parseRuntimeOptions() -> MCPRuntimeOptions {
         case "--both":
             options.transportMode = .both
         case "--transport":
-            guard let value = iterator.next(),
-                  let mode = MCPRuntimeTransportMode(rawValue: value.lowercased())
-            else {
-                stderrLog("invalid --transport value; expected stdio, sse, or both")
-                exit(64)
-            }
-            options.transportMode = mode
+            options.transportMode = parseTransportArgument(iterator.next())
         case "--port":
-            guard let value = iterator.next(), let port = Int(value) else {
-                stderrLog("invalid --port value")
-                exit(64)
-            }
-            options.ssePort = port
+            options.ssePort = parsePortArgument(iterator.next())
         case "--bind":
-            guard let value = iterator.next(),
-                  let scope = MCPServerBindScope(rawValue: value.lowercased())
-            else {
-                stderrLog("invalid --bind value; expected localhost or lan")
-                exit(64)
-            }
-            options.bindScope = scope
+            options.bindScope = parseBindArgument(iterator.next())
         case "--token":
-            guard let value = iterator.next(),
-                  MCPBearerTokenValidator.isPlausible(value)
-            else {
-                stderrLog("invalid --token value")
-                exit(64)
-            }
-            options.bearerToken = MCPBearerTokenValidator.normalized(value)
+            options.bearerToken = parseTokenArgument(iterator.next())
         case "--help", "-h":
             printRuntimeHelp()
             exit(0)
@@ -401,6 +379,42 @@ private func parseRuntimeOptions() -> MCPRuntimeOptions {
         }
     }
     return options
+}
+
+private func parseTransportArgument(_ value: String?) -> MCPRuntimeTransportMode {
+    guard let value,
+          let mode = MCPRuntimeTransportMode(rawValue: value.lowercased())
+    else {
+        stderrLog("invalid --transport value; expected stdio, sse, or both")
+        exit(64)
+    }
+    return mode
+}
+
+private func parsePortArgument(_ value: String?) -> Int {
+    guard let value, let port = Int(value) else {
+        stderrLog("invalid --port value")
+        exit(64)
+    }
+    return port
+}
+
+private func parseBindArgument(_ value: String?) -> MCPServerBindScope {
+    guard let value,
+          let scope = MCPServerBindScope(rawValue: value.lowercased())
+    else {
+        stderrLog("invalid --bind value; expected localhost or lan")
+        exit(64)
+    }
+    return scope
+}
+
+private func parseTokenArgument(_ value: String?) -> String {
+    guard let value, MCPBearerTokenValidator.isPlausible(value) else {
+        stderrLog("invalid --token value")
+        exit(64)
+    }
+    return MCPBearerTokenValidator.normalized(value)
 }
 
 private func printRuntimeHelp() {
