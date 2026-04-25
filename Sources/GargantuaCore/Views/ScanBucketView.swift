@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 // MARK: - Summary Bar
@@ -187,8 +186,12 @@ public struct ScanBucketListView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(groups) { group in
-                            groupSection(group)
+                        if groups.isEmpty {
+                            ScanBucketEmptyView(isFiltered: activeFilter != nil)
+                        } else {
+                            ForEach(groups) { group in
+                                groupSection(group)
+                            }
                         }
                     }
                 }
@@ -589,119 +592,16 @@ public struct ScanBucketListView: View {
     }
 
     private func itemRow(_ item: ScanResult) -> some View {
-        let selected = selectedIDs.contains(item.id)
-        return Group {
-            if item.safety == .protected_ {
-                protectedRow(item)
-                    .contextMenu { scanItemContextMenu(item) }
-            } else {
-                // Branch on selection so SwiftUI sees two different structural
-                // paths and cannot reuse a stale DenseScanItemRow whose isSelected
-                // field it treated as unchanged. Forces a fresh render on flip.
-                if selected {
-                    DenseScanItemRow(
-                        item: item,
-                        isSelected: true,
-                        isFocused: focusedItemID == item.id,
-                        onToggleSelection: { toggleSelection(item.id) },
-                        onExplain: onExplain.map { handler in { handler(item) } }
-                    )
-                    .contextMenu { scanItemContextMenu(item) }
-                } else {
-                    DenseScanItemRow(
-                        item: item,
-                        isSelected: false,
-                        isFocused: focusedItemID == item.id,
-                        onToggleSelection: { toggleSelection(item.id) },
-                        onExplain: onExplain.map { handler in { handler(item) } }
-                    )
-                    .contextMenu { scanItemContextMenu(item) }
-                }
-            }
-        }
-        .id(item.id)
-    }
-
-    /// Protected items: shown but dimmed, locked indicator, no checkbox.
-    private func protectedRow(_ item: ScanResult) -> some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            ConfidenceOrbit(confidence: item.confidence, safety: item.safety)
-
-            Image(systemName: "lock.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(GargantuaColors.ink4)
-                .frame(width: 16, height: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: GargantuaSpacing.space1) {
-                    Text(item.name)
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .lineLimit(1)
-
-                    if !item.explanation.isEmpty {
-                        Text(item.explanation)
-                            .font(GargantuaFonts.body)
-                            .foregroundStyle(GargantuaColors.ink4)
-                            .lineLimit(1)
-                    }
-                }
-
-                Text(item.path)
-                    .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink4)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer()
-
-            Text(AlertItem.formatBytes(item.size))
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.ink3)
-                .lineLimit(1)
-        }
-        .padding(.vertical, GargantuaSpacing.space2)
-        .padding(.horizontal, GargantuaSpacing.space3)
-        .background(GargantuaColors.protected_.opacity(0.06))
-        .overlay(
-            RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                .stroke(GargantuaColors.borderFocus, lineWidth: 2)
-                .padding(1)
-                .opacity(focusedItemID == item.id ? 1 : 0)
+        ScanResultRowView(
+            item: item,
+            isSelected: selectedIDs.contains(item.id),
+            isFocused: focusedItemID == item.id,
+            onToggleSelection: { toggleSelection(item.id) },
+            onExplain: onExplain,
+            onAddToWhitelist: onAddToWhitelist,
+            onViewRule: onViewRule
         )
-    }
-
-    // MARK: - Context Menu
-
-    @ViewBuilder
-    private func scanItemContextMenu(_ item: ScanResult) -> some View {
-        Button {
-            NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
-        } label: {
-            Label("Reveal in Finder", systemImage: "folder")
-        }
-
-        Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.path, forType: .string)
-        } label: {
-            Label("Copy Path", systemImage: "doc.on.doc")
-        }
-
-        Divider()
-
-        Button {
-            onAddToWhitelist?(item)
-        } label: {
-            Label("Add to Whitelist", systemImage: "shield.slash")
-        }
-
-        Button {
-            onViewRule?(item)
-        } label: {
-            Label("View Rule", systemImage: "doc.text.magnifyingglass")
-        }
+        .id(item.id)
     }
 
     // MARK: - Keyboard Actions
