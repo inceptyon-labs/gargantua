@@ -8,6 +8,8 @@ public struct SettingsView: View {
     let persistence: PersistenceController
 
     @AppStorage(AIEnginePreference.userDefaultsKey) private var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
+    @AppStorage(MenuBarPreferences.widgetEnabledKey) private var menuBarWidgetEnabled = MenuBarPreferences.defaultWidgetEnabled
+    @AppStorage(MenuBarPreferences.launchAtLoginEnabledKey) private var launchAtLoginEnabled = MenuBarPreferences.defaultLaunchAtLoginEnabled
 
     /// App-shared download manager. When `init(persistence:)` is used without
     /// an explicit manager, the view owns its own `@StateObject` so standalone
@@ -22,6 +24,8 @@ public struct SettingsView: View {
     @State private var availableProfiles: [CleanupProfile] = CleanupProfile.builtIn
     @State private var scheduledScanAgentStatus: ScheduledScanAgentStatus = .notRegistered
     @State private var scheduledScanError: String?
+    @State private var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
+    @State private var launchAtLoginError: String?
 
     public init(persistence: PersistenceController) {
         let manager = ModelDownloadManager()
@@ -55,6 +59,7 @@ public struct SettingsView: View {
                 CloudAISettingsSection()
                 MCPTransportSettingsSection()
                 updatesSection
+                menuBarSection
                 schedulingSection
                 ScanRootsSettingsSection(
                     settings: settings,
@@ -73,6 +78,8 @@ public struct SettingsView: View {
             availableProfiles = ((try? persistence.fetchProfiles()) ?? CleanupProfile.builtIn)
                 .filter { !$0.categories.isEmpty }
             scheduledScanAgentStatus = ScheduledScanController().status()
+            launchAtLoginStatus = LaunchAtLoginController().status()
+            launchAtLoginEnabled = launchAtLoginStatus == .enabled || launchAtLoginStatus == .requiresApproval
         }
     }
 
@@ -444,6 +451,77 @@ public struct SettingsView: View {
         }
     }
 
+    // MARK: - Menu Bar Section
+
+    private var menuBarSection: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
+            sectionHeader("Menu Bar")
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                    Image(systemName: "menubar.rectangle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(GargantuaColors.accent)
+                        .frame(width: 24, alignment: .center)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Menu Bar Widget")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text(menuBarWidgetStatusLine)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(menuBarWidgetStatusColor)
+                    }
+
+                    Spacer(minLength: GargantuaSpacing.space3)
+
+                    Toggle("Menu Bar Widget", isOn: $menuBarWidgetEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+
+                Divider()
+                    .overlay(GargantuaColors.border)
+
+                updateToggleRow(
+                    icon: "power.circle",
+                    label: "Launch at Login",
+                    isOn: launchAtLoginBinding
+                )
+
+                HStack(spacing: GargantuaSpacing.space3) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13))
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .frame(width: 24, alignment: .center)
+
+                    Text(launchAtLoginStatusLine)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(launchAtLoginStatusColor)
+
+                    Spacer()
+                }
+
+                if let launchAtLoginError {
+                    HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.review)
+
+                        Text(launchAtLoginError)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.review)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(GargantuaSpacing.space4)
+            .background(GargantuaColors.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
+    }
+
     // MARK: - General Section
 
     private var generalSection: some View {
@@ -656,6 +734,42 @@ public struct SettingsView: View {
         return "Last checked \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
+    private var menuBarWidgetStatusLine: String {
+        menuBarWidgetEnabled ? "Visible" : "Off"
+    }
+
+    private var menuBarWidgetStatusColor: Color {
+        menuBarWidgetEnabled ? GargantuaColors.safe : GargantuaColors.ink4
+    }
+
+    private var launchAtLoginStatusLine: String {
+        if !launchAtLoginEnabled && launchAtLoginStatus == .notRegistered {
+            return "Off"
+        }
+        return launchAtLoginStatus.description
+    }
+
+    private var launchAtLoginStatusColor: Color {
+        guard launchAtLoginEnabled else { return GargantuaColors.ink4 }
+        switch launchAtLoginStatus {
+        case .enabled:
+            return GargantuaColors.safe
+        case .requiresApproval:
+            return GargantuaColors.review
+        case .notRegistered, .notFound, .unavailable, .unknown:
+            return GargantuaColors.review
+        }
+    }
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLoginEnabled },
+            set: { enabled in
+                updateLaunchAtLogin(enabled)
+            }
+        )
+    }
+
     private var scheduledInterval: ScheduledScanInterval {
         ScheduledScanInterval(rawValue: settings?.scheduledScanIntervalRaw ?? "") ?? .daily
     }
@@ -750,6 +864,19 @@ public struct SettingsView: View {
             }
         } catch {
             scheduledScanError = error.localizedDescription
+        }
+    }
+
+    private func updateLaunchAtLogin(_ enabled: Bool) {
+        let previous = launchAtLoginEnabled
+        launchAtLoginEnabled = enabled
+
+        do {
+            launchAtLoginStatus = try LaunchAtLoginController().synchronize(isEnabled: enabled)
+            launchAtLoginError = nil
+        } catch {
+            launchAtLoginEnabled = previous
+            launchAtLoginError = error.localizedDescription
         }
     }
 

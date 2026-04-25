@@ -6,7 +6,9 @@ import SwiftUI
 @main
 struct GargantuaApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
+    @AppStorage(MenuBarPreferences.widgetEnabledKey) private var menuBarWidgetEnabled = MenuBarPreferences.defaultWidgetEnabled
     @StateObject private var updateController: AppUpdateController
+    @StateObject private var menuBarStatusModel: MenuBarStatusModel
 
     init() {
         if CommandLine.arguments.contains("--selfcheck-binaries") {
@@ -26,10 +28,17 @@ struct GargantuaApp: App {
             Self.runPrivilegedHelperSmokeTrash(path: path)
         }
         _updateController = StateObject(wrappedValue: AppUpdateController())
+        _menuBarStatusModel = StateObject(wrappedValue: MenuBarStatusModel())
     }
 
+    @SceneBuilder
     var body: some Scene {
-        WindowGroup {
+        mainWindowScene
+        menuBarScene
+    }
+
+    private var mainWindowScene: some Scene {
+        WindowGroup("Gargantua", id: "main") {
             MainContentView(updateSettingsViewModel: updateController.settingsViewModel)
                 .frame(minWidth: 700, minHeight: 500)
         }
@@ -39,6 +48,15 @@ struct GargantuaApp: App {
                 CheckForUpdatesCommand(viewModel: updateController.settingsViewModel)
             }
         }
+    }
+
+    private var menuBarScene: some Scene {
+        MenuBarExtra(isInserted: $menuBarWidgetEnabled) {
+            GargantuaMenuBarSceneContent(model: menuBarStatusModel)
+        } label: {
+            MenuBarStatusLabel(snapshot: menuBarStatusModel.snapshot)
+        }
+        .menuBarExtraStyle(.window)
     }
 
     private static func runBinarySelfCheck() -> Never {
@@ -127,6 +145,8 @@ struct GargantuaApp: App {
 // MARK: - App Delegate
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("GargantuaMainWindow")
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.regular)
         DispatchQueue.main.async { [weak self] in
@@ -144,9 +164,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureMainWindow() {
-        guard let window = NSApplication.shared.windows.first else { return }
+        guard let window = Self.findMainWindow() else { return }
 
         // Persist window position and size across launches
+        window.identifier = Self.mainWindowIdentifier
         window.setFrameAutosaveName("GargantuaMainWindow")
 
         // Transparent titlebar with full-size content underneath
@@ -171,10 +192,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.addTitlebarAccessoryViewController(spacer)
     }
 
-    private func activateMainWindow() {
-        guard let window = NSApplication.shared.windows.first else { return }
+    static func activateMainWindow() {
+        guard let window = findMainWindow() else {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            return
+        }
         window.deminiaturize(nil)
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    private func activateMainWindow() {
+        Self.activateMainWindow()
+    }
+
+    private static func findMainWindow() -> NSWindow? {
+        NSApplication.shared.windows.first { $0.identifier == mainWindowIdentifier }
+            ?? NSApplication.shared.windows.first { !($0 is NSPanel) && $0.canBecomeKey }
+    }
+}
+
+private struct GargantuaMenuBarSceneContent: View {
+    @Environment(\.openWindow) private var openWindow
+    @ObservedObject var model: MenuBarStatusModel
+
+    var body: some View {
+        MenuBarWidgetView(model: model) {
+            openWindow(id: "main")
+            DispatchQueue.main.async {
+                AppDelegate.activateMainWindow()
+            }
+        }
     }
 }
