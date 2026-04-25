@@ -121,18 +121,41 @@ public enum MCPHTTPRequestParser {
         }
 
         let lines = headerText.components(separatedBy: "\r\n")
-        guard let requestLine = lines.first else {
-            throw MCPHTTPParseError.invalidRequestLine
-        }
-        let requestParts = requestLine.split(separator: " ", maxSplits: 2).map(String.init)
-        guard requestParts.count == 3,
-              requestParts[2].hasPrefix("HTTP/")
-        else {
-            throw MCPHTTPParseError.invalidRequestLine
+        let (method, target) = try parseRequestLine(lines.first)
+        let headers = try parseHeaders(from: lines.dropFirst())
+
+        guard let body = try extractBody(
+            from: data,
+            bodyStart: separatorRange.upperBound,
+            headers: headers
+        ) else {
+            return nil
         }
 
+        let (path, query) = parseTarget(target)
+        return MCPHTTPRequest(
+            method: method,
+            path: path,
+            query: query,
+            headers: headers,
+            body: body
+        )
+    }
+
+    private static func parseRequestLine(_ line: String?) throws -> (method: String, target: String) {
+        guard let line else {
+            throw MCPHTTPParseError.invalidRequestLine
+        }
+        let parts = line.split(separator: " ", maxSplits: 2).map(String.init)
+        guard parts.count == 3, parts[2].hasPrefix("HTTP/") else {
+            throw MCPHTTPParseError.invalidRequestLine
+        }
+        return (parts[0], parts[1])
+    }
+
+    private static func parseHeaders(from lines: ArraySlice<String>) throws -> [String: String] {
         var headers: [String: String] = [:]
-        for line in lines.dropFirst() where !line.isEmpty {
+        for line in lines where !line.isEmpty {
             guard let colon = line.firstIndex(of: ":") else {
                 throw MCPHTTPParseError.invalidHeader
             }
@@ -141,7 +164,14 @@ public enum MCPHTTPRequestParser {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             headers[key.lowercased()] = value
         }
+        return headers
+    }
 
+    private static func extractBody(
+        from data: Data,
+        bodyStart: Data.Index,
+        headers: [String: String]
+    ) throws -> Data? {
         guard let contentLength = Int(headers["content-length"] ?? "0"),
               contentLength >= 0
         else {
@@ -151,14 +181,14 @@ public enum MCPHTTPRequestParser {
             throw MCPHTTPParseError.bodyTooLarge
         }
 
-        let bodyStart = separatorRange.upperBound
         let availableBodyBytes = data.distance(from: bodyStart, to: data.endIndex)
         guard availableBodyBytes >= contentLength else {
             return nil
         }
+        return Data(data[bodyStart..<data.index(bodyStart, offsetBy: contentLength)])
+    }
 
-        let body = Data(data[bodyStart..<data.index(bodyStart, offsetBy: contentLength)])
-        let target = requestParts[1]
+    private static func parseTarget(_ target: String) -> (path: String, query: [String: String]) {
         let components = URLComponents(string: "http://localhost\(target)")
         let path = components?.path ?? target
         var query: [String: String] = [:]
@@ -167,14 +197,7 @@ public enum MCPHTTPRequestParser {
                 query[item.name] = value
             }
         }
-
-        return MCPHTTPRequest(
-            method: requestParts[0],
-            path: path,
-            query: query,
-            headers: headers,
-            body: body
-        )
+        return (path, query)
     }
 }
 
