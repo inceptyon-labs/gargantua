@@ -74,41 +74,35 @@ private extension ConditionEvaluator {
         let threshold: TimeInterval
     }
 
+    static let dateFields: [String: DateField] = [
+        "age": .age,
+        "atime": .atime,
+        "mtime": .mtime,
+    ]
+
+    static let comparisonOps: [String: ComparisonOp] = [
+        ">": .greaterThan,
+        ">=": .greaterThanOrEqual,
+        "<": .lessThan,
+        "<=": .lessThanOrEqual,
+    ]
+
+    static let unitMultipliers: [String: TimeInterval] = [
+        "d": 86400,
+        "h": 3600,
+        "m": 60,
+    ]
+
     /// Parse "age > 30d", "age >= 7d", "age < 1h", etc.
     func parseAgeCondition(_ condition: String) -> AgeCondition? {
         let pattern = #/^(age|atime|mtime)\s*(>=|<=|>|<)\s*(\d+)([dhm])$/#
-        guard let match = try? pattern.firstMatch(in: condition) else { return nil }
+        guard let match = try? pattern.firstMatch(in: condition),
+              let field = Self.dateFields[String(match.output.1)],
+              let op = Self.comparisonOps[String(match.output.2)],
+              let multiplier = Self.unitMultipliers[String(match.output.4)]
+        else { return nil }
 
-        let fieldStr = String(match.output.1)
-        let opStr = String(match.output.2)
         let value = Double(String(match.output.3)) ?? 0
-        let unit = String(match.output.4)
-
-        let field: DateField
-        switch fieldStr {
-        case "age": field = .age
-        case "atime": field = .atime
-        case "mtime": field = .mtime
-        default: return nil
-        }
-
-        let op: ComparisonOp
-        switch opStr {
-        case ">": op = .greaterThan
-        case ">=": op = .greaterThanOrEqual
-        case "<": op = .lessThan
-        case "<=": op = .lessThanOrEqual
-        default: return nil
-        }
-
-        let multiplier: TimeInterval
-        switch unit {
-        case "d": multiplier = 86400       // seconds per day
-        case "h": multiplier = 3600        // seconds per hour
-        case "m": multiplier = 60          // seconds per minute
-        default: return nil
-        }
-
         return AgeCondition(field: field, op: op, threshold: value * multiplier)
     }
 }
