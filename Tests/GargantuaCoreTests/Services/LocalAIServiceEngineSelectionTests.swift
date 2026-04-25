@@ -4,6 +4,7 @@ import Testing
 @testable import GargantuaCore
 
 @Suite("LocalAIService engine selection")
+@MainActor
 struct LocalAIServiceEngineSelectionTests {
 
     @Test("AIEnginePreference defaults to Template and persists MLX")
