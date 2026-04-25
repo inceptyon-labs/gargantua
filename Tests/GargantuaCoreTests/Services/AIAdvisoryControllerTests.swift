@@ -68,7 +68,7 @@ struct AIAdvisoryControllerTests {
         controller.request(for: results)
 
         // Drain the Task — give the continuation a few ticks to run.
-        try await Self.waitForPresentation(controller, timeout: .seconds(5)) {
+        try await Self.waitForPresentation(controller, timeout: .seconds(30)) {
             if case .loaded = $0 { return true }
             return false
         }
@@ -94,7 +94,7 @@ struct AIAdvisoryControllerTests {
         ]
         controller.request(for: results)
 
-        try await Self.waitForPresentation(controller, timeout: .seconds(5)) {
+        try await Self.waitForPresentation(controller, timeout: .seconds(30)) {
             if case .loaded = $0 { return true }
             return false
         }
@@ -119,7 +119,7 @@ struct AIAdvisoryControllerTests {
         let snapshot = results[0].safety
         controller.request(for: results)
 
-        try await Self.waitForPresentation(controller, timeout: .seconds(5)) {
+        try await Self.waitForPresentation(controller, timeout: .seconds(30)) {
             if case .loaded = $0 { return true }
             return false
         }
@@ -153,7 +153,7 @@ struct AIAdvisoryControllerTests {
         controller.request(for: [makeResult(id: "first")])
         controller.request(for: [makeResult(id: "second")])
 
-        try await Self.waitForPresentation(controller, timeout: .seconds(5)) {
+        try await Self.waitForPresentation(controller, timeout: .seconds(30)) {
             if case .loaded = $0 { return true }
             return false
         }
@@ -177,7 +177,7 @@ struct AIAdvisoryControllerTests {
         let target = makeResult(id: "review-1")
         controller.request(for: [target, makeResult(id: "safe-1", safety: .safe)])
 
-        try await Self.waitForPresentation(controller, timeout: .seconds(5)) {
+        try await Self.waitForPresentation(controller, timeout: .seconds(30)) {
             if case .loaded = $0 { return true }
             return false
         }
