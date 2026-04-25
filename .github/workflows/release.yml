@@ -1,14 +1,26 @@
 name: Release
 
-# Tag-driven release pipeline. Push a vX.Y.Z tag → this workflow builds,
-# signs with Developer ID, notarizes via the App Store Connect API,
-# generates a Sparkle-signed appcast, creates a GitHub Release, and
-# (if a tap PAT is configured) bumps the Homebrew cask formula.
+# Two ways to fire this workflow:
+#   1. Push a `vX.Y.Z` tag → real release: build, sign, notarize, publish.
+#   2. Manual `workflow_dispatch` → defaults to dry-run + snapshot, useful
+#      for verifying the secrets are wired without shipping anything.
+#
+# Distribution layout (matches the `freeport` cask convention):
+#
+#   - DMG + appcast.xml → uploaded to gargantua's own GitHub Release
+#   - Casks/gargantua.rb → committed in inceptyon-labs/homebrew-tap,
+#     cask URL points back at gargantua's release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run only: build pipeline, no real codesign/notarize, no publish'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -21,6 +33,7 @@ jobs:
 
     env:
       KEYCHAIN_NAME: gargantua-release.keychain-db
+      TAP_REPO: inceptyon-labs/homebrew-tap
 
     steps:
       - name: Checkout
@@ -35,21 +48,51 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Resolve VERSION + asset URL prefix
+      - name: Resolve mode + version
+        # Sets:
+        #   IS_DRY_RUN: 'true' for workflow_dispatch with dry_run=true (default)
+        #   RELEASE_FLAGS: flags to pass to ./Scripts/release.sh
+        #   VERSION: cleaned-up version string (no leading 'v')
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          DOWNLOAD_URL_PREFIX="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/"
-          {
-            echo "VERSION=$VERSION"
-            echo "SPARKLE_DOWNLOAD_URL_PREFIX=$DOWNLOAD_URL_PREFIX"
-          } >> "$GITHUB_ENV"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            DRY="${{ github.event.inputs.dry_run }}"
+            if [ "$DRY" = "true" ]; then
+              echo "IS_DRY_RUN=true" >> "$GITHUB_ENV"
+              echo "RELEASE_FLAGS=--ci --dry-run --snapshot" >> "$GITHUB_ENV"
+              SHORT_SHA=$(git rev-parse --short HEAD)
+              echo "VERSION=0.0.0-${SHORT_SHA}" >> "$GITHUB_ENV"
+            else
+              # Manual non-dry-run requires a tag on HEAD.
+              if ! git describe --tags --exact-match HEAD >/dev/null 2>&1; then
+                echo "::error::workflow_dispatch dry_run=false requires HEAD to be on a vX.Y.Z tag" >&2
+                exit 1
+              fi
+              echo "IS_DRY_RUN=false" >> "$GITHUB_ENV"
+              echo "RELEASE_FLAGS=--ci" >> "$GITHUB_ENV"
+              VERSION=$(git describe --tags --exact-match HEAD)
+              VERSION="${VERSION#v}"
+              echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "IS_DRY_RUN=false" >> "$GITHUB_ENV"
+            echo "RELEASE_FLAGS=--ci" >> "$GITHUB_ENV"
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          fi
+
+      - name: Compute URL prefix for appcast
+        run: |
+          set -euo pipefail
+          PREFIX="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/"
+          echo "SPARKLE_DOWNLOAD_URL_PREFIX=$PREFIX" >> "$GITHUB_ENV"
 
       - name: Resolve SwiftPM dependencies
         # Materialises Sparkle's generate_appcast under .build/artifacts.
         run: swift package resolve
 
       - name: Set up signing keychain
+        if: env.IS_DRY_RUN != 'true'
         env:
           CERT_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
@@ -69,8 +112,6 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Make the temp keychain the search default so codesign finds the
-          # imported identity, but keep login/system in the search list.
           ORIGINAL_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | xargs)
           # shellcheck disable=SC2086
           security list-keychains -d user -s "$KEYCHAIN_PATH" $ORIGINAL_KEYCHAINS
@@ -79,6 +120,7 @@ jobs:
           rm "$CERT_PATH"
 
       - name: Write App Store Connect API key
+        if: env.IS_DRY_RUN != 'true'
         env:
           API_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_API_KEY_P8 }}
         run: |
@@ -89,6 +131,7 @@ jobs:
           echo "NOTARY_API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
 
       - name: Write Sparkle EdDSA private key
+        if: env.IS_DRY_RUN != 'true'
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
@@ -118,57 +161,58 @@ jobs:
           SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
           NOTARY_API_KEY_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ISSUER_ID }}
-          # NOTARY_API_KEY_PATH and SPARKLE_ED_KEY_FILE are set in
-          # earlier steps via $GITHUB_ENV; SPARKLE_DOWNLOAD_URL_PREFIX
-          # was resolved in the version-resolve step.
-        run: ./Scripts/release.sh --ci
+          # NOTARY_API_KEY_PATH, SPARKLE_ED_KEY_FILE, SPARKLE_DOWNLOAD_URL_PREFIX, RELEASE_FLAGS
+          # are set in earlier steps via $GITHUB_ENV.
+        run: ./Scripts/release.sh ${{ env.RELEASE_FLAGS }}
 
-      - name: Detect Homebrew tap token presence
-        # Step-level `if:` can't read `secrets`, so promote presence to env.
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
-        run: |
-          if [ -n "$TAP_TOKEN" ]; then
-            echo "HOMEBREW_TAP_PUSH_TOKEN_PRESENT=true" >> "$GITHUB_ENV"
-          fi
-
-      - name: Stage release notes
+      - name: Compute DMG SHA256 + stage release notes
+        if: env.IS_DRY_RUN != 'true'
         run: |
           set -euo pipefail
+          DMG="dist/Gargantua-${VERSION}.dmg"
+          SHA256=$(shasum -a 256 "$DMG" | awk '{print $1}')
+          echo "DMG_SHA256=$SHA256" >> "$GITHUB_ENV"
+
           NOTES="dist/sparkle-updates/Gargantua-${VERSION}.dmg.md"
           if [ ! -f "$NOTES" ]; then
             printf '# Gargantua %s\n\nSee CHANGELOG.md for details.\n' "$VERSION" > "$NOTES"
           fi
           echo "RELEASE_NOTES_PATH=$NOTES" >> "$GITHUB_ENV"
 
-      - name: Create GitHub Release
+      - name: Detect Homebrew tap token presence
+        if: env.IS_DRY_RUN != 'true'
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
+        run: |
+          if [ -n "$TAP_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN_PRESENT=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create GitHub Release (DMG + appcast)
+        if: env.IS_DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" \
-            --title "Gargantua $VERSION" \
+          gh release create "v${VERSION}" \
+            --title "Gargantua ${VERSION}" \
             --notes-file "$RELEASE_NOTES_PATH" \
             "dist/Gargantua-${VERSION}.dmg" \
             "dist/sparkle-updates/appcast.xml"
 
       - name: Bump Homebrew tap formula
-        if: ${{ env.HOMEBREW_TAP_PUSH_TOKEN_PRESENT == 'true' }}
+        if: env.IS_DRY_RUN != 'true' && env.HOMEBREW_TAP_TOKEN_PRESENT == 'true'
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
-          TAP_REPO: inceptyon-labs/homebrew-tap
         run: |
           set -euo pipefail
-          DMG="dist/Gargantua-${VERSION}.dmg"
-          SHA256=$(shasum -a 256 "$DMG" | awk '{print $1}')
-
           TAP_DIR="$RUNNER_TEMP/homebrew-tap"
           git clone "https://x-access-token:${GH_TOKEN}@github.com/${TAP_REPO}.git" "$TAP_DIR"
 
           mkdir -p "$TAP_DIR/Casks"
           ./Scripts/release/render-cask.sh \
             --version "$VERSION" \
-            --sha256 "$SHA256" \
+            --sha256 "$DMG_SHA256" \
             --repo "${{ github.repository }}" \
             > "$TAP_DIR/Casks/gargantua.rb"
 
@@ -179,7 +223,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "Cask already up to date for $VERSION"
           else
-            git commit -m "gargantua $VERSION"
+            git commit -m "Update gargantua to $VERSION"
             git push origin HEAD
           fi
 
@@ -188,3 +232,14 @@ jobs:
         run: |
           security delete-keychain "$RUNNER_TEMP/$KEYCHAIN_NAME" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/notary-api.p8" "$RUNNER_TEMP/sparkle-ed.key"
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-diagnostics-${{ env.VERSION }}
+          path: |
+            dist/notarize-*.json
+            dist/sparkle-updates/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# render-cask.sh — emit a Homebrew Cask formula for the current release.
+# render-cask.sh — emit a Homebrew Cask for the current Gargantua release.
 #
 # Usage: render-cask.sh --version 0.2.0 --sha256 abc... --repo owner/repo
 #
-# Output (stdout): a `Casks/gargantua.rb` ready to commit into the
-# inceptyon-labs/homebrew-tap repo. Sparkle remains the in-app updater;
-# this is just the Homebrew install/upgrade surface.
+# Output (stdout): a `Casks/gargantua.rb` ready to commit into the tap.
+# Convention matches inceptyon-labs/homebrew-tap's `freeport` cask:
+# DMG hosted on the project repo's GitHub Releases; cask URL points
+# at `${repo}/releases/download/v#{version}/...`; livecheck uses
+# `:github_latest`. Sparkle is the in-app update mechanism, so the
+# Homebrew install/upgrade surface only needs to track latest.
 
 set -euo pipefail
 
@@ -42,6 +45,7 @@ cask "gargantua" do
   end
 
   auto_updates true
+  depends_on macos: ">= :sonoma"
 
   app "Gargantua.app"
 
