@@ -36,6 +36,7 @@ docs/designs/
 docs/handoffs/
 docs/plans/
 docs/scans/
+.healthcheck/
 
 # App artifacts
 *.ipa
