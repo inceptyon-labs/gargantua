@@ -469,6 +469,15 @@ public final class SmartUninstallerViewModel {
     /// surface them for confirmation. The view shows a single combined
     /// confirm modal listing items from every plan.
     ///
+}
+
+// MARK: - Batch uninstall
+
+// Extracted into an extension so type_body_length stays under the
+// SwiftLint threshold. Same file → `private(set)` setters remain
+// accessible.
+extension SmartUninstallerViewModel {
+
     /// On scan completion the phase remains `.batchScanning(total, total)`
     /// and `batchPlans` is populated; the view binds to `batchPlans` to
     /// decide whether the confirm modal should appear. This avoids a
