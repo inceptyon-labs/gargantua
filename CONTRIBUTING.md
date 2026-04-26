@@ -85,6 +85,53 @@ trivy fs --config trivy.yaml .
 Scripts/osv-spm-scan.sh -- --all-packages
 ```
 
+### Mutation Testing (optional)
+
+Mutation testing complements line coverage by checking whether tests
+actually catch behaviour changes in the code they exercise. It is
+**opt-in** and not part of `swift test` or the default CI.
+
+Install [Muter](https://github.com/muter-mutation-testing/muter):
+
+```bash
+brew install muter-mutation-testing/formulae/muter
+muter --version
+```
+
+Run mutation testing on Swift files changed against `origin/main`:
+
+```bash
+Scripts/run-mutation.sh
+```
+
+Other useful invocations:
+
+```bash
+Scripts/run-mutation.sh --base HEAD~1                  # diff against last commit
+Scripts/run-mutation.sh --files Sources/.../Foo.swift  # explicit single-file run
+Scripts/run-mutation.sh --all                          # full mutation pass (slow)
+```
+
+The script writes a Tenet-compatible JSON report to:
+
+```
+.healthcheck/mutation/muter.json
+```
+
+If no Swift sources changed in scope, the script writes a small skip
+marker JSON to that same path and exits 0 — Tenet ingestion stays happy
+without misreporting a zero score. The Muter config (`muter.conf.yml`)
+points the test runner at `Scripts/test.sh` so MLX metallib staging works
+inside Muter's sandbox; if you change the test command there, mirror the
+change in the wrapper.
+
+CI runs mutation testing only when:
+
+- the workflow is dispatched manually from the **Actions** tab, **or**
+- a PR carries the `mutation-test` label.
+
+See `.github/workflows/mutation.yml`.
+
 ## Safety Guidelines
 
 - Use `safe` only when the files are clearly disposable or trivially regenerated.

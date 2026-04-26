@@ -1,0 +1,76 @@
+# Muter configuration for the Gargantua SwiftPM project.
+#
+# Mutation testing is OPT-IN. It is not part of the default `swift test`
+# flow; run it via `Scripts/run-mutation.sh` (or the manual CI workflow).
+#
+# Install Muter:
+#   brew install muter-mutation-testing/formulae/muter
+#
+# Run mutation testing on changed Swift files:
+#   Scripts/run-mutation.sh
+#
+# Run muter directly against the configured test command:
+#   muter --skip-update-check
+#
+# Report path (Tenet-compatible):
+#   .healthcheck/mutation/muter.json
+
+# Muter copies the whole project (including `.build/`) to a sibling sandbox
+# before running tests, which breaks SwiftPM's precompiled module cache
+# (it records absolute paths from the original location). Scripts/test-for-muter.sh
+# detects that mismatch on the first build, wipes `.build`, and then delegates
+# to Scripts/test.sh — which handles MLX metallib staging that `swift test`
+# requires for the GargantuaCoreTests bundle.
+executable: /bin/bash
+arguments:
+  - Scripts/test-for-muter.sh
+  - --parallel
+
+# Skip files Muter should never mutate. Muter uses substring matching, so
+# entries here match anywhere in the file path.
+exclude:
+  # SwiftPM / Xcode build outputs
+  - /.build/
+  - /.swiftpm/
+  - /DerivedData/
+  - /Carthage/
+  - /Pods/
+  # Distribution / release artifacts
+  - /dist/
+  # Test bundles (Muter excludes /Tests/ and *Tests.swift by default;
+  # listed again for clarity)
+  - /Tests/
+  - Tests.swift
+  # Package manifest and tooling
+  - Package.swift
+  - Scripts/
+  - AppShell/
+  # Resources / generated content
+  - /Resources/
+  - Info.plist
+  # Healthcheck / Tenet artifacts
+  - /.healthcheck/
+
+# Functions whose calls are skipped by the RemoveSideEffects operator.
+# Mutating logging or analytics calls produces noise (the test suite has
+# no assertions for them), so leave them out.
+excludeCalls:
+  - print
+  - debugPrint
+  - assertionFailure
+  - preconditionFailure
+  - fatalError
+  - os_log
+  - NSLog
+  - logger.debug
+  - logger.info
+  - logger.notice
+  - logger.warning
+  - logger.error
+  - logger.critical
+
+# Per-mutant test timeout is enforced by `Scripts/test-for-muter.sh`
+# itself (Muter v16 has no native `testSuiteTimeout` config option).
+# Override the default 360s by exporting TEST_FOR_MUTER_TIMEOUT before
+# running muter. Mutants that exceed the cap exit 124 and Muter records
+# them as a runtime error.

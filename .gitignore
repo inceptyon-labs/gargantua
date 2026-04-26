@@ -55,3 +55,13 @@ coverage.lcov
 
 # Release artifacts
 /dist/
+
+# Muter mutation testing scratch artifacts (config + report-in-place are tracked
+# elsewhere; these are working copies/logs Muter creates next to the project).
+/muter_mutations/
+/muter_logs/
+/muter_tmp/
+/baseline run
+/muter.report.json
+/muter.report.html
+/muter.report.xml

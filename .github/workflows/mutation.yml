@@ -1,0 +1,91 @@
+name: Mutation Testing
+
+# Mutation testing is OPT-IN. It is intentionally NOT triggered on every
+# push or PR — Muter rebuilds & retests once per mutant, which is slow.
+#
+# How to run it:
+#   * Manually from the Actions tab (workflow_dispatch).
+#   * Add the `mutation-test` label to a PR.
+#   * Enable the schedule below for a periodic baseline.
+#
+# This workflow does not block the default `ci.yml` pipeline.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Diff base for changed-file mutation. Use 'all' to run a full pass."
+        required: false
+        default: "origin/main"
+      files:
+        description: "Optional comma-separated Swift files to mutate (overrides changed-file detection)."
+        required: false
+        default: ""
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  mutation:
+    name: Muter (changed Swift files)
+    # Only run on PRs that explicitly carry the `mutation-test` label, plus
+    # any manual dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'mutation-test'))
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need history to diff against the base branch.
+          fetch-depth: 0
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Print Swift version
+        run: swift --version
+
+      - name: Install Muter
+        run: brew install muter-mutation-testing/formulae/muter
+
+      - name: Verify Muter
+        run: muter --version
+
+      - name: Sanity-check the configured test command
+        # If the test command is broken outside Muter, every mutant looks
+        # "killed" and the report is meaningless. Run it once up-front so
+        # the workflow fails fast in that case.
+        run: Scripts/test.sh
+
+      - name: Run mutation testing on changed files
+        env:
+          INPUT_BASE: ${{ github.event.inputs.base_ref }}
+          INPUT_FILES: ${{ github.event.inputs.files }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          ARGS=()
+          if [ "${INPUT_FILES:-}" != "" ]; then
+            ARGS+=(--files "$INPUT_FILES")
+          elif [ "${INPUT_BASE:-}" = "all" ]; then
+            ARGS+=(--all)
+          elif [ "${INPUT_BASE:-}" != "" ]; then
+            ARGS+=(--base "$INPUT_BASE")
+          elif [ "${PR_BASE:-}" != "" ]; then
+            ARGS+=(--base "origin/${PR_BASE}")
+          fi
+          Scripts/run-mutation.sh "${ARGS[@]}"
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muter-report
+          path: .healthcheck/mutation/muter.json
+          if-no-files-found: warn
