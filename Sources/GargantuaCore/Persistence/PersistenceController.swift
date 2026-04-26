@@ -84,7 +84,8 @@ public final class PersistenceController {
     /// Save or update a profile.
     public func saveProfile(_ profile: CleanupProfile) throws {
         let predicate = #Predicate<PersistedProfile> { $0.profileID == profile.id }
-        let descriptor = FetchDescriptor(predicate: predicate)
+        var descriptor = FetchDescriptor(predicate: predicate)
+        descriptor.fetchLimit = 1
         if let existing = try context.fetch(descriptor).first {
             existing.update(from: profile)
         } else {
@@ -96,7 +97,8 @@ public final class PersistenceController {
     /// Delete a profile by ID.
     public func deleteProfile(id: String) throws {
         let predicate = #Predicate<PersistedProfile> { $0.profileID == id }
-        let descriptor = FetchDescriptor(predicate: predicate)
+        var descriptor = FetchDescriptor(predicate: predicate)
+        descriptor.fetchLimit = 1
         if let existing = try context.fetch(descriptor).first {
             context.delete(existing)
             try context.save()
@@ -107,7 +109,8 @@ public final class PersistenceController {
 
     /// Fetch the current settings, or return defaults if none exist.
     public func fetchSettings() throws -> PersistedSettings {
-        let descriptor = FetchDescriptor<PersistedSettings>()
+        var descriptor = FetchDescriptor<PersistedSettings>()
+        descriptor.fetchLimit = 1
         if let settings = try context.fetch(descriptor).first {
             return settings
         }
@@ -267,7 +270,8 @@ public final class PersistenceController {
     /// Remove a path exclusion entry by pattern.
     public func removeExclusionEntry(pattern: String) throws {
         let predicate = #Predicate<PersistedWhitelistEntry> { $0.pattern == pattern }
-        let descriptor = FetchDescriptor(predicate: predicate)
+        var descriptor = FetchDescriptor(predicate: predicate)
+        descriptor.fetchLimit = 1
         if let existing = try context.fetch(descriptor).first {
             context.delete(existing)
             try context.save()
