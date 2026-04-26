@@ -471,4 +471,36 @@ private final class ResultHolder<T: Sendable>: @unchecked Sendable {
     }
 }
 
+// MARK: - Graceful shutdown
+//
+// Install DispatchSource signal handlers so SIGTERM (Docker stop, launchd
+// unload, systemd shutdown) and SIGINT (^C) cancel the SSE listener and
+// mark the status store stopped before the process exits. Without this,
+// the kernel kills the process while StatusStore still says "running",
+// which leaves stale status entries that mislead the Settings UI until
+// the next launch.
+//
+// The capture list snapshots `sseTransport` at install time, so the
+// handler reads the final value assigned during SSE setup above without
+// crossing thread boundaries on a top-level var.
+private let shutdownQueue = DispatchQueue(
+    label: "com.gargantua.mcp.shutdown",
+    qos: .userInitiated
+)
+private let shutdownSources: [DispatchSourceSignal] = [SIGTERM, SIGINT].map { signo in
+    // Mask the default disposition so DispatchSource owns delivery.
+    signal(signo, SIG_IGN)
+    let source = DispatchSource.makeSignalSource(signal: signo, queue: shutdownQueue)
+    source.setEventHandler { [sseTransport, serverStatusStore] in
+        sseTransport?.stop()
+        serverStatusStore.markStopped()
+        exit(0)
+    }
+    source.resume()
+    return source
+}
+// Reference shutdownSources so ARC keeps the DispatchSource handles alive
+// for the lifetime of the process.
+withExtendedLifetime(shutdownSources) {}
+
 dispatchMain()
