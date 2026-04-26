@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let runnerLogger = Logger(subsystem: "com.gargantua.core", category: "ClaudeCodeAgentRunner")
 
 /// Output stream categories captured from a Claude Code agent session.
 public enum ClaudeCodeAgentTranscriptStream: String, Codable, Sendable {
@@ -332,7 +335,11 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             transport: "agent",
             clientID: sessionID.uuidString
         )
-        try? auditWriter.write(entry)
+        do {
+            try auditWriter.write(entry)
+        } catch {
+            runnerLogger.warning("Failed to write agent audit entry: \(error.localizedDescription)")
+        }
     }
 }
 
@@ -369,12 +376,16 @@ public struct ClaudeCodeScheduledAgentAuditHook: ScheduledScanAgentAuditHook {
         guard configuration.isEnabled, configuration.runAfterScheduledScans else { return }
 
         let prompt = ClaudeCodeAgentPromptBuilder.scheduledAuditPrompt(summary: summary)
-        _ = try? await runner.run(
-            prompt: prompt,
-            allowDestructiveMCPToolsOverride: false,
-            onEvent: { _ in },
-            onGate: { _ in }
-        )
+        do {
+            _ = try await runner.run(
+                prompt: prompt,
+                allowDestructiveMCPToolsOverride: false,
+                onEvent: { _ in },
+                onGate: { _ in }
+            )
+        } catch {
+            runnerLogger.warning("Scheduled Claude Code audit hook failed: \(error.localizedDescription)")
+        }
     }
 }
 
