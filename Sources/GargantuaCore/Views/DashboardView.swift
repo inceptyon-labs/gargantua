@@ -299,8 +299,8 @@ public struct DashboardView: View {
 
     private func navigateTo(_ destination: AlertDestination) {
         switch destination {
-        case .deepClean:    sidebarSelection = "deepClean"
-        case .devPurge:     sidebarSelection = "devPurge"
+        case .deepClean: sidebarSelection = "deepClean"
+        case .devPurge: sidebarSelection = "devPurge"
         case .diskExplorer: sidebarSelection = "diskExplorer"
         }
     }
@@ -355,10 +355,10 @@ public struct DashboardView: View {
         scheduledScanSummary = nil
         try? persistence?.acknowledgeScheduledScanSummary()
     }
-
 }
 
 // MARK: - Recommendation Model
+
 //
 // Extracted into an in-file extension so DashboardView's primary
 // body stays under the 350-line type_body_length threshold.

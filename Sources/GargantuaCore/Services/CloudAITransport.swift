@@ -49,7 +49,7 @@ public struct AnthropicMessagesTransport: CloudAITransport {
                     guard let http = response as? HTTPURLResponse else {
                         throw CloudAIError.invalidResponse("Cloud AI returned a non-HTTP response.")
                     }
-                    guard (200..<300).contains(http.statusCode) else {
+                    guard (200 ..< 300).contains(http.statusCode) else {
                         throw CloudAIError.transport(statusCode: http.statusCode, message: "Streaming request failed.")
                     }
 
@@ -100,7 +100,7 @@ public struct AnthropicMessagesTransport: CloudAITransport {
             throw CloudAIError.invalidResponse("Cloud AI returned a non-HTTP response.")
         }
 
-        guard (200..<300).contains(http.statusCode) else {
+        guard (200 ..< 300).contains(http.statusCode) else {
             let message = (try? JSONDecoder().decode(AnthropicErrorEnvelope.self, from: data).error.message)
                 ?? String(data: data, encoding: .utf8)
                 ?? ""
@@ -126,7 +126,7 @@ public struct AnthropicMessagesTransport: CloudAITransport {
             return false
         }
         if case CloudAIError.transport(let status, _) = error {
-            return status == 408 || status == 429 || (500..<600).contains(status)
+            return status == 408 || status == 429 || (500 ..< 600).contains(status)
         }
         return (error as NSError).domain == NSURLErrorDomain
     }

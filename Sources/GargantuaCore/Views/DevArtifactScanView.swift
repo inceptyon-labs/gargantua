@@ -440,10 +440,10 @@ public struct DevArtifactScanView: View {
             )
         }
     }
-
 }
 
 // MARK: - Actions
+
 //
 // Extracted into an in-file extension so DevArtifactScanView's
 // primary body stays under the 350-line type_body_length threshold.

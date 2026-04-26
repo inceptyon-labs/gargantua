@@ -11,9 +11,9 @@ public enum ThermalLevel: String, Codable, Sendable, Comparable {
 
     public init(from thermalState: ProcessInfo.ThermalState) {
         switch thermalState {
-        case .nominal:  self = .nominal
-        case .fair:     self = .fair
-        case .serious:  self = .serious
+        case .nominal: self = .nominal
+        case .fair: self = .fair
+        case .serious: self = .serious
         case .critical: self = .critical
         @unknown default: self = .serious
         }
@@ -22,18 +22,18 @@ public enum ThermalLevel: String, Codable, Sendable, Comparable {
     /// Score from 0 (critical) to 100 (nominal).
     public var score: Int {
         switch self {
-        case .nominal:  return 100
-        case .fair:     return 70
-        case .serious:  return 35
+        case .nominal: return 100
+        case .fair: return 70
+        case .serious: return 35
         case .critical: return 0
         }
     }
 
     private var ordinal: Int {
         switch self {
-        case .nominal:  return 0
-        case .fair:     return 1
-        case .serious:  return 2
+        case .nominal: return 0
+        case .fair: return 1
+        case .serious: return 2
         case .critical: return 3
         }
     }

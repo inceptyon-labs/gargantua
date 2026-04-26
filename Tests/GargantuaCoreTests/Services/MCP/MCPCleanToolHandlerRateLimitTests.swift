@@ -101,7 +101,7 @@ struct MCPCleanToolHandlerRateLimitTests {
             clientID: "claude-code"
         )
 
-        for _ in 0..<5 {
+        for _ in 0 ..< 5 {
             _ = try subject.handle(arguments([
                 "item_ids": .array([.string("a")]),
                 "confirm": .bool(true),

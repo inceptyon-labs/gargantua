@@ -72,11 +72,11 @@ public final class MLXInferenceEngine: AIInferenceEngine {
     }
 
     public nonisolated static let defaultInstructions = """
-        You are a helpful assistant that explains macOS cleanup items to end users. \
-        Given a scanned item's metadata, explain in plain English what it is, whether \
-        it is safe to delete, and any caveats. Be concise — 2 to 4 short sentences. \
-        Do not include code fences, bullet lists, or markdown headers.
-        """
+    You are a helpful assistant that explains macOS cleanup items to end users. \
+    Given a scanned item's metadata, explain in plain English what it is, whether \
+    it is safe to delete, and any caveats. Be concise — 2 to 4 short sentences. \
+    Do not include code fences, bullet lists, or markdown headers.
+    """
 
     // MARK: - AIInferenceEngine
 
@@ -168,21 +168,21 @@ public final class MLXInferenceEngine: AIInferenceEngine {
     }
 
     public nonisolated static let cleanupNarrativeInstructions = """
-        You are a helpful assistant that summarizes a completed macOS cleanup \
-        in 1 to 2 short sentences. Describe what was cleaned and any notable \
-        groupings. Plain English only — no bullet lists, no code fences, no \
-        markdown headers. Do not invent items, paths, or numbers that are \
-        not in the provided summary.
-        """
+    You are a helpful assistant that summarizes a completed macOS cleanup \
+    in 1 to 2 short sentences. Describe what was cleaned and any notable \
+    groupings. Plain English only — no bullet lists, no code fences, no \
+    markdown headers. Do not invent items, paths, or numbers that are \
+    not in the provided summary.
+    """
 
     public nonisolated static let scanFilterInstructions = """
-        You translate one user query into a strict JSON object for filtering \
-        macOS cleanup scan results. Output JSON only. Allowed keys are: \
-        bundle_ids (array of strings), path_globs (array of glob strings), \
-        categories (array of strings), min_size (integer bytes), max_size \
-        (integer bytes), safety (array containing safe, review, or protected). \
-        Do not emit any other keys.
-        """
+    You translate one user query into a strict JSON object for filtering \
+    macOS cleanup scan results. Output JSON only. Allowed keys are: \
+    bundle_ids (array of strings), path_globs (array of glob strings), \
+    categories (array of strings), min_size (integer bytes), max_size \
+    (integer bytes), safety (array containing safe, review, or protected). \
+    Do not emit any other keys.
+    """
 
     // MARK: - Prompt
 
@@ -214,13 +214,13 @@ public final class MLXInferenceEngine: AIInferenceEngine {
     static func buildScanFilterPrompt(for query: String) -> String {
         let sanitized = sanitizeForPrompt(query)
         return """
-            Query: \(sanitized)
+        Query: \(sanitized)
 
-            Return the smallest filter that matches the query. Use known \
-            categories such as dev_artifacts, docker, homebrew, browser_cache, \
-            system_logs, system_temp, installers, duplicate_files, and \
-            big_files when applicable. If no safe filter is implied, return {}.
-            """
+        Return the smallest filter that matches the query. Use known \
+        categories such as dev_artifacts, docker, homebrew, browser_cache, \
+        system_logs, system_temp, installers, duplicate_files, and \
+        big_files when applicable. If no safe filter is implied, return {}.
+        """
     }
 
     /// Max characters kept when interpolating a scan-result name into the
@@ -283,7 +283,7 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         lines.append("")
         lines.append(
             "Write 1 to 2 short sentences describing what was cleaned. " +
-            "Use only the numbers above; do not invent item names, paths, or sizes."
+                "Use only the numbers above; do not invent item names, paths, or sizes."
         )
         return lines.joined(separator: "\n")
     }

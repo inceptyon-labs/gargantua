@@ -331,7 +331,7 @@ struct SafetyClassifierTests {
                 SafetyOverride(
                     condition: "age > 30d",
                     safety: .safe,
-                    profiles: []  // applies to all
+                    profiles: [] // applies to all
                 ),
             ]
         )

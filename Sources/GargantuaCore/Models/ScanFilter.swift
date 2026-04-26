@@ -160,7 +160,7 @@ public struct ScanFilterSet: Codable, Equatable, Sendable {
                 } else if character == "}" {
                     depth -= 1
                     if depth == 0 {
-                        return String(text[start...index])
+                        return String(text[start ... index])
                     }
                 }
             }

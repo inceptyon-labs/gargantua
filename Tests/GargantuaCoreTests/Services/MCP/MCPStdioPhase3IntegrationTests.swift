@@ -189,7 +189,7 @@ struct MCPStdioPhase3IntegrationTests {
 
         // Two dry runs in quick succession must both succeed: no rate-limit
         // budget consumed, notification service untouched.
-        for id in Int64(3)...Int64(4) {
+        for id in Int64(3) ... Int64(4) {
             let resp = try server.roundTrip(
                 Self.cleanRequest(id: id, itemIDs: ["safe-a"], dryRun: true)
             )

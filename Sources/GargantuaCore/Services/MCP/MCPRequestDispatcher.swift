@@ -496,8 +496,8 @@ private enum MCPDispatchError: Error {
     var message: String {
         switch self {
         case .methodNotFound(let m): return "Method not found: \(m)"
-        case .invalidParams(let m):  return "Invalid params: \(m)"
-        case .internalError(let m):  return "Internal error: \(m)"
+        case .invalidParams(let m): return "Invalid params: \(m)"
+        case .internalError(let m): return "Internal error: \(m)"
         }
     }
 }
@@ -522,7 +522,7 @@ private func decodeFromJSONAny<T: Decodable>(_ type: T.Type, from any: MCPJSONAn
 
 /// Produces a compact one-line description of a decoding error. Avoids the
 /// multi-line Swift error descriptions that would muddy JSON-RPC messages.
-fileprivate func describe(_ error: Error) -> String {
+private func describe(_ error: Error) -> String {
     if let decodeError = error as? DecodingError {
         switch decodeError {
         case .dataCorrupted(let ctx),

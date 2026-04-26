@@ -101,10 +101,10 @@ public struct SettingsView: View {
             .font(GargantuaFonts.heading)
             .foregroundStyle(GargantuaColors.ink)
     }
-
 }
 
 // MARK: - Sections, helpers, and bindings
+
 //
 // Extracted into an in-file extension so SettingsView's primary
 // body stays under the 350-line type_body_length threshold. Same

@@ -176,71 +176,71 @@ public struct DenseScanItemRow: View {
 // MARK: - Preview
 
 #if DEBUG
-#Preview {
-    VStack(spacing: 0) {
-        DenseScanItemRow(
-            item: ScanResult(
-                id: "cache_001",
-                name: "Chrome Browser Cache",
-                path: "/Users/jason/Library/Caches/Google/Chrome/Default/Cache/Data_001",
-                size: 2_147_483_648,
-                safety: .safe,
-                confidence: 98,
-                explanation: "Browser cache files. Regenerated automatically.",
-                source: SourceAttribution(name: "Google Chrome", bundleID: "com.google.Chrome"),
-                category: "browser_cache"
-            ),
-            isSelected: false,
-            isFocused: false,
-            onToggleSelection: {},
-            onExplain: {}
-        )
+    #Preview {
+        VStack(spacing: 0) {
+            DenseScanItemRow(
+                item: ScanResult(
+                    id: "cache_001",
+                    name: "Chrome Browser Cache",
+                    path: "/Users/jason/Library/Caches/Google/Chrome/Default/Cache/Data_001",
+                    size: 2_147_483_648,
+                    safety: .safe,
+                    confidence: 98,
+                    explanation: "Browser cache files. Regenerated automatically.",
+                    source: SourceAttribution(name: "Google Chrome", bundleID: "com.google.Chrome"),
+                    category: "browser_cache"
+                ),
+                isSelected: false,
+                isFocused: false,
+                onToggleSelection: {},
+                onExplain: {}
+            )
 
-        Rectangle()
-            .fill(GargantuaColors.borderSoft)
-            .frame(height: 1)
+            Rectangle()
+                .fill(GargantuaColors.borderSoft)
+                .frame(height: 1)
 
-        DenseScanItemRow(
-            item: ScanResult(
-                id: "node_001",
-                name: "node_modules (Project A)",
-                path: "/Users/jason/Development/project-a/node_modules",
-                size: 1_048_576_000,
-                safety: .review,
-                confidence: 87,
-                explanation: "Node.js dependencies. Can be reinstalled.",
-                source: SourceAttribution(name: "npm", bundleID: nil),
-                category: "dev_artifacts"
-            ),
-            isSelected: true,
-            isFocused: true,
-            onToggleSelection: {},
-            onExplain: {}
-        )
+            DenseScanItemRow(
+                item: ScanResult(
+                    id: "node_001",
+                    name: "node_modules (Project A)",
+                    path: "/Users/jason/Development/project-a/node_modules",
+                    size: 1_048_576_000,
+                    safety: .review,
+                    confidence: 87,
+                    explanation: "Node.js dependencies. Can be reinstalled.",
+                    source: SourceAttribution(name: "npm", bundleID: nil),
+                    category: "dev_artifacts"
+                ),
+                isSelected: true,
+                isFocused: true,
+                onToggleSelection: {},
+                onExplain: {}
+            )
 
-        Rectangle()
-            .fill(GargantuaColors.borderSoft)
-            .frame(height: 1)
+            Rectangle()
+                .fill(GargantuaColors.borderSoft)
+                .frame(height: 1)
 
-        DenseScanItemRow(
-            item: ScanResult(
-                id: "protected_001",
-                name: "Xcode Derived Data",
-                path: "/Users/jason/Library/Developer/Xcode/DerivedData",
-                size: 5_368_709_120,
-                safety: .protected_,
-                confidence: 72,
-                explanation: "Build cache. Deletion may require full rebuild.",
-                source: SourceAttribution(name: "Xcode", bundleID: "com.apple.dt.Xcode"),
-                category: "dev_cache"
-            ),
-            isSelected: false,
-            isFocused: false,
-            onToggleSelection: {},
-            onExplain: {}
-        )
+            DenseScanItemRow(
+                item: ScanResult(
+                    id: "protected_001",
+                    name: "Xcode Derived Data",
+                    path: "/Users/jason/Library/Developer/Xcode/DerivedData",
+                    size: 5_368_709_120,
+                    safety: .protected_,
+                    confidence: 72,
+                    explanation: "Build cache. Deletion may require full rebuild.",
+                    source: SourceAttribution(name: "Xcode", bundleID: "com.apple.dt.Xcode"),
+                    category: "dev_cache"
+                ),
+                isSelected: false,
+                isFocused: false,
+                onToggleSelection: {},
+                onExplain: {}
+            )
+        }
+        .background(GargantuaColors.void_)
+        .padding(GargantuaSpacing.space4)
     }
-    .background(GargantuaColors.void_)
-    .padding(GargantuaSpacing.space4)
-}
 #endif

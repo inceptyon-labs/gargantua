@@ -440,7 +440,7 @@ public struct EventHorizonConsoleView: View {
         guard delta > 0 else { return }
         // Exponential moving average so the disk reacts to surges without
         // thrashing on single events.
-        let instantaneous = Double(delta) * 10  // events arrive ~100ms apart in bursts
+        let instantaneous = Double(delta) * 10 // events arrive ~100ms apart in bursts
         activityRate = (activityRate * 0.7) + (instantaneous * 0.3)
     }
 

@@ -359,7 +359,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         let escaped = suffixes.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
         let pattern = #"(?i)(?:[\s._-]+)(\#(escaped))$"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return name }
-        let range = NSRange(name.startIndex..<name.endIndex, in: name)
+        let range = NSRange(name.startIndex ..< name.endIndex, in: name)
         return regex.stringByReplacingMatches(in: name, range: range, withTemplate: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

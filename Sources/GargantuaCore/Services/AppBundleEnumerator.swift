@@ -54,7 +54,7 @@ public struct DefaultAppBundleEnumerator: AppBundleEnumerating {
         if includeRunningApps {
             for app in NSWorkspace.shared.runningApplications {
                 guard let bundleURL = app.bundleURL,
-                    bundleURL.pathExtension == "app"
+                      bundleURL.pathExtension == "app"
                 else { continue }
                 let key = bundleURL.standardizedFileURL.path
                 if seenPaths.insert(key).inserted {

@@ -199,7 +199,7 @@ struct PathExpanderTests {
     @Test("Entry cap stops enumeration and marks hitCap")
     func entryCap() throws {
         let fixture = try Self.makeFixture()
-        for i in 0..<50 {
+        for i in 0 ..< 50 {
             try fixture.makeDir("dir\(i)")
         }
 

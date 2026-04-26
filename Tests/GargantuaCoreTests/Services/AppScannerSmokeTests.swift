@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-
 @testable import GargantuaCore
 
 /// End-to-end smoke test: run the real scanner against `/System/Applications`.

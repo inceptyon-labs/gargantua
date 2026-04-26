@@ -1,7 +1,6 @@
 import Darwin
 import Foundation
 import Testing
-
 @testable import GargantuaCore
 
 @Suite("AppBundleReader")

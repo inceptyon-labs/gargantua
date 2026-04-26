@@ -36,7 +36,7 @@ struct PathStreamViewModelTests {
     @Test("buffer caps at bufferCap; oldest drops first")
     func bufferCap() {
         let vm = PathStreamViewModel(bufferCap: 3)
-        for i in 0..<5 {
+        for i in 0 ..< 5 {
             vm.append(ScanProgressEvent(path: "/tmp/\(i)", outcome: .checked))
         }
         #expect(vm.events.count == 3)
@@ -100,7 +100,7 @@ struct PathStreamViewModelTests {
         let vm = PathStreamViewModel()
         // Mimic a scanner on a background task emitting multiple events.
         await Task.detached {
-            for i in 0..<10 {
+            for i in 0 ..< 10 {
                 vm.didEmit(ScanProgressEvent(path: "/tmp/\(i)", outcome: .checked))
             }
         }.value

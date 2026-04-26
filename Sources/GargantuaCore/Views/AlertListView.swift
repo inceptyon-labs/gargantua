@@ -67,19 +67,22 @@ public struct AlertListView: View {
 
             Spacer()
 
-            Button(action: { onScan?() }) {
-                HStack(spacing: GargantuaSpacing.space1) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11, weight: .medium))
-                    Text("Quick Scan")
-                        .font(GargantuaFonts.caption)
+            Button(
+                action: { onScan?() },
+                label: {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Quick Scan")
+                            .font(GargantuaFonts.caption)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, GargantuaSpacing.space3)
+                    .padding(.vertical, GargantuaSpacing.space1)
+                    .background(GargantuaColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, GargantuaSpacing.space3)
-                .padding(.vertical, GargantuaSpacing.space1)
-                .background(GargantuaColors.accent)
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-            }
+            )
             .buttonStyle(.plain)
             .disabled(scanProgress?.isScanning == true)
             .opacity(scanProgress?.isScanning == true ? 0.5 : 1)

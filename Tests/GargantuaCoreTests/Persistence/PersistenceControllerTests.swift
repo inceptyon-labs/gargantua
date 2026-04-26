@@ -252,7 +252,7 @@ struct PersistenceControllerTests {
         }
 
         let purged = try ctrl.purgeOldAuditEntries(retentionDays: 90)
-        #expect(purged == 2)  // 100d and 200d entries
+        #expect(purged == 2) // 100d and 200d entries
 
         let remaining = try ctrl.fetchAuditEntries(from: Date.distantPast)
         #expect(remaining.count == 2)

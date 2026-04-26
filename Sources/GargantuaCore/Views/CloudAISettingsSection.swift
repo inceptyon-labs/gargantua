@@ -129,7 +129,7 @@ struct CloudAISettingsSection: View {
                     saveConfiguration()
                 }
             ),
-            in: 0...100_000,
+            in: 0 ... 100_000,
             step: 100
         ) {
             HStack {

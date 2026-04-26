@@ -173,15 +173,15 @@ extension AlertItem {
         let absBytes = abs(bytes)
 
         switch absBytes {
-        case 0..<1_000:
+        case 0 ..< 1_000:
             return "\(bytes) bytes"
-        case 1_000..<1_000_000:
+        case 1_000 ..< 1_000_000:
             let kb = Double(bytes) / 1_000
             return kb >= 10 ? "\(Int(kb)) KB" : String(format: "%.1f KB", kb)
-        case 1_000_000..<1_000_000_000:
+        case 1_000_000 ..< 1_000_000_000:
             let mb = Double(bytes) / 1_000_000
             return mb >= 10 ? "\(Int(mb)) MB" : String(format: "%.1f MB", mb)
-        case 1_000_000_000..<1_000_000_000_000:
+        case 1_000_000_000 ..< 1_000_000_000_000:
             let gb = Double(bytes) / 1_000_000_000
             return gb >= 10 ? "\(Int(gb)) GB" : String(format: "%.1f GB", gb)
         default:

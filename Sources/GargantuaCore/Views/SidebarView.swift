@@ -1,8 +1,8 @@
 import SwiftUI
 #if os(macOS)
-import AppKit
+    import AppKit
 #elseif os(iOS)
-import UIKit
+    import UIKit
 #endif
 
 // MARK: - Sidebar Data Model
@@ -203,13 +203,13 @@ private struct GargantuaBrandMark: View {
         }
 
         #if os(macOS)
-        guard let nsImage = NSImage(contentsOf: url) else { return nil }
-        return Image(nsImage: nsImage)
+            guard let nsImage = NSImage(contentsOf: url) else { return nil }
+            return Image(nsImage: nsImage)
         #elseif os(iOS)
-        guard let uiImage = UIImage(contentsOfFile: url.path) else { return nil }
-        return Image(uiImage: uiImage)
+            guard let uiImage = UIImage(contentsOfFile: url.path) else { return nil }
+            return Image(uiImage: uiImage)
         #else
-        return nil
+            return nil
         #endif
     }()
 }

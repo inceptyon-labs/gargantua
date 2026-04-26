@@ -92,7 +92,7 @@ struct MCPSSETransportTests {
         #expect(response.headers["Content-Type"] == "text/event-stream")
         #expect(response.headers["Access-Control-Allow-Origin"] == nil)
 
-        let body = String(decoding: response.body, as: UTF8.self)
+        let body = String(bytes: response.body, encoding: .utf8) ?? ""
         #expect(body.contains("event: endpoint"))
         #expect(body.contains("/message?sessionId=\(sessionID)"))
         #expect(recorder.events().isEmpty)

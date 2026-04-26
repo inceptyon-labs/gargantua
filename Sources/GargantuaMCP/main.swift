@@ -177,7 +177,7 @@ dispatcher.register(tool: .listProfiles, handler: listProfilesHandler.toolHandle
 // is the first consumer; future destructive tools share the rate limiter and
 // audit writer so their budgets and forensic trails are cross-cutting.
 private let auditWriter = AuditWriter()
-private let cleanRateLimiter = MCPRateLimiter()          // 1 op / 60s default
+private let cleanRateLimiter = MCPRateLimiter() // 1 op / 60s default
 private let cleanupEngine = CleanupEngine()
 private let cleanNotificationService = MCPCleanNotificationFactory.automatic(
     gracePeriod: 5,

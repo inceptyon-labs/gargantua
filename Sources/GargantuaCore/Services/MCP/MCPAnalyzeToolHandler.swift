@@ -89,19 +89,19 @@ public struct MCPAnalyzeToolHandler: Sendable {
         if metrics.diskUsage >= 0.85 {
             out.append(
                 "Disk usage is at \(Self.percentString(metrics.diskUsage))% — "
-                + "run a scan to find reclaimable space."
+                    + "run a scan to find reclaimable space."
             )
         }
         if metrics.memoryPressure >= 0.85 {
             out.append(
                 "Memory pressure is high (\(Self.percentString(metrics.memoryPressure))%). "
-                + "Quitting unused apps may help."
+                    + "Quitting unused apps may help."
             )
         }
         if metrics.thermalLevel >= .serious {
             out.append(
                 "System is thermally throttled (\(metrics.thermalLevel.rawValue)). "
-                + "Heavy cleanup tasks may take longer than usual."
+                    + "Heavy cleanup tasks may take longer than usual."
             )
         }
         return out

@@ -4,24 +4,24 @@ import SwiftUI
 
 /// Color range for the health score gauge.
 public enum HealthScoreRange: Equatable {
-    case healthy  // 80-100
+    case healthy // 80-100
     case moderate // 50-79
-    case poor     // 0-49
+    case poor // 0-49
 
     public init(score: Int) {
         let clamped = min(max(score, 0), 100)
         switch clamped {
-        case 80...100: self = .healthy
-        case 50...79:  self = .moderate
-        default:       self = .poor
+        case 80 ... 100: self = .healthy
+        case 50 ... 79: self = .moderate
+        default: self = .poor
         }
     }
 
     public var color: Color {
         switch self {
-        case .healthy:  return GargantuaColors.safe
+        case .healthy: return GargantuaColors.safe
         case .moderate: return GargantuaColors.review
-        case .poor:     return GargantuaColors.protected_
+        case .poor: return GargantuaColors.protected_
         }
     }
 }

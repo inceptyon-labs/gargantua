@@ -43,7 +43,7 @@ public struct MCPSSEServerConfiguration: Codable, Sendable, Equatable {
     /// Default SSE port used by Gargantua.
     public static let defaultPort = 7_493
     /// Valid TCP port range accepted by settings.
-    public static let validPortRange = 1...65_535
+    public static let validPortRange = 1 ... 65_535
 
     /// Whether the SSE server should run.
     public var isEnabled: Bool
@@ -382,7 +382,7 @@ public enum MCPSSEAuthorization {
         let maxCount = max(lhsBytes.count, rhsBytes.count)
         var difference = lhsBytes.count ^ rhsBytes.count
 
-        for index in 0..<maxCount {
+        for index in 0 ..< maxCount {
             let lhsByte = index < lhsBytes.count ? Int(lhsBytes[index]) : 0
             let rhsByte = index < rhsBytes.count ? Int(rhsBytes[index]) : 0
             difference |= lhsByte ^ rhsByte

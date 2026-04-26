@@ -138,10 +138,10 @@ public enum MCPJSONValue: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch self {
-        case .bool(let b):    try c.encode(b)
-        case .string(let s):  try c.encode(s)
+        case .bool(let b): try c.encode(b)
+        case .string(let s): try c.encode(s)
         case .integer(let i): try c.encode(i)
-        case .number(let d):  try c.encode(d)
+        case .number(let d): try c.encode(d)
         }
     }
 }

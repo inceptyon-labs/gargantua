@@ -68,7 +68,7 @@ private struct FullDiskAccessScreen: View {
                 + "are limited to your home folder.",
             unlocks: [
                 "System caches, logs, and protected Library folders",
-                "More complete cleanup recommendations before you delete anything"
+                "More complete cleanup recommendations before you delete anything",
             ],
             limitedMode: "Without this, Gargantua only scans what your home folder exposes.",
             settingsURL: fullDiskAccessURL,
@@ -112,7 +112,7 @@ private struct AutomationScreen: View {
                 + "restore files from Trash if needed.",
             unlocks: [
                 "Use Finder-first cleanup for ordinary files",
-                "Keep direct Trash fallback available when Automation is denied"
+                "Keep direct Trash fallback available when Automation is denied",
             ],
             limitedMode: "Without Automation, Gargantua can still scan and use direct Trash APIs for cleanup.",
             settingsURL: automationURL,
@@ -238,7 +238,7 @@ private struct PermissionProgressIndicator: View {
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            ForEach(0..<totalSteps, id: \.self) { index in
+            ForEach(0 ..< totalSteps, id: \.self) { index in
                 Capsule(style: .continuous)
                     .fill(index < stepIndex ? GargantuaColors.accent : GargantuaColors.surface3)
                     .frame(height: 4)

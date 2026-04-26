@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-
 @testable import GargantuaCore
 
 private struct StubEnumerator: AppBundleEnumerating {

@@ -104,7 +104,7 @@ enum DiskTreemapLayout {
         var bestIndex = 1
         var bestDistance = Double.greatestFiniteMagnitude
 
-        for index in 0..<(items.count - 1) {
+        for index in 0 ..< (items.count - 1) {
             running += items[index].weight
             let distance = abs(target - running)
             if distance <= bestDistance {

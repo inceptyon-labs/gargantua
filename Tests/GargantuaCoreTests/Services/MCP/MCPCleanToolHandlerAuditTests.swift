@@ -316,7 +316,7 @@ struct MCPCleanToolHandlerAuditTests {
     @Test("audit recorder failure on cleaner failure path is best-effort — primary error surfaces")
     func auditRecorderFailureOnCleanerFailureIsBestEffort() throws {
         struct CleanerBoom: Error, LocalizedError { var errorDescription: String? { "cleaner exploded" } }
-        struct RecordBoom: Error { }
+        struct RecordBoom: Error {}
         let cache = Self.cacheWith([Self.makeResult(id: "a", size: 5)])
         let captured = LogCapture()
         let subject = MCPCleanToolHandler(

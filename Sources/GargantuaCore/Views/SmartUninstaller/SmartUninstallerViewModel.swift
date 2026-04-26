@@ -51,6 +51,7 @@ public enum SmartUninstallerPhase: Sendable {
 @MainActor
 @Observable
 public final class SmartUninstallerViewModel {
+
     // MARK: - Phase
 
     public private(set) var phase: SmartUninstallerPhase = .idle

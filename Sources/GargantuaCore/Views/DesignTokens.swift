@@ -21,7 +21,9 @@ private func hsl(_ h: Double, _ s: Double, _ l: Double) -> Color {
 /// Named after the Gargantua space theme — surfaces are void-dark,
 /// safety colors (green/amber/red) are the warmest things in the interface.
 public enum GargantuaColors {
+
     // MARK: Surfaces
+
     /// Canvas / page background. hsl(220, 14%, 9%)
     public static let void_ = hsl(220, 14, 9)
     /// Sidebar, panels. hsl(220, 12%, 11%)
@@ -34,6 +36,7 @@ public enum GargantuaColors {
     public static let surface4 = hsl(220, 10, 20)
 
     // MARK: Text
+
     /// Primary text — star-white. hsl(210, 20%, 94%)
     public static let ink = hsl(210, 20, 94)
     /// Secondary text — dim star gray. hsl(215, 12%, 65%)
@@ -44,6 +47,7 @@ public enum GargantuaColors {
     public static let ink4 = hsl(220, 8, 30)
 
     // MARK: Borders
+
     /// Standard separation.
     public static let border = Color.white.opacity(0.07)
     /// Subtle separation.
@@ -52,6 +56,7 @@ public enum GargantuaColors {
     public static let borderEm = Color.white.opacity(0.13)
 
     // MARK: Safety Classification
+
     /// Safe — desaturated terminal green. hsl(148, 45%, 42%)
     public static let safe = hsl(148, 45, 42)
     /// Safe background tint. hsla(148, 45%, 42%, 0.12)
@@ -70,6 +75,7 @@ public enum GargantuaColors {
     public static let protectedDim = protected_.opacity(0.12)
 
     // MARK: Interactive
+
     /// Hawking radiation blue — buttons, links, focus. hsl(213, 90%, 55%)
     public static let accent = hsl(213, 90, 55)
     /// Focus ring border — 2px accent stroke with 2px offset.

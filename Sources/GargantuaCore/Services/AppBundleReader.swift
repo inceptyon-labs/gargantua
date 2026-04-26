@@ -140,8 +140,8 @@ public struct DefaultAppBundleReader: AppBundleReading {
     ) -> Date? {
         let fileManager = FileManager.default
         if let executablePath,
-            let attrs = try? fileManager.attributesOfItem(atPath: executablePath),
-            let accessDate = attrs[.modificationDate] as? Date {
+           let attrs = try? fileManager.attributesOfItem(atPath: executablePath),
+           let accessDate = attrs[.modificationDate] as? Date {
             return accessDate
         }
         return fallback

@@ -345,7 +345,7 @@ public struct DeveloperToolPreviewAdapter: Sendable {
     static func parseFirstSize(in line: String) -> Int64? {
         let pattern = #"(?i)(\d+(?:\.\d+)?)\s*([KMGT]?B)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        let range = NSRange(line.startIndex ..< line.endIndex, in: line)
         guard let match = regex.firstMatch(in: line, range: range),
               match.numberOfRanges == 3,
               let valueRange = Range(match.range(at: 1), in: line),
@@ -359,7 +359,7 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = #"(?i)^(\d+(?:\.\d+)?)\s*([KMGT]?B)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+        let range = NSRange(trimmed.startIndex ..< trimmed.endIndex, in: trimmed)
         guard let match = regex.firstMatch(in: trimmed, range: range),
               match.numberOfRanges == 3,
               let valueRange = Range(match.range(at: 1), in: trimmed),

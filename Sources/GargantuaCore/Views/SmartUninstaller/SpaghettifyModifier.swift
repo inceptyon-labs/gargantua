@@ -52,7 +52,7 @@ public enum Spaghettify {
 
         let keptCount = chars.count - strip
         let kept = String(chars.prefix(keptCount))
-        let tail = (0..<strip).map { dissolveGlyphs[$0 % dissolveGlyphs.count] }
+        let tail = (0 ..< strip).map { dissolveGlyphs[$0 % dissolveGlyphs.count] }
         return kept + String(tail)
     }
 }

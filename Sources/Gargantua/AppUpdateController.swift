@@ -64,7 +64,7 @@ final class AppUpdateController: NSObject, ObservableObject {
             },
             updater.observe(\.allowsAutomaticUpdates, options: [.initial, .new]) { [weak self] _, _ in
                 Task { @MainActor in self?.refreshSettingsState() }
-            }
+            },
         ]
     }
 

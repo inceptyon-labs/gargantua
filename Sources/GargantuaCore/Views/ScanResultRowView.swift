@@ -8,7 +8,7 @@ struct ScanResultRowView: View {
     let isFocused: Bool
     let onToggleSelection: () -> Void
     let onExplain: ((ScanResult) -> Void)?
-    let onAddToWhitelist: ((ScanResult) -> Void)?
+    let onAddToExclusions: ((ScanResult) -> Void)?
     let onViewRule: ((ScanResult) -> Void)?
 
     var body: some View {
@@ -102,9 +102,9 @@ struct ScanResultRowView: View {
         Divider()
 
         Button {
-            onAddToWhitelist?(item)
+            onAddToExclusions?(item)
         } label: {
-            Label("Add to Whitelist", systemImage: "shield.slash")
+            Label("Add to Exclusions", systemImage: "shield.slash")
         }
 
         Button {

@@ -252,8 +252,8 @@ struct FclonesAdapterTests {
     @MainActor
     func reclaimableBytesExcludeOneCopyPerGroup() async throws {
         let json = Self.reportJSON(groups: [
-            GroupFixture(len: 1000, hash: "h1", paths: ["/a1", "/a2", "/a3"]),  // reclaim 2000
-            GroupFixture(len: 500, hash: "h2", paths: ["/b1", "/b2"]),           // reclaim 500
+            GroupFixture(len: 1000, hash: "h1", paths: ["/a1", "/a2", "/a3"]), // reclaim 2000
+            GroupFixture(len: 500, hash: "h2", paths: ["/b1", "/b2"]), // reclaim 500
         ])
         let runner = StubRunner(output: ProcessOutput(stdout: json, stderr: "", exitCode: 0))
         let progress = ScanProgress()
@@ -275,7 +275,7 @@ struct FclonesAdapterTests {
     func builtInTrustDefaults() {
         let entry = FclonesTrustDefaults.builtIn.duplicate
         #expect(entry.safety == .review)
-        #expect((40...80).contains(entry.confidence))
+        #expect((40 ... 80).contains(entry.confidence))
         #expect(!entry.explanation.isEmpty)
     }
 }

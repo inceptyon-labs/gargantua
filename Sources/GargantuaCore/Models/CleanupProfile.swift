@@ -161,7 +161,7 @@ extension CleanupProfile {
             return match
         }
         for profile in [CleanupProfile.developer, .light, .deep, .devPurge]
-        where profile.id == activeProfileID {
+            where profile.id == activeProfileID {
             return profile
         }
         return fallback

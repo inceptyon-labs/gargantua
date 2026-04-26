@@ -195,7 +195,7 @@ struct MCPRateLimiterTests {
         let (limiter, _) = makeLimiter(window: 60, maxOps: 1)
 
         let admitted = await withTaskGroup(of: Bool.self) { group in
-            for _ in 0..<20 {
+            for _ in 0 ..< 20 {
                 group.addTask {
                     limiter.recordAndCheck(clientID: "alpha", tool: "clean") == .allowed
                 }

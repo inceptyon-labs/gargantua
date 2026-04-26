@@ -16,11 +16,11 @@ enum PathExclusionNotice: Equatable {
     var message: String {
         switch self {
         case .added(let pattern):
-            return "Added \(pattern) to the whitelist."
+            return "Added \(pattern) to exclusions."
         case .duplicate(let pattern):
-            return "\(pattern) is already whitelisted."
+            return "\(pattern) is already excluded."
         case .removed(let pattern):
-            return "Removed \(pattern) from the whitelist."
+            return "Removed \(pattern) from exclusions."
         case .empty:
             return "Enter a path or glob pattern before adding it."
         case .failed(let message):
@@ -58,10 +58,10 @@ final class PathExclusionSettingsViewModel: ObservableObject {
 
     func load() {
         do {
-            entries = try persistence.fetchWhitelistEntries()
+            entries = try persistence.fetchExclusionEntries()
         } catch {
             entries = []
-            notice = .failed("Whitelist entries could not be loaded.")
+            notice = .failed("Exclusion entries could not be loaded.")
         }
     }
 
@@ -73,26 +73,26 @@ final class PathExclusionSettingsViewModel: ObservableObject {
         }
 
         do {
-            if try persistence.addWhitelistEntry(pattern: pattern) == nil {
+            if try persistence.addExclusionEntry(pattern: pattern) == nil {
                 notice = .duplicate(pattern)
             } else {
                 newPattern = ""
                 notice = .added(pattern)
             }
-            entries = try persistence.fetchWhitelistEntries()
+            entries = try persistence.fetchExclusionEntries()
         } catch {
-            notice = .failed("Whitelist entry could not be saved.")
+            notice = .failed("Exclusion entry could not be saved.")
             load()
         }
     }
 
     func removeEntry(pattern: String) {
         do {
-            try persistence.removeWhitelistEntry(pattern: pattern)
-            entries = try persistence.fetchWhitelistEntries()
+            try persistence.removeExclusionEntry(pattern: pattern)
+            entries = try persistence.fetchExclusionEntries()
             notice = .removed(pattern)
         } catch {
-            notice = .failed("Whitelist entry could not be removed.")
+            notice = .failed("Exclusion entry could not be removed.")
             load()
         }
     }
@@ -113,7 +113,7 @@ struct PathExclusionSettingsSection: View {
     @MainActor
     init(
         persistence: PersistenceController,
-        title: String = "Whitelists",
+        title: String = "Exclusions",
         subtitle: String = "Paths and glob patterns excluded from cleanup scans.",
         showsDivider: Bool = false,
         titleFont: Font = GargantuaFonts.label
@@ -206,7 +206,7 @@ struct PathExclusionSettingsSection: View {
             }
             .buttonStyle(.plain)
             .disabled(!model.canAdd)
-            .help("Add whitelist entry")
+            .help("Add exclusion entry")
         }
     }
 
@@ -235,7 +235,7 @@ struct PathExclusionSettingsSection: View {
                 .frame(width: 24, alignment: .center)
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                Text("No whitelist entries")
+                Text("No exclusion entries")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink2)
 
@@ -304,7 +304,7 @@ private struct PathExclusionEntryRow: View {
                     .frame(width: 18, height: 18)
             }
             .buttonStyle(.plain)
-            .help("Remove whitelist entry")
+            .help("Remove exclusion entry")
         }
         .padding(.horizontal, GargantuaSpacing.space3)
         .padding(.vertical, GargantuaSpacing.space2)

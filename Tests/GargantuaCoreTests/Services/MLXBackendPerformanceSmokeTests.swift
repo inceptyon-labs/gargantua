@@ -37,21 +37,21 @@ struct MLXBackendPerformanceSmokeTests {
         var allLatencies: [Double] = []
 
         print("""
-            MLX_PERF_SUMMARY \
-            model_dir=\(modelDirectory.path) \
-            cases=\(cases.count) \
-            runs_per_case=\(runsPerCase) \
-            max_new_tokens=\(maxNewTokens) \
-            cold_load_s=\(Self.formatSeconds(coldLoadSeconds)) \
-            memory_bytes=\(memoryAfterLoad) \
-            memory_mib=\(Self.formatMiB(memoryAfterLoad))
-            """)
+        MLX_PERF_SUMMARY \
+        model_dir=\(modelDirectory.path) \
+        cases=\(cases.count) \
+        runs_per_case=\(runsPerCase) \
+        max_new_tokens=\(maxNewTokens) \
+        cold_load_s=\(Self.formatSeconds(coldLoadSeconds)) \
+        memory_bytes=\(memoryAfterLoad) \
+        memory_mib=\(Self.formatMiB(memoryAfterLoad))
+        """)
 
         for smokeCase in cases {
             var latencies: [Double] = []
             var tokenCounts: [Int] = []
 
-            for _ in 0..<runsPerCase {
+            for _ in 0 ..< runsPerCase {
                 let (text, generateSeconds) = try await Self.measureSeconds {
                     try await engine.generate(for: smokeCase.result, rule: smokeCase.rule)
                 }
@@ -64,19 +64,19 @@ struct MLXBackendPerformanceSmokeTests {
             }
 
             print("""
-                MLX_PERF_CASE \
-                id=\(smokeCase.rule.id) \
-                category=\(smokeCase.rule.category) \
-                safety=\(smokeCase.rule.safety.rawValue) \
-                p50_s=\(Self.formatSeconds(Self.percentile(latencies, 0.50))) \
-                p95_s=\(Self.formatSeconds(Self.percentile(latencies, 0.95))) \
-                token_counts=\(tokenCounts.map(String.init).joined(separator: ","))
-                """)
+            MLX_PERF_CASE \
+            id=\(smokeCase.rule.id) \
+            category=\(smokeCase.rule.category) \
+            safety=\(smokeCase.rule.safety.rawValue) \
+            p50_s=\(Self.formatSeconds(Self.percentile(latencies, 0.50))) \
+            p95_s=\(Self.formatSeconds(Self.percentile(latencies, 0.95))) \
+            token_counts=\(tokenCounts.map(String.init).joined(separator: ","))
+            """)
         }
 
         print("""
-            MLX_PERF_TOTAL samples=\(allLatencies.count) p50_s=\(Self.formatSeconds(Self.percentile(allLatencies, 0.50))) p95_s=\(Self.formatSeconds(Self.percentile(allLatencies, 0.95)))
-            """)
+        MLX_PERF_TOTAL samples=\(allLatencies.count) p50_s=\(Self.formatSeconds(Self.percentile(allLatencies, 0.50))) p95_s=\(Self.formatSeconds(Self.percentile(allLatencies, 0.95)))
+        """)
 
         #expect(memoryAfterLoad < LocalAIService.maxModelMemory)
 

@@ -1,0 +1,29 @@
+--swift-version 6.1
+
+# Keep SwiftFormat intentionally conservative. Project-wide formatting should
+# clean whitespace/import/indent noise without rewriting expression style.
+--disable all
+--enable blankLineAfterImports
+--enable blankLinesAroundMark
+--enable blankLinesBetweenImports
+--enable consecutiveBlankLines
+--enable consecutiveSpaces
+--enable duplicateImports
+--enable elseOnSameLine
+--enable emptyBraces
+--enable indent
+--enable linebreakAtEndOfFile
+--enable linebreaks
+--enable semicolons
+--enable spaceAroundBraces
+--enable spaceAroundBrackets
+--enable spaceAroundComments
+--enable spaceAroundGenerics
+--enable spaceAroundOperators
+--enable spaceAroundParens
+--enable spaceInsideBraces
+--enable spaceInsideBrackets
+--enable spaceInsideComments
+--enable spaceInsideGenerics
+--enable spaceInsideParens
+--enable trailingSpace

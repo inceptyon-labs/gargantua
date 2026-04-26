@@ -18,7 +18,7 @@ struct PathExclusionSettingsViewModelTests {
         model.newPattern = "  ~/Library/Caches/KeepMe  \n"
         model.addDraftPattern()
 
-        let persisted = try persistence.fetchWhitelistEntries()
+        let persisted = try persistence.fetchExclusionEntries()
         #expect(persisted.map(\.pattern) == ["~/Library/Caches/KeepMe"])
         #expect(model.entries.map(\.pattern) == ["~/Library/Caches/KeepMe"])
         #expect(model.newPattern.isEmpty)
@@ -29,13 +29,13 @@ struct PathExclusionSettingsViewModelTests {
     @MainActor
     func duplicateEntryIsExplicit() throws {
         let (model, persistence) = try makeSubject()
-        try persistence.addWhitelistEntry(pattern: "~/Library/Caches/KeepMe")
+        try persistence.addExclusionEntry(pattern: "~/Library/Caches/KeepMe")
 
         model.load()
         model.newPattern = "~/Library/Caches/KeepMe"
         model.addDraftPattern()
 
-        let persisted = try persistence.fetchWhitelistEntries()
+        let persisted = try persistence.fetchExclusionEntries()
         #expect(persisted.count == 1)
         #expect(model.entries.count == 1)
         #expect(model.newPattern == "~/Library/Caches/KeepMe")
@@ -50,7 +50,7 @@ struct PathExclusionSettingsViewModelTests {
         model.newPattern = " \n "
         model.addDraftPattern()
 
-        #expect(try persistence.fetchWhitelistEntries().isEmpty)
+        #expect(try persistence.fetchExclusionEntries().isEmpty)
         #expect(model.entries.isEmpty)
         #expect(model.notice == .empty)
     }
@@ -59,12 +59,12 @@ struct PathExclusionSettingsViewModelTests {
     @MainActor
     func removeEntryPersists() throws {
         let (model, persistence) = try makeSubject()
-        try persistence.addWhitelistEntry(pattern: "~/Library/Caches/KeepMe")
+        try persistence.addExclusionEntry(pattern: "~/Library/Caches/KeepMe")
 
         model.load()
         model.removeEntry(pattern: "~/Library/Caches/KeepMe")
 
-        #expect(try persistence.fetchWhitelistEntries().isEmpty)
+        #expect(try persistence.fetchExclusionEntries().isEmpty)
         #expect(model.entries.isEmpty)
         #expect(model.notice == .removed("~/Library/Caches/KeepMe"))
     }

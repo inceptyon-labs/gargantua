@@ -10,8 +10,8 @@ public enum ScanGroupingMode: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .safety:   return "Safety"
-        case .folder:   return "Folder"
+        case .safety: return "Safety"
+        case .folder: return "Folder"
         case .category: return "Category"
         }
     }
@@ -70,8 +70,8 @@ public extension ScanGroup {
 public enum ScanGrouper {
     public static func group(_ results: [ScanResult], mode: ScanGroupingMode) -> [ScanGroup] {
         switch mode {
-        case .safety:   return groupBySafety(results)
-        case .folder:   return groupByFolder(results)
+        case .safety: return groupBySafety(results)
+        case .folder: return groupByFolder(results)
         case .category: return groupByCategory(results)
         }
     }
@@ -123,8 +123,8 @@ public enum ScanGrouper {
 
     private static func title(forSafety level: SafetyLevel) -> String {
         switch level {
-        case .safe:       return "Safe to Clean"
-        case .review:     return "Review Required"
+        case .safe: return "Safe to Clean"
+        case .review: return "Review Required"
         case .protected_: return "Protected"
         }
     }

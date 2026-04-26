@@ -213,7 +213,7 @@ public struct MCPCleanToolHandler: Sendable {
                 log?("clean audit record failed after successful clean: \(error)")
                 throw MCPToolError.internalError(
                     "Clean completed but audit log write failed. "
-                    + "Audit trail may be incomplete; investigate the audit subsystem."
+                        + "Audit trail may be incomplete; investigate the audit subsystem."
                 )
             }
             return try Self.makeResult(

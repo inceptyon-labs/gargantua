@@ -111,9 +111,9 @@ struct SystemMetricsTests {
     @Test("Weights sum to 1.0")
     func weightsSumToOne() {
         let sum = SystemMetrics.Weight.cpu +
-                  SystemMetrics.Weight.memory +
-                  SystemMetrics.Weight.disk +
-                  SystemMetrics.Weight.thermal
+            SystemMetrics.Weight.memory +
+            SystemMetrics.Weight.disk +
+            SystemMetrics.Weight.thermal
         #expect(sum == 1.0)
     }
 

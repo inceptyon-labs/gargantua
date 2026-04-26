@@ -142,7 +142,7 @@ private struct CallerCodeSignatureValidator {
             &error
         )
         if validateStatus != errSecSuccess {
-            let message = error.map { CFErrorCopyDescription($0.takeRetainedValue()) as String? } ?? nil
+            let message = error.map { CFErrorCopyDescription($0.takeRetainedValue()) as String? }
             HelperLog.write("SecCodeCheckValidityWithErrors failed for pid \(connection.processIdentifier): \(validateStatus) \(message ?? "")")
             return false
         }

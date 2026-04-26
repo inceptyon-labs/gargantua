@@ -86,7 +86,7 @@ struct MCPSSETransportNetworkingTests {
                     if count > 0 {
                         data.append(buffer, count: count)
                         if data.range(of: markerData) != nil {
-                            return String(decoding: data, as: UTF8.self)
+                            return String(bytes: data, encoding: .utf8) ?? ""
                         }
                     } else if count < 0 {
                         throw TestSocketError.readFailed
@@ -99,7 +99,7 @@ struct MCPSSETransportNetworkingTests {
                 }
             }
 
-            throw TestSocketError.timedOut(String(decoding: data, as: UTF8.self))
+            throw TestSocketError.timedOut(String(bytes: data, encoding: .utf8) ?? "")
         }
     }
 

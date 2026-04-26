@@ -99,8 +99,8 @@ struct UninstallAppPickerView: View {
     private var batchActionBar: some View {
         HStack(spacing: GargantuaSpacing.space3) {
             Text(viewModel.multiSelected.count == 1
-                 ? "1 app selected"
-                 : "\(viewModel.multiSelected.count) apps selected")
+                ? "1 app selected"
+                : "\(viewModel.multiSelected.count) apps selected")
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink)
 
@@ -126,8 +126,8 @@ struct UninstallAppPickerView: View {
                 Task { await viewModel.startBatchUninstall() }
             } label: {
                 Text(viewModel.multiSelected.count == 1
-                     ? "Uninstall 1 app"
-                     : "Uninstall \(viewModel.multiSelected.count) apps")
+                    ? "Uninstall 1 app"
+                    : "Uninstall \(viewModel.multiSelected.count) apps")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(.white)
                     .padding(.vertical, GargantuaSpacing.space2)

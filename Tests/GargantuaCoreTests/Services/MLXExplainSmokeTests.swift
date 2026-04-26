@@ -24,11 +24,11 @@ struct MLXExplainSmokeTests {
         let manager = ModelDownloadManager()
         guard case .downloaded(let path, let size) = manager.state else {
             Issue.record("""
-                Default model is not staged. Click \"Download Model\" in Settings \
-                or run the download flow, then re-run with GARGANTUA_MLX_SMOKE=1. \
-                Expected: \(ModelDownloadManager.defaultModel.id) at \
-                \(ModelDownloadManager.modelsDirectory.appendingPathComponent(ModelDownloadManager.defaultModel.id).path)
-                """)
+            Default model is not staged. Click \"Download Model\" in Settings \
+            or run the download flow, then re-run with GARGANTUA_MLX_SMOKE=1. \
+            Expected: \(ModelDownloadManager.defaultModel.id) at \
+            \(ModelDownloadManager.modelsDirectory.appendingPathComponent(ModelDownloadManager.defaultModel.id).path)
+            """)
             return
         }
         #expect(size > 0, "Staged model size should be non-zero")

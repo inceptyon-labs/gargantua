@@ -327,7 +327,7 @@ public struct NativeScanAdapter: ScanAdapter {
             lastAccessed: lastAccessed,
             modifiedAt: modifiedAt
         ),
-              !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
+            !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
             return nil
         }
 
@@ -438,7 +438,7 @@ public struct NativeScanAdapter: ScanAdapter {
             } else if i == parts.count - 1 && !pattern.hasSuffix("*") {
                 return name[cursor...].hasSuffix(part)
             } else {
-                guard let range = name.range(of: part, range: cursor..<name.endIndex) else { return false }
+                guard let range = name.range(of: part, range: cursor ..< name.endIndex) else { return false }
                 cursor = range.upperBound
             }
         }

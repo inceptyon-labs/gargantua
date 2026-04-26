@@ -1,6 +1,6 @@
 import Foundation
 #if os(macOS)
-@preconcurrency import ServiceManagement
+    @preconcurrency import ServiceManagement
 #endif
 
 public enum LaunchAtLoginStatus: Sendable, Equatable, CustomStringConvertible {
@@ -12,15 +12,15 @@ public enum LaunchAtLoginStatus: Sendable, Equatable, CustomStringConvertible {
     case unknown(Int)
 
     #if os(macOS)
-    public init(_ status: SMAppService.Status) {
-        switch status {
-        case .notRegistered: self = .notRegistered
-        case .enabled: self = .enabled
-        case .requiresApproval: self = .requiresApproval
-        case .notFound: self = .notFound
-        @unknown default: self = .unknown(status.rawValue)
+        public init(_ status: SMAppService.Status) {
+            switch status {
+            case .notRegistered: self = .notRegistered
+            case .enabled: self = .enabled
+            case .requiresApproval: self = .requiresApproval
+            case .notFound: self = .notFound
+            @unknown default: self = .unknown(status.rawValue)
+            }
         }
-    }
     #endif
 
     public var description: String {
@@ -42,27 +42,27 @@ public protocol LaunchAtLoginInstalling: Sendable {
 }
 
 #if os(macOS)
-public struct SMAppServiceLaunchAtLoginInstaller: LaunchAtLoginInstalling, @unchecked Sendable {
-    private let service: SMAppService
+    public struct SMAppServiceLaunchAtLoginInstaller: LaunchAtLoginInstalling, @unchecked Sendable {
+        private let service: SMAppService
 
-    public init(service: SMAppService = .mainApp) {
-        self.service = service
-    }
+        public init(service: SMAppService = .mainApp) {
+            self.service = service
+        }
 
-    public func status() -> LaunchAtLoginStatus {
-        LaunchAtLoginStatus(service.status)
-    }
+        public func status() -> LaunchAtLoginStatus {
+            LaunchAtLoginStatus(service.status)
+        }
 
-    public func register() throws -> LaunchAtLoginStatus {
-        try service.register()
-        return status()
-    }
+        public func register() throws -> LaunchAtLoginStatus {
+            try service.register()
+            return status()
+        }
 
-    public func unregister() throws -> LaunchAtLoginStatus {
-        try service.unregister()
-        return status()
+        public func unregister() throws -> LaunchAtLoginStatus {
+            try service.unregister()
+            return status()
+        }
     }
-}
 #endif
 
 public final class LaunchAtLoginController: @unchecked Sendable {
@@ -100,9 +100,9 @@ public final class LaunchAtLoginController: @unchecked Sendable {
 
 private func defaultLaunchAtLoginInstaller() -> any LaunchAtLoginInstalling {
     #if os(macOS)
-    return SMAppServiceLaunchAtLoginInstaller()
+        return SMAppServiceLaunchAtLoginInstaller()
     #else
-    return UnavailableLaunchAtLoginInstaller()
+        return UnavailableLaunchAtLoginInstaller()
     #endif
 }
 

@@ -143,12 +143,12 @@ public struct FileHealthContainerView: View {
 
                 Text(
                     "Runs czkawka across your scan roots to surface empty, broken, temporary, oversized, "
-                    + "and visually similar files. Review-by-default — nothing is selected automatically."
+                        + "and visually similar files. Review-by-default — nothing is selected automatically."
                 )
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
             }
 
             Button(action: startScan) {

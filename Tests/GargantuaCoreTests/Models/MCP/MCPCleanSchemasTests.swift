@@ -67,9 +67,9 @@ struct MCPCleanSchemasTests {
         let json = Data(#"{"item_ids":["chrome_cache_001"],"confirm":true}"#.utf8)
         let input = try JSONDecoder().decode(MCPCleanInput.self, from: json)
         #expect(input.itemIDs == ["chrome_cache_001"])
-        #expect(input.method == "trash")  // default
+        #expect(input.method == "trash") // default
         #expect(input.confirm == true)
-        #expect(input.dryRun == false)    // default
+        #expect(input.dryRun == false) // default
     }
 
     @Test("clean input decodes a full payload with all fields")

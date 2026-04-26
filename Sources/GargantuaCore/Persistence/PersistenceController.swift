@@ -241,19 +241,19 @@ public final class PersistenceController {
         return try context.fetch(descriptor).first?.scanDate
     }
 
-    // MARK: - Whitelist
+    // MARK: - Path Exclusions
 
-    /// Fetch all whitelist entries, sorted by creation date.
-    public func fetchWhitelistEntries() throws -> [PersistedWhitelistEntry] {
+    /// Fetch all path exclusion entries, sorted by creation date.
+    public func fetchExclusionEntries() throws -> [PersistedWhitelistEntry] {
         let descriptor = FetchDescriptor<PersistedWhitelistEntry>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         return try context.fetch(descriptor)
     }
 
-    /// Add a whitelist entry. No-op if the pattern already exists.
+    /// Add a path exclusion entry. No-op if the pattern already exists.
     @discardableResult
-    public func addWhitelistEntry(pattern: String, note: String = "") throws -> PersistedWhitelistEntry? {
+    public func addExclusionEntry(pattern: String, note: String = "") throws -> PersistedWhitelistEntry? {
         let predicate = #Predicate<PersistedWhitelistEntry> { $0.pattern == pattern }
         let descriptor = FetchDescriptor(predicate: predicate)
         guard try context.fetch(descriptor).isEmpty else { return nil }
@@ -264,13 +264,32 @@ public final class PersistenceController {
         return entry
     }
 
-    /// Remove a whitelist entry by pattern.
-    public func removeWhitelistEntry(pattern: String) throws {
+    /// Remove a path exclusion entry by pattern.
+    public func removeExclusionEntry(pattern: String) throws {
         let predicate = #Predicate<PersistedWhitelistEntry> { $0.pattern == pattern }
         let descriptor = FetchDescriptor(predicate: predicate)
         if let existing = try context.fetch(descriptor).first {
             context.delete(existing)
             try context.save()
         }
+    }
+
+    @available(*, deprecated, renamed: "fetchExclusionEntries")
+    // swiftlint:disable:next inclusive_language
+    public func fetchWhitelistEntries() throws -> [PersistedWhitelistEntry] {
+        try fetchExclusionEntries()
+    }
+
+    @available(*, deprecated, renamed: "addExclusionEntry")
+    @discardableResult
+    // swiftlint:disable:next inclusive_language
+    public func addWhitelistEntry(pattern: String, note: String = "") throws -> PersistedWhitelistEntry? {
+        try addExclusionEntry(pattern: pattern, note: note)
+    }
+
+    @available(*, deprecated, renamed: "removeExclusionEntry")
+    // swiftlint:disable:next inclusive_language
+    public func removeWhitelistEntry(pattern: String) throws {
+        try removeExclusionEntry(pattern: pattern)
     }
 }

@@ -37,9 +37,9 @@ public struct CleanupSummaryView: View {
     /// Outcome classification used to pick the header treatment and decide
     /// whether the success section is meaningful.
     enum SummaryOutcome: Sendable {
-        case complete       // all items succeeded
-        case partial        // some succeeded, some failed
-        case failed         // zero succeeded, >0 failed
+        case complete // all items succeeded
+        case partial // some succeeded, some failed
+        case failed // zero succeeded, >0 failed
     }
 
     /// Classify a result for header presentation. A result with no items at
@@ -207,8 +207,8 @@ public struct CleanupSummaryView: View {
             let count = result.succeededItems.count
             HStack(spacing: GargantuaSpacing.space2) {
                 Text(count == 1
-                     ? "1 item \(result.cleanupMethod.summaryActionText)"
-                     : "\(count) items \(result.cleanupMethod.summaryActionText)")
+                    ? "1 item \(result.cleanupMethod.summaryActionText)"
+                    : "\(count) items \(result.cleanupMethod.summaryActionText)")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink2)
 

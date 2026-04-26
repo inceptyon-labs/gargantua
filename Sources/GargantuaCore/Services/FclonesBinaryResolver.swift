@@ -79,7 +79,7 @@ public struct FclonesBinaryResolver: Sendable {
         }
 
         for candidate in Self.candidatePaths
-        where fileManager.isExecutableFile(atPath: candidate) {
+            where fileManager.isExecutableFile(atPath: candidate) {
             return URL(fileURLWithPath: candidate)
         }
 

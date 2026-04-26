@@ -37,10 +37,10 @@ struct FileHealthSessionStateTests {
     func finishScanPreselectsSafeOnly() {
         let session = FileHealthSessionState()
         let results = [
-            makeCzkawkaResult(category: .emptyFiles, counter: 0),     // safe
+            makeCzkawkaResult(category: .emptyFiles, counter: 0), // safe
             makeCzkawkaResult(category: .brokenSymlinks, counter: 1), // safe
-            makeCzkawkaResult(category: .bigFiles, counter: 2),       // review
-            makeCzkawkaResult(category: .similarImages, counter: 3),  // review
+            makeCzkawkaResult(category: .bigFiles, counter: 2), // review
+            makeCzkawkaResult(category: .similarImages, counter: 3), // review
         ]
 
         session.finishScan(results: results)
@@ -90,8 +90,8 @@ struct FileHealthSessionStateTests {
     func selectionsPersistAcrossTabSwitches() {
         let session = FileHealthSessionState()
         let results = [
-            makeCzkawkaResult(category: .emptyFiles, counter: 0),    // safe
-            makeCzkawkaResult(category: .bigFiles, counter: 1),      // review, manually opt-in
+            makeCzkawkaResult(category: .emptyFiles, counter: 0), // safe
+            makeCzkawkaResult(category: .bigFiles, counter: 1), // review, manually opt-in
             makeCzkawkaResult(category: .similarImages, counter: 2), // review
         ]
         session.finishScan(results: results)

@@ -239,7 +239,7 @@ public enum DirectorySizeScanner: Sendable {
                 nextIndex += 1
             }
 
-            for _ in 0..<maxConcurrent { enqueueNext() }
+            for _ in 0 ..< maxConcurrent { enqueueNext() }
 
             while inflight > 0 {
                 if Task.isCancelled {

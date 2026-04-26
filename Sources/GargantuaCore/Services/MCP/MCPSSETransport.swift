@@ -185,7 +185,7 @@ public enum MCPHTTPRequestParser {
         guard availableBodyBytes >= contentLength else {
             return nil
         }
-        return Data(data[bodyStart..<data.index(bodyStart, offsetBy: contentLength)])
+        return Data(data[bodyStart ..< data.index(bodyStart, offsetBy: contentLength)])
     }
 
     private static func parseTarget(_ target: String) -> (path: String, query: [String: String]) {
@@ -467,7 +467,7 @@ public final class MCPSSETransport: @unchecked Sendable {
     }
 
     private func handle(_ request: MCPHTTPRequest, on connection: NWConnection) {
-        let storedToken = (try? tokenProvider()) ?? nil
+        let storedToken = (try? tokenProvider())
         if request.method == "GET", request.path == "/sse" {
             var sessionID: String?
             let sink: MCPSSERequestRouter.EventSink = { [weak connection] event, data in
@@ -479,7 +479,7 @@ public final class MCPSSETransport: @unchecked Sendable {
             }
             connection.stateUpdateHandler = { [weak self] state in
                 switch state {
-                case .cancelled, .failed(_):
+                case .cancelled, .failed:
                     if let sessionID {
                         self?.router.closeStream(sessionID: sessionID)
                     }

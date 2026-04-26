@@ -146,12 +146,12 @@ public struct DeveloperToolsView: View {
                     .foregroundStyle(GargantuaColors.ink)
                 Text(
                     "Gargantua looks for Homebrew and Docker in standard install locations. "
-                    + "Install one to see dry-run cleanup previews here."
+                        + "Install one to see dry-run cleanup previews here."
                 )
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
             }
 
             if availabilities.contains(where: { !$0.isInstalled && $0.error != nil }) {

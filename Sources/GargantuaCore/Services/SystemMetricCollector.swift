@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #endif
 
 private let logger = Logger(subsystem: "com.gargantua.core", category: "SystemMetricCollector")
@@ -50,52 +50,52 @@ public struct SystemMetricCollector: Sendable {
     /// Returns aggregate usage across all cores as a 0.0–1.0 fraction.
     private func collectCPU() -> Double {
         #if canImport(Darwin)
-        var numCPUs: natural_t = 0
-        var cpuInfo: processor_info_array_t?
-        var numCPUInfo: mach_msg_type_number_t = 0
+            var numCPUs: natural_t = 0
+            var cpuInfo: processor_info_array_t?
+            var numCPUInfo: mach_msg_type_number_t = 0
 
-        let result = host_processor_info(
-            mach_host_self(),
-            PROCESSOR_CPU_LOAD_INFO,
-            &numCPUs,
-            &cpuInfo,
-            &numCPUInfo
-        )
-
-        guard result == KERN_SUCCESS, let info = cpuInfo else {
-            logger.warning("host_processor_info failed (\(result))")
-            return 0
-        }
-
-        defer {
-            vm_deallocate(
-                mach_task_self_,
-                vm_address_t(bitPattern: info),
-                vm_size_t(Int(numCPUInfo) * MemoryLayout<integer_t>.size)
+            let result = host_processor_info(
+                mach_host_self(),
+                PROCESSOR_CPU_LOAD_INFO,
+                &numCPUs,
+                &cpuInfo,
+                &numCPUInfo
             )
-        }
 
-        var totalUser: Double = 0
-        var totalSystem: Double = 0
-        var totalIdle: Double = 0
-        var totalNice: Double = 0
+            guard result == KERN_SUCCESS, let info = cpuInfo else {
+                logger.warning("host_processor_info failed (\(result))")
+                return 0
+            }
 
-        for i in 0..<Int(numCPUs) {
-            let offset = Int(CPU_STATE_MAX) * i
-            totalUser += Double(info[offset + Int(CPU_STATE_USER)])
-            totalSystem += Double(info[offset + Int(CPU_STATE_SYSTEM)])
-            totalIdle += Double(info[offset + Int(CPU_STATE_IDLE)])
-            totalNice += Double(info[offset + Int(CPU_STATE_NICE)])
-        }
+            defer {
+                vm_deallocate(
+                    mach_task_self_,
+                    vm_address_t(bitPattern: info),
+                    vm_size_t(Int(numCPUInfo) * MemoryLayout<integer_t>.size)
+                )
+            }
 
-        let totalTicks = totalUser + totalSystem + totalIdle + totalNice
-        guard totalTicks > 0 else { return 0 }
+            var totalUser: Double = 0
+            var totalSystem: Double = 0
+            var totalIdle: Double = 0
+            var totalNice: Double = 0
 
-        let usage = (totalUser + totalSystem) / totalTicks
-        logger.debug("CPU usage: \(String(format: "%.1f", usage * 100))%")
-        return usage
+            for i in 0 ..< Int(numCPUs) {
+                let offset = Int(CPU_STATE_MAX) * i
+                totalUser += Double(info[offset + Int(CPU_STATE_USER)])
+                totalSystem += Double(info[offset + Int(CPU_STATE_SYSTEM)])
+                totalIdle += Double(info[offset + Int(CPU_STATE_IDLE)])
+                totalNice += Double(info[offset + Int(CPU_STATE_NICE)])
+            }
+
+            let totalTicks = totalUser + totalSystem + totalIdle + totalNice
+            guard totalTicks > 0 else { return 0 }
+
+            let usage = (totalUser + totalSystem) / totalTicks
+            logger.debug("CPU usage: \(String(format: "%.1f", usage * 100))%")
+            return usage
         #else
-        return 0
+            return 0
         #endif
     }
 
@@ -110,36 +110,36 @@ public struct SystemMetricCollector: Sendable {
     /// Memory usage via Mach `host_statistics64`.
     private func collectMemory() -> MemoryInfo {
         #if canImport(Darwin)
-        let total = UInt64(ProcessInfo.processInfo.physicalMemory)
+            let total = UInt64(ProcessInfo.processInfo.physicalMemory)
 
-        var stats = vm_statistics64()
-        var count = mach_msg_type_number_t(
-            MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size
-        )
+            var stats = vm_statistics64()
+            var count = mach_msg_type_number_t(
+                MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size
+            )
 
-        let result = withUnsafeMutablePointer(to: &stats) { ptr in
-            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, intPtr, &count)
+            let result = withUnsafeMutablePointer(to: &stats) { ptr in
+                ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                    host_statistics64(mach_host_self(), HOST_VM_INFO64, intPtr, &count)
+                }
             }
-        }
 
-        guard result == KERN_SUCCESS else {
-            logger.warning("host_statistics64 failed (\(result))")
-            return MemoryInfo(pressure: 0, total: total, used: 0)
-        }
+            guard result == KERN_SUCCESS else {
+                logger.warning("host_statistics64 failed (\(result))")
+                return MemoryInfo(pressure: 0, total: total, used: 0)
+            }
 
-        let pageSize = UInt64(vm_kernel_page_size)
-        let active = UInt64(stats.active_count) * pageSize
-        let wired = UInt64(stats.wire_count) * pageSize
-        let compressed = UInt64(stats.compressor_page_count) * pageSize
-        let used = active + wired + compressed
+            let pageSize = UInt64(vm_kernel_page_size)
+            let active = UInt64(stats.active_count) * pageSize
+            let wired = UInt64(stats.wire_count) * pageSize
+            let compressed = UInt64(stats.compressor_page_count) * pageSize
+            let used = active + wired + compressed
 
-        let pressure = total > 0 ? Double(used) / Double(total) : 0
-        logger.debug("Memory: \(used / 1_073_741_824)GB / \(total / 1_073_741_824)GB (\(String(format: "%.1f", pressure * 100))%)")
+            let pressure = total > 0 ? Double(used) / Double(total) : 0
+            logger.debug("Memory: \(used / 1_073_741_824)GB / \(total / 1_073_741_824)GB (\(String(format: "%.1f", pressure * 100))%)")
 
-        return MemoryInfo(pressure: pressure, total: total, used: used)
+            return MemoryInfo(pressure: pressure, total: total, used: used)
         #else
-        return MemoryInfo(pressure: 0, total: 0, used: 0)
+            return MemoryInfo(pressure: 0, total: 0, used: 0)
         #endif
     }
 

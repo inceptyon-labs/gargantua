@@ -1,8 +1,8 @@
 import Foundation
 #if os(macOS)
-import IOKit.ps
-@preconcurrency import ServiceManagement
-@preconcurrency import UserNotifications
+    import IOKit.ps
+    @preconcurrency import ServiceManagement
+    @preconcurrency import UserNotifications
 #endif
 
 /// Built-in cadence choices for automatic scheduled scans.
@@ -142,10 +142,10 @@ public struct ScheduledScanCronExpression: Equatable, Sendable {
             .map(String.init)
         guard parts.count == 5 else { return nil }
 
-        guard let minute = Self.parse(parts[0], range: 0...59),
-              let hour = Self.parse(parts[1], range: 0...23),
-              let dayOfMonth = Self.parse(parts[2], range: 1...31),
-              let month = Self.parse(parts[3], range: 1...12),
+        guard let minute = Self.parse(parts[0], range: 0 ... 59),
+              let hour = Self.parse(parts[1], range: 0 ... 23),
+              let dayOfMonth = Self.parse(parts[2], range: 1 ... 31),
+              let month = Self.parse(parts[3], range: 1 ... 12),
               let weekday = Self.parseWeekday(parts[4])
         else { return nil }
 
@@ -208,7 +208,7 @@ public struct ScheduledScanCronExpression: Equatable, Sendable {
 
     private static func parseWeekday(_ value: String) -> Int?? {
         if value == "*" { return .some(nil) }
-        guard let intValue = Int(value), (0...7).contains(intValue) else { return nil }
+        guard let intValue = Int(value), (0 ... 7).contains(intValue) else { return nil }
         return .some((intValue == 0 || intValue == 7) ? 1 : intValue + 1)
     }
 }
@@ -277,16 +277,16 @@ public enum ScheduledScanAgentStatus: Sendable, Equatable, CustomStringConvertib
     case unknown(Int)
 
     #if os(macOS)
-    /// Converts an `SMAppService.Status` into the app's normalized status.
-    public init(_ status: SMAppService.Status) {
-        switch status {
-        case .notRegistered: self = .notRegistered
-        case .enabled: self = .enabled
-        case .requiresApproval: self = .requiresApproval
-        case .notFound: self = .notFound
-        @unknown default: self = .unknown(status.rawValue)
+        /// Converts an `SMAppService.Status` into the app's normalized status.
+        public init(_ status: SMAppService.Status) {
+            switch status {
+            case .notRegistered: self = .notRegistered
+            case .enabled: self = .enabled
+            case .requiresApproval: self = .requiresApproval
+            case .notFound: self = .notFound
+            @unknown default: self = .unknown(status.rawValue)
+            }
         }
-    }
     #endif
 
     /// User-facing status description.
@@ -310,32 +310,32 @@ public protocol ScheduledScanAgentInstalling: Sendable {
 }
 
 #if os(macOS)
-/// `SMAppService`-backed installer for the scheduled scan launch agent.
-public struct SMAppServiceScheduledScanAgentInstaller: ScheduledScanAgentInstalling, @unchecked Sendable {
-    private let service: SMAppService
+    /// `SMAppService`-backed installer for the scheduled scan launch agent.
+    public struct SMAppServiceScheduledScanAgentInstaller: ScheduledScanAgentInstalling, @unchecked Sendable {
+        private let service: SMAppService
 
-    /// Creates an installer for the named launch-agent plist.
-    public init(plistName: String = ScheduledScanLaunchAgentConfiguration.plistName) {
-        self.service = SMAppService.agent(plistName: plistName)
-    }
+        /// Creates an installer for the named launch-agent plist.
+        public init(plistName: String = ScheduledScanLaunchAgentConfiguration.plistName) {
+            self.service = SMAppService.agent(plistName: plistName)
+        }
 
-    /// Returns the current normalized launch-agent status.
-    public func status() -> ScheduledScanAgentStatus {
-        ScheduledScanAgentStatus(service.status)
-    }
+        /// Returns the current normalized launch-agent status.
+        public func status() -> ScheduledScanAgentStatus {
+            ScheduledScanAgentStatus(service.status)
+        }
 
-    /// Registers the launch agent and returns the resulting status.
-    public func register() throws -> ScheduledScanAgentStatus {
-        try service.register()
-        return status()
-    }
+        /// Registers the launch agent and returns the resulting status.
+        public func register() throws -> ScheduledScanAgentStatus {
+            try service.register()
+            return status()
+        }
 
-    /// Unregisters the launch agent and returns the resulting status.
-    public func unregister() throws -> ScheduledScanAgentStatus {
-        try service.unregister()
-        return status()
+        /// Unregisters the launch agent and returns the resulting status.
+        public func unregister() throws -> ScheduledScanAgentStatus {
+            try service.unregister()
+            return status()
+        }
     }
-}
 #endif
 
 /// Coordinates scheduler launch-agent registration with user configuration.
@@ -378,9 +378,9 @@ public final class ScheduledScanController: @unchecked Sendable {
 
 private func defaultScheduledScanInstaller() -> any ScheduledScanAgentInstalling {
     #if os(macOS)
-    return SMAppServiceScheduledScanAgentInstaller()
+        return SMAppServiceScheduledScanAgentInstaller()
     #else
-    return UnavailableScheduledScanAgentInstaller()
+        return UnavailableScheduledScanAgentInstaller()
     #endif
 }
 
@@ -469,20 +469,20 @@ public struct SystemScheduledScanPowerStateProvider: ScheduledScanPowerStateProv
     /// Returns whether any active power source reports battery power.
     public func isOnBatteryPower() -> Bool {
         #if os(macOS)
-        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef]
-        else { return false }
+            guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+                  let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef]
+            else { return false }
 
-        for source in list {
-            guard let description = IOPSGetPowerSourceDescription(info, source)?
-                .takeUnretainedValue() as? [String: Any],
-                let state = description[kIOPSPowerSourceStateKey] as? String
-            else { continue }
+            for source in list {
+                guard let description = IOPSGetPowerSourceDescription(info, source)?
+                    .takeUnretainedValue() as? [String: Any],
+                    let state = description[kIOPSPowerSourceStateKey] as? String
+                else { continue }
 
-            if state == kIOPSBatteryPowerValue {
-                return true
+                if state == kIOPSBatteryPowerValue {
+                    return true
+                }
             }
-        }
         #endif
         return false
     }
@@ -502,37 +502,37 @@ public struct NoopScheduledScanNotifier: ScheduledScanNotificationDelivering {
 }
 
 #if os(macOS)
-/// User notification backend for scheduled scan results.
-public struct UserNotificationScheduledScanNotifier: ScheduledScanNotificationDelivering {
-    private let center: UNUserNotificationCenter
+    /// User notification backend for scheduled scan results.
+    public struct UserNotificationScheduledScanNotifier: ScheduledScanNotificationDelivering {
+        private let center: UNUserNotificationCenter
 
-    /// Creates a notifier using the supplied notification center.
-    public init(center: UNUserNotificationCenter = .current()) {
-        self.center = center
-    }
+        /// Creates a notifier using the supplied notification center.
+        public init(center: UNUserNotificationCenter = .current()) {
+            self.center = center
+        }
 
-    /// Requests notification permission and posts the scheduled scan summary.
-    public func deliver(summary: ScheduledScanSummary) async {
-        do {
-            let granted = try await center.requestAuthorization(options: [.alert, .sound])
-            guard granted else { return }
+        /// Requests notification permission and posts the scheduled scan summary.
+        public func deliver(summary: ScheduledScanSummary) async {
+            do {
+                let granted = try await center.requestAuthorization(options: [.alert, .sound])
+                guard granted else { return }
 
-            let content = UNMutableNotificationContent()
-            content.title = "Gargantua scheduled scan complete"
-            content.body = summary.detail
-            content.sound = .default
+                let content = UNMutableNotificationContent()
+                content.title = "Gargantua scheduled scan complete"
+                content.body = summary.detail
+                content.sound = .default
 
-            let request = UNNotificationRequest(
-                identifier: summary.id,
-                content: content,
-                trigger: nil
-            )
-            try await center.add(request)
-        } catch {
-            return
+                let request = UNNotificationRequest(
+                    identifier: summary.id,
+                    content: content,
+                    trigger: nil
+                )
+                try await center.add(request)
+            } catch {
+                return
+            }
         }
     }
-}
 #endif
 
 /// Outcome of a scheduled scan runner invocation.
@@ -648,8 +648,8 @@ public final class ScheduledScanRunner {
 
 private func defaultScheduledScanNotifier() -> any ScheduledScanNotificationDelivering {
     #if os(macOS)
-    return UserNotificationScheduledScanNotifier()
+        return UserNotificationScheduledScanNotifier()
     #else
-    return NoopScheduledScanNotifier()
+        return NoopScheduledScanNotifier()
     #endif
 }

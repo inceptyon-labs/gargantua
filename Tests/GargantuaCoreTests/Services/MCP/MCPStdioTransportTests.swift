@@ -208,7 +208,7 @@ struct MCPStdioTransportTests {
         }
         let sink = LogSink()
         let huge = String(repeating: "x", count: 2_000)
-        let payloadWithControl = "\u{07}\(huge)"   // BEL at the head
+        let payloadWithControl = "\u{07}\(huge)" // BEL at the head
         let source = QueueSource([payloadWithControl])
         let outSink = RecordingSink()
         let transport = MCPStdioTransport(

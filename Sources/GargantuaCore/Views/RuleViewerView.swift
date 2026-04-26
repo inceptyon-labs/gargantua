@@ -2,11 +2,11 @@ import SwiftUI
 
 private let communityRulesRepositoryURL = URL(string: "https://github.com/inceptyon-labs/gargantua-rules")!
 
-/// Rule Viewer — browse cleanup rules by category with YAML display and whitelist management.
+/// Rule Viewer — browse cleanup rules by category with YAML display and exclusion management.
 ///
 /// Three-column layout: category list (browser/developer/system) → rule list → rule detail.
 /// Detail pane shows safety level, confidence, explanation, source, and raw YAML.
-/// Bottom section manages the path whitelist persisted via SwiftData.
+/// Bottom section manages the path exclusions persisted via SwiftData.
 public struct RuleViewerView: View {
     let persistence: PersistenceController
 
@@ -271,13 +271,13 @@ public struct RuleViewerView: View {
         }
     }
 
-    // MARK: - Whitelist Section
+    // MARK: - Path Exclusions Section
 
     private var pathExclusionSection: some View {
         PathExclusionSettingsSection(
             persistence: persistence,
-            title: "Whitelist",
-            subtitle: "Whitelisted paths are excluded from cleanup scans.",
+            title: "Exclusions",
+            subtitle: "Excluded paths are left untouched by cleanup scans.",
             showsDivider: true,
             titleFont: GargantuaFonts.heading
         )
@@ -447,7 +447,7 @@ private struct CategoryRow: View {
             .padding(.vertical, GargantuaSpacing.space2)
             .background(
                 isSelected ? GargantuaColors.surface3 :
-                isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
+                    isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
             )
             .contentShape(Rectangle())
         }
@@ -494,7 +494,7 @@ private struct RuleRow: View {
             .padding(.vertical, GargantuaSpacing.space2)
             .background(
                 isSelected ? GargantuaColors.surface3 :
-                isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
+                    isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
             )
             .contentShape(Rectangle())
         }
@@ -549,7 +549,7 @@ private struct YAMLHighlightedView: View {
             let indent = String(line.prefix(while: { $0 == " " }))
             let afterDash = String(trimmed.dropFirst(2))
             if let colonIdx = afterDash.firstIndex(of: ":") {
-                let key = String(afterDash[afterDash.startIndex..<colonIdx])
+                let key = String(afterDash[afterDash.startIndex ..< colonIdx])
                 let rest = String(afterDash[afterDash.index(after: colonIdx)...])
                 return [
                     YAMLToken(text: indent + "- ", color: GargantuaColors.ink3),
@@ -571,7 +571,7 @@ private struct YAMLHighlightedView: View {
 
         // Key: value
         if let colonIdx = line.firstIndex(of: ":") {
-            let key = String(line[line.startIndex..<colonIdx])
+            let key = String(line[line.startIndex ..< colonIdx])
             let rest = String(line[line.index(after: colonIdx)...])
             if rest.isEmpty || rest.trimmingCharacters(in: .whitespaces).isEmpty {
                 // Key with no value (block mapping parent)

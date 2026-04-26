@@ -57,9 +57,9 @@ struct FileHealthGrouperTests {
         // Interleave one safe and one review category to catch naive
         // "declaration order" fallback regressions.
         let results = [
-            makeCzkawkaResult(category: .bigFiles, counter: 0),       // review
-            makeCzkawkaResult(category: .emptyFiles, counter: 0),     // safe
-            makeCzkawkaResult(category: .similarImages, counter: 0),  // review
+            makeCzkawkaResult(category: .bigFiles, counter: 0), // review
+            makeCzkawkaResult(category: .emptyFiles, counter: 0), // safe
+            makeCzkawkaResult(category: .similarImages, counter: 0), // review
             makeCzkawkaResult(category: .brokenSymlinks, counter: 0), // safe
         ]
         let tabs = FileHealthGrouper.group(results)

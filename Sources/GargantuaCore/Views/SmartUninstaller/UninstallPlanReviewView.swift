@@ -241,8 +241,8 @@ struct UninstallPlanReviewView: View {
 
                 Button(action: onUninstallTapped) {
                     Text(selectedCount == 1
-                         ? "Uninstall 1 item"
-                         : "Uninstall \(selectedCount) items")
+                        ? "Uninstall 1 item"
+                        : "Uninstall \(selectedCount) items")
                         .font(GargantuaFonts.label)
                         .foregroundStyle(.white)
                         .padding(.vertical, GargantuaSpacing.space2)

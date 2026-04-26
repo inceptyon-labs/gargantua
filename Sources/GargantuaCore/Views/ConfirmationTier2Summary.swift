@@ -75,7 +75,7 @@ struct SummaryDialogContent: View {
                     totalSize: totalSize,
                     cleanupMethod: cleanupMethod
                 )
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if allowsPermanentDelete {
                     CleanupMethodPicker(selection: $cleanupMethod)

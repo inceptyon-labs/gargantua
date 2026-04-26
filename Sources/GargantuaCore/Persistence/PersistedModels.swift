@@ -239,21 +239,23 @@ public final class PersistedScanHistory {
     }
 }
 
-// MARK: - Persisted Whitelist Entry
+// MARK: - Persisted Path Exclusion Entry
 
-/// SwiftData model for persisting path whitelist entries.
+/// SwiftData model for persisting path exclusion entries.
 ///
-/// Whitelisted paths are excluded from cleanup scans.
+/// Excluded paths are left untouched by cleanup scans.
 @Model
+// Keep the model class name stable so existing SwiftData stores do not need a migration.
+// swiftlint:disable:next inclusive_language
 public final class PersistedWhitelistEntry {
     /// Unique path or glob-like pattern to exclude from scans.
     @Attribute(.unique) public var pattern: String
-    /// Optional user note explaining the whitelist entry.
+    /// Optional user note explaining the exclusion entry.
     public var note: String
-    /// Date when the whitelist entry was created.
+    /// Date when the exclusion entry was created.
     public var createdAt: Date
 
-    /// Creates a persisted whitelist entry.
+    /// Creates a persisted path exclusion entry.
     public init(pattern: String, note: String = "", createdAt: Date = Date()) {
         self.pattern = pattern
         self.note = note

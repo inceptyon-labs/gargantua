@@ -76,7 +76,7 @@ public struct ScanBucketListView: View {
     public let onExplain: ((ScanResult) -> Void)?
     public let onClean: (() -> Void)?
     public let onCancel: (() -> Void)?
-    public let onAddToWhitelist: ((ScanResult) -> Void)?
+    public let onAddToExclusions: ((ScanResult) -> Void)?
     public let onViewRule: ((ScanResult) -> Void)?
     public let onAdvisoryForReview: (([ScanResult]) -> Void)?
     public let onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)?
@@ -98,7 +98,7 @@ public struct ScanBucketListView: View {
         onExplain: ((ScanResult) -> Void)? = nil,
         onClean: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
-        onAddToWhitelist: ((ScanResult) -> Void)? = nil,
+        onAddToExclusions: ((ScanResult) -> Void)? = nil,
         onViewRule: ((ScanResult) -> Void)? = nil,
         onAdvisoryForReview: (([ScanResult]) -> Void)? = nil,
         onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)? = nil
@@ -109,7 +109,7 @@ public struct ScanBucketListView: View {
         self.onExplain = onExplain
         self.onClean = onClean
         self.onCancel = onCancel
-        self.onAddToWhitelist = onAddToWhitelist
+        self.onAddToExclusions = onAddToExclusions
         self.onViewRule = onViewRule
         self.onAdvisoryForReview = onAdvisoryForReview
         self.onResolveNaturalLanguageFilter = onResolveNaturalLanguageFilter
@@ -152,9 +152,9 @@ public struct ScanBucketListView: View {
     private var shouldShowRefineDetails: Bool {
         hasRefinementTools && (
             showsRefineControls ||
-            activeFilter != nil ||
-            filterStatus != nil ||
-            !naturalLanguageQuery.isEmpty
+                activeFilter != nil ||
+                filterStatus != nil ||
+                !naturalLanguageQuery.isEmpty
         )
     }
 
@@ -444,7 +444,6 @@ public struct ScanBucketListView: View {
                                 }
                             }
                         }
-
                     }
                     .padding(.horizontal, GargantuaSpacing.space4)
                     .padding(.vertical, GargantuaSpacing.space3)
@@ -471,10 +470,10 @@ public struct ScanBucketListView: View {
         }
         return "Protected items stay locked. Select the safe items you want to include in the cleanup plan."
     }
-
 }
 
 // MARK: - Keyboard navigation, selection, and presentation helpers
+
 //
 // Extracted into an in-file extension so ScanBucketListView's
 // primary body stays under the 350-line type_body_length threshold.
@@ -607,7 +606,7 @@ extension ScanBucketListView {
             isFocused: focusedItemID == item.id,
             onToggleSelection: { toggleSelection(item.id) },
             onExplain: onExplain,
-            onAddToWhitelist: onAddToWhitelist,
+            onAddToExclusions: onAddToExclusions,
             onViewRule: onViewRule
         )
         .id(item.id)

@@ -55,7 +55,7 @@ struct AuditWriterTests {
 
         let writer = AuditWriter(logDirectory: dir)
 
-        for i in 1...3 {
+        for i in 1 ... 3 {
             let entry = AuditEntry(
                 tool: "native",
                 command: "clean",
@@ -147,7 +147,7 @@ struct AuditWriterTests {
         let count = 50
 
         try await withThrowingTaskGroup(of: Void.self) { group in
-            for i in 0..<count {
+            for i in 0 ..< count {
                 group.addTask {
                     let entry = AuditEntry(
                         tool: "native",
@@ -173,7 +173,7 @@ struct AuditWriterTests {
             #expect(throws: Never.self) {
                 _ = try JSONDecoder.auditDecoder.decode(AuditEntry.self, from: data)
             }
-            _ = index  // suppress unused warning
+            _ = index // suppress unused warning
         }
     }
 
@@ -186,7 +186,7 @@ struct AuditWriterTests {
 
         let writer = AuditWriter(logDirectory: dir)
 
-        for i in 1...3 {
+        for i in 1 ... 3 {
             let entry = AuditEntry(
                 tool: "native",
                 command: "clean",

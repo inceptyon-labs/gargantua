@@ -115,7 +115,7 @@ struct ClaudeCodeAgentSettingsSection: View {
                     saveConfiguration()
                 }
             ),
-            in: 1...20,
+            in: 1 ... 20,
             step: 1
         ) {
             HStack {

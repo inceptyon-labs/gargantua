@@ -153,14 +153,14 @@ public struct FileHealthView: View {
                         Text("\(selectedResults.count) · \(AlertItem.formatBytes(selectedBytes))")
                             .foregroundStyle(GargantuaColors.ink.opacity(0.75))
                     }
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space3)
-                        .padding(.vertical, GargantuaSpacing.space1)
-                        .background(
-                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                .fill(GargantuaColors.accent)
-                        )
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, GargantuaSpacing.space3)
+                    .padding(.vertical, GargantuaSpacing.space1)
+                    .background(
+                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                            .fill(GargantuaColors.accent)
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Send selected File Health items to Trash")

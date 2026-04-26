@@ -67,7 +67,7 @@ public struct PathExpander: Sendable {
             return ExpansionResult(paths: [], hitCap: false, capReason: nil)
         }
 
-        let prefixComponents = Array(components[0..<firstGlobIdx])
+        let prefixComponents = Array(components[0 ..< firstGlobIdx])
         let globComponents = Array(components[firstGlobIdx...])
 
         let prefixPaths: [String]
@@ -263,7 +263,7 @@ public struct PathExpander: Sendable {
                 // Must suffix-match in the remaining window.
                 return name[cursor...].hasSuffix(part)
             } else {
-                guard let range = name.range(of: part, range: cursor..<name.endIndex) else { return false }
+                guard let range = name.range(of: part, range: cursor ..< name.endIndex) else { return false }
                 cursor = range.upperBound
             }
         }

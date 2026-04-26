@@ -81,6 +81,7 @@ enum MCPCleanTestFixtures {
 }
 
 // MARK: - Test capture helpers
+
 //
 // Nested under `MCPCleanTestFixtures` to avoid colliding with other test
 // files in the module (e.g. MCPScanToolHandlerErrorsTests.swift) that

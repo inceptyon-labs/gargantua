@@ -39,9 +39,9 @@ extension MCPRequestID: Codable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch self {
-        case .int(let i):    try c.encode(i)
+        case .int(let i): try c.encode(i)
         case .string(let s): try c.encode(s)
-        case .null:          try c.encodeNil()
+        case .null: try c.encodeNil()
         }
     }
 }
@@ -98,24 +98,24 @@ extension MCPJSONAny: Codable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch self {
-        case .null:           try c.encodeNil()
-        case .bool(let b):    try c.encode(b)
-        case .int(let i):     try c.encode(i)
-        case .number(let d):  try c.encode(d)
-        case .string(let s):  try c.encode(s)
-        case .array(let a):   try c.encode(a)
-        case .object(let o):  try c.encode(o)
+        case .null: try c.encodeNil()
+        case .bool(let b): try c.encode(b)
+        case .int(let i): try c.encode(i)
+        case .number(let d): try c.encode(d)
+        case .string(let s): try c.encode(s)
+        case .array(let a): try c.encode(a)
+        case .object(let o): try c.encode(o)
         }
     }
 }
 
 /// Standard JSON-RPC 2.0 error codes (see https://www.jsonrpc.org/specification#error_object).
 public enum MCPErrorCode {
-    public static let parseError      = -32_700
-    public static let invalidRequest  = -32_600
-    public static let methodNotFound  = -32_601
-    public static let invalidParams   = -32_602
-    public static let internalError   = -32_603
+    public static let parseError = -32_700
+    public static let invalidRequest = -32_600
+    public static let methodNotFound = -32_601
+    public static let invalidParams = -32_602
+    public static let internalError = -32_603
 }
 
 /// Error member of a JSON-RPC response.

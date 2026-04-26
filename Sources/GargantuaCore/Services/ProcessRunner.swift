@@ -287,9 +287,14 @@ public struct DefaultProcessRunner: ProcessRunner {
         // case — the `?? ""` fallback would throw away the entire (otherwise
         // useful) prefix. `String(decoding:as:)` substitutes U+FFFD for the
         // partial sequence and preserves the rest.
+        // swiftlint:disable optional_data_string_conversion
+        let stdout = String(decoding: outBuffer.snapshot(), as: UTF8.self)
+        let stderr = String(decoding: errBuffer.snapshot(), as: UTF8.self)
+        // swiftlint:enable optional_data_string_conversion
+
         return ProcessOutput(
-            stdout: String(decoding: outBuffer.snapshot(), as: UTF8.self),
-            stderr: String(decoding: errBuffer.snapshot(), as: UTF8.self),
+            stdout: stdout,
+            stderr: stderr,
             exitCode: exitCode,
             stdoutTruncated: outBuffer.wasTruncated(),
             stderrTruncated: errBuffer.wasTruncated()

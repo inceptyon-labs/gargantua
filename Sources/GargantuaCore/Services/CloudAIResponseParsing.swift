@@ -66,7 +66,7 @@ enum CloudAIJSONExtractor {
                     depth -= 1
                     if depth == 0 {
                         let end = text.index(after: index)
-                        return Data(text[start..<end].utf8)
+                        return Data(text[start ..< end].utf8)
                     }
                 }
             }

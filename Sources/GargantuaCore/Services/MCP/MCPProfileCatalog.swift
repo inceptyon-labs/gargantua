@@ -47,7 +47,7 @@ public struct MCPProfileCatalog: Sendable {
 
         throw MCPToolError.internalError(
             "No available cleanup profile matches active '\(activeProfileID)' "
-            + "or fallback '\(fallbackProfileID)'."
+                + "or fallback '\(fallbackProfileID)'."
         )
     }
 

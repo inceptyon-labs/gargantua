@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-
 @testable import GargantuaCore
 
 @Suite("CloudAIRedactor")
@@ -171,7 +170,7 @@ struct CloudAIRedactorTests {
 
     @Test("items() preserves count and order")
     func itemsPreservesCountAndOrder() throws {
-        let inputs = (0..<5).map { makeResult(id: "id-\($0)") }
+        let inputs = (0 ..< 5).map { makeResult(id: "id-\($0)") }
         let items = try CloudAIRedactor.items(from: inputs, allowsFileContents: false)
         #expect(items.count == 5)
         #expect(items.map(\.id) == ["id-0", "id-1", "id-2", "id-3", "id-4"])

@@ -142,8 +142,8 @@ struct ScanGroupHeader: View {
 
     private func safetyColor(_ level: SafetyLevel) -> Color {
         switch level {
-        case .safe:       return GargantuaColors.safe
-        case .review:     return GargantuaColors.review
+        case .safe: return GargantuaColors.safe
+        case .review: return GargantuaColors.review
         case .protected_: return GargantuaColors.protected_
         }
     }
