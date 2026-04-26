@@ -8,38 +8,47 @@ SPM sources. Canonical entry point is `Scripts/release.sh`. Full design:
 
 1. **Provision a `Developer ID Application` cert** in the login Keychain.
    Verify with:
+
    ```sh
    security find-identity -v -p codesigning
    ```
+
    You should see an entry like:
-   ```
+
+   ```text
    1) ABC123…  "Developer ID Application: Your Name (TEAMID1234)"
    ```
 
 2. **Store notarytool credentials** in a keychain profile (do this once):
+
    ```sh
    xcrun notarytool store-credentials "gargantua-notary" \
      --apple-id you@example.com \
      --team-id TEAMID1234 \
      --password <app-specific-password>
    ```
+
    Generate the app-specific password at <https://appleid.apple.com/>.
 
 3. **Create `.env.release`** from the template and lock it down:
+
    ```sh
    cp .env.release.example .env.release
    chmod 600 .env.release
    # Edit: TEAM_ID, SIGNING_IDENTITY, NOTARY_PROFILE,
    #       SPARKLE_PUBLIC_ED_KEY, SPARKLE_FEED_URL
    ```
+
    The pipeline refuses to source `.env.release` unless it's mode `0600`
    (sourced as shell code; 0644 would let any local user run arbitrary
    commands in your release shell). `.env.release` is gitignored.
 
 4. **Optional: install create-dmg** for a polished drag-to-Applications layout:
+
    ```sh
    brew install create-dmg
    ```
+
    Without it, the pipeline falls back to plain `hdiutil` (functional, not
    polished).
 
@@ -48,10 +57,12 @@ SPM sources. Canonical entry point is `Scripts/release.sh`. Full design:
    Sparkle 2.9 renders the staged markdown notes directly.
 
 5. **Generate Sparkle EdDSA keys** once on the release machine:
+
    ```sh
    swift package resolve
    .build/artifacts/sparkle/Sparkle/bin/generate_keys
    ```
+
    Put the printed public key in `SPARKLE_PUBLIC_ED_KEY`. Keep the private
    key in Keychain or CI secrets only; never commit it.
 
@@ -63,6 +74,7 @@ git tag v0.1.0
 ```
 
 Outputs:
+
 - `dist/Gargantua.app`              — signed, notarized, stapled
 - `dist/Gargantua-0.1.0.dmg`        — stapled, ready to distribute
 - `dist/sparkle-updates/appcast.xml` — signed Sparkle appcast plus staged DMG
@@ -125,23 +137,29 @@ fast.
 ## Troubleshooting
 
 ### `SIGNING_IDENTITY not found in keychain`
+
 Run `security find-identity -v -p codesigning` and copy the **exact**
 string (quotes included, without the leading index number) into
 `.env.release`.
 
 ### `notarytool submit` failed
+
 The script prints the submission ID and the `notarytool log` command to
 fetch the Apple-side rejection details. Most rejections are:
+
 - Missing / bad hardened-runtime flag (`--options runtime`).
 - Unsigned helper binary inside the bundle.
 - Stale `get-task-allow=true` entitlement.
 
 ### `stapler staple` failed
+
 Apple hasn't issued the ticket yet. Re-run `notarize.sh` alone after a
 minute; notarytool returns the cached verdict instantly on re-submit.
 
 ### `spctl` rejects the app
+
 Inspect:
+
 ```sh
 codesign -dv --verbose=4 dist/Gargantua.app
 xcrun stapler validate dist/Gargantua.app

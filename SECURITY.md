@@ -10,10 +10,11 @@ Pre-1.0: only the latest released version receives security fixes. Once 1.0 ship
 
 Please report security issues **privately**, not in public GitHub issues.
 
-- **Email:** jnew00@gmail.com (subject: `[gargantua security]`)
+- **Email:** <jnew00@gmail.com> (subject: `[gargantua security]`)
 - **GitHub:** use [private vulnerability reporting](https://github.com/inceptyon-labs/gargantua/security/advisories/new) on this repo
 
 Include:
+
 - A description of the issue and its impact
 - Steps to reproduce, or a proof-of-concept
 - Affected version / commit SHA

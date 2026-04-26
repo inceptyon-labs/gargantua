@@ -1,0 +1,28 @@
+# Markdownlint configuration
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+
+# Documentation often quotes long URLs, log lines, and command output that
+# would be harmed by hard wrapping; line-length is more noise than signal here.
+MD013: false
+
+# Allow inline HTML — used in places for collapsible <details> blocks etc.
+MD033: false
+
+# Don't require fixed table column style; "compact" vs "leading_only" mixes
+# are common in generated/edited docs.
+MD060: false
+
+# Allow duplicate sibling headings only across sections — Keep-a-Changelog
+# legitimately repeats "### Added" / "### Fixed" under each version.
+MD024:
+  siblings_only: true
+
+# Some docs intentionally lead with bold taglines or HTML (logo wrappers,
+# centered banners) rather than an H1.
+MD041: false
+
+# Bold pull-quotes / taglines (e.g. "Gargantua devours your Mac's …") are
+# emphasis by intent, not headings.
+MD036: false

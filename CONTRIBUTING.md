@@ -114,7 +114,7 @@ Scripts/run-mutation.sh --all                          # full mutation pass (slo
 
 The script writes a Tenet-compatible JSON report to:
 
-```
+```text
 .healthcheck/mutation/muter.json
 ```
 

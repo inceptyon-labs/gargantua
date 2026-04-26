@@ -6,7 +6,7 @@ By participating in this project, you agree to abide by its terms.
 
 ## Reporting
 
-Violations may be reported to the project maintainers at **jnew00@gmail.com**. All reports will be reviewed and investigated promptly and fairly. Maintainers are obligated to respect the privacy and security of the reporter.
+Violations may be reported to the project maintainers at **<jnew00@gmail.com>**. All reports will be reviewed and investigated promptly and fairly. Maintainers are obligated to respect the privacy and security of the reporter.
 
 ## Enforcement
 
