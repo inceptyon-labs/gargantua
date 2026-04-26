@@ -304,8 +304,11 @@ public enum ScheduledScanAgentStatus: Sendable, Equatable, CustomStringConvertib
 
 /// ServiceManagement operations required by the scheduled scan controller.
 public protocol ScheduledScanAgentInstalling: Sendable {
+    /// Returns the current launch-agent status.
     func status() -> ScheduledScanAgentStatus
+    /// Registers the launch agent and returns the resulting status.
     func register() throws -> ScheduledScanAgentStatus
+    /// Unregisters the launch agent and returns the resulting status.
     func unregister() throws -> ScheduledScanAgentStatus
 }
 
@@ -441,6 +444,7 @@ public struct ScheduledScanSummary: Equatable, Sendable, Identifiable {
 
 /// Scanner abstraction used by scheduled scans.
 public protocol ScheduledScanScanning: Sendable {
+    /// Runs a scan for the supplied profile and optional root URLs.
     func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult]
 }
 
@@ -458,6 +462,7 @@ public struct NativeScheduledScanScanner: ScheduledScanScanning {
 
 /// Supplies whether the system is currently using battery power.
 public protocol ScheduledScanPowerStateProviding: Sendable {
+    /// Returns whether the system is currently running on battery power.
     func isOnBatteryPower() -> Bool
 }
 
@@ -490,6 +495,7 @@ public struct SystemScheduledScanPowerStateProvider: ScheduledScanPowerStateProv
 
 /// Delivers user-visible notifications for scheduled scan results.
 public protocol ScheduledScanNotificationDelivering: Sendable {
+    /// Posts a user-visible notification for the supplied scheduled scan summary.
     func deliver(summary: ScheduledScanSummary) async
 }
 

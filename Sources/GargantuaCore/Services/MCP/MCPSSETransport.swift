@@ -1,13 +1,20 @@
 import Foundation
 import Network
 
+/// Minimal HTTP request value used by the MCP SSE transport.
 public struct MCPHTTPRequest: Sendable, Equatable {
+    /// HTTP method, normalized to uppercase.
     public let method: String
+    /// URL path component (without query string).
     public let path: String
+    /// Parsed query string parameters.
     public let query: [String: String]
+    /// Request headers, with names lowercased for case-insensitive lookup.
     public let headers: [String: String]
+    /// Raw request body bytes.
     public let body: Data
 
+    /// Creates an HTTP request value, normalizing method and header casing.
     public init(
         method: String,
         path: String,
@@ -26,17 +33,24 @@ public struct MCPHTTPRequest: Sendable, Equatable {
         self.body = body
     }
 
+    /// Returns the header value for `name`, using case-insensitive lookup.
     public func header(_ name: String) -> String? {
         headers[name.lowercased()]
     }
 }
 
+/// Minimal HTTP response value used by the MCP SSE transport.
 public struct MCPHTTPResponse: Sendable, Equatable {
+    /// HTTP status code (e.g. 200, 404).
     public let statusCode: Int
+    /// HTTP reason phrase paired with `statusCode`.
     public let reasonPhrase: String
+    /// Response headers (case-preserving — emitted verbatim during serialization).
     public let headers: [String: String]
+    /// Response body bytes.
     public let body: Data
 
+    /// Creates an HTTP response value.
     public init(
         statusCode: Int,
         reasonPhrase: String,
@@ -49,6 +63,7 @@ public struct MCPHTTPResponse: Sendable, Equatable {
         self.body = body
     }
 
+    /// Serializes the response into a buffer ready to write to a TCP connection.
     public func serialized() -> Data {
         var output = "HTTP/1.1 \(statusCode) \(reasonPhrase)\r\n"
         var allHeaders = headers
@@ -69,6 +84,7 @@ public struct MCPHTTPResponse: Sendable, Equatable {
         return data
     }
 
+    /// Builds a `text/plain` HTTP response with the supplied status and message.
     public static func text(
         _ statusCode: Int,
         _ reasonPhrase: String,
@@ -83,7 +99,9 @@ public struct MCPHTTPResponse: Sendable, Equatable {
     }
 }
 
+/// Helpers for encoding Server-Sent Events frames used by the MCP transport.
 public enum MCPSSEEvent {
+    /// Encodes one SSE frame with the supplied event name and multi-line data body.
     public static func encode(event: String, data: String) -> String {
         var output = "event: \(event)\n"
         for line in data.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -94,11 +112,16 @@ public enum MCPSSEEvent {
     }
 }
 
+/// Streaming-safe HTTP request parser used by the MCP SSE transport.
 public enum MCPHTTPRequestParser {
+    /// Maximum bytes allowed in the request header section.
     public static let maximumHeaderBytes = 65_536
+    /// Maximum bytes allowed in the request body.
     public static let maximumBodyBytes = 1_048_576
+    /// Combined header and body byte limit per buffered request.
     public static let maximumBufferedBytes = maximumHeaderBytes + maximumBodyBytes
 
+    /// Parses a request from the supplied buffer or returns `nil` when more data is needed.
     public static func parse(_ data: Data) throws -> MCPHTTPRequest? {
         guard data.count <= maximumBufferedBytes else {
             throw MCPHTTPParseError.bodyTooLarge
@@ -201,13 +224,20 @@ public enum MCPHTTPRequestParser {
     }
 }
 
+/// Errors thrown by `MCPHTTPRequestParser`.
 public enum MCPHTTPParseError: Error, LocalizedError, Equatable, Sendable {
+    /// Headers contained bytes that were not valid UTF-8.
     case invalidHeaderEncoding
+    /// Request line was missing or malformed.
     case invalidRequestLine
+    /// One or more headers were missing a colon or had invalid syntax.
     case invalidHeader
+    /// Header section exceeded `MCPHTTPRequestParser.maximumHeaderBytes`.
     case headerTooLarge
+    /// Body exceeded `MCPHTTPRequestParser.maximumBodyBytes`.
     case bodyTooLarge
 
+    /// Localized user-facing error description.
     public var errorDescription: String? {
         switch self {
         case .invalidHeaderEncoding:
@@ -224,12 +254,17 @@ public enum MCPHTTPParseError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
+/// Outcome of an `openStream` call on `MCPSSERequestRouter`.
 public enum MCPSSEOpenStreamResult: Sendable, Equatable {
+    /// Stream opened successfully with the supplied session id and initial response.
     case opened(sessionID: String, response: MCPHTTPResponse)
+    /// Stream rejected; the supplied response should be written and the connection closed.
     case rejected(MCPHTTPResponse)
 }
 
+/// Routes MCP SSE HTTP requests to either stream creation or per-message dispatch.
 public final class MCPSSERequestRouter: @unchecked Sendable {
+    /// Callback invoked when an SSE event should be emitted on a session's connection.
     public typealias EventSink = @Sendable (_ event: String, _ data: String) -> Void
 
     private let handler: MCPMessageHandler
@@ -239,6 +274,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     private let lock = NSLock()
     private var sessions: [String: EventSink] = [:]
 
+    /// Creates a router with the supplied JSON-RPC handler and optional log sink.
     public init(
         handler: @escaping MCPMessageHandler,
         log: MCPTransportLog? = nil
@@ -250,6 +286,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         self.decoder = JSONDecoder()
     }
 
+    /// Opens a new SSE session if the request authorizes; otherwise returns a rejection response.
     public func openStream(
         request: MCPHTTPRequest,
         configuration: MCPSSEServerConfiguration,
@@ -285,12 +322,14 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         return .opened(sessionID: sessionID, response: response)
     }
 
+    /// Removes the supplied session from the routing table.
     public func closeStream(sessionID: String) {
         lock.lock()
         sessions.removeValue(forKey: sessionID)
         lock.unlock()
     }
 
+    /// Routes a `/message` POST to the matching session's event sink and returns the HTTP response.
     public func handleRequest(
         _ request: MCPHTTPRequest,
         configuration: MCPSSEServerConfiguration,
@@ -371,7 +410,9 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     }
 }
 
+/// TCP/SSE transport that exposes the MCP server over loopback HTTP.
 public final class MCPSSETransport: @unchecked Sendable {
+    /// Closure that returns the current bearer token, if any.
     public typealias TokenProvider = @Sendable () throws -> String?
 
     private let configuration: MCPSSEServerConfiguration
@@ -381,6 +422,7 @@ public final class MCPSSETransport: @unchecked Sendable {
     private let queue: DispatchQueue
     private var listener: NWListener?
 
+    /// Creates a transport, wiring router, token provider, and dispatch queue.
     public init(
         configuration: MCPSSEServerConfiguration,
         tokenProvider: @escaping TokenProvider,
@@ -395,6 +437,7 @@ public final class MCPSSETransport: @unchecked Sendable {
         self.queue = queue
     }
 
+    /// Validates configuration, binds the listener, and begins accepting connections.
     public func start() throws {
         try configuration.validate(hasBearerToken: tokenProvider() != nil)
         let port = NWEndpoint.Port(rawValue: UInt16(configuration.port))!
@@ -424,6 +467,7 @@ public final class MCPSSETransport: @unchecked Sendable {
         listener.start(queue: queue)
     }
 
+    /// Cancels the listener and stops accepting new connections.
     public func stop() {
         listener?.cancel()
         listener = nil

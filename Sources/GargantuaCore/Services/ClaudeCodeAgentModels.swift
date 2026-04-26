@@ -1,15 +1,24 @@
 import Foundation
 
+/// User-configurable settings that control the Claude Code agent integration.
 public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
+    /// UserDefaults key used for the encoded configuration.
     public static let defaultsKey = "claudeCodeAgentConfiguration"
+    /// Default conversation-turn budget for an agent session.
     public static let defaultMaxTurns = 5
 
+    /// Whether the Claude Code agent integration is enabled.
     public var isEnabled: Bool
+    /// Configured filesystem path to the `claude` executable.
     public var cliPath: String
+    /// Maximum number of conversation turns per agent session.
     public var maxTurns: Int
+    /// Whether the agent may invoke the destructive MCP `clean` tool.
     public var allowDestructiveMCPTools: Bool
+    /// Whether an audit agent runs after each scheduled scan.
     public var runAfterScheduledScans: Bool
 
+    /// Creates an agent configuration, clamping `maxTurns` to `[1, 20]`.
     public init(
         isEnabled: Bool = false,
         cliPath: String = "",
@@ -32,6 +41,7 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
         case runAfterScheduledScans
     }
 
+    /// Decodes a configuration with backwards-compatible defaults for missing fields.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -43,6 +53,7 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
         )
     }
 
+    /// Encodes the configuration into a keyed container.
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(isEnabled, forKey: .isEnabled)
@@ -52,20 +63,24 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
         try c.encode(runAfterScheduledScans, forKey: .runAfterScheduledScans)
     }
 
+    /// Tilde-expanded CLI path, or `nil` when no path is configured.
     public var normalizedCLIPath: String? {
         let trimmed = cliPath.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : NSString(string: trimmed).expandingTildeInPath
     }
 }
 
+/// Thread-safe persistence wrapper for `ClaudeCodeAgentConfiguration`.
 public final class ClaudeCodeAgentConfigurationStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private let lock = NSLock()
 
+    /// Creates a store backed by the supplied user defaults.
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
+    /// Loads the saved configuration, or returns defaults when none is available.
     public func load() -> ClaudeCodeAgentConfiguration {
         lock.lock()
         defer { lock.unlock() }
@@ -78,6 +93,7 @@ public final class ClaudeCodeAgentConfigurationStore: @unchecked Sendable {
         return decoded
     }
 
+    /// Saves the supplied configuration when it can be encoded.
     public func save(_ configuration: ClaudeCodeAgentConfiguration) {
         lock.lock()
         defer { lock.unlock() }
@@ -87,13 +103,20 @@ public final class ClaudeCodeAgentConfigurationStore: @unchecked Sendable {
     }
 }
 
+/// Errors surfaced by Claude Code agent setup and execution.
 public enum ClaudeCodeAgentError: Error, LocalizedError, Equatable {
+    /// The agent integration is disabled in settings.
     case disabled
+    /// The `claude` CLI could not be located on the system.
     case cliNotFound
+    /// The configured CLI path exists but is not executable.
     case cliNotExecutable(String)
+    /// Writing the per-session MCP configuration file failed.
     case mcpConfigWriteFailed(String)
+    /// The agent process exited with a non-zero status.
     case processFailed(Int32)
 
+    /// Localized user-facing error description.
     public var errorDescription: String? {
         switch self {
         case .disabled:
@@ -110,10 +133,14 @@ public enum ClaudeCodeAgentError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Resolves the `claude` CLI executable from configuration or the user's `PATH`.
 public struct ClaudeCodeCLIResolver: @unchecked Sendable {
+    /// Process environment used for `PATH` lookup.
     public var environment: [String: String]
+    /// File manager used for existence and executability checks.
     public var fileManager: FileManager
 
+    /// Creates a resolver using the supplied environment and file manager.
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         fileManager: FileManager = .default
@@ -122,6 +149,7 @@ public struct ClaudeCodeCLIResolver: @unchecked Sendable {
         self.fileManager = fileManager
     }
 
+    /// Returns a URL for the `claude` executable, preferring the configured path.
     public func resolve(configuration: ClaudeCodeAgentConfiguration) throws -> URL {
         if let configured = configuration.normalizedCLIPath {
             guard fileManager.fileExists(atPath: configured) else {
@@ -147,13 +175,19 @@ public struct ClaudeCodeCLIResolver: @unchecked Sendable {
     }
 }
 
+/// Built-in agent prompt templates surfaced in the UI.
 public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, Sendable {
+    /// Investigate disk-space usage and propose safe cleanup.
     case investigateSpace
+    /// Inspect a development directory for stale projects and artifacts.
     case projectArchaeology
+    /// Generate a reviewable maintenance script.
     case customCleanupScript
 
+    /// Stable identifier used by SwiftUI lists and pickers.
     public var id: String { rawValue }
 
+    /// Short user-facing template name.
     public var title: String {
         switch self {
         case .investigateSpace: "Investigate Space"
@@ -162,6 +196,7 @@ public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, S
         }
     }
 
+    /// SF Symbol used for the template icon.
     public var icon: String {
         switch self {
         case .investigateSpace: "magnifyingglass.circle"
@@ -170,6 +205,7 @@ public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, S
         }
     }
 
+    /// Placeholder user context shown in the prompt input field.
     public var placeholder: String {
         switch self {
         case .investigateSpace:
@@ -193,7 +229,9 @@ public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, S
     }
 }
 
+/// Builds the text prompts handed to the Claude Code agent process.
 public enum ClaudeCodeAgentPromptBuilder {
+    /// MCP tools the agent may invoke without an explicit user approval.
     public static let readOnlyToolAllowlist = [
         "mcp__gargantua__scan",
         "mcp__gargantua__analyze",
@@ -202,8 +240,10 @@ public enum ClaudeCodeAgentPromptBuilder {
         "mcp__gargantua__list_profiles",
     ]
 
+    /// Destructive MCP tool name gated behind explicit user approval.
     public static let destructiveTool = "mcp__gargantua__clean"
 
+    /// Builds an agent prompt for a template and trimmed user-supplied context.
     public static func prompt(
         template: ClaudeCodeAgentPromptTemplate,
         userContext: String
@@ -231,6 +271,7 @@ public enum ClaudeCodeAgentPromptBuilder {
         """
     }
 
+    /// Builds a post-scheduled-scan audit prompt using the supplied scan summary.
     public static func scheduledAuditPrompt(summary: ScheduledScanSummary) -> String {
         prompt(
             template: .investigateSpace,
@@ -245,11 +286,16 @@ public enum ClaudeCodeAgentPromptBuilder {
     }
 }
 
+/// Launch arguments for the MCP server child process spawned by the agent.
 public struct ClaudeCodeMCPServerLaunch: Sendable, Equatable {
+    /// Executable path or command name to run.
     public let command: String
+    /// Arguments passed to the executable.
     public let args: [String]
+    /// Extra environment variables merged into the child process environment.
     public let env: [String: String]
 
+    /// Creates a launch descriptor for the MCP server child process.
     public init(command: String, args: [String], env: [String: String] = [:]) {
         self.command = command
         self.args = args
@@ -257,9 +303,12 @@ public struct ClaudeCodeMCPServerLaunch: Sendable, Equatable {
     }
 }
 
+/// Builds the per-session MCP configuration JSON consumed by Claude Code.
 public enum ClaudeCodeMCPConfigBuilder {
+    /// MCP server name used in the generated configuration.
     public static let serverName = "gargantua"
 
+    /// Returns the preferred MCP server launch, falling back to `swift run` in dev.
     public static func defaultServerLaunch(fileManager: FileManager = .default) -> ClaudeCodeMCPServerLaunch {
         if let executableDirectory = Bundle.main.executableURL?.deletingLastPathComponent() {
             let bundledMCP = executableDirectory.appendingPathComponent("GargantuaMCP")
@@ -274,6 +323,7 @@ public enum ClaudeCodeMCPConfigBuilder {
         )
     }
 
+    /// Encodes the MCP configuration JSON for the supplied server launch.
     public static func configurationData(server: ClaudeCodeMCPServerLaunch) throws -> Data {
         let config = ClaudeCodeMCPConfig(mcpServers: [
             serverName: ClaudeCodeMCPServerConfig(
@@ -288,6 +338,7 @@ public enum ClaudeCodeMCPConfigBuilder {
         return try encoder.encode(config)
     }
 
+    /// Writes the per-session MCP configuration file and returns its URL.
     public static func writeConfiguration(
         server: ClaudeCodeMCPServerLaunch,
         sessionID: UUID,

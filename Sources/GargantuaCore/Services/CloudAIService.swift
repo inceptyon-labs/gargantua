@@ -1,19 +1,28 @@
 import Foundation
 
+/// One human-readable Cloud AI recommendation line.
 public struct CloudAIRecommendation: Codable, Sendable, Equatable {
+    /// Recommendation text returned by the model.
     public let text: String
 
+    /// Creates a recommendation wrapping the supplied text.
     public init(text: String) {
         self.text = text
     }
 }
 
+/// Parsed deep-analysis output for a set of scan results.
 public struct CloudAIDeepAnalysis: Sendable, Equatable {
+    /// One-paragraph human-readable analysis summary.
     public let summary: String
+    /// Structured recommendations parsed from the model output.
     public let recommendations: [CloudAIRecommendation]
+    /// Raw model text retained for fallback rendering.
     public let rawText: String
+    /// Estimated request cost, in cents.
     public let usageCostCents: Int
 
+    /// Creates a deep-analysis result.
     public init(
         summary: String,
         recommendations: [CloudAIRecommendation],
@@ -27,13 +36,20 @@ public struct CloudAIDeepAnalysis: Sendable, Equatable {
     }
 }
 
+/// Cloud-proposed cleanup plan targeting a specific reclaim size.
 public struct CloudCleanupPlan: Sendable {
+    /// Reclaim target requested by the caller, in bytes.
     public let targetBytes: Int64
+    /// Items the model recommends cleaning, filtered against protected items.
     public let proposedItems: [ScanResult]
+    /// Total bytes covered by the proposed items.
     public let proposedBytes: Int64
+    /// Free-text rationale for the proposed plan.
     public let rationale: String
+    /// Estimated request cost, in cents.
     public let usageCostCents: Int
 
+    /// Creates a cleanup plan.
     public init(
         targetBytes: Int64,
         proposedItems: [ScanResult],
@@ -49,12 +65,18 @@ public struct CloudCleanupPlan: Sendable {
     }
 }
 
+/// Cloud-proposed resolution for one duplicate group.
 public struct CloudDuplicateResolutionSuggestion: Codable, Sendable, Equatable {
+    /// Identifier of the duplicate group the suggestion applies to.
     public let groupID: String
+    /// Identifier of the file the model recommends keeping.
     public let keepID: String
+    /// Identifiers of files the model recommends removing.
     public let deleteIDs: [String]
+    /// Free-text rationale for the suggestion.
     public let rationale: String
 
+    /// Creates a duplicate-resolution suggestion.
     public init(groupID: String, keepID: String, deleteIDs: [String], rationale: String) {
         self.groupID = groupID
         self.keepID = keepID
@@ -63,12 +85,18 @@ public struct CloudDuplicateResolutionSuggestion: Codable, Sendable, Equatable {
     }
 }
 
+/// Result of a Cloud AI scan-rule suggestion request.
 public struct CloudScanRuleSuggestionResult: Sendable, Equatable {
+    /// File URL where the proposed rules YAML was written.
     public let proposedRulesURL: URL
+    /// YAML body of the proposed rules.
     public let yaml: String
+    /// Free-text rationale for the proposed rules.
     public let rationale: String
+    /// Estimated request cost, in cents.
     public let usageCostCents: Int
 
+    /// Creates a scan-rule suggestion result.
     public init(
         proposedRulesURL: URL,
         yaml: String,
@@ -82,8 +110,10 @@ public struct CloudScanRuleSuggestionResult: Sendable, Equatable {
     }
 }
 
+/// High-level Cloud AI workflow service backing the in-app feature surface.
 @MainActor
 public final class CloudAIService: ObservableObject {
+    /// Whether a Cloud AI request is currently in flight.
     @Published public private(set) var isRunning = false
 
     private let configurationStore: CloudAIConfigurationStore
@@ -94,6 +124,7 @@ public final class CloudAIService: ObservableObject {
     private let fileManager: FileManager
     private let contentProvider: CloudAIRedactor.ContentProvider?
 
+    /// Creates a service with injected configuration, transport, and usage dependencies.
     public init(
         configurationStore: CloudAIConfigurationStore = CloudAIConfigurationStore(),
         keyStore: any CloudAPIKeyStore = KeychainCloudAPIKeyStore(),
@@ -112,14 +143,17 @@ public final class CloudAIService: ObservableObject {
         self.contentProvider = contentProvider
     }
 
+    /// Stores an Anthropic API key in the keychain.
     public func saveAPIKey(_ apiKey: String) throws {
         try keyStore.save(apiKey)
     }
 
+    /// Removes the stored Anthropic API key from the keychain.
     public func revokeAPIKey() throws {
         try keyStore.delete()
     }
 
+    /// Returns the combined Cloud AI readiness and usage status.
     public func status() async -> CloudAIStatus {
         await CloudAIStatusProvider.snapshot(
             configurationStore: configurationStore,
@@ -128,6 +162,7 @@ public final class CloudAIService: ObservableObject {
         )
     }
 
+    /// Runs a deep analysis over the supplied scan results.
     public func deepAnalyze(results: [ScanResult]) async throws -> CloudAIDeepAnalysis {
         let configuration = configurationStore.load()
         let items = try CloudAIRedactor.items(
@@ -156,6 +191,7 @@ public final class CloudAIService: ObservableObject {
         )
     }
 
+    /// Asks the model for a cleanup plan that targets a specific reclaim size.
     public func proposeCleanupTarget(
         results: [ScanResult],
         targetBytes: Int64
@@ -197,6 +233,7 @@ public final class CloudAIService: ObservableObject {
         )
     }
 
+    /// Asks the model to recommend keep/delete decisions for duplicate groups.
     public func resolveDuplicates(
         groups: [DuplicateGroup]
     ) async throws -> [CloudDuplicateResolutionSuggestion] {
@@ -228,6 +265,7 @@ public final class CloudAIService: ObservableObject {
         }
     }
 
+    /// Asks the model to draft new cleanup rules and writes them to a proposed-rules file.
     public func suggestScanRules(
         from results: [ScanResult],
         proposedRulesURL: URL? = nil
@@ -346,6 +384,7 @@ public final class CloudAIService: ObservableObject {
         }
     }
 
+    /// Default URL for cloud-proposed rule files in user-scoped Application Support.
     public static func defaultProposedRulesURL(fileManager: FileManager = .default) -> URL {
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
@@ -355,6 +394,7 @@ public final class CloudAIService: ObservableObject {
             .appendingPathComponent("cloud-ai-proposed-rules.yaml")
     }
 
+    /// Returns whether the supplied URL is outside live bundled rule directories.
     public static func isProposedRulesURLAllowed(_ url: URL) -> Bool {
         let components = Set(url.standardizedFileURL.pathComponents)
         return !components.contains("cleanup_rules") && !components.contains("uninstall_rules")
