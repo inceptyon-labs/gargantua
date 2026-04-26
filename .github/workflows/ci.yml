@@ -62,6 +62,9 @@ jobs:
             -instr-profile .build/debug/codecov/default.profdata \
             -ignore-filename-regex='.build|Tests' > coverage.lcov
 
+      - name: Enforce coverage floor (40%)
+        run: Scripts/coverage-priorities.sh coverage.lcov --fail-under 40
+
       - name: Summarize low-coverage service and model files
         run: Scripts/coverage-priorities.sh coverage.lcov --limit 20 --min-lines 20
 
