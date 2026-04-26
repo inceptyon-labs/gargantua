@@ -55,4 +55,9 @@ regexes = [
   '''YOUR_[A-Z_]+_KEY''',
   '''YOUR_[A-Z_]+_API_KEY''',
   '''AIza[A-Za-z0-9_-]{0,5}EXAMPLE''',
+  # Test-only fixtures used by Tests/GargantuaCoreTests/Services/MCP/MCPSSETransport*Tests.swift
+  '''gtua_test_token_\d+''',
+  # Test-only fixture used by Tests/GargantuaCoreTests/Services/CloudAIRedactorTests.swift
+  # (gitleaks matches allowlist regexes against the captured secret, not the full match)
+  '''hunter2-with-enough-length''',
 ]

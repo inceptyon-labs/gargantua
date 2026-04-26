@@ -1,0 +1,9 @@
+# Semgrep ignore rules for Gargantua.
+#
+# CloudAIRedactorTests exercises the cloud-AI redactor against deliberately
+# credential-shaped fixture strings (AWS keys, GitHub tokens, sk- API keys,
+# PEM-style private keys, passwords). Semgrep's secret-detection rules
+# unsurprisingly flag every fixture as a hardcoded secret. The file itself
+# IS the test for redaction; suppressing the whole file is the correct
+# scope. Real-world secret leaks elsewhere remain in scope.
+Tests/GargantuaCoreTests/Services/CloudAIRedactorTests.swift
