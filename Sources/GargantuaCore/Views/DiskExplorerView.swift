@@ -207,17 +207,33 @@ public struct DiskExplorerView: View {
         DiskExplorerView.collapseSmall(items)
     }
 
-    /// If a single child has more than 70% of the visible total, the treemap
-    /// degenerates into one giant tile next to a thin strip of unreadable
-    /// slivers. Detect that case so we can render a more useful layout.
+    /// If the largest child dwarfs everything else, the treemap degenerates
+    /// into one giant tile next to a thin strip of unreadable slivers. Detect
+    /// that case so we can render a more useful layout.
+    ///
+    /// Only computed once the scan completes — otherwise the answer flickers
+    /// as sizes resolve in arbitrary order: the first small folder to finish
+    /// sizing would briefly be "dominant" against zero, get swept aside as
+    /// the real heavyweight resolves, and then potentially flip again as
+    /// medium peers join the picture.
+    ///
+    /// The heuristic looks at the ratio between the largest and second-largest
+    /// child rather than the largest's share of the total — that's what
+    /// actually determines whether the treemap will produce visible non-largest
+    /// tiles or just slivers crammed against the edge.
     private var dominantChild: DirectoryItem? {
-        let sized = items.filter {
-            !$0.isPermissionDenied && !$0.isSizing && $0.size > 0
+        guard !isLoading else { return nil }
+        let sized = items
+            .filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
+            .sorted { $0.size > $1.size }
+        guard let largest = sized.first else { return nil }
+        guard sized.count > 1 else { return largest }
+        let second = sized[1]
+        // Second-largest below ~15% of largest means it'd render as a sliver.
+        if Double(second.size) / Double(largest.size) < 0.15 {
+            return largest
         }
-        let total = sized.reduce(0) { $0 + $1.size }
-        guard total > 0, let largest = sized.first else { return nil }
-        let fraction = Double(largest.size) / Double(total)
-        return fraction > 0.70 ? largest : nil
+        return nil
     }
 
     private var treemapView: some View {
