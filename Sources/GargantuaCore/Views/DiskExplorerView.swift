@@ -2,9 +2,12 @@ import SwiftUI
 
 /// Disk Explorer with native treemap and sorted list views for disk consumers.
 ///
-/// Shows the largest directories at the current path, sorted by size.
-/// Click to expand loads child directories on demand.
-/// Breadcrumb trail tracks drill-down navigation.
+/// Mirrors the idle → results phase pattern used by Deep Clean, File Health,
+/// Dev Purge, and Duplicate Finder: starts at an idle CTA, transitions to the
+/// `ScanResultsHeader`-fronted results view once the user kicks off a scan.
+/// Within results, clicking a tile drills down (pushes onto the breadcrumb
+/// stack); Refresh re-scans the current directory; Rescan resets to home and
+/// re-runs from scratch; Back returns to the idle CTA.
 public struct DiskExplorerView: View {
     /// Stack of (path, displayName) representing the drill-down breadcrumb trail.
     @State private var pathStack: [(path: String, name: String)] = [
@@ -15,6 +18,10 @@ public struct DiskExplorerView: View {
     @State private var isLoading = false
     @State private var maxSize: Int64 = 1
     @State private var displayMode: DiskExplorerDisplayMode = .treemap
+    @State private var phase: DiskExplorerPhase = .idle
+    @State private var scanGeneration = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init() {}
 
@@ -25,74 +32,124 @@ public struct DiskExplorerView: View {
             GargantuaColors.void_
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 0) {
-                headerView
-                breadcrumbView
-                contentView
+            switch phase {
+            case .idle:
+                idleView
+                    .transition(.opacity)
+            case .results:
+                resultsView
+                    .transition(.opacity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .task(id: currentPath) {
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: phase)
+        .task(id: scanLoadKey) {
+            guard phase == .results else { return }
             await loadDirectory(currentPath)
         }
     }
 
-    // MARK: - Header
+    /// Bumped on every navigation/rescan so `.task(id:)` re-runs the scan
+    /// even when the path hasn't changed (e.g. Refresh on the same dir).
+    private var scanLoadKey: String { "\(scanGeneration)|\(currentPath)" }
 
-    private var headerView: some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            Text("Disk Explorer")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
+    // MARK: - Idle CTA
 
-            if isLoading {
-                scanStatusPill
+    private var idleView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Disk Explorer")
+                    .font(GargantuaFonts.heading)
+                    .foregroundStyle(GargantuaColors.ink)
+                Spacer()
             }
+            .padding(.horizontal, GargantuaSpacing.space4)
+            .padding(.vertical, GargantuaSpacing.space4)
+
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
 
             Spacer()
 
-            Picker("Display mode", selection: $displayMode) {
-                Label("Treemap", systemImage: "square.grid.2x2")
-                    .tag(DiskExplorerDisplayMode.treemap)
-                Label("List", systemImage: "list.bullet")
-                    .tag(DiskExplorerDisplayMode.list)
+            VStack(spacing: GargantuaSpacing.space3) {
+                Image(systemName: "externaldrive")
+                    .font(.system(size: 36))
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                Text("Disk Map")
+                    .font(GargantuaFonts.heading)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text("Visualize what's eating your home directory. Click any folder to drill in.")
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+
+                Button(action: startScan) {
+                    Text("Start Disk Scan")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(GargantuaColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, GargantuaSpacing.space2)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 190)
+
+            Spacer()
         }
-        .padding(.horizontal, GargantuaSpacing.space6)
-        .padding(.top, GargantuaSpacing.space6)
-        .padding(.bottom, GargantuaSpacing.space3)
     }
 
-    private var scanStatusPill: some View {
+    // MARK: - Results
+
+    private var resultsView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScanResultsHeader(
+                title: "Disk Explorer",
+                subtitle: scanSubtitle,
+                onBack: { exitToIdle() },
+                onRefresh: { refreshCurrent() },
+                onRescan: { rescanFromHome() },
+                isBusy: isLoading
+            )
+
+            controlsBar
+            breadcrumbView
+            contentView
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var scanSubtitle: String? {
         let total = items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
         let pending = items.filter { $0.isSizing }.count
         let done = max(total - pending, 0)
-        let label: String = {
+        if isLoading {
             if total == 0 { return "Probing gravitational pull…" }
             if pending == 0 { return "Finishing up…" }
             return "Sizing \(done) of \(total) folders…"
-        }()
-        let activityRate: Double = pending > 0 ? 12 : 4
-        return HStack(spacing: GargantuaSpacing.space2) {
-            AccretionDiskView(activityRate: activityRate, size: 22, color: GargantuaColors.accent)
-            Text(label)
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink2)
-                .monospacedDigit()
-                .accessibilityLabel(label)
         }
-        .padding(.horizontal, GargantuaSpacing.space3)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .background(
-            Capsule().fill(GargantuaColors.surface2)
-        )
-        .overlay(
-            Capsule().strokeBorder(GargantuaColors.accent.opacity(0.4), lineWidth: 1)
-        )
-        .transition(.opacity)
+        if total > 0 {
+            return "\(total) item\(total == 1 ? "" : "s")"
+        }
+        return nil
+    }
+
+    private var controlsBar: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            if isLoading {
+                AccretionDiskView(activityRate: 14, size: 18, color: GargantuaColors.accent)
+                    .accessibilityHidden(true)
+            }
+            Spacer()
+            DisplayModeToggle(selection: $displayMode)
+        }
+        .padding(.horizontal, GargantuaSpacing.space6)
+        .padding(.top, GargantuaSpacing.space3)
+        .padding(.bottom, GargantuaSpacing.space2)
     }
 
     // MARK: - Breadcrumb
@@ -123,7 +180,7 @@ public struct DiskExplorerView: View {
                 }
             }
             .padding(.horizontal, GargantuaSpacing.space6)
-            .padding(.bottom, GargantuaSpacing.space4)
+            .padding(.bottom, GargantuaSpacing.space3)
         }
     }
 
@@ -144,12 +201,16 @@ public struct DiskExplorerView: View {
         }
     }
 
+    private var displayItems: [DirectoryItem] {
+        DiskExplorerView.collapseSmall(items)
+    }
+
     private var treemapView: some View {
         GeometryReader { geometry in
             let width = max(geometry.size.width - GargantuaSpacing.space6 * 2, 1)
             let height = max(geometry.size.height - GargantuaSpacing.space6, 1)
             let bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
-            let tiles = DiskTreemapLayout.tiles(for: items, in: bounds)
+            let tiles = DiskTreemapLayout.tiles(for: displayItems, in: bounds)
 
             ZStack(alignment: .topLeading) {
                 ForEach(tiles) { tile in
@@ -162,6 +223,7 @@ public struct DiskExplorerView: View {
                 }
             }
             .frame(width: width, height: height, alignment: .topLeading)
+            .clipped()
             .padding(.horizontal, GargantuaSpacing.space6)
             .padding(.bottom, GargantuaSpacing.space6)
         }
@@ -219,6 +281,38 @@ public struct DiskExplorerView: View {
 
     // MARK: - Actions
 
+    private func startScan() {
+        pathStack = [(path: NSHomeDirectory(), name: "Home")]
+        items = []
+        expandedItems = [:]
+        maxSize = 1
+        scanGeneration += 1
+        phase = .results
+    }
+
+    private func refreshCurrent() {
+        items = []
+        expandedItems = [:]
+        maxSize = 1
+        scanGeneration += 1
+    }
+
+    private func rescanFromHome() {
+        pathStack = [(path: NSHomeDirectory(), name: "Home")]
+        items = []
+        expandedItems = [:]
+        maxSize = 1
+        scanGeneration += 1
+    }
+
+    private func exitToIdle() {
+        items = []
+        expandedItems = [:]
+        maxSize = 1
+        pathStack = [(path: NSHomeDirectory(), name: "Home")]
+        phase = .idle
+    }
+
     private func loadDirectory(_ path: String) async {
         isLoading = true
         expandedItems = [:]
@@ -262,7 +356,10 @@ public struct DiskExplorerView: View {
     }
 
     private func drillDown(into item: DirectoryItem) {
-        guard !item.isPermissionDenied, !item.isFilesAggregate else { return }
+        guard !item.isPermissionDenied,
+              !item.isFilesAggregate,
+              !item.isOthersAggregate,
+              !item.isSizing else { return }
         pathStack.append((path: item.path, name: item.name))
     }
 
@@ -270,11 +367,113 @@ public struct DiskExplorerView: View {
         guard index < pathStack.count - 1 else { return }
         pathStack = Array(pathStack.prefix(index + 1))
     }
+
+    /// Bundle directories whose size is < 1% of the largest into a single
+    /// synthetic "Others" tile. Avoids the ant-farm of unidentifiable
+    /// 60×60-pixel icons that plague treemaps of skewed distributions.
+    static func collapseSmall(_ items: [DirectoryItem]) -> [DirectoryItem] {
+        let sized = items.filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
+        guard let largest = sized.map(\.size).max(), largest > 0 else { return items }
+
+        let threshold = max(largest / 100, 1)
+        var kept: [DirectoryItem] = []
+        var aggregated: [DirectoryItem] = []
+
+        for item in items {
+            if item.isPermissionDenied || item.isSizing || item.isFilesAggregate {
+                kept.append(item)
+                continue
+            }
+            if item.size < threshold {
+                aggregated.append(item)
+            } else {
+                kept.append(item)
+            }
+        }
+
+        // Only collapse when it's worth it — a single small item gets a normal
+        // tile rather than a misleading "Others (1)" wrapper.
+        guard aggregated.count >= 2 else { return items }
+
+        let totalSize = aggregated.reduce(0) { $0 + $1.size }
+        let aggregateName = "Others (\(aggregated.count))"
+        let parentPath = aggregated.first?.path
+            .split(separator: "/")
+            .dropLast()
+            .joined(separator: "/") ?? ""
+        let aggregatePath = "/\(parentPath)#others"
+        kept.append(DirectoryItem(
+            name: aggregateName,
+            path: aggregatePath,
+            size: totalSize,
+            isOthersAggregate: true
+        ))
+        return kept
+    }
 }
 
 private enum DiskExplorerDisplayMode {
     case treemap
     case list
+}
+
+private enum DiskExplorerPhase {
+    case idle
+    case results
+}
+
+// MARK: - Display Mode Toggle
+
+/// Two-button toggle for treemap / list view, hand-rolled so it stays legible
+/// against the dark `void_` background. The native segmented `Picker` renders
+/// the unselected segment as dark-on-dark in this theme and is effectively
+/// invisible, so we draw both segments explicitly with theme colors.
+private struct DisplayModeToggle: View {
+    @Binding var selection: DiskExplorerDisplayMode
+
+    var body: some View {
+        HStack(spacing: 0) {
+            segment(
+                mode: .treemap,
+                label: "Treemap",
+                systemImage: "square.grid.2x2"
+            )
+            segment(
+                mode: .list,
+                label: "List",
+                systemImage: "list.bullet"
+            )
+        }
+        .background(GargantuaColors.surface2)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .strokeBorder(GargantuaColors.border, lineWidth: 1)
+        )
+    }
+
+    private func segment(mode: DiskExplorerDisplayMode, label: String, systemImage: String) -> some View {
+        let isSelected = selection == mode
+        return Button {
+            selection = mode
+        } label: {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(label)
+                    .font(GargantuaFonts.label)
+            }
+            .foregroundStyle(isSelected ? Color.white : GargantuaColors.ink)
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .padding(.vertical, GargantuaSpacing.space2)
+            .frame(minWidth: 92)
+            .background(isSelected ? GargantuaColors.accent : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
 }
 
 // MARK: - Treemap Cell
@@ -288,7 +487,10 @@ private struct DirectoryTreemapCellView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canDrillDown: Bool {
-        !item.isPermissionDenied && !item.isFilesAggregate && !item.isSizing
+        !item.isPermissionDenied
+            && !item.isFilesAggregate
+            && !item.isOthersAggregate
+            && !item.isSizing
     }
 
     var body: some View {
@@ -410,6 +612,7 @@ private struct DirectoryTreemapCellView: View {
         if item.isPermissionDenied { return GargantuaColors.protected_ }
         if item.isPartial { return GargantuaColors.review }
         if item.isSizing { return GargantuaColors.accent }
+        if item.isOthersAggregate { return GargantuaColors.ink3 }
         return GargantuaColors.ink2
     }
 
@@ -429,6 +632,7 @@ private struct DirectoryTreemapCellView: View {
     }
 
     private var iconName: String {
+        if item.isOthersAggregate { return "ellipsis.circle" }
         if item.isFilesAggregate { return "doc" }
         if item.isPermissionDenied { return "lock.fill" }
         if item.isSizing { return "hourglass" }

@@ -26,6 +26,11 @@ public struct DirectoryItem: Identifiable, Sendable {
     /// `(files)` does not collide with the aggregate.
     public let isFilesAggregate: Bool
 
+    /// `true` when this row represents the synthetic "Others" treemap tile
+    /// that bundles directories too small to render as their own visible
+    /// rectangle. Not drillable; surfaced only in the treemap view.
+    public let isOthersAggregate: Bool
+
     /// Child items, loaded on demand. `nil` means not yet loaded.
     public var children: [DirectoryItem]?
 
@@ -37,9 +42,16 @@ public struct DirectoryItem: Identifiable, Sendable {
         isPartial: Bool = false,
         isSizing: Bool = false,
         isFilesAggregate: Bool = false,
+        isOthersAggregate: Bool = false,
         children: [DirectoryItem]? = nil
     ) {
-        self.id = isFilesAggregate ? "\(path)#filesAggregate" : path
+        if isFilesAggregate {
+            self.id = "\(path)#filesAggregate"
+        } else if isOthersAggregate {
+            self.id = "\(path)#othersAggregate"
+        } else {
+            self.id = path
+        }
         self.name = name
         self.path = path
         self.size = size
@@ -47,6 +59,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         self.isPartial = isPartial
         self.isSizing = isSizing
         self.isFilesAggregate = isFilesAggregate
+        self.isOthersAggregate = isOthersAggregate
         self.children = children
     }
 }
