@@ -190,6 +190,8 @@ public struct DiskExplorerView: View {
         Group {
             if !isLoading, items.isEmpty {
                 emptyState
+            } else if displayMode == .treemap, let dominant = dominantChild {
+                dominantChildView(dominant: dominant)
             } else {
                 switch displayMode {
                 case .treemap:
@@ -203,6 +205,19 @@ public struct DiskExplorerView: View {
 
     private var displayItems: [DirectoryItem] {
         DiskExplorerView.collapseSmall(items)
+    }
+
+    /// If a single child has more than 70% of the visible total, the treemap
+    /// degenerates into one giant tile next to a thin strip of unreadable
+    /// slivers. Detect that case so we can render a more useful layout.
+    private var dominantChild: DirectoryItem? {
+        let sized = items.filter {
+            !$0.isPermissionDenied && !$0.isSizing && $0.size > 0
+        }
+        let total = sized.reduce(0) { $0 + $1.size }
+        guard total > 0, let largest = sized.first else { return nil }
+        let fraction = Double(largest.size) / Double(total)
+        return fraction > 0.70 ? largest : nil
     }
 
     private var treemapView: some View {
@@ -260,6 +275,108 @@ public struct DiskExplorerView: View {
             .padding(.horizontal, GargantuaSpacing.space6)
             .padding(.bottom, GargantuaSpacing.space6)
         }
+    }
+
+    /// Alternate layout for folders where one child is so large the treemap
+    /// would just show a giant rectangle with sliver-thin neighbors. Renders
+    /// the dominant child as a hero card with a Drill In affordance and the
+    /// remaining children as a compact size-bar list below.
+    private func dominantChildView(dominant: DirectoryItem) -> some View {
+        let total = items.reduce(0) { $0 + max($1.size, 0) }
+        let fraction = total > 0 ? Double(dominant.size) / Double(total) : 0
+        let percent = Int((fraction * 100).rounded())
+        let remaining = items.filter { $0.id != dominant.id }
+        let canDrillIn = !dominant.isPermissionDenied
+            && !dominant.isFilesAggregate
+            && !dominant.isSizing
+
+        return VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
+            HStack(spacing: GargantuaSpacing.space3) {
+                Image(systemName: "scope")
+                    .font(.system(size: 14))
+                    .foregroundStyle(GargantuaColors.review)
+                Text("One folder dominates this directory")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                Spacer()
+            }
+
+            Button {
+                if canDrillIn { drillDown(into: dominant) }
+            } label: {
+                HStack(spacing: GargantuaSpacing.space4) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(GargantuaColors.accent)
+
+                    VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                        Text(dominant.name)
+                            .font(GargantuaFonts.heading)
+                            .foregroundStyle(GargantuaColors.ink)
+                            .lineLimit(2)
+                        HStack(spacing: GargantuaSpacing.space2) {
+                            Text(AlertItem.formatBytes(dominant.size))
+                                .font(GargantuaFonts.monoData)
+                                .foregroundStyle(GargantuaColors.ink2)
+                            Text("•")
+                                .foregroundStyle(GargantuaColors.ink4)
+                            Text("\(percent)% of folder")
+                                .font(GargantuaFonts.caption)
+                                .foregroundStyle(GargantuaColors.ink2)
+                        }
+                    }
+
+                    Spacer()
+
+                    if canDrillIn {
+                        HStack(spacing: GargantuaSpacing.space1) {
+                            Text("Drill in")
+                                .font(GargantuaFonts.label)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(GargantuaColors.accent)
+                    }
+                }
+                .padding(GargantuaSpacing.space4)
+                .background(GargantuaColors.surface3)
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+                .overlay(
+                    RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                        .strokeBorder(GargantuaColors.accent.opacity(0.5), lineWidth: 1.5)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canDrillIn)
+
+            if !remaining.isEmpty {
+                VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+                    Text("Other items")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .textCase(.uppercase)
+
+                    ScrollView {
+                        LazyVStack(spacing: 1) {
+                            ForEach(remaining) { item in
+                                DirectoryRowView(
+                                    item: item,
+                                    maxSize: maxSize,
+                                    isExpanded: false,
+                                    onExpand: nil,
+                                    onDrillDown: { drillDown(into: item) }
+                                )
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, GargantuaSpacing.space6)
+        .padding(.bottom, GargantuaSpacing.space6)
     }
 
     private var emptyState: some View {
@@ -519,7 +636,7 @@ private struct DirectoryTreemapCellView: View {
 
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                    .fill(canDrillDown && isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2)
+                    .fill(canDrillDown && isHovered ? GargantuaColors.surface4 : GargantuaColors.surface3)
 
                 if item.isPermissionDenied {
                     RoundedRectangle(cornerRadius: GargantuaRadius.medium)
