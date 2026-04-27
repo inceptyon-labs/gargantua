@@ -189,6 +189,9 @@ public struct DiskExplorerView: View {
     private var contentView: some View {
         ZStack {
             switch contentMode {
+            case .scanning:
+                scanningView
+                    .transition(.opacity)
             case .empty:
                 emptyState
                     .transition(.opacity)
@@ -210,8 +213,16 @@ public struct DiskExplorerView: View {
     /// `.animation(_:value:)` can drive cross-fades between them. Without
     /// this, swapping treemap → dominant card on `isLoading` flipping false
     /// is an abrupt view-tree replacement with no transition window.
+    ///
+    /// While `isLoading` is true we deliberately do NOT render a partial
+    /// treemap. Watching tiles bounce around as sizes resolve and the
+    /// squarify layout re-runs is jarring, and worse, on a folder destined
+    /// for the dominant-child fallback the user sees the full ant-farm
+    /// before the card resolves. Show a clean scanning view instead and
+    /// cross-fade into the result once it's stable.
     private var contentMode: DiskExplorerContentMode {
-        if !isLoading, items.isEmpty { return .empty }
+        if isLoading { return .scanning }
+        if items.isEmpty { return .empty }
         if displayMode == .treemap, let dominant = dominantChild {
             return .dominant(dominant)
         }
@@ -413,6 +424,36 @@ public struct DiskExplorerView: View {
         .padding(.bottom, GargantuaSpacing.space6)
     }
 
+    private var scanningView: some View {
+        let total = items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
+        let pending = items.filter { $0.isSizing }.count
+        let done = max(total - pending, 0)
+        let primary: String = {
+            if total == 0 { return "Probing gravitational pull…" }
+            if pending == 0 { return "Finishing up…" }
+            return "Sizing \(done) of \(total) folders…"
+        }()
+        let folderName = pathStack.last?.name ?? "Home"
+        return VStack(spacing: GargantuaSpacing.space4) {
+            AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
+
+            VStack(spacing: GargantuaSpacing.space2) {
+                Text("Mapping \(folderName)")
+                    .font(GargantuaFonts.heading)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(primary)
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .monospacedDigit()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, GargantuaSpacing.space6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Scanning \(folderName), \(primary)")
+    }
+
     private var emptyState: some View {
         VStack(spacing: GargantuaSpacing.space2) {
             AccretionDiskView(activityRate: 0, size: 28, color: GargantuaColors.ink3)
@@ -574,6 +615,7 @@ private enum DiskExplorerPhase {
 }
 
 private enum DiskExplorerContentMode: Equatable {
+    case scanning
     case empty
     case treemap
     case list
@@ -581,7 +623,10 @@ private enum DiskExplorerContentMode: Equatable {
 
     static func == (lhs: DiskExplorerContentMode, rhs: DiskExplorerContentMode) -> Bool {
         switch (lhs, rhs) {
-        case (.empty, .empty), (.treemap, .treemap), (.list, .list):
+        case (.scanning, .scanning),
+             (.empty, .empty),
+             (.treemap, .treemap),
+             (.list, .list):
             return true
         case let (.dominant(l), .dominant(r)):
             return l.id == r.id
