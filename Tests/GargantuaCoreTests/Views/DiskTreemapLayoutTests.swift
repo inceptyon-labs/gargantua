@@ -69,6 +69,31 @@ struct DiskTreemapLayoutTests {
         #expect((blocked.map(area) ?? 0) > 0)
     }
 
+    @Test("squarified layout keeps tile aspect ratios bounded")
+    func squarifiedAspectRatiosAreReasonable() {
+        // Heavily skewed distribution (one whale + many small items) is the
+        // pathological case for slice-and-dice; squarified should still keep
+        // every tile at a well-bounded aspect ratio.
+        let items = [
+            makeItem("whale", size: 256_000),
+            makeItem("medium-a", size: 91_000),
+            makeItem("medium-b", size: 82_000),
+            makeItem("small-a", size: 10_000),
+            makeItem("small-b", size: 9_500),
+            makeItem("small-c", size: 8_900),
+            makeItem("tiny-a", size: 600),
+            makeItem("tiny-b", size: 300),
+            makeItem("tiny-c", size: 150),
+        ]
+        let bounds = CGRect(x: 0, y: 0, width: 1_400, height: 900)
+        let tiles = DiskTreemapLayout.tiles(for: items, in: bounds)
+
+        #expect(tiles.count == items.count)
+        let worst = tiles.map { aspectRatio(of: $0.rect) }.max() ?? 0
+        #expect(worst < 6.0)
+        #expect(tiles.allSatisfy { bounds.insetBy(dx: -0.5, dy: -0.5).contains($0.rect) })
+    }
+
     @Test("empty input and empty bounds produce no tiles")
     func emptyInputsProduceNoTiles() {
         let item = makeItem("a", size: 1)
@@ -92,5 +117,12 @@ struct DiskTreemapLayoutTests {
 
     private func area(of tile: DiskTreemapTile) -> Double {
         Double(tile.rect.width * tile.rect.height)
+    }
+
+    private func aspectRatio(of rect: CGRect) -> Double {
+        guard rect.width > 0, rect.height > 0 else { return .infinity }
+        let w = Double(rect.width)
+        let h = Double(rect.height)
+        return max(w / h, h / w)
     }
 }

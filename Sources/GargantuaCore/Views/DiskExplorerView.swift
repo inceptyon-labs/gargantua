@@ -46,9 +46,7 @@ public struct DiskExplorerView: View {
                 .foregroundStyle(GargantuaColors.ink)
 
             if isLoading {
-                Text("Probing gravitational pull…")
-                    .font(GargantuaFonts.body.italic())
-                    .foregroundStyle(GargantuaColors.ink2)
+                scanStatusPill
             }
 
             Spacer()
@@ -62,14 +60,39 @@ public struct DiskExplorerView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 190)
-
-            if isLoading {
-                AccretionDiskView(activityRate: 0, size: 14)
-            }
         }
         .padding(.horizontal, GargantuaSpacing.space6)
         .padding(.top, GargantuaSpacing.space6)
         .padding(.bottom, GargantuaSpacing.space3)
+    }
+
+    private var scanStatusPill: some View {
+        let total = items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
+        let pending = items.filter { $0.isSizing }.count
+        let done = max(total - pending, 0)
+        let label: String = {
+            if total == 0 { return "Probing gravitational pull…" }
+            if pending == 0 { return "Finishing up…" }
+            return "Sizing \(done) of \(total) folders…"
+        }()
+        let activityRate: Double = pending > 0 ? 12 : 4
+        return HStack(spacing: GargantuaSpacing.space2) {
+            AccretionDiskView(activityRate: activityRate, size: 22, color: GargantuaColors.accent)
+            Text(label)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink2)
+                .monospacedDigit()
+                .accessibilityLabel(label)
+        }
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(
+            Capsule().fill(GargantuaColors.surface2)
+        )
+        .overlay(
+            Capsule().strokeBorder(GargantuaColors.accent.opacity(0.4), lineWidth: 1)
+        )
+        .transition(.opacity)
     }
 
     // MARK: - Breadcrumb
@@ -261,6 +284,8 @@ private struct DirectoryTreemapCellView: View {
     let onDrillDown: () -> Void
 
     @State private var isHovered = false
+    @State private var sizingPulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canDrillDown: Bool {
         !item.isPermissionDenied && !item.isFilesAggregate && !item.isSizing
@@ -302,7 +327,18 @@ private struct DirectoryTreemapCellView: View {
                         .fill(GargantuaColors.reviewDim)
                 } else if item.isSizing {
                     RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                        .fill(GargantuaColors.accent.opacity(0.10))
+                        .fill(GargantuaColors.accent)
+                        .opacity(reduceMotion ? 0.18 : (sizingPulse ? 0.28 : 0.10))
+                        .animation(
+                            reduceMotion
+                                ? nil
+                                : .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                            value: sizingPulse
+                        )
+                        .onAppear {
+                            guard !reduceMotion else { return }
+                            sizingPulse = true
+                        }
                 }
 
                 RoundedRectangle(cornerRadius: GargantuaRadius.medium)
