@@ -187,20 +187,35 @@ public struct DiskExplorerView: View {
     // MARK: - Content
 
     private var contentView: some View {
-        Group {
-            if !isLoading, items.isEmpty {
+        ZStack {
+            switch contentMode {
+            case .empty:
                 emptyState
-            } else if displayMode == .treemap, let dominant = dominantChild {
+                    .transition(.opacity)
+            case .dominant(let dominant):
                 dominantChildView(dominant: dominant)
-            } else {
-                switch displayMode {
-                case .treemap:
-                    treemapView
-                case .list:
-                    listView
-                }
+                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            case .treemap:
+                treemapView
+                    .transition(.opacity)
+            case .list:
+                listView
+                    .transition(.opacity)
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: contentMode)
+    }
+
+    /// Coalesces the various render branches into one Equatable value so
+    /// `.animation(_:value:)` can drive cross-fades between them. Without
+    /// this, swapping treemap → dominant card on `isLoading` flipping false
+    /// is an abrupt view-tree replacement with no transition window.
+    private var contentMode: DiskExplorerContentMode {
+        if !isLoading, items.isEmpty { return .empty }
+        if displayMode == .treemap, let dominant = dominantChild {
+            return .dominant(dominant)
+        }
+        return displayMode == .list ? .list : .treemap
     }
 
     private var displayItems: [DirectoryItem] {
@@ -553,6 +568,24 @@ private enum DiskExplorerDisplayMode {
 private enum DiskExplorerPhase {
     case idle
     case results
+}
+
+private enum DiskExplorerContentMode: Equatable {
+    case empty
+    case treemap
+    case list
+    case dominant(DirectoryItem)
+
+    static func == (lhs: DiskExplorerContentMode, rhs: DiskExplorerContentMode) -> Bool {
+        switch (lhs, rhs) {
+        case (.empty, .empty), (.treemap, .treemap), (.list, .list):
+            return true
+        case let (.dominant(l), .dominant(r)):
+            return l.id == r.id
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Display Mode Toggle
