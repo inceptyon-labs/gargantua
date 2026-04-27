@@ -20,6 +20,10 @@ public struct DiskExplorerView: View {
     @State private var displayMode: DiskExplorerDisplayMode = .treemap
     @State private var phase: DiskExplorerPhase = .idle
     @State private var scanGeneration = 0
+    /// Per-path snapshot of the last successful scan. Lets the breadcrumb
+    /// navigate back to a directory we've already mapped without paying for
+    /// another recursive sizing pass. Invalidated by Refresh / Rescan / Back.
+    @State private var pathCache: [String: [DirectoryItem]] = [:]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -474,42 +478,52 @@ public struct DiskExplorerView: View {
     // MARK: - Actions
 
     private func startScan() {
+        pathCache = [:]
         pathStack = [(path: NSHomeDirectory(), name: "Home")]
         items = []
         expandedItems = [:]
         maxSize = 1
+        isLoading = true
         scanGeneration += 1
         phase = .results
     }
 
     private func refreshCurrent() {
+        pathCache.removeValue(forKey: currentPath)
         items = []
         expandedItems = [:]
         maxSize = 1
+        isLoading = true
         scanGeneration += 1
     }
 
     private func rescanFromHome() {
+        pathCache = [:]
         pathStack = [(path: NSHomeDirectory(), name: "Home")]
         items = []
         expandedItems = [:]
         maxSize = 1
+        isLoading = true
         scanGeneration += 1
     }
 
     private func exitToIdle() {
+        pathCache = [:]
         items = []
         expandedItems = [:]
         maxSize = 1
         pathStack = [(path: NSHomeDirectory(), name: "Home")]
+        isLoading = false
         phase = .idle
     }
 
     private func loadDirectory(_ path: String) async {
-        isLoading = true
-        expandedItems = [:]
-        items = []
-        maxSize = 1
+        // The matching navigation handler (or scanGeneration bump) already set
+        // up state synchronously: `applyCachedItemsIfPresent` will have either
+        // populated `items` from cache and cleared `isLoading`, or cleared
+        // `items` and set `isLoading = true`. So if we got here without
+        // `isLoading`, there's nothing to scan.
+        guard isLoading else { return }
 
         for await item in DirectorySizeScanner.streamChildren(of: path) {
             if Task.isCancelled { return }
@@ -517,7 +531,24 @@ public struct DiskExplorerView: View {
         }
 
         if !Task.isCancelled {
+            pathCache[path] = items
             isLoading = false
+        }
+    }
+
+    /// Synchronously hydrate `items` from `pathCache` if possible. Called from
+    /// every navigation entry point so the user never sees a scanning flash
+    /// when stepping back to a directory we've already mapped.
+    private func applyCachedItemsIfPresent() {
+        expandedItems = [:]
+        if let cached = pathCache[currentPath] {
+            items = cached
+            maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
+            isLoading = false
+        } else {
+            items = []
+            maxSize = 1
+            isLoading = true
         }
     }
 
@@ -553,11 +584,13 @@ public struct DiskExplorerView: View {
               !item.isOthersAggregate,
               !item.isSizing else { return }
         pathStack.append((path: item.path, name: item.name))
+        applyCachedItemsIfPresent()
     }
 
     private func navigateTo(index: Int) {
         guard index < pathStack.count - 1 else { return }
         pathStack = Array(pathStack.prefix(index + 1))
+        applyCachedItemsIfPresent()
     }
 
     /// Bundle directories whose size is < 1% of the largest into a single
