@@ -20,68 +20,51 @@ private func makeResult(category: CzkawkaCategory = .emptyFiles) -> ScanResult {
     )
 }
 
-// MARK: - deriveScanState
+// MARK: - FileHealthContainerState.finishScan
 
-@Suite("FileHealthContainerView.deriveScanState")
+@Suite("FileHealthContainerState.finishScan")
+@MainActor
 struct FileHealthContainerStateTests {
 
-    @Test("Results with no errors yield plain results state")
+    @Test("Results with no errors yield results phase with no warnings")
     func cleanResults() {
-        let state = FileHealthContainerView.deriveScanState(
-            results: [makeResult()],
-            errors: []
-        )
-
-        if case .results(let results, let warnings) = state {
-            #expect(results.count == 1)
-            #expect(warnings.isEmpty)
-        } else {
-            Issue.record("expected .results, got \(state)")
-        }
+        let state = FileHealthContainerState()
+        state.finishScan(results: [makeResult()], errors: [])
+        #expect(state.phase == .results)
+        #expect(state.scanResults.count == 1)
+        #expect(state.scanWarnings.isEmpty)
     }
 
-    @Test("Results with errors carry warnings so the UI can flag partial failure")
+    @Test("Results with errors stay in results phase and carry warnings")
     func partialFailureSurfacesWarnings() {
-        let state = FileHealthContainerView.deriveScanState(
+        let state = FileHealthContainerState()
+        state.finishScan(
             results: [makeResult()],
             errors: [
                 "czkawka_cli image exit 1: ffprobe not found",
                 "czkawka_cli broken exit 1: permission denied",
             ]
         )
-
-        if case .results(let results, let warnings) = state {
-            #expect(results.count == 1)
-            #expect(warnings.count == 2)
-            #expect(warnings.contains { $0.contains("ffprobe") })
-        } else {
-            Issue.record("expected .results with warnings, got \(state)")
-        }
+        #expect(state.phase == .results)
+        #expect(state.scanResults.count == 1)
+        #expect(state.scanWarnings.count == 2)
+        #expect(state.scanWarnings.contains { $0.contains("ffprobe") })
     }
 
-    @Test("No results + errors collapses to terminal error")
+    @Test("No results + errors collapses to error phase")
     func allCategoriesFailed() {
-        let state = FileHealthContainerView.deriveScanState(
-            results: [],
-            errors: ["czkawka_cli empty-files exit 2: invalid arg"]
-        )
-
-        if case .error(let message) = state {
-            #expect(message.contains("empty-files"))
-        } else {
-            Issue.record("expected .error, got \(state)")
-        }
+        let state = FileHealthContainerState()
+        state.finishScan(results: [], errors: ["czkawka_cli empty-files exit 2: invalid arg"])
+        #expect(state.phase == .error)
+        #expect(state.errorMessage?.contains("empty-files") == true)
     }
 
-    @Test("No results + no errors is still .results (czkawka ran cleanly, found nothing)")
+    @Test("No results + no errors yields results phase (czkawka ran cleanly, found nothing)")
     func cleanBillOfHealth() {
-        let state = FileHealthContainerView.deriveScanState(results: [], errors: [])
-
-        if case .results(let results, let warnings) = state {
-            #expect(results.isEmpty)
-            #expect(warnings.isEmpty)
-        } else {
-            Issue.record("expected empty .results, got \(state)")
-        }
+        let state = FileHealthContainerState()
+        state.finishScan(results: [], errors: [])
+        #expect(state.phase == .results)
+        #expect(state.scanResults.isEmpty)
+        #expect(state.scanWarnings.isEmpty)
     }
 }

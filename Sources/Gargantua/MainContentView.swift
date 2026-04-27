@@ -14,6 +14,7 @@ struct MainContentView: View {
     @State private var persistence: PersistenceController?
     @State private var deepCleanSession = DeepCleanSessionState()
     @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
+    @State private var fileHealthState = FileHealthContainerState()
     @State private var duplicateFinderSelection: Set<String> = []
     @State private var activeAIEngineKind: AIEnginePreference
 
@@ -95,6 +96,7 @@ struct MainContentView: View {
                                 )
                             case "fileHealth":
                                 FileHealthContainerView(
+                                    state: fileHealthState,
                                     scanRoots: resolvedScanRoots,
                                     profile: activeDeepCleanProfile,
                                     onExplain: explainHandler

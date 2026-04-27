@@ -89,7 +89,9 @@ public struct DuplicateFinderContainerView: View {
                         results: results,
                         selectedIDs: $selectedIDs,
                         onSendToTrash: onSendToTrash,
-                        onExplain: onExplain
+                        onExplain: onExplain,
+                        onBack: { scanState = .idle },
+                        onRescan: startScan
                     )
                 case .error(let message):
                     errorView(message)

@@ -13,7 +13,13 @@ public struct EventHorizonContext: Equatable {
     /// a profile name. Pass `"—"` when no target makes sense.
     public let target: String
     /// Subtitle line under the header (italic, paired with the activity disk).
+    /// When `subtitlePool` is non-empty and `isInProgress` is true, the console
+    /// rotates through the pool instead of showing this static value.
     public let subtitle: String
+    /// Rotating pool of status lines shown during active work. Cycled every
+    /// few seconds so the UI signals ongoing activity even between log events.
+    /// Leave empty to show the static `subtitle` only.
+    public let subtitlePool: [String]
     /// Whether the console is still working — drives the spinning indicator
     /// and the trailing animated ellipsis.
     public let isInProgress: Bool
@@ -28,6 +34,7 @@ public struct EventHorizonContext: Equatable {
         header: String,
         target: String,
         subtitle: String,
+        subtitlePool: [String] = [],
         isInProgress: Bool,
         isExecuting: Bool,
         phaseKey: String
@@ -35,6 +42,7 @@ public struct EventHorizonContext: Equatable {
         self.header = header
         self.target = target
         self.subtitle = subtitle
+        self.subtitlePool = subtitlePool
         self.isInProgress = isInProgress
         self.isExecuting = isExecuting
         self.phaseKey = phaseKey
@@ -49,6 +57,7 @@ extension EventHorizonContext {
             header: "ENDURANCE · UNINSTALL SEQUENCE",
             target: uninstallTarget(for: phase),
             subtitle: uninstallSubtitle(for: phase),
+            subtitlePool: uninstallSubtitlePool(for: phase),
             isInProgress: uninstallInProgress(for: phase),
             isExecuting: uninstallExecuting(for: phase),
             phaseKey: uninstallPhaseKey(for: phase)
@@ -106,6 +115,47 @@ extension EventHorizonContext {
         }
     }
 
+    private static func uninstallSubtitlePool(for phase: SmartUninstallerPhase) -> [String] {
+        switch phase {
+        case .scanning(let app):
+            let name = app.displayName ?? app.name
+            return [
+                "Tracing gravitational echoes from \(name)",
+                "Mapping \(name)'s orbital debris field",
+                "Cataloguing artifact mass across support constellation",
+                "Scanning container boundary topology",
+                "Measuring sandbox curvature anomalies",
+                "Probing preference manifold geometry",
+                "Surveying cache residue in deep orbit",
+                "Calibrating removal trajectory",
+                "Detecting stray framework signatures",
+                "Charting plugin accretion layers",
+            ]
+        case .batchScanning:
+            return [
+                "Tracing gravitational echoes across the batch",
+                "Mapping multi-app debris fields",
+                "Cataloguing artifact mass across targets",
+                "Scanning container boundary topology",
+                "Calibrating batch removal trajectories",
+                "Surveying cache residue in deep orbit",
+                "Probing preference manifold geometry",
+                "Charting plugin accretion layers",
+            ]
+        case .executing, .batchExecuting:
+            return [
+                "Crossing the event horizon",
+                "Spaghettification sequence active",
+                "Matter absorption nominal",
+                "Tidal compression underway",
+                "Singularity ingestion in progress",
+                "No signal can escape",
+            ]
+        default:
+            return []
+        }
+    }
+
     private static func uninstallInProgress(for phase: SmartUninstallerPhase) -> Bool {
         switch phase {
         case .loadingApps, .scanning, .executing, .batchScanning, .batchExecuting: true
@@ -146,6 +196,7 @@ extension EventHorizonContext {
             header: "ENDURANCE · DEEP CLEAN SWEEP",
             target: profileName,
             subtitle: deepCleanSubtitle(for: phase, profileName: profileName),
+            subtitlePool: deepCleanSubtitlePool(for: phase, profileName: profileName),
             isInProgress: phase == .scanning || phase == .cleaning,
             isExecuting: phase == .cleaning,
             phaseKey: deepCleanPhaseKey(for: phase)
@@ -159,6 +210,37 @@ extension EventHorizonContext {
         case .results: return "Plan locked. Awaiting authorization."
         case .cleaning: return "Crossing the event horizon"
         case .summary: return "Signal recovered. Gargantua has consumed the cache."
+        }
+    }
+
+    private static func deepCleanSubtitlePool(for phase: DeepCleanPhase, profileName: String) -> [String] {
+        switch phase {
+        case .scanning:
+            return [
+                "Tracing gravitational echoes from \(profileName)",
+                "Mapping accretion disk topology",
+                "Calibrating tidal force sensors",
+                "Surveying event horizon boundary layers",
+                "Probing for reclaimable mass",
+                "Measuring spacetime debris density",
+                "Detecting substellar cache fields",
+                "Charting the gravitational lens",
+                "Analyzing residual quantum foam",
+                "Sweeping the accretion corridor",
+                "Cataloguing orbital cache debris",
+                "Scanning for entropy accumulation",
+            ]
+        case .cleaning:
+            return [
+                "Crossing the event horizon",
+                "Spaghettification sequence active",
+                "Matter absorption nominal",
+                "Tidal compression underway",
+                "Singularity ingestion in progress",
+                "No signal can escape",
+            ]
+        default:
+            return []
         }
     }
 
@@ -181,6 +263,7 @@ extension EventHorizonContext {
             header: "ENDURANCE · DEV ARTIFACT PURGE",
             target: profileName,
             subtitle: devPurgeSubtitle(for: phase, profileName: profileName),
+            subtitlePool: devPurgeSubtitlePool(for: phase, profileName: profileName),
             isInProgress: phase == .scanning || phase == .cleaning,
             isExecuting: phase == .cleaning,
             phaseKey: devPurgePhaseKey(for: phase)
@@ -194,6 +277,34 @@ extension EventHorizonContext {
         case .results: return "Plan locked. Awaiting authorization."
         case .cleaning: return "Crossing the event horizon"
         case .summary: return "Signal recovered. The build artifacts are gone."
+        }
+    }
+
+    private static func devPurgeSubtitlePool(for phase: DeepCleanPhase, profileName: String) -> [String] {
+        switch phase {
+        case .scanning:
+            return [
+                "Tracing dev artifact debris (\(profileName))",
+                "Mapping build artifact constellations",
+                "Probing derived data singularity",
+                "Scanning simulator cache topology",
+                "Detecting stale index store fragments",
+                "Measuring Swift package cache density",
+                "Surveying archive residue fields",
+                "Cataloguing incremental build debris",
+                "Charting module map accretion layers",
+                "Analyzing orphaned framework signatures",
+            ]
+        case .cleaning:
+            return [
+                "Crossing the event horizon",
+                "Spaghettification sequence active",
+                "Build artifacts absorbed",
+                "Tidal compression underway",
+                "Singularity ingestion in progress",
+            ]
+        default:
+            return []
         }
     }
 
@@ -307,12 +418,33 @@ public struct EventHorizonConsoleView: View {
         // on big apps during quiet event stretches.
         HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
             AccretionDiskView(activityRate: activityRate, size: 11)
-            Text(context.subtitle)
-                .font(GargantuaFonts.body.italic())
-                .foregroundStyle(GargantuaColors.ink2)
+            subtitleText
             if context.isInProgress {
                 activityEllipsis
             }
+        }
+    }
+
+    @ViewBuilder
+    private var subtitleText: some View {
+        let pool = context.subtitlePool
+        if context.isInProgress && pool.count > 1 && !reduceMotion {
+            // Rotate through the pool every 4 seconds. Using a TimelineView
+            // with a periodic schedule keeps SwiftUI from re-evaluating the
+            // whole body — only this subtree updates on each tick.
+            TimelineView(.periodic(from: .now, by: 4.0)) { tlContext in
+                let step = Int(tlContext.date.timeIntervalSinceReferenceDate / 4.0) % pool.count
+                Text(pool[step])
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .transition(.opacity)
+                    .id(step)
+                    .animation(.easeInOut(duration: 0.5), value: step)
+            }
+        } else {
+            Text(pool.first ?? context.subtitle)
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
         }
     }
 

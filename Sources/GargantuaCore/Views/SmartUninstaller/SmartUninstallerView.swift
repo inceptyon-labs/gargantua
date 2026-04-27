@@ -24,7 +24,10 @@ public struct SmartUninstallerView: View {
 
             ZStack {
                 switch viewModel.phase {
-                case .idle, .loadingApps, .scanning, .executing,
+                case .idle:
+                    idleView
+                        .transition(phaseTransition)
+                case .loadingApps, .scanning, .executing,
                      .batchScanning, .batchExecuting:
                     EventHorizonConsoleView(
                         context: .uninstaller(phase: viewModel.phase),
@@ -96,14 +99,44 @@ public struct SmartUninstallerView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: showingConfirmation)
-        .task {
-            if case .idle = viewModel.phase {
-                await viewModel.loadApps()
-            }
-        }
     }
 
     // MARK: - Phase subviews
+
+    private var idleView: some View {
+        VStack(spacing: GargantuaSpacing.space4) {
+            Image(systemName: "trash.slash")
+                .font(.system(size: 36))
+                .foregroundStyle(GargantuaColors.ink3)
+
+            VStack(spacing: GargantuaSpacing.space2) {
+                Text("Smart Uninstaller")
+                    .font(GargantuaFonts.heading)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text("Finds installed apps and surfaces their support files, caches, and login items so you can review what gets removed.")
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
+            }
+
+            Button {
+                Task { await viewModel.loadApps() }
+            } label: {
+                Text("Scan Installed Apps")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .background(GargantuaColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, GargantuaSpacing.space2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
     private func summaryState(result: UninstallExecutionResult) -> some View {
         let outcome = SingularityCloseMessage.Outcome.from(result: result.cleanupResult)

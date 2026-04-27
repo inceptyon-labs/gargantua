@@ -8,66 +8,44 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "FileHeal
 
 /// Scan-state owner for the File Health panel.
 ///
-/// Builds a `ScanEngine` pipeline around ``CzkawkaAdapter`` (all eight
-/// categories) and renders one of four phases:
-///   1. **Idle** — call-to-action to run the scan.
-///   2. **Scanning** — progress indicator with live "items found" count.
-///   3. **Results** — ``FileHealthView`` grouped by category tabs.
-///   4. **Cleaning** — selected findings are moved to Trash.
-///   5. **Summary** — cleanup result, audit trail, and Trash reveal affordance.
-///   6. **Error** — czkawka binary missing or scan failure with retry.
+/// Accepts an externally owned `FileHealthContainerState` so scan results
+/// survive sidebar navigation — switching away and back does not reset the
+/// phase or discard findings.
 public struct FileHealthContainerView: View {
+    public let state: FileHealthContainerState
     public let scanRoots: [URL]?
     public let profile: CleanupProfile
     public let engineFactory: (_ scanRoots: [URL], _ profile: CleanupProfile) throws -> any ScanAdapter
     public let onExplain: ((ScanResult) -> Void)?
 
-    @State var scanState: ScanState = .idle
-    @State private var scanProgress: ScanProgress = ScanProgress()
     @State private var activeScanTask: Task<Void, Never>?
     @State private var scanGeneration: Int = 0
-    @State var session = FileHealthSessionState()
-    @State var showConfirmation = false
-    @State var cleanupContext: CleanupContext?
 
-    enum ScanState {
-        case idle
-        case scanning
-        case cleaning
-        case summary
-        case results([ScanResult], warnings: [String])
-        case error(String)
-    }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    struct CleanupContext {
-        let result: CleanupResult
-        let remainingResults: [ScanResult]
-        let warnings: [String]
-    }
-
-    /// Derive the terminal scan state from results + adapter-recorded errors.
-    ///
-    /// CzkawkaAdapter runs eight independent subcommands; per-category failures
-    /// land in `errors` without blocking the scan. Three outcomes:
-    ///
-    /// - No results + errors → `.error` (every category failed, nothing to show).
-    /// - Results + errors → `.results(_, warnings:)` so the UI can surface a
-    ///   partial-failure banner; silent success would mislead the user into
-    ///   thinking an incomplete audit was clean.
-    /// - Results + no errors → plain `.results(_, warnings: [])`.
-    static func deriveScanState(results: [ScanResult], errors: [String]) -> ScanState {
-        if results.isEmpty, !errors.isEmpty {
-            return .error(errors.joined(separator: "\n"))
-        }
-        return .results(results, warnings: errors)
-    }
+    private static let fileHealthSubtitlePool: [String] = [
+        "Tracing duplicate file signatures",
+        "Scanning for broken symlinks",
+        "Cataloguing empty directories",
+        "Comparing visual fingerprints",
+        "Probing extension anomalies",
+        "Measuring oversized file mass",
+        "Detecting corrupted archives",
+        "Mapping file health topology",
+        "Cross-referencing checksum manifests",
+        "Surveying orphaned fragments",
+        "Analyzing entropy distributions",
+        "Charting the debris field",
+    ]
 
     public init(
+        state: FileHealthContainerState,
         scanRoots: [URL]? = nil,
         profile: CleanupProfile = .deep,
         engine: (any ScanAdapter)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil
     ) {
+        self.state = state
         self.scanRoots = scanRoots
         self.profile = profile
         self.onExplain = onExplain
@@ -84,7 +62,7 @@ public struct FileHealthContainerView: View {
                 .ignoresSafeArea()
 
             Group {
-                switch scanState {
+                switch state.phase {
                 case .idle:
                     idleView
                 case .scanning:
@@ -92,40 +70,39 @@ public struct FileHealthContainerView: View {
                 case .cleaning:
                     cleanupProgressView
                 case .summary:
-                    if let cleanupContext {
-                        summaryState(context: cleanupContext)
-                    }
-                case .results(let results, let warnings):
+                    summaryState()
+                case .results:
                     FileHealthView(
-                        results: results,
-                        warnings: warnings,
-                        session: session,
+                        results: state.scanResults,
+                        warnings: state.scanWarnings,
+                        session: state.session,
                         onExplain: onExplain,
+                        onBack: { state.clearResults() },
                         onRescan: startScan,
-                        onSendToTrash: { showConfirmation = true }
+                        onSendToTrash: { state.showConfirmation = true }
                     )
-                case .error(let message):
-                    errorView(message)
+                case .error:
+                    errorView(state.errorMessage ?? "Unknown scan error")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if showConfirmation, case .results(let results, _) = scanState {
+            if state.showConfirmation {
                 let selected = FileHealthCleanupFlow.selectedResults(
-                    from: results,
-                    selectedIDs: session.selectedResultIDs
+                    from: state.scanResults,
+                    selectedIDs: state.session.selectedResultIDs
                 )
                 ConfirmationModalView(
                     items: selected,
                     allowsPermanentDelete: false,
                     onConfirm: { method in confirmCleanup(selected, method: method) },
-                    onCancel: { showConfirmation = false }
+                    onCancel: { state.showConfirmation = false }
                 )
                 .transition(.opacity)
             }
         }
         .onDisappear(perform: cancelActiveScan)
-        .animation(.easeOut(duration: 0.15), value: showConfirmation)
+        .animation(.easeOut(duration: 0.15), value: state.showConfirmation)
     }
 
     // MARK: - Phase views
@@ -167,29 +144,138 @@ public struct FileHealthContainerView: View {
     }
 
     private var scanningView: some View {
-        VStack(spacing: GargantuaSpacing.space4) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .controlSize(.large)
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            consoleHeader
+            consoleSubtitle
 
-            VStack(spacing: GargantuaSpacing.space1) {
-                Text("Auditing file health…")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
+            if state.scanProgress.fractionCompleted > 0 {
+                progressBar
+            }
 
-                if scanProgress.itemsFound > 0 {
-                    Text("\(scanProgress.itemsFound) item\(scanProgress.itemsFound == 1 ? "" : "s") found so far")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                } else {
-                    Text("czkawka is walking your scan roots across eight categories. Large trees can take a few minutes.")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 420)
-                }
+            if let path = state.scanProgress.currentPath {
+                Text(abbreviatedPath(path))
+                    .font(GargantuaFonts.monoPath)
+                    .foregroundStyle(GargantuaColors.ink4)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .transition(.opacity)
+            }
+
+            Spacer()
+
+            HStack(spacing: GargantuaSpacing.space5) {
+                Text("SCAN ROOTS: \(resolvedScanRoots().count)")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                Text("CATEGORIES: 8")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                Spacer()
             }
         }
+        .padding(GargantuaSpacing.space5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(.easeInOut(duration: 0.3), value: state.scanProgress.currentPath)
+        .animation(.easeInOut(duration: 0.3), value: state.scanProgress.fractionCompleted > 0)
+    }
+
+    private var consoleHeader: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            HStack {
+                Text("ENDURANCE · FILE HEALTH AUDIT")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(2)
+                    .foregroundStyle(GargantuaColors.ink2)
+                Spacer()
+                AccretionDiskView(activityRate: 20)
+            }
+
+            HStack(spacing: GargantuaSpacing.space5) {
+                if let cat = state.scanProgress.currentCategory {
+                    Text("CATEGORY: \(prettifiedCategory(cat))")
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink)
+                        .animation(.none, value: cat)
+                } else {
+                    Text("CATEGORY: initializing")
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+
+                if state.scanProgress.itemsFound > 0 {
+                    Text("ITEMS FOUND: \(state.scanProgress.itemsFound)")
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.accretion)
+                        .transition(.opacity)
+                }
+            }
+
+            Text("[TARS] Humor: 60% · Honesty: 95% · Pragmatism: 100%")
+                .font(GargantuaFonts.monoPath)
+                .foregroundStyle(GargantuaColors.ink3)
+        }
+    }
+
+    private var consoleSubtitle: some View {
+        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
+            AccretionDiskView(activityRate: 20, size: 11)
+            rotatingSubtitle
+            scanEllipsis
+        }
+    }
+
+    @ViewBuilder
+    private var rotatingSubtitle: some View {
+        let pool = Self.fileHealthSubtitlePool
+        if reduceMotion {
+            Text(pool[0])
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
+        } else {
+            TimelineView(.periodic(from: .now, by: 4.0)) { tlContext in
+                let step = Int(tlContext.date.timeIntervalSinceReferenceDate / 4.0) % pool.count
+                Text(pool[step])
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .id(step)
+                    .animation(.easeInOut(duration: 0.5), value: step)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var scanEllipsis: some View {
+        if reduceMotion {
+            Text("…")
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
+                .frame(width: 18, alignment: .leading)
+                .accessibilityHidden(true)
+        } else {
+            TimelineView(.periodic(from: .now, by: 0.45)) { tlContext in
+                let step = Int(tlContext.date.timeIntervalSinceReferenceDate / 0.45) % 3
+                Text(String(repeating: ".", count: step + 1))
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .frame(width: 18, alignment: .leading)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var progressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(GargantuaColors.surface3)
+                    .frame(height: 3)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(GargantuaColors.accretion)
+                    .frame(width: max(0, geo.size.width * state.scanProgress.fractionCompleted), height: 3)
+                    .animation(.linear(duration: 0.3), value: state.scanProgress.fractionCompleted)
+            }
+        }
+        .frame(height: 3)
     }
 
     private func errorView(_ message: String) -> some View {
@@ -225,10 +311,7 @@ public struct FileHealthContainerView: View {
 
     // MARK: - Scan orchestration
 
-    private func startScan() {
-        // Cancel any in-flight scan so its completion can't overwrite the new
-        // scan's state. Generation id is the belt to this suspenders —
-        // cancellation is cooperative and may no-op past un-cancellable points.
+    func startScan() {
         activeScanTask?.cancel()
         scanGeneration &+= 1
         let generation = scanGeneration
@@ -240,54 +323,45 @@ public struct FileHealthContainerView: View {
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             logger.error("Failed to build file-health engine: \(message, privacy: .public)")
-            scanState = .error(message)
+            state.failScan(message)
             return
         }
 
-        // Fresh ScanProgress per attempt — a superseded scan's late error
-        // append can't mutate the next scan's progress bookkeeping.
-        let progress = ScanProgress()
-        scanProgress = progress
-        scanState = .scanning
-        cleanupContext = nil
-        showConfirmation = false
-        session.clear()
+        let progress = state.scanProgress
+        state.prepareForScan()
+        // prepareForScan replaces scanProgress; capture the new one
+        let freshProgress = state.scanProgress
 
         activeScanTask = Task {
-            let outcome: ScanState
             do {
-                let results = try await engine.scan(progress: progress, observer: nil)
-                let errors = await MainActor.run { progress.errors }
-                outcome = Self.deriveScanState(results: results, errors: errors)
+                let results = try await engine.scan(progress: freshProgress, observer: nil)
+                let errors = await MainActor.run { freshProgress.errors }
+                await MainActor.run {
+                    guard generation == scanGeneration else { return }
+                    state.finishScan(results: results, errors: errors)
+                    activeScanTask = nil
+                }
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 logger.error("File-health scan failed: \(message, privacy: .public)")
-                outcome = .error(message)
-            }
-
-            await MainActor.run {
-                // Drop completions that belong to a superseded scan.
-                guard generation == scanGeneration else { return }
-                scanState = outcome
-                if case .results(let results, _) = outcome {
-                    session.finishScan(results: results)
+                await MainActor.run {
+                    guard generation == scanGeneration else { return }
+                    state.failScan(message)
+                    activeScanTask = nil
                 }
-                activeScanTask = nil
             }
         }
+        _ = progress // suppress unused warning
     }
 
-    /// Cancels the in-flight scan on view teardown so czkawka subprocess work
-    /// doesn't outlive the panel. `scanGeneration` is bumped so any late
-    /// completion from the cancelled task is discarded at the generation guard.
     private func cancelActiveScan() {
         activeScanTask?.cancel()
         activeScanTask = nil
-        showConfirmation = false
+        state.showConfirmation = false
         scanGeneration &+= 1
     }
 
-    private func resolvedScanRoots() -> [URL] {
+    func resolvedScanRoots() -> [URL] {
         if let scanRoots, !scanRoots.isEmpty {
             return scanRoots
         }
@@ -296,12 +370,6 @@ public struct FileHealthContainerView: View {
 
     // MARK: - Default engine factory
 
-    /// Build the default pipeline: a ``ScanEngine`` wrapping ``CzkawkaAdapter``.
-    ///
-    /// The active profile is passed into the adapter so czkawka findings pass
-    /// through `SafetyClassifier` — profile-level age overrides (e.g.
-    /// developer's `age > 30d → safe`) now apply to File Health results the
-    /// same way they apply to YAML-driven rules.
     private static func defaultEngine(
         scanRoots: [URL],
         profile: CleanupProfile
@@ -311,5 +379,20 @@ public struct FileHealthContainerView: View {
             profile: profile
         )
         return ScanEngine(adapters: [czkawka])
+    }
+
+    // MARK: - Helpers
+
+    private func prettifiedCategory(_ raw: String) -> String {
+        raw.split(separator: "_")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    private func abbreviatedPath(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path.hasPrefix(home + "/") { return "~" + String(path.dropFirst(home.count)) }
+        if path == home { return "~" }
+        return path
     }
 }

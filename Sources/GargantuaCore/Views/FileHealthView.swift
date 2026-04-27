@@ -17,6 +17,7 @@ public struct FileHealthView: View {
     public let warnings: [String]
     public let session: FileHealthSessionState
     public let onExplain: ((ScanResult) -> Void)?
+    public let onBack: (() -> Void)?
     public let onRescan: (() -> Void)?
     public let onSendToTrash: (() -> Void)?
 
@@ -27,6 +28,7 @@ public struct FileHealthView: View {
         warnings: [String] = [],
         session: FileHealthSessionState? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
+        onBack: (() -> Void)? = nil,
         onRescan: (() -> Void)? = nil,
         onSendToTrash: (() -> Void)? = nil
     ) {
@@ -34,6 +36,7 @@ public struct FileHealthView: View {
         self.warnings = warnings
         self.session = session ?? FileHealthSessionState()
         self.onExplain = onExplain
+        self.onBack = onBack
         self.onRescan = onRescan
         self.onSendToTrash = onSendToTrash
     }
@@ -77,6 +80,12 @@ public struct FileHealthView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            ScanResultsHeader(
+                title: "File Health",
+                onBack: onBack,
+                onRescan: onRescan
+            )
+
             summaryBar
 
             if !warnings.isEmpty {
@@ -98,6 +107,10 @@ public struct FileHealthView: View {
 
                 if let tab = selectedTab {
                     findingsList(for: tab)
+                }
+
+                if onSendToTrash != nil {
+                    bottomActionBar
                 }
             }
         }
@@ -141,50 +154,90 @@ public struct FileHealthView: View {
                 summaryDot
                 summaryLabel(AlertItem.formatBytes(totalFlaggedBytes) + " flagged")
             }
-
             Spacer()
-
-            if let onSendToTrash, !selectedResults.isEmpty {
-                Button(action: onSendToTrash) {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Send to Trash")
-                        Text("\(selectedResults.count) · \(AlertItem.formatBytes(selectedBytes))")
-                            .foregroundStyle(GargantuaColors.ink.opacity(0.75))
-                    }
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, GargantuaSpacing.space3)
-                    .padding(.vertical, GargantuaSpacing.space1)
-                    .background(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(GargantuaColors.accent)
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Send selected File Health items to Trash")
-            }
-
-            if let onRescan {
-                Button(action: onRescan) {
-                    Label("Rescan", systemImage: "arrow.clockwise")
-                        .labelStyle(.titleAndIcon)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink2)
-                        .padding(.horizontal, GargantuaSpacing.space3)
-                        .padding(.vertical, GargantuaSpacing.space1)
-                        .background(
-                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                .fill(GargantuaColors.surface3)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
         .background(GargantuaColors.surface2)
+    }
+
+    // MARK: - Bottom Action Bar
+
+    private var bottomActionBar: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(GargantuaColors.border)
+                .frame(height: 1)
+
+            HStack(spacing: GargantuaSpacing.space3) {
+                VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                    if selectedResults.isEmpty {
+                        Text("No items selected")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink2)
+                        Text("Pick safe items above to send them to the Trash.")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    } else {
+                        Text("\(selectedResults.count) item\(selectedResults.count == 1 ? "" : "s") selected")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                        Text("\(AlertItem.formatBytes(selectedBytes)) ready for Trash")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                }
+
+                Spacer()
+
+                if !selectedResults.isEmpty {
+                    Button {
+                        session.selectedResultIDs.removeAll()
+                    } label: {
+                        Text("Clear Selection")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink2)
+                            .padding(.horizontal, GargantuaSpacing.space4)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .background(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small, style: .continuous)
+                                    .fill(GargantuaColors.surface3)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small, style: .continuous)
+                                    .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let onSendToTrash {
+                    Button(action: onSendToTrash) {
+                        HStack(spacing: GargantuaSpacing.space1) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Send to Trash")
+                                .font(GargantuaFonts.label)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(
+                            selectedResults.isEmpty
+                                ? GargantuaColors.accent.opacity(0.4)
+                                : GargantuaColors.accent
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedResults.isEmpty)
+                    .accessibilityLabel("Send selected File Health items to Trash")
+                }
+            }
+            .padding(.horizontal, GargantuaSpacing.space4)
+            .padding(.vertical, GargantuaSpacing.space3)
+            .background(GargantuaColors.surface1)
+        }
     }
 
     private func summaryLabel(_ text: String) -> some View {

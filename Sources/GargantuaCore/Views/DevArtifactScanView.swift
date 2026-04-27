@@ -364,46 +364,16 @@ public struct DevArtifactScanView: View {
 
     private func resultsView(_ results: [ScanResult]) -> some View {
         VStack(spacing: 0) {
-            // Back to categories header
-            HStack {
-                Button {
+            ScanResultsHeader(
+                title: "Dev Artifact Purge",
+                onBack: {
                     scanResults = nil
                     pathStream.clear()
                     phase = .idle
-                } label: {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Categories")
-                            .font(GargantuaFonts.label)
-                    }
-                    .foregroundStyle(GargantuaColors.accent)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Text("Dev Artifact Purge")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Spacer()
-
-                // Invisible spacer to balance the back button
-                HStack(spacing: GargantuaSpacing.space1) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Categories")
-                        .font(GargantuaFonts.label)
-                }
-                .foregroundStyle(.clear)
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
-
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+                },
+                onRescan: { startScan() },
+                isBusy: scanProgress.isScanning
+            )
 
             // Profile override banner in results view too
             if !profile.safetyOverrides.isEmpty {

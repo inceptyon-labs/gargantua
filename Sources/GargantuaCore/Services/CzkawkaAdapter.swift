@@ -266,6 +266,18 @@ public struct CzkawkaAdapter: ScanAdapter {
             args.append("-d")
             args.append(root.path)
         }
+        switch category {
+        case .brokenFiles:
+            // czkawka's `broken` defaults to PDF only and requires the
+            // --checked-types flag repeated per value (no comma-list); enable
+            // every supported check type so the category surfaces real findings.
+            args += ["-c", "PDF", "-c", "AUDIO", "-c", "IMAGE",
+                     "-c", "ARCHIVE", "-c", "VIDEO"]
+        default:
+            // `bigFiles` has no minimum-size flag in this czkawka build; the
+            // default `-n` cap (top-N biggest) already produces useful output.
+            break
+        }
         return args
     }
 
@@ -285,9 +297,13 @@ public struct CzkawkaAdapter: ScanAdapter {
             lastAccessed = accessed
         }
 
-        // Empty files/folders legitimately have zero size; everything else with
-        // zero size usually means the file disappeared between scan and stat.
-        if size == 0 && category != .emptyFiles && category != .emptyFolders {
+        // Empty files/folders and broken symlinks legitimately have zero size.
+        // Everything else with zero size usually means the file disappeared
+        // between scan and stat — drop it to avoid phantom results.
+        let allowsZeroSize = category == .emptyFiles
+            || category == .emptyFolders
+            || category == .brokenSymlinks
+        if size == 0 && !allowsZeroSize {
             return nil
         }
 

@@ -5,46 +5,67 @@ private let cleanupLogger = Logger(subsystem: "com.gargantua.core", category: "F
 
 extension FileHealthContainerView {
     var cleanupProgressView: some View {
-        VStack(spacing: GargantuaSpacing.space4) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .controlSize(.large)
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+                HStack {
+                    Text("ENDURANCE · FILE HEALTH CLEANUP")
+                        .font(GargantuaFonts.sectionLabel)
+                        .tracking(2)
+                        .foregroundStyle(GargantuaColors.ink2)
+                    Spacer()
+                    AccretionDiskView(activityRate: 20)
+                }
 
-            VStack(spacing: GargantuaSpacing.space1) {
-                Text("Moving selected items to Trash...")
-                    .font(GargantuaFonts.heading)
+                Text("TARGET: Trash")
+                    .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("File Health uses the same Trash-first cleanup path as Deep Clean.")
-                    .font(GargantuaFonts.caption)
+                Text("[TARS] Humor: 60% · Honesty: 95% · Pragmatism: 100%")
+                    .font(GargantuaFonts.monoPath)
                     .foregroundStyle(GargantuaColors.ink3)
             }
-        }
-    }
 
-    func summaryState(context: CleanupContext) -> some View {
-        let outcome = SingularityCloseMessage.Outcome.from(result: context.result)
-        let accent = outcomeAccentColor(outcome.accent)
-        return VStack(spacing: GargantuaSpacing.space2) {
-            Spacer()
-            VStack(spacing: GargantuaSpacing.space2) {
-                Text(SingularityCloseMessage.heading(for: context.result))
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(3)
-                    .foregroundStyle(accent)
-
-                Text(SingularityCloseMessage.line(for: context.result))
+            HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
+                AccretionDiskView(activityRate: 20, size: 11)
+                Text("Relocating selected items to Trash")
                     .font(GargantuaFonts.body.italic())
                     .foregroundStyle(GargantuaColors.ink2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: context.result, outcomeAccent: accent) {
-                dismissSummary()
-            }
+
             Spacer()
         }
-        .padding(GargantuaSpacing.space6)
+        .padding(GargantuaSpacing.space5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    func summaryState() -> some View {
+        guard let result = state.cleanupResult else {
+            return AnyView(EmptyView())
+        }
+        let outcome = SingularityCloseMessage.Outcome.from(result: result)
+        let accent = outcomeAccentColor(outcome.accent)
+        return AnyView(
+            VStack(spacing: GargantuaSpacing.space2) {
+                Spacer()
+                VStack(spacing: GargantuaSpacing.space2) {
+                    Text(SingularityCloseMessage.heading(for: result))
+                        .font(GargantuaFonts.sectionLabel)
+                        .tracking(3)
+                        .foregroundStyle(accent)
+
+                    Text(SingularityCloseMessage.line(for: result))
+                        .font(GargantuaFonts.body.italic())
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 480)
+                }
+                CleanupSummaryView(result: result, outcomeAccent: accent) {
+                    state.dismissSummary()
+                }
+                Spacer()
+            }
+            .padding(GargantuaSpacing.space6)
+        )
     }
 
     func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {
@@ -56,18 +77,19 @@ extension FileHealthContainerView {
     }
 
     func confirmCleanup(_ items: [ScanResult], method _: CleanupMethod) {
-        guard case .results(let currentResults, let currentWarnings) = scanState else {
-            showConfirmation = false
+        guard state.phase == .results else {
+            state.showConfirmation = false
             return
         }
 
-        showConfirmation = false
-        scanState = .cleaning
+        let currentResults = state.scanResults
+        let currentWarnings = state.scanWarnings
         let confirmationMethod = confirmationTier(for: items)
 
+        state.beginCleanup()
+
         Task { @MainActor in
-            let cleanupMethod: CleanupMethod = .trash
-            let result = await CleanupEngine().clean(items, method: cleanupMethod)
+            let result = await CleanupEngine().clean(items, method: .trash)
             do {
                 try AuditWriter().record(
                     result: result,
@@ -79,30 +101,16 @@ extension FileHealthContainerView {
                 cleanupLogger.warning("Failed to write File Health audit entry: \(error.localizedDescription)")
             }
 
-            let remainingResults = FileHealthCleanupFlow.remainingResults(
+            let remaining = FileHealthCleanupFlow.remainingResults(
                 after: result,
                 from: currentResults
             )
             let warnings = currentWarnings + FileHealthCleanupFlow.failureWarnings(from: result)
-            session.selectedResultIDs = FileHealthCleanupFlow.remainingSelection(
+            state.session.selectedResultIDs = FileHealthCleanupFlow.remainingSelection(
                 after: result,
-                from: session.selectedResultIDs
+                from: state.session.selectedResultIDs
             )
-            cleanupContext = CleanupContext(
-                result: result,
-                remainingResults: remainingResults,
-                warnings: warnings
-            )
-            scanState = .summary
+            state.finishCleanup(result: result, remaining: remaining, warnings: warnings)
         }
-    }
-
-    func dismissSummary() {
-        guard let cleanupContext else {
-            scanState = .idle
-            return
-        }
-        scanState = .results(cleanupContext.remainingResults, warnings: cleanupContext.warnings)
-        self.cleanupContext = nil
     }
 }

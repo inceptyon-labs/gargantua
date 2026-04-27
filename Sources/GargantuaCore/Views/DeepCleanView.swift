@@ -148,7 +148,7 @@ public struct DeepCleanView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            // Description
+            // Description + action centered
             Spacer()
 
             VStack(spacing: GargantuaSpacing.space3) {
@@ -165,51 +165,33 @@ public struct DeepCleanView: View {
                     .foregroundStyle(GargantuaColors.ink2)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 320)
+
+                if session.scanProgress.errors.isEmpty == false {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.review)
+                        Text(session.scanProgress.errors.first ?? "Scan error")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.review)
+                            .lineLimit(1)
+                    }
+                }
+
+                Button(action: startScan) {
+                    Text("Start Deep Clean Scan")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(GargantuaColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, GargantuaSpacing.space2)
             }
 
             Spacer()
-
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
-
-            // Scan button / progress
-            scanFooter
-        }
-    }
-
-    private var scanFooter: some View {
-        idleFooter
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
-    }
-
-    @ViewBuilder
-    private var idleFooter: some View {
-        HStack {
-            if session.scanProgress.errors.isEmpty == false {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(GargantuaColors.review)
-
-                Text(session.scanProgress.errors.first ?? "Scan error")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.review)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Button(action: startScan) {
-                Text("Start Deep Clean Scan")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(GargantuaColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-            }
-            .buttonStyle(.plain)
         }
     }
 
@@ -217,50 +199,12 @@ public struct DeepCleanView: View {
 
     private func resultsView(_ results: [ScanResult]) -> some View {
         VStack(spacing: 0) {
-            // Back header
-            HStack {
-                Button {
-                    session.clearResults()
-                } label: {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Back")
-                            .font(GargantuaFonts.label)
-                    }
-                    .foregroundStyle(GargantuaColors.accent)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Text("Deep Clean")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Spacer()
-
-                Button(action: refreshScan) {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Refresh")
-                            .font(GargantuaFonts.label)
-                    }
-                    .foregroundStyle(GargantuaColors.accent)
-                }
-                .buttonStyle(.plain)
-                .disabled(session.isScanning)
-                .opacity(session.isScanning ? 0.5 : 1)
-                .accessibilityLabel("Refresh Deep Clean Scan")
-                .frame(minWidth: 78, alignment: .trailing)
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
-
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+            ScanResultsHeader(
+                title: "Deep Clean",
+                onBack: { session.clearResults() },
+                onRescan: { startScan() },
+                isBusy: session.isScanning
+            )
 
             // Three-bucket scan results
             ScanBucketListView(
@@ -303,10 +247,6 @@ public struct DeepCleanView: View {
 
     private func dismissSummary() {
         session.dismissSummary()
-    }
-
-    private func refreshScan() {
-        startScan()
     }
 
     private func startScan() {

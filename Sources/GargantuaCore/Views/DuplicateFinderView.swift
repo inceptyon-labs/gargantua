@@ -19,6 +19,8 @@ public struct DuplicateFinderView: View {
     @Binding public var selectedIDs: Set<String>
     public let onSendToTrash: (([ScanResult]) -> Void)?
     public let onExplain: ((ScanResult) -> Void)?
+    public let onBack: (() -> Void)?
+    public let onRescan: (() -> Void)?
 
     @State private var expandedGroupIDs: Set<String>
 
@@ -26,12 +28,16 @@ public struct DuplicateFinderView: View {
         results: [ScanResult],
         selectedIDs: Binding<Set<String>>,
         onSendToTrash: (([ScanResult]) -> Void)? = nil,
-        onExplain: ((ScanResult) -> Void)? = nil
+        onExplain: ((ScanResult) -> Void)? = nil,
+        onBack: (() -> Void)? = nil,
+        onRescan: (() -> Void)? = nil
     ) {
         self.results = results
         self._selectedIDs = selectedIDs
         self.onSendToTrash = onSendToTrash
         self.onExplain = onExplain
+        self.onBack = onBack
+        self.onRescan = onRescan
         // Expand the biggest few groups by default; large duplicate sets can
         // have hundreds of groups, and keeping them all open hurts scroll
         // performance and visual parse.
@@ -81,6 +87,12 @@ public struct DuplicateFinderView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            ScanResultsHeader(
+                title: "Duplicate Finder",
+                onBack: onBack,
+                onRescan: onRescan
+            )
+
             summaryBar
 
             Rectangle()

@@ -19,7 +19,13 @@ struct UninstallPlanReviewView: View {
     var body: some View {
         if let plan {
             VStack(spacing: 0) {
-                header(plan: plan)
+                ScanResultsHeader(
+                    title: plan.app.displayName ?? plan.app.name,
+                    subtitle: plan.app.bundleID,
+                    onBack: onBack
+                )
+
+                planStatsBar(plan: plan)
 
                 if plan.app.isRunning, isAppBundleSelected(plan: plan) {
                     runningBanner(app: plan.app)
@@ -51,44 +57,27 @@ struct UninstallPlanReviewView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Stats Bar
 
-    private func header(plan: UninstallPlan) -> some View {
-        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .padding(GargantuaSpacing.space2)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back to apps")
+    private func planStatsBar(plan: UninstallPlan) -> some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            Text(AlertItem.formatBytes(plan.totalBytes))
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(plan.app.displayName ?? plan.app.name)
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
+            Text("·")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
 
-                Text(plan.app.bundleID)
-                    .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
+            Text("\(plan.allItems.count) item\(plan.allItems.count == 1 ? "" : "s")")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
 
             Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(AlertItem.formatBytes(plan.totalBytes))
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text("across \(plan.allItems.count) item\(plan.allItems.count == 1 ? "" : "s")")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
         }
-        .padding(.horizontal, GargantuaSpacing.space5)
-        .padding(.vertical, GargantuaSpacing.space3)
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface2)
     }
 
     // MARK: - Running banner
