@@ -209,14 +209,23 @@ public struct DefaultProcessRunner: ProcessRunner {
                 // recycled after waitpid freed it, hitting an innocent
                 // process group.
                 let killDeadline = DispatchTime.now() + 0.5
-                DispatchQueue.global(qos: .utility).asyncAfter(deadline: killDeadline) {
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: killDeadline) {
                     if coordinator.shouldEscalateKill() {
                         _ = killpg(pid, SIGKILL)
                     }
                 }
             }
             watchdog = item
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline, execute: item)
+            // `.userInitiated` rather than `.utility`: same reasoning as the
+            // drain queue above. On the GitHub macos-15 runner, `.utility`
+            // tasks were starved long enough that the watchdog fired AFTER
+            // short-lived children (e.g. `sleep 10` with `timeout: 0.2`) had
+            // already exited naturally — `tryArmTimeout` then refused to
+            // arm because the child was already reaped, and the test saw a
+            // successful run instead of `ProcessRunnerError.timedOut`. The
+            // SIGKILL escalation queued in the watchdog above runs at the
+            // same QoS for the same reason.
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: deadline, execute: item)
         }
 
         // waitpid blocks until the child exits (or is killed). WUNTRACED/WCONTINUED

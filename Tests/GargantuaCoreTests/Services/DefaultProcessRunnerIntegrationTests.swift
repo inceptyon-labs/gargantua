@@ -2,15 +2,10 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
-private let runningOnCI = ProcessInfo.processInfo.environment["CI"] != nil
-
 @Suite("DefaultProcessRunner integration")
 struct DefaultProcessRunnerIntegrationTests {
 
-    @Test(
-        "/bin/sleep with short timeout throws timedOut",
-        .disabled(if: runningOnCI, "GitHub macos-15 runner: timeout enforcement appears to wait for full process exit")
-    )
+    @Test("/bin/sleep with short timeout throws timedOut")
     func sleepTimesOut() throws {
         let runner = DefaultProcessRunner()
         do {
