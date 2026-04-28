@@ -228,15 +228,15 @@ struct RuleParserTests {
         // beyond) must not silently parse: Double(Int64.max + 1) rounds to the
         // same value as Double(Int64.max), so a naïve `Int64(bytes)` would trap.
         let overflowInputs = [
-            "9223372036854775808",       // Int64.max + 1
-            "99999999999999999999",     // far beyond
-            "1.5e30",                   // scientific notation, huge
-            "10000PB",                  // unsupported unit
-            "100000000TB",              // 10^20 bytes overflows Int64 (max ≈ 9.2e18)
-            "-100MB",                   // negative
-            "NaN",                      // Double special value
-            "Infinity",                 // Double special value
-            "3.14159MB.5",              // double-decimal nonsense
+            "9223372036854775808", // Int64.max + 1
+            "99999999999999999999", // far beyond
+            "1.5e30", // scientific notation, huge
+            "10000PB", // unsupported unit
+            "100000000TB", // 10^20 bytes overflows Int64 (max ≈ 9.2e18)
+            "-100MB", // negative
+            "NaN", // Double special value
+            "Infinity", // Double special value
+            "3.14159MB.5", // double-decimal nonsense
         ]
         for input in overflowInputs {
             let yaml = """
