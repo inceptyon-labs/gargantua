@@ -59,7 +59,8 @@ extension SidebarSection {
             id: "analyze",
             label: "ANALYZE",
             items: [
-                SidebarItem(id: "diskExplorer", label: "Disk Explorer", icon: "internaldrive")
+                SidebarItem(id: "diskExplorer", label: "Disk Explorer", icon: "internaldrive"),
+                SidebarItem(id: "aiModels", label: "AI Models", icon: "brain"),
             ]
         ),
         SidebarSection(

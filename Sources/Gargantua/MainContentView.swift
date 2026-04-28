@@ -106,6 +106,14 @@ struct MainContentView: View {
                                 )
                             case "diskExplorer":
                                 DiskExplorerView(state: diskExplorerState)
+                            case "aiModels":
+                                AIModelsView(
+                                    profile: .aiModels,
+                                    scanRoots: resolvedScanRoots,
+                                    onExplain: explainHandler,
+                                    onAdvisory: advisoryHandler,
+                                    onResolveFilter: scanFilterHandler
+                                )
                             case "rules":
                                 if let persistence {
                                     RuleViewerView(persistence: persistence)

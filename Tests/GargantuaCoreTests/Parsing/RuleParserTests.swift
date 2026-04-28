@@ -2,7 +2,12 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// File and type body cover the full ScanRule YAML schema in a single suite.
+// Splitting risks hiding edge cases under inconsistent fixtures.
+// swiftlint:disable file_length
+
 @Suite("RuleParser")
+// swiftlint:disable:next type_body_length
 struct RuleParserTests {
     let parser = RuleParser()
 

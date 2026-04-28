@@ -3,10 +3,12 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// File and type body intentionally large: a single suite captures the
+// adapter's full contract — profile filtering, ecosystem probing, progress
+// events, and per-rule edge cases — under a shared fixture helper.
+// swiftlint:disable file_length
+
 @Suite("NativeScanAdapter")
-// Test struct intentionally large: groups fixture helpers with full coverage
-// of the adapter's profile filtering, ecosystem probing, and progress events
-// so a single suite captures the adapter's contract end-to-end.
 // swiftlint:disable:next type_body_length
 struct NativeScanAdapterTests {
 
