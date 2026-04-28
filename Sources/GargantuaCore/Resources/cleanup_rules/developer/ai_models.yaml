@@ -1,0 +1,275 @@
+rules:
+  # Known-location model storage. Each rule surfaces the whole model
+  # directory because the user generally thinks of "all my Ollama models"
+  # as a single decision rather than per-blob. Safety is `review` because
+  # re-downloading takes minutes to hours and the user invested in choosing
+  # the model.
+
+  - id: ollama_models
+    name: Ollama Models
+    paths:
+      - "~/.ollama/models"
+    safety: review
+    confidence: 92
+    explanation: "Ollama's downloaded model blobs and manifests. Often the largest local-AI footprint on a machine — re-pull with `ollama pull <name>` to restore."
+    source:
+      name: Ollama
+      bundle_id: com.electron.ollama
+    regenerates: false
+    regenerate_command: "ollama pull <model>"
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+    safety_overrides:
+      - condition: "age > 180d"
+        safety: safe
+        confidence: 88
+        explanation_suffix: "No access in 6+ months."
+        profiles:
+          - aiModels
+          - deep
+
+  - id: lm_studio_models_cache
+    name: LM Studio Models (cache)
+    paths:
+      - "~/.cache/lm-studio/models"
+    safety: review
+    confidence: 90
+    explanation: "LM Studio's GGUF model store under the XDG cache dir. Re-download via the LM Studio app to restore."
+    source:
+      name: LM Studio
+    regenerates: false
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+
+  - id: lm_studio_models_xdg
+    name: LM Studio Models (XDG)
+    paths:
+      - "~/.lmstudio/models"
+    safety: review
+    confidence: 90
+    explanation: "LM Studio's GGUF model store under the legacy `~/.lmstudio` location. Re-download via the LM Studio app to restore."
+    source:
+      name: LM Studio
+    regenerates: false
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+
+  - id: lm_studio_caches
+    name: LM Studio Caches
+    paths:
+      - "~/Library/Caches/LMStudio"
+      - "~/Library/Caches/com.lmstudio"
+    safety: safe
+    confidence: 92
+    explanation: "LM Studio runtime caches under macOS Library/Caches — safe to clear; the app rebuilds them."
+    source:
+      name: LM Studio
+    regenerates: true
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: torch_hub_checkpoints
+    name: PyTorch Hub Checkpoints
+    paths:
+      - "~/.cache/torch/hub/checkpoints"
+    safety: review
+    confidence: 85
+    explanation: "PyTorch Hub's downloaded model checkpoints. Re-downloaded on next `torch.hub.load()` of the same model."
+    source:
+      name: PyTorch
+    regenerates: true
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+      - python
+    safety_overrides:
+      - condition: "age > 90d"
+        safety: safe
+        confidence: 90
+        explanation_suffix: "No checkpoint access in 90+ days."
+        profiles:
+          - aiModels
+          - deep
+
+  - id: pinokio_workspace
+    name: Pinokio Workspace
+    paths:
+      - "~/pinokio"
+    safety: review
+    confidence: 80
+    explanation: "Pinokio's app workspace including downloaded model weights for installed AI scripts. Each Pinokio app may store multi-GB models."
+    source:
+      name: Pinokio
+    regenerates: false
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+
+  - id: comfyui_user_models
+    name: ComfyUI Models (user)
+    paths:
+      - "~/Documents/ComfyUI/models"
+      - "~/ComfyUI/models"
+    safety: review
+    confidence: 85
+    explanation: "ComfyUI's downloaded checkpoints, LoRAs, VAEs, ControlNets, and embeddings. Often the largest single category for diffusion workflows."
+    source:
+      name: ComfyUI
+    regenerates: false
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+      - diffusion
+
+  - id: a1111_user_models
+    name: Stable Diffusion WebUI Models
+    paths:
+      - "~/stable-diffusion-webui/models"
+      - "~/Documents/stable-diffusion-webui/models"
+    safety: review
+    confidence: 85
+    explanation: "Automatic1111 / Stable Diffusion WebUI checkpoints, LoRAs, embeddings, and VAEs. Re-downloading from Civitai or HuggingFace can take a while."
+    source:
+      name: Stable Diffusion WebUI
+    regenerates: false
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+      - diffusion
+
+  - id: cody_models
+    name: Cody Models
+    paths:
+      - "~/.cache/cody/models"
+      - "~/Library/Caches/com.sourcegraph.cody/models"
+    safety: review
+    confidence: 80
+    explanation: "Cody's local model cache used for offline / on-device completions."
+    source:
+      name: Cody
+      bundle_id: com.sourcegraph.cody
+    regenerates: true
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+
+  - id: tabby_models
+    name: Tabby Models
+    paths:
+      - "~/.tabby/models"
+    safety: review
+    confidence: 80
+    explanation: "Tabby's downloaded code-completion models served by the local inference engine."
+    source:
+      name: Tabby
+    regenerates: false
+    category: ai_models
+    tags:
+      - developer
+      - ai
+      - models
+
+  # File-extension orphan scan rules. Combining `**` recursion with the file
+  # extension in a single path (e.g. `~/Downloads/**/*.gguf`) lets PathExpander
+  # honor its 30s / 100k-entry walk caps in one pass — adding a separate
+  # `pattern:` would force a second uncapped enumeration of every matched dir.
+  # `min_size: 100MB` suppresses small files that share the extension but
+  # aren't model weights (e.g. small `.bin` files in random project dirs).
+
+  - id: orphan_gguf_models
+    name: Orphan GGUF Models
+    paths:
+      - "~/Downloads/**/*.gguf"
+      - "~/Documents/**/*.gguf"
+      - "~/Desktop/**/*.gguf"
+    min_size: "100MB"
+    safety: review
+    confidence: 65
+    explanation: "Large `.gguf` files in user folders that aren't owned by a known AI tool. Likely abandoned downloads or hand-managed model weights."
+    source:
+      name: Orphan model file
+    regenerates: false
+    category: ai_models
+    tags:
+      - ai
+      - models
+      - orphan
+
+  - id: orphan_safetensors_models
+    name: Orphan SafeTensors Models
+    paths:
+      - "~/Downloads/**/*.safetensors"
+      - "~/Documents/**/*.safetensors"
+      - "~/Desktop/**/*.safetensors"
+    min_size: "100MB"
+    safety: review
+    confidence: 65
+    explanation: "Large `.safetensors` files in user folders that aren't owned by a known AI tool. Likely abandoned downloads or hand-managed model weights."
+    source:
+      name: Orphan model file
+    regenerates: false
+    category: ai_models
+    tags:
+      - ai
+      - models
+      - orphan
+
+  - id: orphan_onnx_models
+    name: Orphan ONNX Models
+    paths:
+      - "~/Downloads/**/*.onnx"
+      - "~/Documents/**/*.onnx"
+      - "~/Desktop/**/*.onnx"
+    min_size: "100MB"
+    safety: review
+    confidence: 60
+    explanation: "Large `.onnx` model files in user folders. Re-export from the source training framework or re-download from the model registry."
+    source:
+      name: Orphan model file
+    regenerates: false
+    category: ai_models
+    tags:
+      - ai
+      - models
+      - orphan
+
+  - id: orphan_pytorch_checkpoints
+    name: Orphan PyTorch Checkpoints
+    paths:
+      - "~/Downloads/**/*.ckpt"
+      - "~/Documents/**/*.ckpt"
+      - "~/Desktop/**/*.ckpt"
+    min_size: "100MB"
+    safety: review
+    confidence: 60
+    explanation: "Large `.ckpt` files in user folders. Likely Stable Diffusion or other PyTorch checkpoints downloaded outside a managed tool."
+    source:
+      name: Orphan model file
+    regenerates: false
+    category: ai_models
+    tags:
+      - ai
+      - models
+      - orphan

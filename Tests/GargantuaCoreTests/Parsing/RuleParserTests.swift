@@ -2,7 +2,12 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// File and type body cover the full ScanRule YAML schema in a single suite.
+// Splitting risks hiding edge cases under inconsistent fixtures.
+// swiftlint:disable file_length
+
 @Suite("RuleParser")
+// swiftlint:disable:next type_body_length
 struct RuleParserTests {
     let parser = RuleParser()
 
@@ -143,8 +148,134 @@ struct RuleParserTests {
         #expect(rule.presenceGuards.isEmpty)
         #expect(rule.contentGuards.isEmpty)
         #expect(rule.matchFilters.isEmpty)
+        #expect(rule.minSize == nil)
         #expect(rule.source.bundleID == nil)
         #expect(rule.source.verifySignature == false)
+    }
+
+    // MARK: - min_size
+
+    @Test("min_size accepts raw integer bytes")
+    func minSizeAcceptsRawBytes() throws {
+        let yaml = """
+        rules:
+          - id: orphan_gguf
+            name: Orphan GGUF
+            paths: ["~/Downloads/**"]
+            pattern: "*.gguf"
+            min_size: 104857600
+            safety: review
+            confidence: 60
+            explanation: Large model files
+            source: { name: Orphan model file }
+            category: ai_models
+        """
+        let rule = try parser.parse(yaml: yaml).rules[0]
+        #expect(rule.minSize == 104_857_600)
+    }
+
+    @Test("min_size accepts human-readable suffixes")
+    func minSizeAcceptsSuffixes() throws {
+        let cases: [(String, Int64)] = [
+            ("100MB", 100 * 1024 * 1024),
+            ("100 MB", 100 * 1024 * 1024),
+            ("1.5GB", Int64(1.5 * 1024 * 1024 * 1024)),
+            ("512KB", 512 * 1024),
+            ("2GiB", 2 * 1024 * 1024 * 1024),
+            ("1024", 1024),
+            ("0", 0),
+        ]
+        for (input, expected) in cases {
+            let yaml = """
+            rules:
+              - id: r
+                name: Rule
+                paths: ["/x"]
+                min_size: "\(input)"
+                safety: review
+                confidence: 50
+                explanation: e
+                source: { name: t }
+                category: test
+            """
+            let rule = try parser.parse(yaml: yaml).rules[0]
+            #expect(rule.minSize == expected, "min_size '\(input)' should parse to \(expected) but got \(rule.minSize ?? -1)")
+        }
+    }
+
+    @Test("min_size rejects nonsense strings")
+    func minSizeRejectsNonsense() {
+        let yaml = """
+        rules:
+          - id: r
+            name: Rule
+            paths: ["/x"]
+            min_size: "ten gigabytes"
+            safety: review
+            confidence: 50
+            explanation: e
+            source: { name: t }
+            category: test
+        """
+        #expect(throws: RuleParseError.self) {
+            _ = try parser.parse(yaml: yaml)
+        }
+    }
+
+    @Test("min_size rejects values that would overflow Int64")
+    func minSizeRejectsOverflow() {
+        // `Int64.max` is 9223372036854775807. The next integer (and anything
+        // beyond) must not silently parse: Double(Int64.max + 1) rounds to the
+        // same value as Double(Int64.max), so a naïve `Int64(bytes)` would trap.
+        let overflowInputs = [
+            "9223372036854775808", // Int64.max + 1
+            "99999999999999999999", // far beyond
+            "1.5e30", // scientific notation, huge
+            "10000PB", // unsupported unit
+            "100000000TB", // 10^20 bytes overflows Int64 (max ≈ 9.2e18)
+            "-100MB", // negative
+            "NaN", // Double special value
+            "Infinity", // Double special value
+            "3.14159MB.5", // double-decimal nonsense
+        ]
+        for input in overflowInputs {
+            let yaml = """
+            rules:
+              - id: r
+                name: Rule
+                paths: ["/x"]
+                min_size: "\(input)"
+                safety: review
+                confidence: 50
+                explanation: e
+                source: { name: t }
+                category: test
+            """
+            // Parser raises; SizeStringParser returns nil for these so the
+            // parser converts the nil result into RuleParseError.invalidValue.
+            #expect(throws: RuleParseError.self,
+                    "min_size '\(input)' should be rejected") {
+                _ = try parser.parse(yaml: yaml)
+            }
+        }
+    }
+
+    @Test("min_size accepts Int64.max as raw bytes")
+    func minSizeAcceptsInt64Max() throws {
+        let yaml = """
+        rules:
+          - id: r
+            name: Rule
+            paths: ["/x"]
+            min_size: "9223372036854775807"
+            safety: review
+            confidence: 50
+            explanation: e
+            source: { name: t }
+            category: test
+        """
+        let rule = try parser.parse(yaml: yaml).rules[0]
+        #expect(rule.minSize == Int64.max)
     }
 
     // MARK: - Safety Levels

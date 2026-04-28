@@ -36,10 +36,10 @@ struct RuleSetIntegrationTests {
         // productivity, media, launchers, games, utilities, and remote desktop
         // developer: xcode, node, docker, homebrew, python, rust, go,
         // plus Mole parity batches for frontend, cloud, mobile, JVM, editors,
-        // AI tools, languages, CI, database/API tools, shell/network, project caches
+        // AI tools, AI models, languages, CI, database/API tools, shell/network, project caches
         // system: caches, logs, temp, trash, plus Mole parity batches for
         // Apple services, user state, mobile installers/backups, and privileged paths
-        #expect(result.filesLoaded == 50)
+        #expect(result.filesLoaded == 51)
     }
 
     // MARK: - Rule Completeness
@@ -195,6 +195,41 @@ struct RuleSetIntegrationTests {
         #expect(result.rules.contains(where: { $0.tags.contains("dotnet") }), "Missing .NET rules")
         #expect(result.rules.contains(where: { $0.tags.contains("php") }), "Missing PHP rules")
         #expect(result.rules.contains(where: { $0.tags.contains("shell") }), "Missing shell rules")
+    }
+
+    @Test("AI Models rules cover known model storage and orphan extension scans")
+    func aiModelsCoverage() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let aiModels = result.rules.filter { $0.category == "ai_models" }
+        let ids = Set(aiModels.map(\.id))
+
+        // Known-location rules — the heavyweight ones the bean called out.
+        #expect(ids.contains("ollama_models"), "Missing Ollama models rule")
+        #expect(ids.contains(where: { $0.hasPrefix("lm_studio") }), "Missing LM Studio rules")
+        #expect(ids.contains("torch_hub_checkpoints"), "Missing PyTorch hub checkpoints rule")
+        #expect(ids.contains("comfyui_user_models"), "Missing ComfyUI rule")
+        #expect(ids.contains("a1111_user_models"), "Missing A1111 rule")
+        #expect(ids.contains("pinokio_workspace"), "Missing Pinokio rule")
+
+        // Orphan-extension rules must declare a min_size to avoid surfacing
+        // small files that share the extension but aren't model weights, and
+        // must encode the file extension directly in the path (single-walk
+        // expansion) rather than via a separate `pattern:` field that would
+        // trigger a second uncapped child enumeration.
+        let orphanRules = aiModels.filter { $0.id.hasPrefix("orphan_") }
+        #expect(!orphanRules.isEmpty, "Missing orphan-extension scan rules")
+        for rule in orphanRules {
+            #expect(rule.minSize != nil,
+                    "Orphan rule '\(rule.id)' must declare min_size")
+            #expect(rule.paths.allSatisfy { $0.contains("*.") },
+                    "Orphan rule '\(rule.id)' must declare extension globs in `paths` to keep PathExpander caps in effect")
+        }
+
+        // Every AI Models rule should be tagged so the UI can identify them.
+        for rule in aiModels {
+            #expect(rule.tags.contains("ai"),
+                    "AI models rule '\(rule.id)' missing 'ai' tag")
+        }
     }
 
     @Test("System rules cover caches, logs, temp, trash")

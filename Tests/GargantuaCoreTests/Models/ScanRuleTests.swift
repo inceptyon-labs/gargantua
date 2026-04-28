@@ -71,6 +71,26 @@ struct ScanRuleTests {
         #expect(rule.presenceGuards.isEmpty)
         #expect(rule.contentGuards.isEmpty)
         #expect(rule.matchFilters.isEmpty)
+        #expect(rule.minSize == nil)
+    }
+
+    @Test("minSize is preserved through initializer")
+    func minSizePreserved() {
+        let rule = ScanRule(
+            id: "orphan_gguf",
+            name: "Orphan GGUF Models",
+            paths: ["~/Downloads/**"],
+            pattern: "*.gguf",
+            matchFilters: [],
+            minSize: 100 * 1024 * 1024,
+            safety: .review,
+            confidence: 60,
+            explanation: "Large GGUF model files in Downloads",
+            source: SourceAttribution(name: "Orphan model file"),
+            category: "ai_models",
+            tags: ["ai", "models"]
+        )
+        #expect(rule.minSize == 104_857_600)
     }
 
     @Test("Rule guards and match filters are stored")

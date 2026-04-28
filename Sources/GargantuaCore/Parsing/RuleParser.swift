@@ -1,3 +1,7 @@
+// File intentionally large: covers the full YAML schema for cleanup rules
+// in one place so a reader can find any field without bouncing across files.
+// swiftlint:disable file_length
+
 import Foundation
 import Yams
 
@@ -29,7 +33,10 @@ public enum RuleParseError: Error, CustomStringConvertible {
     }
 }
 
-/// Parses YAML rule files into typed `RuleFile` / `ScanRule` objects.
+// Parses YAML rule files into typed `RuleFile` / `ScanRule` objects.
+// Type body covers the full set of field-level YAML decoders so the rule
+// schema is auditable from a single struct.
+// swiftlint:disable:next type_body_length
 public struct RuleParser: Sendable {
 
     public init() {}
@@ -99,6 +106,7 @@ public struct RuleParser: Sendable {
         let presenceGuards = try parsePresenceGuards(from: mapping, index: index, filePath: filePath)
         let contentGuards = try parseContentGuards(from: mapping, index: index, filePath: filePath)
         let matchFilters = optionalStringArray("match_filters", from: mapping)
+        let minSize = try parseMinSize(from: mapping, index: index, filePath: filePath)
         let tags = optionalStringArray("tags", from: mapping)
         let regenerates = optionalBool("regenerates", from: mapping) ?? false
         let regenerateCommand = optionalString("regenerate_command", from: mapping)
@@ -114,6 +122,7 @@ public struct RuleParser: Sendable {
             presenceGuards: presenceGuards,
             contentGuards: contentGuards,
             matchFilters: matchFilters,
+            minSize: minSize,
             safety: safety,
             confidence: confidence,
             explanation: explanation,
@@ -123,6 +132,38 @@ public struct RuleParser: Sendable {
             category: category,
             tags: tags,
             safetyOverrides: safetyOverrides
+        )
+    }
+
+    /// Parse a `min_size` field as either a raw byte count or a human-readable
+    /// suffix string (e.g. `100MB`, `1.5 GB`, `512 KiB`).
+    private func parseMinSize(from mapping: Node.Mapping, index: Int, filePath: String) throws -> Int64? {
+        guard let node = mapping["min_size"] else { return nil }
+
+        if let intValue = node.int {
+            return Int64(intValue)
+        }
+
+        guard let stringValue = node.string else {
+            throw RuleParseError.invalidValue(
+                field: "min_size",
+                value: "<non-string, non-int>",
+                expected: "integer bytes or string with unit suffix (e.g. '100MB')",
+                ruleIndex: index,
+                filePath: filePath
+            )
+        }
+
+        if let parsed = SizeStringParser.parse(stringValue) {
+            return parsed
+        }
+
+        throw RuleParseError.invalidValue(
+            field: "min_size",
+            value: stringValue,
+            expected: "integer bytes or string with unit suffix (e.g. '100MB', '1.5GB')",
+            ruleIndex: index,
+            filePath: filePath
         )
     }
 
@@ -325,5 +366,65 @@ public struct RuleParser: Sendable {
 private extension Node.Mapping {
     subscript(key: String) -> Node? {
         self[Node(key)]
+    }
+}
+
+// MARK: - Size string parsing
+
+/// Parses byte-count strings like "100MB", "1.5 GiB", "512KB" into Int64 bytes.
+///
+/// Bare suffixes (`MB`) and IEC suffixes (`MiB`) both use 1024^n to match how
+/// macOS Finder typically displays sizes. Returns `nil` for nonsense input,
+/// negative values, NaN/infinity, or values that overflow `Int64`.
+enum SizeStringParser {
+    /// Multipliers for known byte-count unit suffixes (uppercased).
+    private static let multipliers: [String: Int64] = [
+        "": 1, "B": 1,
+        "K": 1024, "KB": 1024, "KIB": 1024,
+        "M": 1024 * 1024, "MB": 1024 * 1024, "MIB": 1024 * 1024,
+        "G": 1024 * 1024 * 1024, "GB": 1024 * 1024 * 1024, "GIB": 1024 * 1024 * 1024,
+        "T": 1024 * 1024 * 1024 * 1024, "TB": 1024 * 1024 * 1024 * 1024, "TIB": 1024 * 1024 * 1024 * 1024,
+    ]
+
+    static func parse(_ raw: String) -> Int64? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let (numericPart, unitPart) = splitNumericAndUnit(trimmed)
+        guard let multiplier = multipliers[unitPart] else { return nil }
+
+        // Whole-number numerics go through Int64 directly to preserve precision
+        // near `Int64.max` — `Double` rounds at 2^53 and silently maps
+        // `Int64.max + 1` to the same Double as `Int64.max`.
+        if !numericPart.contains(".") {
+            guard let value = Int64(numericPart), value >= 0 else { return nil }
+            return value.multipliedReportingOverflow(by: multiplier).overflow ? nil
+                : value * multiplier
+        }
+
+        guard let value = Double(numericPart), value.isFinite, value >= 0 else { return nil }
+        let scaled = value * Double(multiplier)
+        guard scaled.isFinite, scaled >= 0,
+              scaled < Double(Int64.max) - 1 else { // -1 keeps us clear of the rounded boundary
+            return nil
+        }
+        return Int64(scaled)
+    }
+
+    private static func splitNumericAndUnit(_ raw: String) -> (numeric: String, unit: String) {
+        let numericChars = CharacterSet(charactersIn: "0123456789.")
+        var splitIndex = raw.endIndex
+        for index in raw.indices {
+            guard let scalar = raw[index].unicodeScalars.first else { continue }
+            if !numericChars.contains(scalar) {
+                splitIndex = index
+                break
+            }
+        }
+        let numericPart = String(raw[..<splitIndex])
+        let unitPart = raw[splitIndex...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        return (numericPart, unitPart)
     }
 }
