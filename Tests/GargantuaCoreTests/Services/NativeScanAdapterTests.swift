@@ -36,6 +36,7 @@ struct NativeScanAdapterTests {
         presenceGuards: [RulePresenceGuard] = [],
         contentGuards: [RuleContentGuard] = [],
         matchFilters: [String] = [],
+        minSize: Int64? = nil,
         safety: SafetyLevel = .safe,
         category: String,
         tags: [String] = []
@@ -50,6 +51,7 @@ struct NativeScanAdapterTests {
             presenceGuards: presenceGuards,
             contentGuards: contentGuards,
             matchFilters: matchFilters,
+            minSize: minSize,
             safety: safety,
             confidence: 90,
             explanation: "Test cleanup rule",
@@ -204,6 +206,28 @@ struct NativeScanAdapterTests {
 
         #expect(results.map(\.path) == [dmg.path])
         #expect(results.first?.name == "Installer Images — tool.dmg")
+    }
+
+    @Test("min_size filters out files below the byte threshold")
+    func minSizeFiltersSmallFiles() async throws {
+        let fixture = try Self.makeFixture()
+        let downloads = try fixture.makeDir("Downloads")
+        let largeModel = try fixture.makeFile("Downloads/big.gguf", byteCount: 4096)
+        try fixture.makeFile("Downloads/tiny.gguf", byteCount: 128)
+        try fixture.makeFile("Downloads/notes.txt", byteCount: 8192)
+
+        let rule = Self.rule(
+            id: "orphan_gguf",
+            name: "Orphan GGUF",
+            paths: [downloads.path],
+            pattern: "*.gguf",
+            minSize: 1024,
+            category: "installers"
+        )
+
+        let results = try await NativeScanAdapter(rules: [rule], profile: .light).scan()
+
+        #expect(results.map(\.path) == [largeModel.path])
     }
 
     @Test("skip_if_process_running suppresses guarded cleanup rules")

@@ -50,6 +50,13 @@ public struct ScanRule: Codable, Sendable, Identifiable {
     /// and `atime` prefixes for modification/access time filters.
     public let matchFilters: [String]
 
+    /// Minimum size in bytes for a matched item to be surfaced.
+    ///
+    /// Items smaller than this threshold are filtered out before classification.
+    /// Useful for orphan-file scans (e.g. `*.gguf` ≥ 100 MB) where small files
+    /// are unlikely to be the intended target.
+    public let minSize: Int64?
+
     /// Trust Layer safety classification for matched items.
     public let safety: SafetyLevel
 
@@ -90,6 +97,7 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         presenceGuards: [RulePresenceGuard] = [],
         contentGuards: [RuleContentGuard] = [],
         matchFilters: [String] = [],
+        minSize: Int64? = nil,
         safety: SafetyLevel,
         confidence: Int,
         explanation: String,
@@ -109,6 +117,7 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         self.presenceGuards = presenceGuards
         self.contentGuards = contentGuards
         self.matchFilters = matchFilters
+        self.minSize = minSize
         self.safety = safety
         self.confidence = confidence
         self.explanation = explanation

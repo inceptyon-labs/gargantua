@@ -99,6 +99,7 @@ public struct RuleParser: Sendable {
         let presenceGuards = try parsePresenceGuards(from: mapping, index: index, filePath: filePath)
         let contentGuards = try parseContentGuards(from: mapping, index: index, filePath: filePath)
         let matchFilters = optionalStringArray("match_filters", from: mapping)
+        let minSize = try parseMinSize(from: mapping, index: index, filePath: filePath)
         let tags = optionalStringArray("tags", from: mapping)
         let regenerates = optionalBool("regenerates", from: mapping) ?? false
         let regenerateCommand = optionalString("regenerate_command", from: mapping)
@@ -114,6 +115,7 @@ public struct RuleParser: Sendable {
             presenceGuards: presenceGuards,
             contentGuards: contentGuards,
             matchFilters: matchFilters,
+            minSize: minSize,
             safety: safety,
             confidence: confidence,
             explanation: explanation,
@@ -124,6 +126,85 @@ public struct RuleParser: Sendable {
             tags: tags,
             safetyOverrides: safetyOverrides
         )
+    }
+
+    /// Parse a `min_size` field as either a raw byte count or a human-readable
+    /// suffix string (e.g. `100MB`, `1.5 GB`, `512 KiB`).
+    ///
+    /// Accepts both decimal (KB/MB/GB/TB = 1000^n) and binary (KiB/MiB/GiB/TiB = 1024^n).
+    /// Bare suffixes (`MB`) follow IEC convention here and use 1024^n to match how
+    /// macOS Finder typically displays sizes.
+    private func parseMinSize(from mapping: Node.Mapping, index: Int, filePath: String) throws -> Int64? {
+        guard let node = mapping["min_size"] else { return nil }
+
+        if let intValue = node.int {
+            return Int64(intValue)
+        }
+
+        guard let stringValue = node.string else {
+            throw RuleParseError.invalidValue(
+                field: "min_size",
+                value: "<non-string, non-int>",
+                expected: "integer bytes or string with unit suffix (e.g. '100MB')",
+                ruleIndex: index,
+                filePath: filePath
+            )
+        }
+
+        if let parsed = Self.parseSizeString(stringValue) {
+            return parsed
+        }
+
+        throw RuleParseError.invalidValue(
+            field: "min_size",
+            value: stringValue,
+            expected: "integer bytes or string with unit suffix (e.g. '100MB', '1.5GB')",
+            ruleIndex: index,
+            filePath: filePath
+        )
+    }
+
+    static func parseSizeString(_ raw: String) -> Int64? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Find the boundary between numeric prefix and unit suffix.
+        let numericChars = CharacterSet(charactersIn: "0123456789.")
+        var splitIndex = trimmed.endIndex
+        for index in trimmed.indices {
+            guard let scalar = trimmed[index].unicodeScalars.first else { continue }
+            if !numericChars.contains(scalar) {
+                splitIndex = index
+                break
+            }
+        }
+
+        let numericPart = String(trimmed[..<splitIndex])
+        let unitPart = trimmed[splitIndex...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+
+        guard let value = Double(numericPart), value >= 0 else { return nil }
+
+        let multiplier: Double
+        switch unitPart {
+        case "", "B":
+            multiplier = 1
+        case "K", "KB", "KIB":
+            multiplier = 1024
+        case "M", "MB", "MIB":
+            multiplier = 1024 * 1024
+        case "G", "GB", "GIB":
+            multiplier = 1024 * 1024 * 1024
+        case "T", "TB", "TIB":
+            multiplier = 1024 * 1024 * 1024 * 1024
+        default:
+            return nil
+        }
+
+        let bytes = value * multiplier
+        guard bytes.isFinite, bytes >= 0, bytes <= Double(Int64.max) else { return nil }
+        return Int64(bytes)
     }
 
     private func parsePresenceGuards(

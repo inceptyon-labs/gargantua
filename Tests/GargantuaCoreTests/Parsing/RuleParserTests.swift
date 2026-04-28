@@ -143,8 +143,78 @@ struct RuleParserTests {
         #expect(rule.presenceGuards.isEmpty)
         #expect(rule.contentGuards.isEmpty)
         #expect(rule.matchFilters.isEmpty)
+        #expect(rule.minSize == nil)
         #expect(rule.source.bundleID == nil)
         #expect(rule.source.verifySignature == false)
+    }
+
+    // MARK: - min_size
+
+    @Test("min_size accepts raw integer bytes")
+    func minSizeAcceptsRawBytes() throws {
+        let yaml = """
+        rules:
+          - id: orphan_gguf
+            name: Orphan GGUF
+            paths: ["~/Downloads/**"]
+            pattern: "*.gguf"
+            min_size: 104857600
+            safety: review
+            confidence: 60
+            explanation: Large model files
+            source: { name: Orphan model file }
+            category: ai_models
+        """
+        let rule = try parser.parse(yaml: yaml).rules[0]
+        #expect(rule.minSize == 104_857_600)
+    }
+
+    @Test("min_size accepts human-readable suffixes")
+    func minSizeAcceptsSuffixes() throws {
+        let cases: [(String, Int64)] = [
+            ("100MB", 100 * 1024 * 1024),
+            ("100 MB", 100 * 1024 * 1024),
+            ("1.5GB", Int64(1.5 * 1024 * 1024 * 1024)),
+            ("512KB", 512 * 1024),
+            ("2GiB", 2 * 1024 * 1024 * 1024),
+            ("1024", 1024),
+            ("0", 0),
+        ]
+        for (input, expected) in cases {
+            let yaml = """
+            rules:
+              - id: r
+                name: Rule
+                paths: ["/x"]
+                min_size: "\(input)"
+                safety: review
+                confidence: 50
+                explanation: e
+                source: { name: t }
+                category: test
+            """
+            let rule = try parser.parse(yaml: yaml).rules[0]
+            #expect(rule.minSize == expected, "min_size '\(input)' should parse to \(expected) but got \(rule.minSize ?? -1)")
+        }
+    }
+
+    @Test("min_size rejects nonsense strings")
+    func minSizeRejectsNonsense() {
+        let yaml = """
+        rules:
+          - id: r
+            name: Rule
+            paths: ["/x"]
+            min_size: "ten gigabytes"
+            safety: review
+            confidence: 50
+            explanation: e
+            source: { name: t }
+            category: test
+        """
+        #expect(throws: RuleParseError.self) {
+            _ = try parser.parse(yaml: yaml)
+        }
     }
 
     // MARK: - Safety Levels

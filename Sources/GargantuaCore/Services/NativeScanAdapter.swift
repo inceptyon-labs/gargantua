@@ -365,6 +365,7 @@ public struct NativeScanAdapter: ScanAdapter {
             size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
         }
         guard size > 0 else { return nil }
+        if let minSize = rule.minSize, size < minSize { return nil }
 
         let displayName = Self.displayName(forRule: rule, path: path)
 
