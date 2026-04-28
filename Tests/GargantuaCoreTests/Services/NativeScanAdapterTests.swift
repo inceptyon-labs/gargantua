@@ -4,6 +4,10 @@ import Testing
 @testable import GargantuaCore
 
 @Suite("NativeScanAdapter")
+// Test struct intentionally large: groups fixture helpers with full coverage
+// of the adapter's profile filtering, ecosystem probing, and progress events
+// so a single suite captures the adapter's contract end-to-end.
+// swiftlint:disable:next type_body_length
 struct NativeScanAdapterTests {
 
     // MARK: - Fixture helpers

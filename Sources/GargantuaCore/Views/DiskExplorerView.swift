@@ -1,5 +1,12 @@
 import SwiftUI
 
+// File contains the Disk Explorer view plus its three private sub-views
+// (DisplayModeToggle, DirectoryTreemapCellView, DirectoryRowView). They're
+// kept in one file because they're tightly coupled to the explorer's layout
+// model and this file is under active iteration; splitting now would churn
+// alongside in-flight UI fixes. Revisit once treemap layout stabilizes.
+// swiftlint:disable file_length
+
 /// Disk Explorer with native treemap and sorted list views for disk consumers.
 ///
 /// Mirrors the idle → results phase pattern used by Deep Clean, File Health,
@@ -8,6 +15,10 @@ import SwiftUI
 /// Within results, clicking a tile drills down (pushes onto the breadcrumb
 /// stack); Refresh re-scans the current directory; Rescan resets to home and
 /// re-runs from scratch; Back returns to the idle CTA.
+// Type body covers idle CTA, results header chrome, treemap layout entry, and
+// list mode in one struct — splitting risks tearing the active scan-state
+// wiring while UI iterations are landing.
+// swiftlint:disable:next type_body_length
 public struct DiskExplorerView: View {
     @Bindable public var state: DiskExplorerState
 

@@ -406,31 +406,32 @@ private func humanize(_ raw: String) -> String {
 /// Tiny lookup for the most common bundle IDs so users see "Google Chrome"
 /// rather than "Chrome" or "google.Chrome". Fall through to humanizing the
 /// last segment for anything not listed.
+private let knownAppNames: [String: String] = [
+    "com.google.Chrome": "Google Chrome",
+    "com.google.Chrome.canary": "Google Chrome Canary",
+    "com.apple.Safari": "Safari",
+    "com.apple.dt.Xcode": "Xcode",
+    "com.apple.iTunes": "iTunes",
+    "com.apple.Music": "Music",
+    "com.apple.Photos": "Photos",
+    "com.apple.mail": "Mail",
+    "com.microsoft.VSCode": "VS Code",
+    "com.microsoft.teams2": "Microsoft Teams",
+    "com.spotify.client": "Spotify",
+    "com.tinyspeck.slackmacgap": "Slack",
+    "com.hnc.Discord": "Discord",
+    "com.figma.Desktop": "Figma",
+    "com.adobe.Photoshop": "Adobe Photoshop",
+    "com.adobe.PremierePro": "Adobe Premiere Pro",
+    "com.adobe.AfterEffects": "Adobe After Effects",
+    "com.adobe.LightroomClassicCC7": "Adobe Lightroom Classic",
+    "com.docker.docker": "Docker",
+    "company.thebrowser.Browser": "Arc",
+    "org.mozilla.firefox": "Firefox",
+    "com.brave.Browser": "Brave",
+    "com.todesktop.230313mzl4w4u92": "Cursor",
+]
+
 private func knownAppName(forBundleID bundleID: String) -> String? {
-    switch bundleID {
-    case "com.google.Chrome": return "Google Chrome"
-    case "com.google.Chrome.canary": return "Google Chrome Canary"
-    case "com.apple.Safari": return "Safari"
-    case "com.apple.dt.Xcode": return "Xcode"
-    case "com.apple.iTunes": return "iTunes"
-    case "com.apple.Music": return "Music"
-    case "com.apple.Photos": return "Photos"
-    case "com.apple.mail": return "Mail"
-    case "com.microsoft.VSCode": return "VS Code"
-    case "com.microsoft.teams2": return "Microsoft Teams"
-    case "com.spotify.client": return "Spotify"
-    case "com.tinyspeck.slackmacgap": return "Slack"
-    case "com.hnc.Discord": return "Discord"
-    case "com.figma.Desktop": return "Figma"
-    case "com.adobe.Photoshop": return "Adobe Photoshop"
-    case "com.adobe.PremierePro": return "Adobe Premiere Pro"
-    case "com.adobe.AfterEffects": return "Adobe After Effects"
-    case "com.adobe.LightroomClassicCC7": return "Adobe Lightroom Classic"
-    case "com.docker.docker": return "Docker"
-    case "company.thebrowser.Browser": return "Arc"
-    case "org.mozilla.firefox": return "Firefox"
-    case "com.brave.Browser": return "Brave"
-    case "com.todesktop.230313mzl4w4u92": return "Cursor"
-    default: return nil
-    }
+    knownAppNames[bundleID]
 }

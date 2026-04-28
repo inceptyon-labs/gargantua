@@ -125,7 +125,10 @@ public struct NativeScanAdapter: ScanAdapter {
         // UI from emitting "depth reached. 0 partial results." warnings for every
         // rule the user has no projects of (Angular, .NET, Zig, Terraform, etc.).
         let availableEcosystems = applicabilityChecker.availableEcosystems(in: scanRoots)
-        logger.info("NativeScanAdapter: \(applicable.count) rules match profile \(profile.id, privacy: .public); ecosystems present: \(availableEcosystems.map(\.rawValue).sorted().joined(separator: ","), privacy: .public)")
+        let ecosystemList = availableEcosystems.map(\.rawValue).sorted().joined(separator: ",")
+        logger.info(
+            "NativeScanAdapter: \(applicable.count) rules match profile \(profile.id, privacy: .public); ecosystems present: \(ecosystemList, privacy: .public)"
+        )
 
         var results: [ScanResult] = []
         var seenPaths: Set<String> = []
