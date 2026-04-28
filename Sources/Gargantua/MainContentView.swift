@@ -15,7 +15,9 @@ struct MainContentView: View {
     @State private var deepCleanSession = DeepCleanSessionState()
     @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
     @State private var fileHealthState = FileHealthContainerState()
+    @State private var duplicateFinderState = DuplicateFinderContainerState()
     @State private var duplicateFinderSelection: Set<String> = []
+    @State private var diskExplorerState = DiskExplorerState()
     @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
@@ -90,6 +92,7 @@ struct MainContentView: View {
                                 // Trust Layer / ConfirmationModalView flow for
                                 // destructive duplicate-removal is in place.
                                 DuplicateFinderContainerView(
+                                    state: duplicateFinderState,
                                     scanRoots: resolvedScanRoots,
                                     selectedIDs: $duplicateFinderSelection,
                                     onExplain: explainHandler
@@ -102,7 +105,7 @@ struct MainContentView: View {
                                     onExplain: explainHandler
                                 )
                             case "diskExplorer":
-                                DiskExplorerView()
+                                DiskExplorerView(state: diskExplorerState)
                             case "rules":
                                 if let persistence {
                                     RuleViewerView(persistence: persistence)

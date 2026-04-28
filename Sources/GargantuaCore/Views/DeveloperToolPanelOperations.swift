@@ -75,8 +75,7 @@ extension DeveloperToolPanel {
         } label: {
             HStack(spacing: GargantuaSpacing.space1) {
                 if isExecuting {
-                    ProgressView()
-                        .controlSize(.small)
+                    AccretionDiskView(activityRate: 18, size: 12, color: .white)
                 } else {
                     Image(systemName: "play.fill")
                         .font(.system(size: 10, weight: .semibold))

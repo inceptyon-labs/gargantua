@@ -67,27 +67,55 @@ extension DeveloperToolsView {
         case .success(let preview):
             previews[tool] = .loaded(preview)
         case .failure(let error):
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            previews[tool] = .failed(message)
+            if case DeveloperToolPreviewError.daemonNotRunning(let stoppedTool) = error {
+                previews[tool] = .daemonStopped(stoppedTool)
+            } else {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                previews[tool] = .failed(message)
+            }
         }
         return .ready(availabilities: availabilities, previews: previews)
     }
 
-    func load() async {
+    /// User clicked "Scan tools" from idle (or "Refresh" from results).
+    /// Bumps the generation, flips to `.loading`, and spins up a fresh
+    /// availability + preview pass.
+    func startScan() {
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        phase = .loading
+        Task { await load(generation: generation) }
+    }
+
+    /// Click handler for the Back button. Bumps the generation so any
+    /// in-flight load can detect it's been superseded.
+    func returnToIdle() {
+        loadGeneration &+= 1
+        phase = .idle
+    }
+
+    func load(generation: Int) async {
         let availabilities = availabilityProvider()
         if Task.isCancelled { return }
         let initial = Self.deriveInitialPhase(availabilities: availabilities)
-        await MainActor.run { phase = initial }
+        let stillCurrent: Bool = await MainActor.run {
+            guard generation == loadGeneration else { return false }
+            phase = initial
+            return true
+        }
+        guard stillCurrent else { return }
 
         guard case .ready = initial else { return }
         let installed = availabilities.filter(\.isInstalled).map(\.tool)
         for tool in installed {
             if Task.isCancelled { return }
-            await loadPreview(for: tool)
+            let isCurrent: Bool = await MainActor.run { generation == loadGeneration }
+            if !isCurrent { return }
+            await loadPreview(for: tool, generation: generation)
         }
     }
 
-    func loadPreview(for tool: DeveloperTool) async {
+    func loadPreview(for tool: DeveloperTool, generation: Int? = nil) async {
         let result: Result<DeveloperToolPreview, Error>
         do {
             let preview = try previewProvider(tool)
@@ -97,6 +125,9 @@ extension DeveloperToolsView {
             result = .failure(error)
         }
         await MainActor.run {
+            // If a generation was passed (in-flight scan), skip the update
+            // when the user has navigated away or kicked off a new scan.
+            if let generation, generation != loadGeneration { return }
             phase = Self.applyPreviewResult(tool: tool, result: result, to: phase)
         }
     }
@@ -109,6 +140,55 @@ extension DeveloperToolsView {
             }
         }
         await loadPreview(for: tool)
+    }
+
+
+    /// Start Docker Desktop and poll until the daemon answers, then refresh
+    /// the Docker preview. Lifecycle activity is published on
+    /// `dockerLifecycleActivity` so the panel can show a busy state instead
+    /// of a stale daemon-stopped CTA.
+    func startDockerDaemon() {
+        guard dockerLifecycleActivity == nil else { return }
+        dockerLifecycleActivity = .starting
+        let control = dockerControl
+        Task {
+            _ = control.start()
+            let succeeded = await control.pollUntilRunning()
+            if succeeded {
+                await reloadPreview(for: .docker)
+            }
+            await MainActor.run {
+                dockerLifecycleActivity = nil
+            }
+        }
+    }
+
+    /// Quit Docker Desktop and poll until the daemon stops responding, then
+    /// flip the panel back to `.daemonStopped`.
+    func stopDockerDaemon() {
+        guard dockerLifecycleActivity == nil else { return }
+        dockerLifecycleActivity = .stopping
+        let control = dockerControl
+        Task {
+            control.stop()
+            _ = await control.pollUntilStopped()
+            await MainActor.run {
+                if case .ready(let availabilities, var previews) = phase {
+                    previews[.docker] = .daemonStopped(.docker)
+                    phase = .ready(availabilities: availabilities, previews: previews)
+                }
+                dockerLifecycleActivity = nil
+            }
+        }
+    }
+
+    /// Re-run availability + previews for every tool. Wired to the page-level
+    /// Refresh button.
+    func refreshAll() async {
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        phase = .loading
+        await load(generation: generation)
     }
 
     func confirmExecution(_ request: ExecutionRequest) {

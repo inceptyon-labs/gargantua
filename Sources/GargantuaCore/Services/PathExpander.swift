@@ -123,7 +123,7 @@ public struct PathExpander: Sendable {
         }
 
         if depth >= limits.maxDepth {
-            state.recordCap(reason: "depth")
+            state.recordCap(reason: "depth", abort: false)
             return
         }
 
@@ -151,14 +151,61 @@ public struct PathExpander: Sendable {
         // Match zero directories: proceed with the remaining segments here.
         walk(atPath: path, remaining: rest, depth: depth, results: &results, state: state)
         // Match one or more directories: descend, keep `**` in remaining.
-        for (childPath, _) in enumerateChildren(
+        for (childPath, childName) in enumerateChildren(
             atPath: path,
             includeHidden: Self.requiresHiddenEnumeration(remaining),
             state: state
         ) {
             if state.shouldStop { return }
+            // Don't descend into well-known dependency / artifact dirs unless the
+            // pattern itself names that dir. For a pattern like `**/.next/cache`,
+            // walking into every `node_modules` tree burns through the entries
+            // cap and never reaches sibling projects with shallower matches. For
+            // a pattern like `**/node_modules/.vite`, the dir IS named in the
+            // pattern, so we keep descending.
+            if Self.shouldSkipRecursiveDescent(into: childName, pattern: remaining) {
+                continue
+            }
             walk(atPath: childPath, remaining: remaining, depth: depth + 1, results: &results, state: state)
         }
+    }
+
+    /// Dependency / artifact directories that should never be descended into during
+    /// `**` recursion, unless the user's pattern explicitly names them.
+    ///
+    /// Limited to names that are *unambiguously* dependency caches or VCS metadata
+    /// — not generic dir names like `build`, `dist`, or `out` which are commonly
+    /// user-authored (e.g. a Cargo target dir nested under a `build/` workspace
+    /// folder). Pruning a generic name would silently miss legitimate matches.
+    ///
+    /// The prune-when-not-in-pattern check below ensures rules that *target* these
+    /// names (e.g. `**/.next/cache`, `**/node_modules`) still descend correctly: the
+    /// match-zero branch in `walkRecursive` finds them at the current level, and
+    /// only sibling subtrees that don't name them get pruned.
+    private static let pruneOnRecursiveDescent: Set<String> = [
+        // Dependency dirs (rarely user-authored at these names)
+        "node_modules", "vendor", "Pods",
+        "__pycache__", ".venv", "venv",
+        // VCS metadata
+        ".git", ".svn", ".hg",
+        // Per-tool artifact / cache dirs (dotted, tool-specific)
+        "DerivedData",
+        ".next", ".nuxt", ".svelte-kit", ".angular",
+        ".gradle",
+        ".terraform",
+        ".serverless",
+        ".zig-cache",
+        ".turbo",
+        ".vite", ".parcel-cache",
+        ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
+    ]
+
+    private static func shouldSkipRecursiveDescent(into name: String, pattern: [String]) -> Bool {
+        guard pruneOnRecursiveDescent.contains(name) else { return false }
+        // If the pattern explicitly names this directory as a literal segment, the
+        // walk needs to descend into it (or to the level just above it). Patterns
+        // that contain wildcards in the segment match independently.
+        return !pattern.contains(name)
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -277,36 +324,50 @@ public struct PathExpander: Sendable {
 ///
 /// Reference type (class) so nested recursive walks and child enumerations can
 /// update caps without Swift exclusivity violations on overlapping `inout` access.
+///
+/// Distinguishes between a *partial* outcome (we hit some cap and the result
+/// set may be incomplete) and an *aborted* walk (we ran out of a global budget
+/// — entries or time — and must stop visiting siblings). Depth cap is a
+/// per-branch property: hitting it on one subtree does not preclude finding
+/// shallower matches in sibling subtrees.
 private final class WalkState {
     let limits: PathExpander.Limits
     let start: Date = Date()
     var entries: Int = 0
     private(set) var hitCap: Bool = false
     private(set) var capReason: String?
+    private(set) var aborted: Bool = false
 
     init(limits: PathExpander.Limits) {
         self.limits = limits
     }
 
+    /// True only when a global resource cap (entries / time) has been exhausted.
+    /// Depth cap does NOT set this — it just trims the current branch.
     var shouldStop: Bool {
-        hitCap
+        aborted
     }
 
     func incrementEntries() {
         entries += 1
         if entries >= limits.maxEntries {
-            recordCap(reason: "entries")
+            recordCap(reason: "entries", abort: true)
             return
         }
         if Date().timeIntervalSince(start) > limits.timeBudget {
-            recordCap(reason: "time")
+            recordCap(reason: "time", abort: true)
         }
     }
 
-    func recordCap(reason: String) {
+    /// Record that the walk truncated some result. Pass `abort: true` for budgets
+    /// (entries / time) that should stop visiting any further paths.
+    func recordCap(reason: String, abort: Bool) {
         if !hitCap {
             hitCap = true
             capReason = reason
+        }
+        if abort {
+            aborted = true
         }
     }
 }

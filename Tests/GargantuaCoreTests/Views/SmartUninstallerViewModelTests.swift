@@ -72,8 +72,61 @@ struct SmartUninstallerAppPickerTests {
         )
         await vm.loadApps()
 
-        vm.sort = .size
+        vm.applySort(.size)
         #expect(vm.visibleApps.map(\.bundleID) == ["big", "small"])
+    }
+
+    @Test("applySort flips direction when re-tapping the active field")
+    func applySortFlipsDirection() async {
+        let small = makeApp(bundleID: "small", name: "Small", size: 1_000)
+        let big = makeApp(bundleID: "big", name: "Big", size: 1_000_000_000)
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: [small, big]),
+            planner: StubPlanner(build: { app, _ in makePlan(app: app) }),
+            executor: StubExecutor(result: .success(makeExecutionResult(plan: makePlan(app: small))))
+        )
+        await vm.loadApps()
+
+        // Default: name ascending → Big before Small alphabetically.
+        #expect(vm.sort == .name)
+        #expect(vm.sortAscending == true)
+        #expect(vm.visibleApps.map(\.bundleID) == ["big", "small"])
+
+        // Tapping Name again flips to descending.
+        vm.applySort(.name)
+        #expect(vm.sortAscending == false)
+        #expect(vm.visibleApps.map(\.bundleID) == ["small", "big"])
+
+        // Switching to Size resets to its default (descending).
+        vm.applySort(.size)
+        #expect(vm.sortAscending == false)
+        #expect(vm.visibleApps.map(\.bundleID) == ["big", "small"])
+
+        // Tapping Size again flips to ascending (smallest first).
+        vm.applySort(.size)
+        #expect(vm.sortAscending == true)
+        #expect(vm.visibleApps.map(\.bundleID) == ["small", "big"])
+    }
+
+    @Test("lastUsed direction flips between most-recent and oldest first")
+    func sortByLastUsedFlips() async {
+        let now = Date()
+        let recent = makeApp(bundleID: "recent", name: "Recent", lastUsed: now)
+        let old = makeApp(bundleID: "old", name: "Old", lastUsed: now.addingTimeInterval(-86_400 * 30))
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: [recent, old]),
+            planner: StubPlanner(build: { app, _ in makePlan(app: app) }),
+            executor: StubExecutor(result: .success(makeExecutionResult(plan: makePlan(app: recent))))
+        )
+        await vm.loadApps()
+
+        vm.applySort(.lastUsed)
+        #expect(vm.sortAscending == false)
+        #expect(vm.visibleApps.map(\.bundleID) == ["recent", "old"])
+
+        vm.applySort(.lastUsed)
+        #expect(vm.sortAscending == true)
+        #expect(vm.visibleApps.map(\.bundleID) == ["old", "recent"])
     }
 }
 

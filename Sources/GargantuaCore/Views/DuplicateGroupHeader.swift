@@ -4,12 +4,14 @@ import SwiftUI
 
 /// Collapsible header row for a `DuplicateGroup` in `DuplicateFinderView`.
 ///
-/// Shows the short hash, file count, and "selected / ceiling" reclaimable
-/// byte summary. Includes a tri-state checkbox that matches
-/// `ScanGroupHeader`'s affordance and a "Keep one" quick action that
-/// selects every file except the first (path-ascending).
+/// Surfaces a deterministic, human-readable classification (icon + title +
+/// crumb + plain-English explainer) instead of the raw fclones short hash. The
+/// hash is preserved in the help-tooltip for power users. Tri-state checkbox
+/// matches `ScanGroupHeader`'s affordance; a "Keep one" quick action selects
+/// every file except the first (path-ascending).
 struct DuplicateGroupHeader: View {
     let group: DuplicateGroup
+    let classification: DuplicateGroupClassification
     let isExpanded: Bool
     let selectionState: GroupSelectionState
     let reclaimableBytes: Int64
@@ -18,64 +20,84 @@ struct DuplicateGroupHeader: View {
     let onSelectAllButFirst: () -> Void
 
     var body: some View {
-        HStack(spacing: GargantuaSpacing.space2) {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
             Button(action: onToggle) {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(GargantuaColors.ink3)
-                    .frame(width: 12)
+                    .frame(width: 12, height: 16)
             }
             .buttonStyle(.plain)
 
             checkbox
 
-            Image(systemName: "doc.on.doc.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 12)
+            Image(systemName: classification.icon)
+                .font(.system(size: 12))
+                .foregroundStyle(categoryTint)
+                .frame(width: 16, height: 16)
+                .padding(.top, 2)
 
             Button(action: onToggle) {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    Text(hashLabel)
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink)
-                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        Text(classification.title)
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                            .lineLimit(1)
 
-                    Text("·")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink3)
+                        Text("·")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
 
-                    Text("\(group.fileCount) files")
+                        Text("\(group.fileCount) files")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink2)
+
+                        Text("·")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+
+                        Text(bytesLabel)
+                            .font(GargantuaFonts.monoData)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Spacer(minLength: 0)
+                    }
+
+                    Text(classification.explainer)
                         .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink2)
-
-                    Text("·")
-                        .font(GargantuaFonts.label)
                         .foregroundStyle(GargantuaColors.ink3)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    Text(bytesLabel)
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink)
-
-                    Spacer()
+                    if !classification.pathCrumb.isEmpty {
+                        Text(classification.pathCrumb)
+                            .font(GargantuaFonts.monoPath)
+                            .foregroundStyle(GargantuaColors.ink4)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help(hashTooltip)
 
             Button("Keep one", action: onSelectAllButFirst)
                 .font(GargantuaFonts.caption)
                 .buttonStyle(.plain)
                 .foregroundStyle(GargantuaColors.accent)
                 .help("Select every file except the first — preserves one copy.")
+                .padding(.top, 1)
         }
         .padding(.vertical, GargantuaSpacing.space2)
         .padding(.horizontal, GargantuaSpacing.space4)
         .background(GargantuaColors.surface1)
     }
 
-    private var hashLabel: String {
-        group.shortHash.isEmpty ? group.id : "#\(group.shortHash)"
+    private var hashTooltip: String {
+        let hash = group.shortHash.isEmpty ? group.id : "#\(group.shortHash)"
+        return "Group \(hash) — same content across \(group.fileCount) files."
     }
 
     private var bytesLabel: String {
@@ -83,6 +105,15 @@ struct DuplicateGroupHeader: View {
             return "\(AlertItem.formatBytes(reclaimableBytes)) / \(AlertItem.formatBytes(group.reclaimableCeilingBytes)) reclaimable"
         }
         return "\(AlertItem.formatBytes(group.reclaimableCeilingBytes)) reclaimable"
+    }
+
+    private var categoryTint: Color {
+        switch classification.category {
+        case .appCache, .appAutosave, .devArtifact: return GargantuaColors.safe
+        case .download, .userDocument, .media: return GargantuaColors.review
+        case .appSupport: return GargantuaColors.review
+        case .generic: return GargantuaColors.ink3
+        }
     }
 
     @ViewBuilder

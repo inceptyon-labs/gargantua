@@ -210,6 +210,54 @@ struct PathExpanderTests {
         #expect(result.capReason == "entries")
     }
 
+    @Test("Depth cap is branch-local — sibling matches are still found after one branch hits cap")
+    func depthCapDoesNotAbortSiblingBranches() throws {
+        let fixture = try Self.makeFixture()
+        // One project nested deeper than the cap; another with a shallow match that
+        // must still be found after the deep branch returns from the cap.
+        try fixture.makeDir("deep/a/b/c/d/e/f/g/h")
+        try fixture.makeDir("shallow/node_modules")
+
+        let limits = PathExpander.Limits(maxDepth: 3, maxEntries: 100_000, timeBudget: 30)
+        let result = PathExpander(limits: limits).expand(pattern: "**/node_modules", roots: [fixture.root])
+
+        // Pre-fix: walking `deep/...` would fire the depth cap globally, aborting
+        // the entire walk and leaving `shallow/node_modules` unfound.
+        #expect(result.paths == [fixture.root.appendingPathComponent("shallow/node_modules").path])
+        #expect(result.hitCap == true)
+        #expect(result.capReason == "depth")
+    }
+
+    @Test("Recursive descent prunes well-known dependency dirs to preserve entries budget")
+    func recursivePruneSkipsDependencyDirs() throws {
+        let fixture = try Self.makeFixture()
+        // node_modules is on the prune list — its deep contents should not consume
+        // entries while we're searching for an unrelated leaf.
+        try fixture.makeDir("project-a/node_modules/dep1/sub1/sub2/sub3")
+        try fixture.makeDir("project-a/node_modules/dep2/sub1/sub2/sub3")
+        try fixture.makeDir("project-b/.next/cache")
+
+        // entries=8 is enough to enumerate a few project roots but would be quickly
+        // exhausted if we descended into node_modules. With pruning, we skip past
+        // and find project-b/.next/cache.
+        let limits = PathExpander.Limits(maxDepth: 8, maxEntries: 8, timeBudget: 30)
+        let result = PathExpander(limits: limits).expand(pattern: "**/.next/cache", roots: [fixture.root])
+
+        #expect(result.paths == [fixture.root.appendingPathComponent("project-b/.next/cache").path])
+    }
+
+    @Test("Recursive descent does not prune a dir when the pattern names it")
+    func recursivePruneRespectsPatternSegments() throws {
+        let fixture = try Self.makeFixture()
+        try fixture.makeDir("project/node_modules/.vite")
+
+        // Pattern explicitly references node_modules, so the walker must descend
+        // into it instead of pruning.
+        let result = PathExpander().expand(pattern: "**/node_modules/.vite", roots: [fixture.root])
+
+        #expect(result.paths == [fixture.root.appendingPathComponent("project/node_modules/.vite").path])
+    }
+
     // MARK: - Symlinks
 
     @Test("Symlinked directories are skipped during recursive walk")

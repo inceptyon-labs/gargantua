@@ -25,13 +25,26 @@ public struct DeveloperToolsView: View {
     let availabilityProvider: AvailabilityProvider
     let previewProvider: PreviewProvider
     let executionProvider: ExecutionProvider
+    let dockerControl: DockerDaemonControl
 
-    @State var phase: Phase = .loading
+    @State var phase: Phase = .idle
     @State var pendingExecution: ExecutionRequest?
     @State var executingOperationID: DeveloperToolCleanupOperation.ID?
     @State var executionNotices: [DeveloperToolCleanupOperation.ID: ExecutionNotice] = [:]
+    /// Tracks an in-flight Docker start/stop so the panel can show a busy
+    /// state instead of a stale daemon-stopped CTA while the daemon comes up
+    /// (or goes down).
+    @State var dockerLifecycleActivity: DockerLifecycleActivity?
+    /// Bumped on every kickoff or return-to-idle so background scan tasks
+    /// can detect that they've been superseded and bail rather than
+    /// stomping the current phase.
+    @State var loadGeneration: Int = 0
 
     public enum Phase: Equatable {
+        /// User hasn't kicked off a scan yet — we show the CTA. Mirrors the
+        /// idle state on Deep Clean / File Health / Duplicate Finder so all
+        /// scan flows share one entry pattern.
+        case idle
         case loading
         case ready(availabilities: [DeveloperToolAvailability], previews: [DeveloperTool: PreviewState])
         case empty(availabilities: [DeveloperToolAvailability])
@@ -40,7 +53,16 @@ public struct DeveloperToolsView: View {
     public enum PreviewState: Equatable {
         case loading
         case loaded(DeveloperToolPreview)
+        /// Tool is installed but the background daemon (currently only
+        /// Docker) isn't running. Driven by
+        /// `DeveloperToolPreviewError.daemonNotRunning`.
+        case daemonStopped(DeveloperTool)
         case failed(String)
+    }
+
+    public enum DockerLifecycleActivity: Equatable {
+        case starting
+        case stopping
     }
 
     struct ExecutionRequest: Equatable, Identifiable {
@@ -60,11 +82,13 @@ public struct DeveloperToolsView: View {
         previewProvider: @escaping PreviewProvider = { try DeveloperToolPreviewAdapter().preview($0) },
         executionProvider: @escaping ExecutionProvider = {
             try DeveloperToolExecutionAdapter().execute($0, preview: $1, confirmationMethod: $2)
-        }
+        },
+        dockerControl: DockerDaemonControl = DockerDaemonControl()
     ) {
         self.availabilityProvider = availabilityProvider
         self.previewProvider = previewProvider
         self.executionProvider = executionProvider
+        self.dockerControl = dockerControl
     }
 
     public var body: some View {
@@ -77,6 +101,8 @@ public struct DeveloperToolsView: View {
 
                 Group {
                     switch phase {
+                    case .idle:
+                        idleView
                     case .loading:
                         loadingView
                     case .empty(let availabilities):
@@ -101,37 +127,116 @@ public struct DeveloperToolsView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: pendingExecution)
-        .task(id: "developer-tools-load") {
-            await load()
+    }
+
+    private var idleView: some View {
+        VStack(spacing: GargantuaSpacing.space4) {
+            Image(systemName: "hammer")
+                .font(.system(size: 32))
+                .foregroundStyle(GargantuaColors.ink4)
+
+            VStack(spacing: GargantuaSpacing.space2) {
+                Text("Scan developer tools")
+                    .font(GargantuaFonts.heading)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text("Checks Homebrew and Docker for cleanup opportunities. Read-only previews — nothing runs without an explicit Run click.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
+            }
+
+            Button(action: startScan) {
+                Text("Scan tools")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .background(
+                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                            .fill(GargantuaColors.accent)
+                    )
+            }
+            .buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: Sections
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+        HStack(alignment: .center) {
+            if phase != .idle {
+                backButton
+            } else {
+                // Reserve symmetric width so the title doesn't shift between
+                // idle / results.
+                Color.clear.frame(width: 60, height: 1)
+            }
+            Spacer()
+            VStack(spacing: 2) {
                 Text("Developer Tools")
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
-                Text("Read-only previews — no changes are made.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
+                if phase != .idle {
+                    Text("Preview cleanup actions for Homebrew and Docker.")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
             }
             Spacer()
+            HStack(spacing: GargantuaSpacing.space3) {
+                if phase != .idle {
+                    refreshButton
+                }
+            }
+            .frame(minWidth: 60, alignment: .trailing)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space4)
     }
 
-    private var loadingView: some View {
-        VStack(spacing: GargantuaSpacing.space3) {
-            ProgressView()
-                .controlSize(.regular)
-            Text("Checking installed tools…")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
+    private var backButton: some View {
+        Button(action: returnToIdle) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Back")
+                    .font(GargantuaFonts.label)
+            }
+            .foregroundStyle(GargantuaColors.accent)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Return to idle")
+    }
+
+    private var refreshButton: some View {
+        Button {
+            Task { await refreshAll() }
+        } label: {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Refresh")
+                    .font(GargantuaFonts.label)
+            }
+            .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("r", modifiers: .command)
+        .help("Re-check installed tools and reload previews (⌘R)")
+        .accessibilityLabel("Refresh previews")
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: GargantuaSpacing.space4) {
+            AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
+            Text("Checking installed tools…")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func emptyView(availabilities: [DeveloperToolAvailability]) -> some View {
@@ -187,6 +292,7 @@ public struct DeveloperToolsView: View {
                         preview: previews[availability.tool] ?? .loading,
                         executingOperationID: executingOperationID,
                         executionNotices: executionNotices,
+                        dockerLifecycleActivity: availability.tool == .docker ? dockerLifecycleActivity : nil,
                         onRetry: {
                             Task { await reloadPreview(for: availability.tool) }
                         },
@@ -195,7 +301,9 @@ public struct DeveloperToolsView: View {
                         },
                         onRetryOperation: { operation, preview in
                             pendingExecution = ExecutionRequest(operation: operation, preview: preview)
-                        }
+                        },
+                        onStartDocker: { startDockerDaemon() },
+                        onStopDocker: { stopDockerDaemon() }
                     )
                 }
 

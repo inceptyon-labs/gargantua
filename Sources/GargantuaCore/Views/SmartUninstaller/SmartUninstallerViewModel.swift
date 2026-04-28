@@ -14,6 +14,16 @@ public enum UninstallAppSort: String, CaseIterable, Sendable {
         case .lastUsed: "Last used"
         }
     }
+
+    /// The direction users expect by default when first selecting this field.
+    /// Names read alphabetically, but for size and recency the interesting
+    /// rows are at the top in descending order.
+    public var defaultAscending: Bool {
+        switch self {
+        case .name: true
+        case .size, .lastUsed: false
+        }
+    }
 }
 
 /// Top-level phases of the Smart Uninstaller flow.
@@ -60,8 +70,25 @@ public final class SmartUninstallerViewModel {
 
     public private(set) var apps: [AppInfo] = []
     public var query: String = ""
-    public var sort: UninstallAppSort = .name
+    public private(set) var sort: UninstallAppSort = .name
+    public private(set) var sortAscending: Bool = UninstallAppSort.name.defaultAscending
     public var showSystemApps: Bool = false
+
+    /// Apply a sort selection. Tapping the active field flips direction;
+    /// switching to another field resets to that field's natural default.
+    public func applySort(_ field: UninstallAppSort) {
+        if sort == field {
+            sortAscending.toggle()
+        } else {
+            sort = field
+            sortAscending = field.defaultAscending
+        }
+    }
+
+    /// Flip the current sort direction without changing the field.
+    public func toggleSortDirection() {
+        sortAscending.toggle()
+    }
 
     /// Bundle IDs the user has checked in the picker for batch uninstall.
     public private(set) var multiSelected: Set<String> = []
@@ -142,15 +169,19 @@ public final class SmartUninstallerViewModel {
             return false
         }
 
+        // Each branch sorts in the field's "natural" direction (asc for name,
+        // desc for size and recency); a final reverse flips it when the user
+        // has toggled away from the default.
+        let naturallySorted: [AppInfo]
         switch sort {
         case .name:
-            return filtered.sorted { lhs, rhs in
+            naturallySorted = filtered.sorted { lhs, rhs in
                 lhs.displayName ?? lhs.name < rhs.displayName ?? rhs.name
             }
         case .size:
-            return filtered.sorted { ($0.sizeOnDisk ?? 0) > ($1.sizeOnDisk ?? 0) }
+            naturallySorted = filtered.sorted { ($0.sizeOnDisk ?? 0) > ($1.sizeOnDisk ?? 0) }
         case .lastUsed:
-            return filtered.sorted { lhs, rhs in
+            naturallySorted = filtered.sorted { lhs, rhs in
                 switch (lhs.lastUsedDate, rhs.lastUsedDate) {
                 case let (l?, r?): return l > r
                 case (_?, nil): return true
@@ -159,6 +190,8 @@ public final class SmartUninstallerViewModel {
                 }
             }
         }
+
+        return sortAscending == sort.defaultAscending ? naturallySorted : naturallySorted.reversed()
     }
 
     // MARK: - Plan access

@@ -6,11 +6,14 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "Duplicat
 
 // MARK: - Duplicate Finder Container View
 
-/// Scan state owner that feeds `DuplicateFinderView` with fclones results.
+/// Renders the Duplicate Finder flow against a `DuplicateFinderContainerState`
+/// owned by `MainContentView` so the cache, in-flight task, and last-scan
+/// timestamp survive sidebar navigation.
 ///
 /// Builds a `ScanEngine` pipeline containing `FclonesAdapter` (per PRD §8.4
 /// sequential pipeline rule) and renders one of four phases:
-///   1. **Idle** — "Scan for duplicates" call-to-action.
+///   1. **Idle** — "Scan for duplicates" call-to-action, or a "View previous
+///      results / Scan again" pair when a cached scan exists.
 ///   2. **Scanning** — progress indicator.
 ///   3. **Results** — `DuplicateFinderView` with the discovered groups.
 ///   4. **Error** — binary-missing or scan-failure message with retry.
@@ -19,49 +22,21 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "Duplicat
 /// `onSendToTrash` closure so the Trust Layer boundary stays above this view.
 public struct DuplicateFinderContainerView: View {
     public let scanRoots: [URL]?
+    @Bindable public var state: DuplicateFinderContainerState
     @Binding public var selectedIDs: Set<String>
     public let engineFactory: (_ scanRoots: [URL]) throws -> any ScanAdapter
     public let onSendToTrash: (([ScanResult]) -> Void)?
     public let onExplain: ((ScanResult) -> Void)?
 
-    @State private var scanState: ScanState = .idle
-    @State private var scanProgress = ScanProgress()
-    @State private var activeScanTask: Task<Void, Never>?
-    @State private var scanGeneration: Int = 0
-
-    enum ScanState {
-        case idle
-        case scanning
-        case results([ScanResult])
-        case error(String)
-    }
-
-    /// Derive the terminal scan state from a finished scan's results + the
-    /// errors an adapter recorded on `ScanProgress`.
-    ///
-    /// `FclonesAdapter` reports hard failures (timeout, non-zero exit, JSON
-    /// parse failure) by appending to `progress.errors` and returning `[]`
-    /// rather than throwing. If we don't translate that into `.error`, a
-    /// silent scan failure would render as "No duplicates found" — the
-    /// user would never know something broke.
-    ///
-    /// Partial successes (some results + some errors) still surface as
-    /// `.results` so the user isn't blocked by a non-fatal read failure on a
-    /// single subdirectory.
-    static func deriveScanState(results: [ScanResult], errors: [String]) -> ScanState {
-        if results.isEmpty, !errors.isEmpty {
-            return .error(errors.joined(separator: "\n"))
-        }
-        return .results(results)
-    }
-
     public init(
+        state: DuplicateFinderContainerState,
         scanRoots: [URL]? = nil,
         selectedIDs: Binding<Set<String>>,
         engine: (any ScanAdapter)? = nil,
         onSendToTrash: (([ScanResult]) -> Void)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil
     ) {
+        self.state = state
         self.scanRoots = scanRoots
         self._selectedIDs = selectedIDs
         self.onSendToTrash = onSendToTrash
@@ -79,7 +54,7 @@ public struct DuplicateFinderContainerView: View {
                 .ignoresSafeArea()
 
             Group {
-                switch scanState {
+                switch state.scanState {
                 case .idle:
                     idleView
                 case .scanning:
@@ -90,7 +65,8 @@ public struct DuplicateFinderContainerView: View {
                         selectedIDs: $selectedIDs,
                         onSendToTrash: onSendToTrash,
                         onExplain: onExplain,
-                        onBack: { scanState = .idle },
+                        onBack: { state.returnToIdle() },
+                        onRefresh: refreshResults,
                         onRescan: startScan
                     )
                 case .error(let message):
@@ -114,41 +90,84 @@ public struct DuplicateFinderContainerView: View {
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("Runs `fclones group` across your scan roots. Review-by-default — nothing is selected automatically.")
+                Text(idleSubtitle)
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 380)
+                    .frame(maxWidth: 420)
             }
 
-            Button(action: startScan) {
-                Text("Scan for duplicates")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(GargantuaColors.accent)
-                    )
+            HStack(spacing: GargantuaSpacing.space3) {
+                if state.cachedResults != nil {
+                    Button(action: showCachedResults) {
+                        Text("View previous results")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                            .padding(.horizontal, GargantuaSpacing.space4)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .background(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                    .fill(GargantuaColors.accent)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: startScan) {
+                        Text("Scan again")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                            .padding(.horizontal, GargantuaSpacing.space4)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .background(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                    .fill(GargantuaColors.surface3)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: startScan) {
+                        Text("Scan for duplicates")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                            .padding(.horizontal, GargantuaSpacing.space4)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .background(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                    .fill(GargantuaColors.accent)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private var idleSubtitle: String {
+        guard let cached = state.cachedResults, let when = state.cachedAt else {
+            return "Runs `fclones group` across your scan roots. Review-by-default — nothing is selected automatically."
+        }
+        let groups = DuplicateGrouper.group(cached).count
+        let files = cached.count
+        return "Last scan \(relativeTime(since: when)): \(groups) group\(groups == 1 ? "" : "s") · \(files) file\(files == 1 ? "" : "s")."
+    }
+
+    private func relativeTime(since date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private var scanningView: some View {
         VStack(spacing: GargantuaSpacing.space4) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .controlSize(.large)
+            AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
 
             VStack(spacing: GargantuaSpacing.space1) {
                 Text("Scanning for duplicates…")
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                if scanProgress.itemsFound > 0 {
-                    Text("\(scanProgress.itemsFound) duplicate file\(scanProgress.itemsFound == 1 ? "" : "s") found so far")
+                if state.scanProgress.itemsFound > 0 {
+                    Text("\(state.scanProgress.itemsFound) duplicate file\(state.scanProgress.itemsFound == 1 ? "" : "s") found so far")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                 } else {
@@ -194,13 +213,11 @@ public struct DuplicateFinderContainerView: View {
     // MARK: - Scan orchestration
 
     private func startScan() {
-        // Cancel any in-flight scan so its completion can't overwrite the new
-        // scan's state. The generation id below is the belt to this suspenders
-        // — cancellation is cooperative and may no-op if the task is already
-        // at an un-cancellable point.
-        activeScanTask?.cancel()
-        scanGeneration &+= 1
-        let generation = scanGeneration
+        // The state class cancels any in-flight task, bumps the generation,
+        // and wipes the cache up-front (a Rescan must not leave stale data
+        // around if the new scan ultimately fails).
+        state.prepareForScan()
+        let generation = state.scanGeneration
 
         let roots = resolvedScanRoots()
         let engine: any ScanAdapter
@@ -209,33 +226,90 @@ public struct DuplicateFinderContainerView: View {
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             logger.error("Failed to build duplicate-scan engine: \(message, privacy: .public)")
-            scanState = .error(message)
+            state.failScan(message)
             return
         }
 
         // Reset selection so a stale scan's ids can't point into a new result set.
         selectedIDs = []
-        scanState = .scanning
+        let progress = state.scanProgress
 
-        activeScanTask = Task {
-            let outcome: ScanState
+        state.activeScanTask = Task {
+            let resultsOrError: Result<([ScanResult], [String]), Error>
             do {
-                let results = try await engine.scan(progress: scanProgress, observer: nil)
-                let errors = await MainActor.run { scanProgress.errors }
-                outcome = Self.deriveScanState(results: results, errors: errors)
+                let results = try await engine.scan(progress: progress, observer: nil)
+                let errors = await MainActor.run { progress.errors }
+                resultsOrError = .success((results, errors))
             } catch {
-                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                logger.error("Duplicate scan failed: \(message, privacy: .public)")
-                outcome = .error(message)
+                resultsOrError = .failure(error)
             }
 
             await MainActor.run {
                 // Drop any completion that belongs to a superseded scan.
-                guard generation == scanGeneration else { return }
-                scanState = outcome
-                activeScanTask = nil
+                guard generation == state.scanGeneration else { return }
+                switch resultsOrError {
+                case .success(let (results, errors)):
+                    state.finishScan(results: results, errors: errors)
+                case .failure(let error):
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    logger.error("Duplicate scan failed: \(message, privacy: .public)")
+                    state.failScan(message)
+                }
+                state.activeScanTask = nil
             }
         }
+    }
+
+    /// Re-stat every cached path off the main actor, drop missing ones, and
+    /// publish the pruned list. Cheap relative to a full fclones run — even
+    /// for tens of thousands of paths it's a few hundred ms of stat() calls.
+    private func refreshResults() {
+        guard !state.isRefreshing, case .results(let current) = state.scanState else { return }
+        state.isRefreshing = true
+
+        let snapshot = current
+        Task.detached(priority: .userInitiated) {
+            let paths = snapshot.map(\.path)
+            var existing: Set<String> = []
+            existing.reserveCapacity(paths.count)
+            let fileManager = FileManager.default
+            for path in paths {
+                if fileManager.fileExists(atPath: path) {
+                    existing.insert(path)
+                }
+            }
+            let pruned = DuplicateFinderRefresh.prune(
+                results: snapshot,
+                existingPaths: existing
+            )
+
+            await MainActor.run {
+                // Bail if a Rescan landed while we were stat()-ing — the new
+                // scan's results win.
+                guard case .results = state.scanState else {
+                    state.isRefreshing = false
+                    return
+                }
+                selectedIDs = DuplicateFinderRefresh.sanitizeSelection(
+                    selectedIDs: selectedIDs,
+                    against: pruned
+                )
+                state.applyRefresh(pruned: pruned)
+                state.isRefreshing = false
+            }
+        }
+    }
+
+    /// Re-enter results from idle using the cached scan output, no work needed.
+    private func showCachedResults() {
+        guard let cached = state.cachedResults else { return }
+        // Sanitize selection in case anything changed about the cached set
+        // (e.g. a previous refresh dropped rows while idle).
+        selectedIDs = DuplicateFinderRefresh.sanitizeSelection(
+            selectedIDs: selectedIDs,
+            against: cached
+        )
+        state.showCachedResults()
     }
 
     private func resolvedScanRoots() -> [URL] {

@@ -193,6 +193,26 @@ struct DeveloperToolsViewApplyResultTests {
         #expect(message.contains("cannot connect"))
     }
 
+    @Test("Daemon-not-running error maps to .daemonStopped, not .failed")
+    func daemonNotRunningMapsToDaemonStopped() {
+        let initial = DeveloperToolsView.deriveInitialPhase(availabilities: [
+            availability(.docker, installed: true),
+        ])
+        let error = DeveloperToolPreviewError.daemonNotRunning(.docker)
+
+        let next = DeveloperToolsView.applyPreviewResult(
+            tool: .docker,
+            result: .failure(error),
+            to: initial
+        )
+
+        guard case .ready(_, let previews) = next else {
+            Issue.record("expected .ready, got \(next)")
+            return
+        }
+        #expect(previews[.docker] == .daemonStopped(.docker))
+    }
+
     @Test("Preview result on .empty phase is ignored — view has moved past it")
     func resultIgnoredOnEmpty() {
         let phase: DeveloperToolsView.Phase = .empty(availabilities: [

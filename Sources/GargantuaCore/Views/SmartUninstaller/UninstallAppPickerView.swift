@@ -69,10 +69,10 @@ struct UninstallAppPickerView: View {
             SearchField(text: $viewModel.query)
                 .frame(maxWidth: 320)
 
-            GargantuaSegmentedPicker(
-                selection: $viewModel.sort,
-                options: UninstallAppSort.allCases.map { (value: $0, label: $0.label) },
-                accessibilityLabel: "Sort apps"
+            SortPicker(
+                sort: viewModel.sort,
+                ascending: viewModel.sortAscending,
+                onSelect: { viewModel.applySort($0) }
             )
             .frame(width: 260)
 
@@ -399,5 +399,69 @@ private struct StatusPill: View {
             .padding(.horizontal, 6)
             .background(color.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
+// MARK: - Sort Picker
+//
+// Like `GargantuaSegmentedPicker` but the active segment shows a chevron
+// indicating direction, and tapping it again flips ascending/descending.
+// Tapping a different segment selects that field at its natural default
+// direction (handled by the view model).
+private struct SortPicker: View {
+    let sort: UninstallAppSort
+    let ascending: Bool
+    let onSelect: (UninstallAppSort) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(UninstallAppSort.allCases, id: \.self) { field in
+                segment(for: field)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small + 2)
+                .fill(GargantuaColors.surface1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Sort apps")
+    }
+
+    @ViewBuilder
+    private func segment(for field: UninstallAppSort) -> some View {
+        let isSelected = sort == field
+        Button {
+            onSelect(field)
+        } label: {
+            HStack(spacing: 4) {
+                Text(field.label)
+                    .font(GargantuaFonts.caption.weight(.medium))
+                if isSelected {
+                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+            }
+            .foregroundStyle(isSelected ? Color.white : GargantuaColors.ink2)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .fill(isSelected ? GargantuaColors.accent : GargantuaColors.surface2)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel(for: field, isSelected: isSelected))
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .help(isSelected
+              ? "\(field.label) — \(ascending ? "ascending" : "descending"). Click to flip."
+              : "Sort by \(field.label.lowercased())")
+    }
+
+    private func accessibilityLabel(for field: UninstallAppSort, isSelected: Bool) -> String {
+        guard isSelected else { return field.label }
+        return "\(field.label), \(ascending ? "ascending" : "descending")"
     }
 }

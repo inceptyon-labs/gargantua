@@ -171,6 +171,44 @@ struct DeveloperToolPreviewAdapterTests {
         #expect(runner.calls.map(\.arguments) == [["system", "df"]])
     }
 
+    @Test("Docker daemon-down stderr maps to .daemonNotRunning, not commandFailed")
+    func dockerDaemonNotRunningSurfacesAsDaemonNotRunning() throws {
+        let docker = try makeScratchBinary(name: "docker")
+        defer { try? FileManager.default.removeItem(at: docker.deletingLastPathComponent()) }
+
+        let runner = StubRunner(outputs: [
+            "docker system df": ProcessOutput(
+                stdout: "",
+                stderr: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?",
+                exitCode: 1
+            ),
+        ])
+        let adapter = DeveloperToolPreviewAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.dockerEnvVarName: docker.path,
+            ]),
+            runner: runner
+        )
+
+        #expect(throws: DeveloperToolPreviewError.daemonNotRunning(.docker)) {
+            _ = try adapter.preview(.docker)
+        }
+    }
+
+    @Test("isDockerDaemonNotRunning matches both canonical phrases")
+    func dockerDaemonStderrPatterns() {
+        #expect(DeveloperToolPreviewError.isDockerDaemonNotRunning(
+            stderr: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"
+        ))
+        #expect(DeveloperToolPreviewError.isDockerDaemonNotRunning(
+            stderr: "error during connect: ... Is the docker daemon running?"
+        ))
+        #expect(!DeveloperToolPreviewError.isDockerDaemonNotRunning(
+            stderr: "permission denied while trying to connect"
+        ))
+        #expect(!DeveloperToolPreviewError.isDockerDaemonNotRunning(stderr: ""))
+    }
+
     @Test("adapter exposes no destructive prune commands")
     func noDestructiveCommands() {
         #expect(DeveloperToolPreviewAdapter.previewArguments(for: .homebrew) == ["cleanup", "-n"])

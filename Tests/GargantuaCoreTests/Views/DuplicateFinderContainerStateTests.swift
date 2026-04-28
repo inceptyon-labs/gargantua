@@ -21,7 +21,7 @@ struct DuplicateFinderContainerStateTests {
 
     @Test("Empty results with recorded errors surface as .error — silent fclones failures are visible")
     func emptyResultsPlusErrorsBecomesError() {
-        let state = DuplicateFinderContainerView.deriveScanState(
+        let state = DuplicateFinderContainerState.deriveScanState(
             results: [],
             errors: ["fclones exit 1: timed out"]
         )
@@ -35,7 +35,7 @@ struct DuplicateFinderContainerStateTests {
 
     @Test("Empty results with no errors is a legitimate \"no duplicates\" outcome")
     func emptyResultsNoErrorsBecomesResults() {
-        let state = DuplicateFinderContainerView.deriveScanState(
+        let state = DuplicateFinderContainerState.deriveScanState(
             results: [],
             errors: []
         )
@@ -49,7 +49,7 @@ struct DuplicateFinderContainerStateTests {
 
     @Test("Partial success (results + errors) still shows results — non-fatal errors don't block review")
     func partialSuccessBecomesResults() {
-        let state = DuplicateFinderContainerView.deriveScanState(
+        let state = DuplicateFinderContainerState.deriveScanState(
             results: [Self.makeResult(id: "dup1")],
             errors: ["Couldn't read /some/subdir: permission denied"]
         )
@@ -64,7 +64,7 @@ struct DuplicateFinderContainerStateTests {
 
     @Test("Multiple errors are joined so the user sees every failure cause")
     func multipleErrorsJoined() {
-        let state = DuplicateFinderContainerView.deriveScanState(
+        let state = DuplicateFinderContainerState.deriveScanState(
             results: [],
             errors: ["timed out", "parse failed"]
         )

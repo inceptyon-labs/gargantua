@@ -48,6 +48,7 @@ public struct NativeScanAdapter: ScanAdapter {
     private let scanRoots: [URL]
     private let expander: PathExpander
     private let processChecker: any RunningProcessChecking
+    private let applicabilityChecker: any RuleApplicabilityChecking
 
     public init(
         rules: [ScanRule],
@@ -55,7 +56,8 @@ public struct NativeScanAdapter: ScanAdapter {
         classifier: SafetyClassifier = SafetyClassifier(),
         scanRoots: [URL] = PathExpander.defaultScanRoots(),
         expander: PathExpander = PathExpander(),
-        processChecker: any RunningProcessChecking = DefaultRunningProcessChecker()
+        processChecker: any RunningProcessChecking = DefaultRunningProcessChecker(),
+        applicabilityChecker: any RuleApplicabilityChecking = DefaultRuleApplicabilityChecker()
     ) {
         self.rules = rules
         self.profile = profile
@@ -63,6 +65,7 @@ public struct NativeScanAdapter: ScanAdapter {
         self.scanRoots = scanRoots
         self.expander = expander
         self.processChecker = processChecker
+        self.applicabilityChecker = applicabilityChecker
     }
 
     /// Build a scanner against the YAML rules shipped with the app.
@@ -117,7 +120,12 @@ public struct NativeScanAdapter: ScanAdapter {
             profile.categories.isEmpty || profile.categories.contains(rule.category)
         }
 
-        logger.info("NativeScanAdapter: \(applicable.count) rules match profile \(profile.id, privacy: .public)")
+        // Probe scan roots once for present ecosystems so rule evaluation can drop
+        // `**/<leaf>` patterns whose ecosystem isn't represented anywhere — keeps the
+        // UI from emitting "depth reached. 0 partial results." warnings for every
+        // rule the user has no projects of (Angular, .NET, Zig, Terraform, etc.).
+        let availableEcosystems = applicabilityChecker.availableEcosystems(in: scanRoots)
+        logger.info("NativeScanAdapter: \(applicable.count) rules match profile \(profile.id, privacy: .public); ecosystems present: \(availableEcosystems.map(\.rawValue).sorted().joined(separator: ","), privacy: .public)")
 
         var results: [ScanResult] = []
         var seenPaths: Set<String> = []
@@ -147,6 +155,7 @@ public struct NativeScanAdapter: ScanAdapter {
             let expander = expander
             let roots = scanRoots
             let processChecker = processChecker
+            let ecosystems = availableEcosystems
             let evaluation = await Task.detached {
                 Self.evaluate(
                     rule: rule,
@@ -155,6 +164,7 @@ public struct NativeScanAdapter: ScanAdapter {
                     expander: expander,
                     scanRoots: roots,
                     processChecker: processChecker,
+                    availableEcosystems: ecosystems,
                     onSizing: onSizing
                 )
             }.value
@@ -198,6 +208,7 @@ public struct NativeScanAdapter: ScanAdapter {
         expander: PathExpander,
         scanRoots: [URL],
         processChecker: any RunningProcessChecking,
+        availableEcosystems: Set<RuleEcosystem>,
         onSizing: @Sendable (String) -> Void = { _ in }
     ) -> RuleEvaluation {
         if NativeRuleGuardEvaluator.shouldSkipRule(rule: rule, processChecker: processChecker) {
@@ -214,10 +225,22 @@ public struct NativeScanAdapter: ScanAdapter {
             let resolvedPaths: [String]
 
             if isGlob {
+                // Skip `**/<leaf>` patterns whose ecosystem has no signal anywhere in the
+                // scan roots — the walk would just hit the depth cap and emit a noisy
+                // "0 partial results" warning. Patterns with concrete prefixes or that
+                // map to no specific ecosystem still run unchanged.
+                if let required = RulePatternEcosystem.required(for: pattern),
+                   !availableEcosystems.contains(required) {
+                    continue
+                }
+
                 let expansion = expander.expand(pattern: pattern, roots: scanRoots)
                 resolvedPaths = expansion.paths
-                if expansion.hitCap {
-                    let reason = expansion.capReason ?? "cap"
+                // Only warn for global resource caps (entries / time). Depth cap is
+                // branch-local after pruning — it just means some unrelated sub-tree
+                // bottomed out; the user isn't missing actionable matches.
+                if expansion.hitCap, !resolvedPaths.isEmpty,
+                   let reason = expansion.capReason, reason != "depth" {
                     warnings.append(
                         "Stopped scanning \(rule.name): \(reason) reached. \(resolvedPaths.count) partial results."
                     )

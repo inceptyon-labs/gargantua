@@ -9,34 +9,20 @@ import SwiftUI
 /// stack); Refresh re-scans the current directory; Rescan resets to home and
 /// re-runs from scratch; Back returns to the idle CTA.
 public struct DiskExplorerView: View {
-    /// Stack of (path, displayName) representing the drill-down breadcrumb trail.
-    @State private var pathStack: [(path: String, name: String)] = [
-        (path: NSHomeDirectory(), name: "Home")
-    ]
-    @State private var items: [DirectoryItem] = []
-    @State private var expandedItems: [String: [DirectoryItem]] = [:]
-    @State private var isLoading = false
-    @State private var maxSize: Int64 = 1
-    @State private var displayMode: DiskExplorerDisplayMode = .treemap
-    @State private var phase: DiskExplorerPhase = .idle
-    @State private var scanGeneration = 0
-    /// Per-path snapshot of the last successful scan. Lets the breadcrumb
-    /// navigate back to a directory we've already mapped without paying for
-    /// another recursive sizing pass. Invalidated by Refresh / Rescan / Back.
-    @State private var pathCache: [String: [DirectoryItem]] = [:]
+    @Bindable public var state: DiskExplorerState
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init() {}
-
-    private var currentPath: String { pathStack.last?.path ?? NSHomeDirectory() }
+    public init(state: DiskExplorerState) {
+        self.state = state
+    }
 
     public var body: some View {
         ZStack {
             GargantuaColors.void_
                 .ignoresSafeArea()
 
-            switch phase {
+            switch state.phase {
             case .idle:
                 idleView
                     .transition(.opacity)
@@ -45,16 +31,12 @@ public struct DiskExplorerView: View {
                     .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: phase)
-        .task(id: scanLoadKey) {
-            guard phase == .results else { return }
-            await loadDirectory(currentPath)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: state.phase)
+        .task(id: state.scanLoadKey) {
+            guard state.phase == .results else { return }
+            await loadDirectory(state.currentPath)
         }
     }
-
-    /// Bumped on every navigation/rescan so `.task(id:)` re-runs the scan
-    /// even when the path hasn't changed (e.g. Refresh on the same dir).
-    private var scanLoadKey: String { "\(scanGeneration)|\(currentPath)" }
 
     // MARK: - Idle CTA
 
@@ -117,7 +99,7 @@ public struct DiskExplorerView: View {
                 onBack: { exitToIdle() },
                 onRefresh: { refreshCurrent() },
                 onRescan: { rescanFromHome() },
-                isBusy: isLoading
+                isBusy: state.isLoading
             )
 
             controlsBar
@@ -128,10 +110,10 @@ public struct DiskExplorerView: View {
     }
 
     private var scanSubtitle: String? {
-        let total = items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
-        let pending = items.filter { $0.isSizing }.count
+        let total = state.items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
+        let pending = state.items.filter { $0.isSizing }.count
         let done = max(total - pending, 0)
-        if isLoading {
+        if state.isLoading {
             if total == 0 { return "Probing gravitational pull…" }
             if pending == 0 { return "Finishing up…" }
             return "Sizing \(done) of \(total) folders…"
@@ -144,12 +126,12 @@ public struct DiskExplorerView: View {
 
     private var controlsBar: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            if isLoading {
+            if state.isLoading {
                 AccretionDiskView(activityRate: 14, size: 18, color: GargantuaColors.accent)
                     .accessibilityHidden(true)
             }
             Spacer()
-            DisplayModeToggle(selection: $displayMode)
+            DisplayModeToggle(selection: $state.displayMode)
         }
         .padding(.horizontal, GargantuaSpacing.space6)
         .padding(.top, GargantuaSpacing.space3)
@@ -161,7 +143,7 @@ public struct DiskExplorerView: View {
     private var breadcrumbView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: GargantuaSpacing.space1) {
-                ForEach(Array(pathStack.enumerated()), id: \.offset) { index, crumb in
+                ForEach(Array(state.pathStack.enumerated()), id: \.offset) { index, crumb in
                     if index > 0 {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .medium))
@@ -174,13 +156,13 @@ public struct DiskExplorerView: View {
                         Text(crumb.name)
                             .font(GargantuaFonts.caption)
                             .foregroundStyle(
-                                index == pathStack.count - 1
+                                index == state.pathStack.count - 1
                                     ? GargantuaColors.ink
                                     : GargantuaColors.accent
                             )
                     }
                     .buttonStyle(.plain)
-                    .disabled(index == pathStack.count - 1)
+                    .disabled(index == state.pathStack.count - 1)
                 }
             }
             .padding(.horizontal, GargantuaSpacing.space6)
@@ -225,16 +207,16 @@ public struct DiskExplorerView: View {
     /// before the card resolves. Show a clean scanning view instead and
     /// cross-fade into the result once it's stable.
     private var contentMode: DiskExplorerContentMode {
-        if isLoading { return .scanning }
-        if items.isEmpty { return .empty }
-        if displayMode == .treemap, let dominant = dominantChild {
+        if state.isLoading { return .scanning }
+        if state.items.isEmpty { return .empty }
+        if state.displayMode == .treemap, let dominant = dominantChild {
             return .dominant(dominant)
         }
-        return displayMode == .list ? .list : .treemap
+        return state.displayMode == .list ? .list : .treemap
     }
 
     private var displayItems: [DirectoryItem] {
-        DiskExplorerView.collapseSmall(items)
+        DiskExplorerView.collapseSmall(state.items)
     }
 
     /// If the largest child dwarfs everything else, the treemap degenerates
@@ -252,8 +234,8 @@ public struct DiskExplorerView: View {
     /// actually determines whether the treemap will produce visible non-largest
     /// tiles or just slivers crammed against the edge.
     private var dominantChild: DirectoryItem? {
-        guard !isLoading else { return nil }
-        let sized = items
+        guard !state.isLoading else { return nil }
+        let sized = state.items
             .filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
             .sorted { $0.size > $1.size }
         guard let largest = sized.first else { return nil }
@@ -297,20 +279,20 @@ public struct DiskExplorerView: View {
     private var listView: some View {
         ScrollView {
             LazyVStack(spacing: 1) {
-                ForEach(items) { item in
+                ForEach(state.items) { item in
                     DirectoryRowView(
                         item: item,
-                        maxSize: maxSize,
-                        isExpanded: expandedItems[item.path] != nil,
+                        maxSize: state.maxSize,
+                        isExpanded: state.expandedItems[item.path] != nil,
                         onExpand: { await toggleExpand(item) },
                         onDrillDown: { drillDown(into: item) }
                     )
 
-                    if let children = expandedItems[item.path] {
+                    if let children = state.expandedItems[item.path] {
                         ForEach(children) { child in
                             DirectoryRowView(
                                 item: child,
-                                maxSize: maxSize,
+                                maxSize: state.maxSize,
                                 isExpanded: false,
                                 onExpand: nil,
                                 onDrillDown: { drillDown(into: child) },
@@ -331,10 +313,10 @@ public struct DiskExplorerView: View {
     /// the dominant child as a hero card with a Drill In affordance and the
     /// remaining children as a compact size-bar list below.
     private func dominantChildView(dominant: DirectoryItem) -> some View {
-        let total = items.reduce(0) { $0 + max($1.size, 0) }
+        let total = state.items.reduce(0) { $0 + max($1.size, 0) }
         let fraction = total > 0 ? Double(dominant.size) / Double(total) : 0
         let percent = Int((fraction * 100).rounded())
-        let remaining = items.filter { $0.id != dominant.id }
+        let remaining = state.items.filter { $0.id != dominant.id }
         let canDrillIn = !dominant.isPermissionDenied
             && !dominant.isFilesAggregate
             && !dominant.isSizing
@@ -410,7 +392,7 @@ public struct DiskExplorerView: View {
                             ForEach(remaining) { item in
                                 DirectoryRowView(
                                     item: item,
-                                    maxSize: maxSize,
+                                    maxSize: state.maxSize,
                                     isExpanded: false,
                                     onExpand: nil,
                                     onDrillDown: { drillDown(into: item) }
@@ -429,15 +411,15 @@ public struct DiskExplorerView: View {
     }
 
     private var scanningView: some View {
-        let total = items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
-        let pending = items.filter { $0.isSizing }.count
+        let total = state.items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
+        let pending = state.items.filter { $0.isSizing }.count
         let done = max(total - pending, 0)
         let primary: String = {
             if total == 0 { return "Probing gravitational pull…" }
             if pending == 0 { return "Finishing up…" }
             return "Sizing \(done) of \(total) folders…"
         }()
-        let folderName = pathStack.last?.name ?? "Home"
+        let folderName = state.pathStack.last?.name ?? "Home"
         return VStack(spacing: GargantuaSpacing.space4) {
             AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
 
@@ -477,45 +459,12 @@ public struct DiskExplorerView: View {
 
     // MARK: - Actions
 
-    private func startScan() {
-        pathCache = [:]
-        pathStack = [(path: NSHomeDirectory(), name: "Home")]
-        items = []
-        expandedItems = [:]
-        maxSize = 1
-        isLoading = true
-        scanGeneration += 1
-        phase = .results
-    }
-
-    private func refreshCurrent() {
-        pathCache.removeValue(forKey: currentPath)
-        items = []
-        expandedItems = [:]
-        maxSize = 1
-        isLoading = true
-        scanGeneration += 1
-    }
-
-    private func rescanFromHome() {
-        pathCache = [:]
-        pathStack = [(path: NSHomeDirectory(), name: "Home")]
-        items = []
-        expandedItems = [:]
-        maxSize = 1
-        isLoading = true
-        scanGeneration += 1
-    }
-
-    private func exitToIdle() {
-        pathCache = [:]
-        items = []
-        expandedItems = [:]
-        maxSize = 1
-        pathStack = [(path: NSHomeDirectory(), name: "Home")]
-        isLoading = false
-        phase = .idle
-    }
+    private func startScan() { state.startScan() }
+    private func refreshCurrent() { state.refreshCurrent() }
+    private func rescanFromHome() { state.rescanFromHome() }
+    private func exitToIdle() { state.exitToIdle() }
+    private func drillDown(into item: DirectoryItem) { state.drillDown(into: item) }
+    private func navigateTo(index: Int) { state.navigateTo(index: index) }
 
     private func loadDirectory(_ path: String) async {
         // The matching navigation handler (or scanGeneration bump) already set
@@ -523,74 +472,25 @@ public struct DiskExplorerView: View {
         // populated `items` from cache and cleared `isLoading`, or cleared
         // `items` and set `isLoading = true`. So if we got here without
         // `isLoading`, there's nothing to scan.
-        guard isLoading else { return }
+        guard state.isLoading else { return }
 
         for await item in DirectorySizeScanner.streamChildren(of: path) {
             if Task.isCancelled { return }
-            upsert(item)
+            state.upsert(item)
         }
 
         if !Task.isCancelled {
-            pathCache[path] = items
-            isLoading = false
+            state.completeLoad(for: path)
         }
-    }
-
-    /// Synchronously hydrate `items` from `pathCache` if possible. Called from
-    /// every navigation entry point so the user never sees a scanning flash
-    /// when stepping back to a directory we've already mapped.
-    private func applyCachedItemsIfPresent() {
-        expandedItems = [:]
-        if let cached = pathCache[currentPath] {
-            items = cached
-            maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
-            isLoading = false
-        } else {
-            items = []
-            maxSize = 1
-            isLoading = true
-        }
-    }
-
-    /// Insert or replace `item` (keyed by `item.id`), then keep `items` sorted
-    /// largest-first with permission-denied rows pushed to the bottom.
-    private func upsert(_ item: DirectoryItem) {
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index] = item
-        } else {
-            items.append(item)
-        }
-        items.sort { lhs, rhs in
-            if lhs.isPermissionDenied != rhs.isPermissionDenied {
-                return !lhs.isPermissionDenied
-            }
-            return lhs.size > rhs.size
-        }
-        maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
     }
 
     private func toggleExpand(_ item: DirectoryItem) async {
-        if expandedItems[item.path] != nil {
-            expandedItems.removeValue(forKey: item.path)
+        if state.expandedItems[item.path] != nil {
+            state.expandedItems.removeValue(forKey: item.path)
         } else {
             let children = await DirectorySizeScanner.scanChildren(of: item.path)
-            expandedItems[item.path] = children
+            state.expandedItems[item.path] = children
         }
-    }
-
-    private func drillDown(into item: DirectoryItem) {
-        guard !item.isPermissionDenied,
-              !item.isFilesAggregate,
-              !item.isOthersAggregate,
-              !item.isSizing else { return }
-        pathStack.append((path: item.path, name: item.name))
-        applyCachedItemsIfPresent()
-    }
-
-    private func navigateTo(index: Int) {
-        guard index < pathStack.count - 1 else { return }
-        pathStack = Array(pathStack.prefix(index + 1))
-        applyCachedItemsIfPresent()
     }
 
     /// Bundle directories whose size is < 1% of the largest into a single
@@ -635,16 +535,6 @@ public struct DiskExplorerView: View {
         ))
         return kept
     }
-}
-
-private enum DiskExplorerDisplayMode {
-    case treemap
-    case list
-}
-
-private enum DiskExplorerPhase {
-    case idle
-    case results
 }
 
 private enum DiskExplorerContentMode: Equatable {

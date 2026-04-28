@@ -100,6 +100,9 @@ public struct DeveloperToolPreview: Equatable, Sendable {
 public enum DeveloperToolPreviewError: Error, Equatable, LocalizedError {
     case notInstalled(DeveloperTool)
     case commandFailed(tool: DeveloperTool, exitCode: Int32, stderr: String)
+    /// Tool is installed but its background daemon isn't running. Currently
+    /// only Docker emits this — the CLI is on disk but the engine is down.
+    case daemonNotRunning(DeveloperTool)
 
     public var errorDescription: String? {
         switch self {
@@ -107,7 +110,21 @@ public enum DeveloperToolPreviewError: Error, Equatable, LocalizedError {
             "\(tool.displayName) is not installed."
         case .commandFailed(let tool, let exitCode, let stderr):
             "\(tool.displayName) preview failed with exit \(exitCode): \(stderr)"
+        case .daemonNotRunning(let tool):
+            "\(tool.displayName) daemon is not running."
         }
+    }
+
+    /// Stderr-pattern check used by the preview adapter to distinguish
+    /// "daemon down" (recoverable: just start the engine) from a true command
+    /// failure (e.g. permission denied). Pattern is the canonical Docker CLI
+    /// error and has been stable across versions.
+    public static func isDockerDaemonNotRunning(stderr: String) -> Bool {
+        let needles = [
+            "Cannot connect to the Docker daemon",
+            "Is the docker daemon running",
+        ]
+        return needles.contains { stderr.contains($0) }
     }
 }
 
@@ -250,10 +267,14 @@ public struct DeveloperToolPreviewAdapter: Sendable {
             maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
         )
         guard output.exitCode == 0 else {
+            let stderr = output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if tool == .docker, DeveloperToolPreviewError.isDockerDaemonNotRunning(stderr: stderr) {
+                throw DeveloperToolPreviewError.daemonNotRunning(.docker)
+            }
             throw DeveloperToolPreviewError.commandFailed(
                 tool: tool,
                 exitCode: output.exitCode,
-                stderr: output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                stderr: stderr
             )
         }
 

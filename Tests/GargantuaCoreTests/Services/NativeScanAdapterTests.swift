@@ -323,11 +323,44 @@ struct NativeScanAdapterTests {
     // MARK: - Progress and factory wiring
 
     @MainActor
-    @Test("Path expansion cap warnings are recorded on ScanProgress")
+    @Test("Path expansion cap warnings are recorded when partial results exist")
     func capWarningsPropagateThroughProgress() async throws {
         let fixture = try Self.makeFixture()
-        try fixture.makeDir("project-a/node_modules")
-        try fixture.makeDir("project-b/node_modules")
+        try fixture.makeFile("project-a/node_modules/dep/index.js")
+        try fixture.makeFile("project-b/node_modules/dep/index.js")
+        let rule = Self.rule(
+            id: "node_modules",
+            name: "Node Modules",
+            paths: ["**/node_modules"],
+            safety: .review,
+            category: "dev_artifacts"
+        )
+        let progress = ScanProgress()
+        // entries=3 lets the walker enumerate root (2 entries) and find one
+        // node_modules match before the cap fires inside project-a's enumeration.
+        let expander = PathExpander(
+            limits: PathExpander.Limits(maxDepth: 8, maxEntries: 3, timeBudget: 30)
+        )
+        let adapter = NativeScanAdapter(
+            rules: [rule],
+            profile: .devPurge,
+            scanRoots: [fixture.root],
+            expander: expander
+        )
+
+        _ = try await adapter.scan(progress: progress)
+
+        #expect(progress.errors.contains {
+            $0.contains("Stopped scanning Node Modules: entries reached")
+        })
+    }
+
+    @MainActor
+    @Test("Path expansion cap warnings are suppressed when no partial results exist")
+    func capWarningsSuppressedWhenNoMatches() async throws {
+        let fixture = try Self.makeFixture()
+        // No node_modules anywhere — the walker will hit its cap and find nothing.
+        try fixture.makeFile("project-a/package.json")
         let rule = Self.rule(
             id: "node_modules",
             name: "Node Modules",
@@ -348,8 +381,10 @@ struct NativeScanAdapterTests {
 
         _ = try await adapter.scan(progress: progress)
 
-        #expect(progress.errors.contains {
-            $0.contains("Stopped scanning Node Modules: entries reached")
+        // The cap fires (only 1 entry allowed before stopping) but produces no results,
+        // so nothing should be reported to the user — it's not actionable.
+        #expect(!progress.errors.contains {
+            $0.contains("Stopped scanning Node Modules")
         })
     }
 
@@ -362,5 +397,79 @@ struct NativeScanAdapterTests {
             .first { $0.label == "scanRoots" }?.value as? [URL]
 
         #expect(scanRoots?.map(\.path) == customRoots.map(\.path))
+    }
+
+    // MARK: - Ecosystem applicability
+
+    @MainActor
+    @Test("Glob rules whose ecosystem isn't represented are skipped without warning")
+    func ecosystemAbsentRuleSkippedSilently() async throws {
+        let fixture = try Self.makeFixture()
+        // Fixture has only Node-shaped projects. The .NET-shaped rule should silently
+        // skip its `**/bin/Debug` pattern because no `*.csproj`/`*.sln` exists.
+        try fixture.makeFile("app/package.json")
+        try fixture.makeFile("app/node_modules/dep/index.js")
+
+        let nodeRule = Self.rule(
+            id: "node_modules",
+            name: "Node Modules",
+            paths: ["**/node_modules"],
+            safety: .review,
+            category: "dev_artifacts"
+        )
+        let dotnetRule = Self.rule(
+            id: "dotnet_build_outputs",
+            name: ".NET Build Outputs",
+            paths: ["**/bin/Debug", "**/bin/Release", "**/obj"],
+            safety: .review,
+            category: "dev_artifacts"
+        )
+        let progress = ScanProgress()
+        let adapter = NativeScanAdapter(
+            rules: [nodeRule, dotnetRule],
+            profile: .devPurge,
+            scanRoots: [fixture.root]
+        )
+
+        let results = try await adapter.scan(progress: progress)
+
+        // Node rule still finds node_modules.
+        #expect(results.contains { $0.path.hasSuffix("/app/node_modules") })
+
+        // No `.NET Build Outputs` warning leaks into progress.
+        #expect(!progress.errors.contains { $0.contains(".NET Build Outputs") })
+    }
+
+    @Test("Permissive checker disables filtering — used by tests that need every rule to run")
+    func permissiveCheckerRunsAllRules() async throws {
+        let fixture = try Self.makeFixture()
+        // No manifests at all — default checker would skip every glob rule.
+        let dotnetBin = try fixture.makeFile("svc/bin/Debug/svc.dll", byteCount: 64)
+            .deletingLastPathComponent()
+
+        let rule = Self.rule(
+            id: "dotnet_build_outputs",
+            name: ".NET Build Outputs",
+            paths: ["**/bin/Debug"],
+            safety: .review,
+            category: "dev_artifacts"
+        )
+
+        let permissive = NativeScanAdapter(
+            rules: [rule],
+            profile: .devPurge,
+            scanRoots: [fixture.root],
+            applicabilityChecker: PermissiveRuleApplicabilityChecker()
+        )
+        let permissiveResults = try await permissive.scan()
+        #expect(permissiveResults.map(\.path) == [dotnetBin.path])
+
+        let strict = NativeScanAdapter(
+            rules: [rule],
+            profile: .devPurge,
+            scanRoots: [fixture.root]
+        )
+        let strictResults = try await strict.scan()
+        #expect(strictResults.isEmpty)
     }
 }

@@ -290,6 +290,90 @@ struct SelectAllButFirstTests {
 
 // MARK: - Total Reclaimable Overflow
 
+@Suite("DuplicateFinderRefresh.prune")
+struct DuplicateFinderRefreshTests {
+    @Test("Rows whose paths no longer exist are dropped")
+    func dropsMissingPaths() {
+        let results = [
+            makeFclonesResult(id: "a1", groupID: 1, path: "/x/a"),
+            makeFclonesResult(id: "a2", groupID: 1, path: "/x/b"),
+            makeFclonesResult(id: "a3", groupID: 1, path: "/x/c"),
+        ]
+        let pruned = DuplicateFinderRefresh.prune(
+            results: results,
+            existingPaths: ["/x/a", "/x/c"]
+        )
+        #expect(pruned.map(\.id) == ["a1", "a3"])
+    }
+
+    @Test("Groups falling below 2 surviving members are removed entirely")
+    func dropsGroupsBelowDuplicateThreshold() {
+        let results = [
+            // Group 1 will keep 2 of 3 → survives.
+            makeFclonesResult(id: "g1a", groupID: 1, path: "/x/g1a"),
+            makeFclonesResult(id: "g1b", groupID: 1, path: "/x/g1b"),
+            makeFclonesResult(id: "g1c", groupID: 1, path: "/x/g1c"),
+            // Group 2 will keep only 1 → entire group dropped.
+            makeFclonesResult(id: "g2a", groupID: 2, path: "/x/g2a"),
+            makeFclonesResult(id: "g2b", groupID: 2, path: "/x/g2b"),
+        ]
+        let pruned = DuplicateFinderRefresh.prune(
+            results: results,
+            existingPaths: ["/x/g1a", "/x/g1b", "/x/g2a"]
+        )
+        #expect(Set(pruned.map(\.id)) == ["g1a", "g1b"])
+    }
+
+    @Test("All paths missing returns empty array")
+    func everythingGone() {
+        let results = [
+            makeFclonesResult(id: "a1", groupID: 1, path: "/x/a"),
+            makeFclonesResult(id: "a2", groupID: 1, path: "/x/b"),
+        ]
+        let pruned = DuplicateFinderRefresh.prune(results: results, existingPaths: [])
+        #expect(pruned.isEmpty)
+    }
+
+    @Test("All paths present passes through unchanged")
+    func everythingPresent() {
+        let results = [
+            makeFclonesResult(id: "a1", groupID: 1, path: "/x/a"),
+            makeFclonesResult(id: "a2", groupID: 1, path: "/x/b"),
+        ]
+        let pruned = DuplicateFinderRefresh.prune(
+            results: results,
+            existingPaths: ["/x/a", "/x/b"]
+        )
+        #expect(pruned.map(\.id) == ["a1", "a2"])
+    }
+}
+
+@Suite("DuplicateFinderRefresh.sanitizeSelection")
+struct DuplicateFinderSanitizeSelectionTests {
+    @Test("Stale ids are removed; valid ids are kept")
+    func dropsStaleIDs() {
+        let results = [
+            makeFclonesResult(id: "a1", groupID: 1, path: "/x/a"),
+            makeFclonesResult(id: "a2", groupID: 1, path: "/x/b"),
+        ]
+        let sanitized = DuplicateFinderRefresh.sanitizeSelection(
+            selectedIDs: ["a1", "ghost", "a2", "vanished"],
+            against: results
+        )
+        #expect(sanitized == ["a1", "a2"])
+    }
+
+    @Test("Empty selection stays empty")
+    func emptySelection() {
+        let results = [makeFclonesResult(id: "a1", groupID: 1, path: "/x/a")]
+        let sanitized = DuplicateFinderRefresh.sanitizeSelection(
+            selectedIDs: [],
+            against: results
+        )
+        #expect(sanitized.isEmpty)
+    }
+}
+
 @Suite("DuplicateFinderSelection.totalReclaimableBytes")
 struct TotalReclaimableTests {
     @Test("Total reclaimable clamps at Int64.max across groups on overflow")

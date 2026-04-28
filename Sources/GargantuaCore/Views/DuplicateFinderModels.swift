@@ -124,6 +124,52 @@ public enum DuplicateGrouper {
     }
 }
 
+// MARK: - Refresh prune
+
+public enum DuplicateFinderRefresh {
+    /// Prune `results` against the set of paths that still exist on disk.
+    ///
+    /// Drops any row whose path is no longer present, then drops every row
+    /// whose `fclones_group_<id>` group falls below 2 surviving members (a
+    /// single-file "duplicate" is meaningless). Pure — caller is responsible
+    /// for performing the filesystem existence checks (so this stays trivially
+    /// testable and so the view can do the IO off the main actor).
+    public static func prune(
+        results: [ScanResult],
+        existingPaths: Set<String>
+    ) -> [ScanResult] {
+        let surviving = results.filter { existingPaths.contains($0.path) }
+
+        var countByGroup: [String: Int] = [:]
+        for result in surviving {
+            guard let groupTag = result.tags.first(where: { $0.hasPrefix("fclones_group_") }) else {
+                continue
+            }
+            countByGroup[groupTag, default: 0] += 1
+        }
+
+        return surviving.filter { result in
+            guard let groupTag = result.tags.first(where: { $0.hasPrefix("fclones_group_") }) else {
+                // Untagged rows shouldn't reach the duplicate finder, but if
+                // they do, drop them rather than try to render them ungrouped.
+                return false
+            }
+            return (countByGroup[groupTag] ?? 0) >= 2
+        }
+    }
+
+    /// Sanitize `selectedIDs` against a fresh `results` list. Drops any id
+    /// that no longer corresponds to a row, so refresh + rescan can't leave
+    /// the action bar pointing at vanished files.
+    public static func sanitizeSelection(
+        selectedIDs: Set<String>,
+        against results: [ScanResult]
+    ) -> Set<String> {
+        let valid = Set(results.map(\.id))
+        return selectedIDs.intersection(valid)
+    }
+}
+
 // MARK: - Selection helpers
 
 public enum DuplicateFinderSelection {
