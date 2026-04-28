@@ -109,7 +109,7 @@ extension CleanupProfile {
         categories: [
             "browser_cache", "browser_data", "system_cache", "system_logs",
             "temp_files", "trash", "app_cache", "app_data", "dev_artifacts", "docker", "homebrew",
-            "installers", "similar_images", "empty_files", "broken_symlinks",
+            "installers", "similar_images", "empty_files", "broken_symlinks", "ai_models",
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -143,15 +143,37 @@ extension CleanupProfile {
         ]
     )
 
+    /// Built-in AI Models profile.
+    ///
+    /// Narrow scope for the AI / Models view: only AI model storage. Models
+    /// take minutes to hours to re-download, so the default safety lean is
+    /// `review` and overrides bias toward keeping recently-touched files.
+    public static let aiModels = CleanupProfile(
+        id: "aiModels",
+        name: "AI Models",
+        description: "Downloaded LLM and diffusion models from local AI tools",
+        categories: ["ai_models"],
+        safetyOverrides: [
+            SafetyOverride(
+                condition: "age > 90d",
+                safety: .review,
+                confidence: 75,
+                explanationSuffix: "No access in 90+ days. Re-downloading requires the original tool.",
+                profiles: ["aiModels"]
+            ),
+        ]
+    )
+
     /// All built-in profiles.
     public static let builtIn: [CleanupProfile] = [.developer, .light, .deep]
 
     /// Resolve a cleanup profile for the given active profile ID.
     ///
     /// Searches the provided persisted profiles first (user overrides win),
-    /// then the built-in set (including `.devPurge`), and finally returns the
-    /// supplied fallback when nothing matches. Call sites that cannot reach
-    /// persistence should pass `persisted: []` and rely on the fallback.
+    /// then the built-in set (including `.devPurge` and `.aiModels`), and
+    /// finally returns the supplied fallback when nothing matches. Call sites
+    /// that cannot reach persistence should pass `persisted: []` and rely on
+    /// the fallback.
     public static func resolve(
         activeProfileID: String,
         persisted: [CleanupProfile] = [],
@@ -160,7 +182,7 @@ extension CleanupProfile {
         if let match = persisted.first(where: { $0.id == activeProfileID }) {
             return match
         }
-        for profile in [CleanupProfile.developer, .light, .deep, .devPurge]
+        for profile in [CleanupProfile.developer, .light, .deep, .devPurge, .aiModels]
             where profile.id == activeProfileID {
             return profile
         }
