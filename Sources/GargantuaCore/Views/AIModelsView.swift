@@ -155,6 +155,10 @@ public struct AIModelsView: View {
 
             Spacer()
 
+            if !scanProgress.errors.isEmpty {
+                scanWarningsBanner
+            }
+
             if !profile.safetyOverrides.isEmpty {
                 profileOverrideBanner
             }

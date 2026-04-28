@@ -374,10 +374,11 @@ private extension Node.Mapping {
 /// Parses byte-count strings like "100MB", "1.5 GiB", "512KB" into Int64 bytes.
 ///
 /// Bare suffixes (`MB`) and IEC suffixes (`MiB`) both use 1024^n to match how
-/// macOS Finder typically displays sizes. Returns `nil` for nonsense input.
+/// macOS Finder typically displays sizes. Returns `nil` for nonsense input,
+/// negative values, NaN/infinity, or values that overflow `Int64`.
 enum SizeStringParser {
     /// Multipliers for known byte-count unit suffixes (uppercased).
-    private static let multipliers: [String: Double] = [
+    private static let multipliers: [String: Int64] = [
         "": 1, "B": 1,
         "K": 1024, "KB": 1024, "KIB": 1024,
         "M": 1024 * 1024, "MB": 1024 * 1024, "MIB": 1024 * 1024,
@@ -390,14 +391,24 @@ enum SizeStringParser {
         guard !trimmed.isEmpty else { return nil }
 
         let (numericPart, unitPart) = splitNumericAndUnit(trimmed)
-        guard let value = Double(numericPart), value >= 0,
-              let multiplier = multipliers[unitPart] else {
-            return nil
+        guard let multiplier = multipliers[unitPart] else { return nil }
+
+        // Whole-number numerics go through Int64 directly to preserve precision
+        // near `Int64.max` — `Double` rounds at 2^53 and silently maps
+        // `Int64.max + 1` to the same Double as `Int64.max`.
+        if !numericPart.contains(".") {
+            guard let value = Int64(numericPart), value >= 0 else { return nil }
+            return value.multipliedReportingOverflow(by: multiplier).overflow ? nil
+                : value * multiplier
         }
 
-        let bytes = value * multiplier
-        guard bytes.isFinite, bytes >= 0, bytes <= Double(Int64.max) else { return nil }
-        return Int64(bytes)
+        guard let value = Double(numericPart), value.isFinite, value >= 0 else { return nil }
+        let scaled = value * Double(multiplier)
+        guard scaled.isFinite, scaled >= 0,
+              scaled < Double(Int64.max) - 1 else { // -1 keeps us clear of the rounded boundary
+            return nil
+        }
+        return Int64(scaled)
     }
 
     private static func splitNumericAndUnit(_ raw: String) -> (numeric: String, unit: String) {

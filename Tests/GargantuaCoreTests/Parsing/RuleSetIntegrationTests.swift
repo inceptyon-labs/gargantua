@@ -212,14 +212,17 @@ struct RuleSetIntegrationTests {
         #expect(ids.contains("pinokio_workspace"), "Missing Pinokio rule")
 
         // Orphan-extension rules must declare a min_size to avoid surfacing
-        // small files that share the extension but aren't model weights.
+        // small files that share the extension but aren't model weights, and
+        // must encode the file extension directly in the path (single-walk
+        // expansion) rather than via a separate `pattern:` field that would
+        // trigger a second uncapped child enumeration.
         let orphanRules = aiModels.filter { $0.id.hasPrefix("orphan_") }
         #expect(!orphanRules.isEmpty, "Missing orphan-extension scan rules")
         for rule in orphanRules {
             #expect(rule.minSize != nil,
                     "Orphan rule '\(rule.id)' must declare min_size")
-            #expect(rule.pattern != nil,
-                    "Orphan rule '\(rule.id)' must declare a file pattern")
+            #expect(rule.paths.allSatisfy { $0.contains("*.") },
+                    "Orphan rule '\(rule.id)' must declare extension globs in `paths` to keep PathExpander caps in effect")
         }
 
         // Every AI Models rule should be tagged so the UI can identify them.

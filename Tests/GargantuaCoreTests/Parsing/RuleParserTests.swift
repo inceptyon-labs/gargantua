@@ -222,6 +222,62 @@ struct RuleParserTests {
         }
     }
 
+    @Test("min_size rejects values that would overflow Int64")
+    func minSizeRejectsOverflow() {
+        // `Int64.max` is 9223372036854775807. The next integer (and anything
+        // beyond) must not silently parse: Double(Int64.max + 1) rounds to the
+        // same value as Double(Int64.max), so a naïve `Int64(bytes)` would trap.
+        let overflowInputs = [
+            "9223372036854775808",       // Int64.max + 1
+            "99999999999999999999",     // far beyond
+            "1.5e30",                   // scientific notation, huge
+            "10000PB",                  // unsupported unit
+            "100000000TB",              // 10^20 bytes overflows Int64 (max ≈ 9.2e18)
+            "-100MB",                   // negative
+            "NaN",                      // Double special value
+            "Infinity",                 // Double special value
+            "3.14159MB.5",              // double-decimal nonsense
+        ]
+        for input in overflowInputs {
+            let yaml = """
+            rules:
+              - id: r
+                name: Rule
+                paths: ["/x"]
+                min_size: "\(input)"
+                safety: review
+                confidence: 50
+                explanation: e
+                source: { name: t }
+                category: test
+            """
+            // Parser raises; SizeStringParser returns nil for these so the
+            // parser converts the nil result into RuleParseError.invalidValue.
+            #expect(throws: RuleParseError.self,
+                    "min_size '\(input)' should be rejected") {
+                _ = try parser.parse(yaml: yaml)
+            }
+        }
+    }
+
+    @Test("min_size accepts Int64.max as raw bytes")
+    func minSizeAcceptsInt64Max() throws {
+        let yaml = """
+        rules:
+          - id: r
+            name: Rule
+            paths: ["/x"]
+            min_size: "9223372036854775807"
+            safety: review
+            confidence: 50
+            explanation: e
+            source: { name: t }
+            category: test
+        """
+        let rule = try parser.parse(yaml: yaml).rules[0]
+        #expect(rule.minSize == Int64.max)
+    }
+
     // MARK: - Safety Levels
 
     @Test("Parses all three safety levels")

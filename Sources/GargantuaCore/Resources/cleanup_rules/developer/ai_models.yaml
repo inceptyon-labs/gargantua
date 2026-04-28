@@ -175,22 +175,6 @@ rules:
       - ai
       - models
 
-  - id: aider_models
-    name: Aider Models
-    paths:
-      - "~/.aider"
-    safety: review
-    confidence: 75
-    explanation: "Aider's working dir which may include downloaded inference helper models alongside session history."
-    source:
-      name: Aider
-    regenerates: false
-    category: ai_models
-    tags:
-      - developer
-      - ai
-      - models
-
   - id: tabby_models
     name: Tabby Models
     paths:
@@ -207,17 +191,19 @@ rules:
       - ai
       - models
 
-  # File-extension orphan scan rules. Use min_size to suppress small files
-  # that share the extension but aren't model weights (e.g. small .bin files
-  # in random project dirs). Surface only files ≥ 100 MB.
+  # File-extension orphan scan rules. Combining `**` recursion with the file
+  # extension in a single path (e.g. `~/Downloads/**/*.gguf`) lets PathExpander
+  # honor its 30s / 100k-entry walk caps in one pass — adding a separate
+  # `pattern:` would force a second uncapped enumeration of every matched dir.
+  # `min_size: 100MB` suppresses small files that share the extension but
+  # aren't model weights (e.g. small `.bin` files in random project dirs).
 
   - id: orphan_gguf_models
     name: Orphan GGUF Models
     paths:
-      - "~/Downloads/**"
-      - "~/Documents/**"
-      - "~/Desktop/**"
-    pattern: "*.gguf"
+      - "~/Downloads/**/*.gguf"
+      - "~/Documents/**/*.gguf"
+      - "~/Desktop/**/*.gguf"
     min_size: "100MB"
     safety: review
     confidence: 65
@@ -234,10 +220,9 @@ rules:
   - id: orphan_safetensors_models
     name: Orphan SafeTensors Models
     paths:
-      - "~/Downloads/**"
-      - "~/Documents/**"
-      - "~/Desktop/**"
-    pattern: "*.safetensors"
+      - "~/Downloads/**/*.safetensors"
+      - "~/Documents/**/*.safetensors"
+      - "~/Desktop/**/*.safetensors"
     min_size: "100MB"
     safety: review
     confidence: 65
@@ -254,10 +239,9 @@ rules:
   - id: orphan_onnx_models
     name: Orphan ONNX Models
     paths:
-      - "~/Downloads/**"
-      - "~/Documents/**"
-      - "~/Desktop/**"
-    pattern: "*.onnx"
+      - "~/Downloads/**/*.onnx"
+      - "~/Documents/**/*.onnx"
+      - "~/Desktop/**/*.onnx"
     min_size: "100MB"
     safety: review
     confidence: 60
@@ -274,10 +258,9 @@ rules:
   - id: orphan_pytorch_checkpoints
     name: Orphan PyTorch Checkpoints
     paths:
-      - "~/Downloads/**"
-      - "~/Documents/**"
-      - "~/Desktop/**"
-    pattern: "*.ckpt"
+      - "~/Downloads/**/*.ckpt"
+      - "~/Documents/**/*.ckpt"
+      - "~/Desktop/**/*.ckpt"
     min_size: "100MB"
     safety: review
     confidence: 60
