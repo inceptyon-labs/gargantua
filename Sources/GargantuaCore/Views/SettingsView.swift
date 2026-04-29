@@ -121,135 +121,142 @@ extension SettingsView {
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
                 enginePreferenceRow
 
-                Divider()
-                    .overlay(GargantuaColors.border)
+                if useLocalAI {
+                    Divider()
+                        .overlay(GargantuaColors.border)
 
-                // Model info row
-                HStack(spacing: GargantuaSpacing.space3) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 20))
-                        .foregroundStyle(GargantuaColors.accent)
-                        .frame(width: 24, alignment: .center)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(downloadManager.modelInfo.name)
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-
-                        Text(modelStatusText)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(modelStatusColor)
-                    }
-
-                    Spacer()
-
-                    modelSizeLabel
-                }
-
-                if shouldShowMLXDownloadNotice {
-                    HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 12))
+                    // Model info row
+                    HStack(spacing: GargantuaSpacing.space3) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 20))
                             .foregroundStyle(GargantuaColors.accent)
-                            .frame(width: 16, alignment: .center)
+                            .frame(width: 24, alignment: .center)
 
-                        Text("MLX needs the local model before it can be used. The app will use template explanations until the download is ready.")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(GargantuaSpacing.space3)
-                    .background(GargantuaColors.accent.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-
-                // Progress bar (when downloading)
-                if case .downloading(let progress, _) = downloadManager.state {
-                    VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(GargantuaColors.surface3)
-
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(GargantuaColors.accent)
-                                    .frame(width: max(4, geo.size.width * progress))
-                            }
-                        }
-                        .frame(height: 6)
-
-                        HStack {
-                            Text("\(Int(progress * 100))%")
-                                .font(GargantuaFonts.monoData)
-                                .foregroundStyle(GargantuaColors.ink2)
-
-                            Spacer()
-
-                            if case .downloading(_, let bytesReceived) = downloadManager.state {
-                                Text(ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .file))
-                                    .font(GargantuaFonts.monoData)
-                                    .foregroundStyle(GargantuaColors.ink3)
-                            }
-                        }
-                    }
-                }
-
-                // Error message
-                if case .failed(let message) = downloadManager.state {
-                    HStack(spacing: GargantuaSpacing.space2) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(GargantuaColors.review)
-                        Text(message)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.review)
-                            .lineLimit(2)
-                    }
-                }
-
-                // Action buttons
-                HStack(spacing: GargantuaSpacing.space3) {
-                    switch downloadManager.state {
-                    case .notDownloaded, .failed:
-                        actionButton(
-                            label: "Download Model",
-                            icon: "arrow.down.circle.fill",
-                            color: GargantuaColors.accent
-                        ) {
-                            downloadManager.startDownload()
-                        }
-
-                        Text("~\(downloadManager.formattedExpectedSize)")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink4)
-
-                    case .downloading:
-                        actionButton(
-                            label: "Cancel",
-                            icon: "xmark.circle.fill",
-                            color: GargantuaColors.protected_
-                        ) {
-                            downloadManager.cancelDownload()
-                        }
-
-                    case .downloaded:
-                        HStack(spacing: GargantuaSpacing.space2) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(GargantuaColors.safe)
-                            Text("Ready")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(downloadManager.modelInfo.name)
                                 .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.safe)
+                                .foregroundStyle(GargantuaColors.ink)
+
+                            Text(modelStatusText)
+                                .font(GargantuaFonts.caption)
+                                .foregroundStyle(modelStatusColor)
                         }
 
                         Spacer()
 
-                        actionButton(
-                            label: "Delete",
-                            icon: "trash",
-                            color: GargantuaColors.protected_
-                        ) {
-                            downloadManager.deleteModel()
+                        modelSizeLabel
+                    }
+                }
+
+                if useLocalAI {
+                    if shouldShowMLXDownloadNotice {
+                        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 12))
+                                .foregroundStyle(GargantuaColors.accent)
+                                .frame(width: 16, alignment: .center)
+
+                            Text(
+                                "MLX needs the local model before it can be used. " +
+                                    "The app will use template explanations until the download is ready."
+                            )
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(GargantuaSpacing.space3)
+                        .background(GargantuaColors.accent.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    }
+
+                    // Progress bar (when downloading)
+                    if case .downloading(let progress, _) = downloadManager.state {
+                        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(GargantuaColors.surface3)
+
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(GargantuaColors.accent)
+                                        .frame(width: max(4, geo.size.width * progress))
+                                }
+                            }
+                            .frame(height: 6)
+
+                            HStack {
+                                Text("\(Int(progress * 100))%")
+                                    .font(GargantuaFonts.monoData)
+                                    .foregroundStyle(GargantuaColors.ink2)
+
+                                Spacer()
+
+                                if case .downloading(_, let bytesReceived) = downloadManager.state {
+                                    Text(ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .file))
+                                        .font(GargantuaFonts.monoData)
+                                        .foregroundStyle(GargantuaColors.ink3)
+                                }
+                            }
+                        }
+                    }
+
+                    // Error message
+                    if case .failed(let message) = downloadManager.state {
+                        HStack(spacing: GargantuaSpacing.space2) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(GargantuaColors.review)
+                            Text(message)
+                                .font(GargantuaFonts.caption)
+                                .foregroundStyle(GargantuaColors.review)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    // Action buttons
+                    HStack(spacing: GargantuaSpacing.space3) {
+                        switch downloadManager.state {
+                        case .notDownloaded, .failed:
+                            actionButton(
+                                label: "Download Model",
+                                icon: "arrow.down.circle.fill",
+                                color: GargantuaColors.accent
+                            ) {
+                                downloadManager.startDownload()
+                            }
+
+                            Text("~\(downloadManager.formattedExpectedSize)")
+                                .font(GargantuaFonts.caption)
+                                .foregroundStyle(GargantuaColors.ink4)
+
+                        case .downloading:
+                            actionButton(
+                                label: "Cancel",
+                                icon: "xmark.circle.fill",
+                                color: GargantuaColors.protected_
+                            ) {
+                                downloadManager.cancelDownload()
+                            }
+
+                        case .downloaded:
+                            HStack(spacing: GargantuaSpacing.space2) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(GargantuaColors.safe)
+                                Text("Ready")
+                                    .font(GargantuaFonts.label)
+                                    .foregroundStyle(GargantuaColors.safe)
+                            }
+
+                            Spacer()
+
+                            actionButton(
+                                label: "Delete",
+                                icon: "trash",
+                                color: GargantuaColors.protected_
+                            ) {
+                                downloadManager.deleteModel()
+                            }
                         }
                     }
                 }
@@ -590,32 +597,45 @@ extension SettingsView {
 
     private var enginePreferenceRow: some View {
         HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-            Image(systemName: preferredAIEngine.systemImage)
+            Image(systemName: useLocalAI ? "sparkles" : "doc.text")
                 .font(.system(size: 16))
                 .foregroundStyle(GargantuaColors.accent)
                 .frame(width: 24, alignment: .center)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Engine")
+                Text("Use local AI")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text(preferredAIEngine.settingsDescription)
+                Text(useLocalAI
+                    ? "On — Generated locally; first run takes longer while shaders compile."
+                    : "Off — Instant rule-based explanations from the YAML library.")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: GargantuaSpacing.space3)
 
-            Picker("Engine", selection: $preferredAIEngineRawValue) {
-                ForEach(AIEnginePreference.allCases) { preference in
-                    Text(preference.label).tag(preference.rawValue)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .frame(width: 180)
+            Toggle("Use local AI", isOn: useLocalAIBinding)
+                .labelsHidden()
+                .toggleStyle(.switch)
         }
+    }
+
+    /// Maps the persisted `AIEnginePreference` to the settings toggle.
+    /// Off → Template (instant, rule-based). On → MLX (real local model).
+    private var useLocalAI: Bool {
+        preferredAIEngine == .mlx
+    }
+
+    private var useLocalAIBinding: Binding<Bool> {
+        Binding(
+            get: { useLocalAI },
+            set: { isOn in
+                preferredAIEngineRawValue = (isOn ? AIEnginePreference.mlx : .template).rawValue
+            }
+        )
     }
 
     private func settingsRow(icon: String, label: String, value: String) -> some View {

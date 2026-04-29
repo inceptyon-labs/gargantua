@@ -46,6 +46,7 @@ public enum MLXInferenceError: Error, LocalizedError {
 /// capped at a handful of sentences.
 @MainActor
 public final class MLXInferenceEngine: AIInferenceEngine {
+    public let kind: AIEnginePreference = .mlx
     public private(set) var isLoaded: Bool = false
     public private(set) var memoryUsage: Int64 = 0
 

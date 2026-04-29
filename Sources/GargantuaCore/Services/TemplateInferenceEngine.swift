@@ -11,6 +11,7 @@ import Foundation
 /// genuinely generated text without changing the call site.
 @MainActor
 public final class TemplateInferenceEngine: AIInferenceEngine {
+    public let kind: AIEnginePreference = .template
     public private(set) var isLoaded: Bool = false
     public private(set) var memoryUsage: Int64 = 0
 

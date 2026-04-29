@@ -19,8 +19,10 @@ public struct CleanupSummaryView: View {
     // Users can collapse to the compact card if they want.
     @State private var succeededExpanded: Bool = true
     @State private var narrative: CleanupNarrative?
+    @State private var didShowFirstWarmupAtStart: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.cleanupNarrator) private var cleanupNarrator
+    @Environment(\.aiEngineNeedsFirstWarmup) private var needsFirstWarmup
 
     /// Sort options for the cleaned-item lists in the summary.
     public enum SummarySort: String, CaseIterable, Sendable {
@@ -108,12 +110,16 @@ public struct CleanupSummaryView: View {
 
             let outcome = Self.outcome(for: result)
 
-            if cleanupNarrator != nil, let narrative {
+            if cleanupNarrator != nil {
                 Rectangle()
                     .fill(GargantuaColors.border)
                     .frame(height: 1)
 
-                CleanupNarrativeSection(narrative: narrative)
+                if let narrative {
+                    CleanupNarrativeSection(narrative: narrative)
+                } else {
+                    narrativeLoadingSection
+                }
             }
 
             if outcome != .failed {
@@ -151,9 +157,35 @@ public struct CleanupSummaryView: View {
             // assignment on `Task.isCancelled` so a late response from a
             // cancelled task can never overwrite the next result's prose.
             narrative = nil
+            // Snapshot the warmup state when the task starts so the JIT hint
+            // doesn't flicker off mid-call as another sheet completes its
+            // first MLX inference.
+            didShowFirstWarmupAtStart = needsFirstWarmup
             let value = await narrator(result)
             if !Task.isCancelled { narrative = value }
         }
+    }
+
+    // MARK: - Narrative loading
+
+    private var narrativeLoadingSection: some View {
+        HStack(alignment: .center, spacing: GargantuaSpacing.space2) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(GargantuaColors.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Composing summary…")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                if didShowFirstWarmupAtStart {
+                    Text("Compiling shaders for first use…")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(GargantuaSpacing.space4)
     }
 
     // MARK: - Header

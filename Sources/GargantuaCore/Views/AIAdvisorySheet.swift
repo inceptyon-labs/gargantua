@@ -13,6 +13,10 @@ public struct AIAdvisorySheet: View {
     /// footer. `MainContentView` uses this to switch sidebar to settings.
     public let onOpenSettings: (() -> Void)?
 
+    @Environment(\.aiEngineNeedsFirstWarmup) private var needsFirstWarmup
+    @Environment(\.openAIModelSettings) private var openAIModelSettings
+    @Environment(\.preferredAIEngineKind) private var preferredAIEngineKind
+
     /// Mirror of `controller.presentation` retained across the sheet's
     /// dismiss animation. The moment the user taps Close, `controller.dismiss`
     /// flips `presentation` to `nil`. A `Group { if let … }` body then
@@ -90,7 +94,7 @@ public struct AIAdvisorySheet: View {
                     .foregroundStyle(GargantuaColors.ink)
                 Spacer()
             }
-            Text("AI suggestions are advisory only — safety classifications come from YAML rules and are never changed.")
+            Text("Suggestions are advisory only — safety classifications come from YAML rules and are never changed.")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -109,6 +113,12 @@ public struct AIAdvisorySheet: View {
             Text("Generating advisories…")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
+
+            if needsFirstWarmup {
+                Text("Compiling shaders for first use…")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -128,6 +138,11 @@ public struct AIAdvisorySheet: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                    if preferredAIEngineKind == .template,
+                       advisories.allSatisfy({ $0.source == .template }) {
+                        enableAIFooterNote
+                    }
+
                     ForEach(advisories, id: \.resultId) { advisory in
                         advisoryRow(advisory)
                     }
@@ -135,6 +150,21 @@ public struct AIAdvisorySheet: View {
                 .padding(GargantuaSpacing.space4)
             }
         }
+    }
+
+    private var enableAIFooterNote: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12))
+                .foregroundStyle(GargantuaColors.ink3)
+            Text("These are rule-based. Enable local AI in Settings → AI Model for generated advisories.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(GargantuaSpacing.space3)
+        .background(GargantuaColors.surface3)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
     private func advisoryRow(_ advisory: ScanResultAdvisory) -> some View {
@@ -165,7 +195,7 @@ public struct AIAdvisorySheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: GargantuaSpacing.space1) {
-                Text("AI suggests:")
+                Text(suggestedClassificationLabel(for: advisory.source))
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
                 suggestedSafetyBadge(advisory.suggestedSafety)
@@ -201,8 +231,17 @@ public struct AIAdvisorySheet: View {
         switch source {
         case .ai:
             badge(label: "AI", icon: "sparkles", color: GargantuaColors.accent)
+        case .template:
+            badge(label: "Rule-based", icon: "doc.text", color: GargantuaColors.ink3)
         case .rule:
             badge(label: "YAML", icon: "doc.text.magnifyingglass", color: GargantuaColors.ink3)
+        }
+    }
+
+    private func suggestedClassificationLabel(for source: ExplanationSource) -> String {
+        switch source {
+        case .ai: return "AI suggests:"
+        case .template, .rule: return "Suggested:"
         }
     }
 
@@ -236,16 +275,8 @@ public struct AIAdvisorySheet: View {
 
     private func footer(for presentation: AIAdvisoryPresentation) -> some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            if case .loaded(let advisories) = presentation,
-               advisories.contains(where: { $0.source == .rule }),
-               !controller.isModelAvailable,
-               onOpenSettings != nil {
-                Button("Download Model") {
-                    controller.dismiss()
-                    onOpenSettings?()
-                }
-                .buttonStyle(AIModalButtonStyle(tone: .accent))
-                .focusable(false)
+            if case .loaded(let advisories) = presentation {
+                footerCTA(for: advisories)
             }
 
             if case .failed = presentation {
@@ -265,6 +296,39 @@ public struct AIAdvisorySheet: View {
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    /// Footer CTA differs by what the advisory batch contains AND by toggle:
+    /// - `.template` entries + AI toggle off → "Enable AI".
+    /// - `.template` entries + AI toggle on (fallback) OR `.rule` fallback +
+    ///   no model on disk → "Download Model".
+    /// - all `.ai` (or `.rule` with model present, i.e. engine errors) → no
+    ///   CTA needed.
+    @ViewBuilder
+    private func footerCTA(for advisories: [ScanResultAdvisory]) -> some View {
+        let hasTemplate = advisories.contains(where: { $0.source == .template })
+        let hasRule = advisories.contains(where: { $0.source == .rule })
+
+        if hasTemplate, preferredAIEngineKind == .template {
+            if let openSettings = onOpenSettings ?? openAIModelSettings {
+                Button("Enable AI") {
+                    controller.dismiss()
+                    openSettings()
+                }
+                .buttonStyle(AIModalButtonStyle(tone: .accent))
+                .focusable(false)
+                .help("Open Settings → AI Model")
+            }
+        } else if (hasTemplate || hasRule),
+                  !controller.isModelAvailable,
+                  onOpenSettings != nil {
+            Button("Download Model") {
+                controller.dismiss()
+                onOpenSettings?()
+            }
+            .buttonStyle(AIModalButtonStyle(tone: .accent))
+            .focusable(false)
+        }
     }
 }
 

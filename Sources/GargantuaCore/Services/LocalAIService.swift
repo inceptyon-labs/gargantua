@@ -21,6 +21,13 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
     /// Approximate memory used by the loaded model, in bytes.
     @Published public private(set) var modelMemoryUsage: Int64 = 0
 
+    /// Flips true the first time an MLX-backed inference returns successfully
+    /// in this session and stays true until the engine is reconfigured. The UI
+    /// reads this to decide whether to surface the "Compiling shaders for
+    /// first use…" subtitle on its loading spinners — that latency only hits
+    /// the very first call after the GPU JIT-compiles its kernels.
+    @Published public private(set) var hasCompletedFirstMLXInference: Bool = false
+
     /// Maximum allowed model memory in bytes (3 GB).
     public static let maxModelMemory: Int64 = 3_000_000_000
 
@@ -61,19 +68,40 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
     /// Replace the inference backend after a settings change or model-state
     /// transition. Existing model state is unloaded first so the new backend
-    /// starts from a clean lifecycle.
+    /// starts from a clean lifecycle. The first-MLX-inference flag is also
+    /// cleared so a switch from Template → MLX (or MLX reload) re-shows the
+    /// "compiling shaders" subtitle on the next call.
     public func configureEngine(_ newEngine: AIInferenceEngine) {
         unloadModel()
         engine = newEngine
+        hasCompletedFirstMLXInference = false
     }
 
     public func explain(result: ScanResult, rule: ScanRule) async throws -> AIExplanation {
-        // Fallback: no model on disk → return YAML rule explanation
+        // Capture the engine + its source label up front. A settings change
+        // mid-call (`configureEngine`) replaces `self.engine`, but inference
+        // already in flight should be labeled and accounted against the
+        // engine that actually produced it.
+        let engine = self.engine
+        let stampingSource = sourceForKind(engine.kind)
+
+        // Template engine doesn't need model weights — it stitches rule +
+        // scan metadata. Run it directly so "AI Off" produces honest
+        // `.template` output instead of falling back to raw YAML.
+        if engine.kind == .template {
+            do {
+                let text = try await engine.generate(for: result, rule: rule)
+                return AIExplanation(text: text, source: stampingSource)
+            } catch {
+                return AIExplanation(text: rule.explanation, source: .rule)
+            }
+        }
+
+        // MLX path: needs a downloaded model, lazy-load + ready guards apply.
         guard isModelAvailable else {
             return AIExplanation(text: rule.explanation, source: .rule)
         }
 
-        // Lazy load
         if lifecycleState == .unloaded {
             do {
                 try await loadModel()
@@ -82,7 +110,6 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             }
         }
 
-        // Guard: if loading failed or model too large, fall back
         guard lifecycleState == .ready else {
             return AIExplanation(text: rule.explanation, source: .rule)
         }
@@ -102,10 +129,9 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
         do {
             let text = try await engine.generate(for: result, rule: rule)
-            return AIExplanation(text: text, source: .ai)
+            markFirstInferenceComplete(for: engine.kind)
+            return AIExplanation(text: text, source: stampingSource)
         } catch {
-            // Engine failure is advisory — surface the YAML rule rather than
-            // throwing, so callers always get a usable explanation.
             return AIExplanation(text: rule.explanation, source: .rule)
         }
     }
@@ -148,6 +174,26 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             )
         }
 
+        let engine = self.engine
+        let stampingSource = sourceForKind(engine.kind)
+
+        // Template path: no model required.
+        if engine.kind == .template {
+            var advisories: [ScanResultAdvisory] = []
+            for result in reviewOnly {
+                guard let rule = rules[result.id] else { continue }
+                do {
+                    let advisory = try await engine.advisory(for: result, rule: rule)
+                    advisories.append(stampSource(stampingSource, on: advisory))
+                } catch {
+                    if let fallback = yamlFallback(for: result) {
+                        advisories.append(fallback)
+                    }
+                }
+            }
+            return advisories
+        }
+
         guard isModelAvailable else {
             return reviewOnly.compactMap(yamlFallback)
         }
@@ -182,7 +228,8 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             guard let rule = rules[result.id] else { continue }
             do {
                 let advisory = try await engine.advisory(for: result, rule: rule)
-                advisories.append(advisory)
+                markFirstInferenceComplete(for: engine.kind)
+                advisories.append(stampSource(stampingSource, on: advisory))
             } catch {
                 if let fallback = yamlFallback(for: result) {
                     advisories.append(fallback)
@@ -201,6 +248,22 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             text: CleanupNarrativeTemplate.text(for: result),
             source: .rule
         )
+
+        let engine = self.engine
+        let stampingSource = sourceForKind(engine.kind)
+
+        // Template path: no model required. Run the engine directly so a
+        // user-toggled-off session still sees structured `.template` output.
+        if engine.kind == .template {
+            do {
+                let text = try await engine.narrate(cleanup: result)
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty { return fallback }
+                return CleanupNarrative(text: trimmed, source: stampingSource)
+            } catch {
+                return fallback
+            }
+        }
 
         guard isModelAvailable else { return fallback }
 
@@ -232,7 +295,8 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             if trimmed.isEmpty {
                 return fallback
             }
-            return CleanupNarrative(text: trimmed, source: .ai)
+            markFirstInferenceComplete(for: engine.kind)
+            return CleanupNarrative(text: trimmed, source: stampingSource)
         } catch {
             return fallback
         }
@@ -248,11 +312,17 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
+        let engine = self.engine
+        let engineKind = engine.kind
+
         func runEngine() async throws -> ScanFilterSet? {
             try await engine.scanFilter(for: trimmed)
         }
 
-        guard isModelAvailable else {
+        // Template engine doesn't need model weights and the scanFilter path
+        // skipped the model gate even before this change. Either way, no
+        // load/idle bookkeeping needed.
+        if engineKind == .template || !isModelAvailable {
             do {
                 return try await runEngine()
             } catch {
@@ -281,7 +351,11 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
 
         do {
-            return try await runEngine()
+            let filter = try await runEngine()
+            // First MLX call may be a natural-language filter resolution; flip
+            // the warmup flag so later spinners stop showing the JIT subtitle.
+            markFirstInferenceComplete(for: engineKind)
+            return filter
         } catch {
             return nil
         }
@@ -331,6 +405,42 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
 
         modelMemoryUsage = resident
         lifecycleState = .ready
+    }
+
+    /// Map an engine kind to the `ExplanationSource` the UI should display.
+    /// Callers capture this once before awaiting so a concurrent
+    /// `configureEngine` swap can't relabel the result of an in-flight call.
+    private func sourceForKind(_ kind: AIEnginePreference) -> ExplanationSource {
+        switch kind {
+        case .mlx: return .ai
+        case .template: return .template
+        }
+    }
+
+    /// Rebuild an advisory with the active engine's source. Engines may stamp
+    /// `.ai` themselves (the protocol's default extension does), so the
+    /// service has the final say to keep labeling consistent across calls.
+    private func stampSource(
+        _ source: ExplanationSource,
+        on advisory: ScanResultAdvisory
+    ) -> ScanResultAdvisory {
+        guard advisory.source != source else { return advisory }
+        return ScanResultAdvisory(
+            resultId: advisory.resultId,
+            rationale: advisory.rationale,
+            suggestedSafety: advisory.suggestedSafety,
+            source: source
+        )
+    }
+
+    /// Flip the warmup flag once an MLX-backed call returns successfully.
+    /// Takes the captured engine kind so a concurrent settings change
+    /// (`configureEngine` swapped `self.engine` mid-call) doesn't mislabel.
+    private func markFirstInferenceComplete(for kind: AIEnginePreference) {
+        guard !hasCompletedFirstMLXInference else { return }
+        if kind == .mlx {
+            hasCompletedFirstMLXInference = true
+        }
     }
 
     private func resetIdleTimer() {
