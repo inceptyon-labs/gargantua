@@ -179,43 +179,7 @@ public struct AIModelsView: View {
             }
 
             Spacer()
-
-            if !profile.safetyOverrides.isEmpty {
-                profileOverrideBanner
-            }
         }
-    }
-
-    // MARK: - Profile override banner
-
-    private var profileOverrideBanner: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            HStack(spacing: GargantuaSpacing.space1) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(GargantuaColors.accent)
-
-                Text("Profile: \(profile.name)")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-            }
-
-            ForEach(Array(profile.safetyOverrides.enumerated()), id: \.offset) { _, override_ in
-                HStack(spacing: GargantuaSpacing.space1) {
-                    Circle()
-                        .fill(safetyColor(override_.safety))
-                        .frame(width: 6, height: 6)
-
-                    Text("Auto-classified as \(override_.safety.displayName): \(override_.explanationSuffix ?? override_.condition)")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink2)
-                }
-                .padding(.leading, GargantuaSpacing.space4)
-            }
-        }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space3)
-        .background(GargantuaColors.surface1)
     }
 
     private var scanWarningsBanner: some View {
@@ -248,14 +212,6 @@ public struct AIModelsView: View {
                 onRescan: { startScan() },
                 isBusy: session.isScanning
             )
-
-            if !profile.safetyOverrides.isEmpty {
-                profileOverrideBanner
-
-                Rectangle()
-                    .fill(GargantuaColors.border)
-                    .frame(height: 1)
-            }
 
             if !session.scanProgress.errors.isEmpty {
                 scanWarningsBanner
@@ -315,14 +271,6 @@ extension AIModelsView {
         case .safe: return GargantuaColors.safe
         case .accretion: return GargantuaColors.accretion
         case .protected: return GargantuaColors.protected_
-        }
-    }
-
-    fileprivate func safetyColor(_ level: SafetyLevel) -> Color {
-        switch level {
-        case .safe: GargantuaColors.safe
-        case .review: GargantuaColors.review
-        case .protected_: GargantuaColors.protected_
         }
     }
 }
