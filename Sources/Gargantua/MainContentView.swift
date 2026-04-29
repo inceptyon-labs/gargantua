@@ -2,11 +2,14 @@ import GargantuaCore
 import Foundation
 import SwiftUI
 
-/// Root content view for the Gargantua window.
-///
-/// Fills the entire window with ``GargantuaColors/void_`` so no system
-/// chrome is visible behind the transparent titlebar.
-/// Shows the permission request flow on first launch, then sidebar + content.
+// Root content view for the Gargantua window.
+//
+// Fills the entire window with `GargantuaColors.void_` so no system
+// chrome is visible behind the transparent titlebar. Shows the permission
+// request flow on first launch, then sidebar + content. Type body grows
+// by one `@State` per top-level view; splitting along sidebar groups
+// would scatter shared persistence/AI plumbing.
+// swiftlint:disable:next type_body_length
 struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(AIEnginePreference.userDefaultsKey) private var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
@@ -18,6 +21,7 @@ struct MainContentView: View {
     @State private var duplicateFinderState = DuplicateFinderContainerState()
     @State private var duplicateFinderSelection: Set<String> = []
     @State private var diskExplorerState = DiskExplorerState()
+    @State private var aiModelsSession = AIModelsState()
     @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
@@ -110,6 +114,7 @@ struct MainContentView: View {
                                 AIModelsView(
                                     profile: .aiModels,
                                     scanRoots: resolvedScanRoots,
+                                    session: aiModelsSession,
                                     onExplain: explainHandler,
                                     onAdvisory: advisoryHandler,
                                     onResolveFilter: scanFilterHandler
