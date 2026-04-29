@@ -212,7 +212,7 @@ public struct FileHealthContainerView: View {
                 }
             }
 
-            Text("[TARS] Humor: 60% · Honesty: 95% · Pragmatism: 100%")
+            Text("[TARS] Humor: 75% · Honesty: 90% · Pragmatism: 100%")
                 .font(GargantuaFonts.monoPath)
                 .foregroundStyle(GargantuaColors.ink3)
         }

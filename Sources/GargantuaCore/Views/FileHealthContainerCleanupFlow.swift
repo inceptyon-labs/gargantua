@@ -20,7 +20,7 @@ extension FileHealthContainerView {
                     .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("[TARS] Humor: 60% · Honesty: 95% · Pragmatism: 100%")
+                Text("[CASE] Humor: 30% · Honesty: 100% · Discretion: 100%")
                     .font(GargantuaFonts.monoPath)
                     .foregroundStyle(GargantuaColors.ink3)
             }

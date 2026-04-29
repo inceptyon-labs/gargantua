@@ -108,6 +108,31 @@ struct SmartUninstallerAppPickerTests {
         #expect(vm.visibleApps.map(\.bundleID) == ["small", "big"])
     }
 
+    @Test("pruneMissingApps drops apps whose bundle path no longer exists on disk")
+    func pruneMissingDropsStaleEntries() async {
+        // /private exists on every Mac and isn't going anywhere; the synthetic
+        // /Applications/__GargantuaTestMissing__.app reliably does not.
+        let real = makeApp(bundleID: "real", name: "Real", bundlePath: "/private")
+        let stale = makeApp(
+            bundleID: "stale",
+            name: "Stale",
+            bundlePath: "/Applications/__GargantuaTestMissing__.app"
+        )
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: [real, stale]),
+            planner: StubPlanner(build: { app, _ in makePlan(app: app) }),
+            executor: StubExecutor(result: .success(makeExecutionResult(plan: makePlan(app: real))))
+        )
+        await vm.loadApps()
+        #expect(vm.apps.count == 2)
+
+        vm.toggleMultiSelect(bundleID: "stale")
+        vm.pruneMissingApps()
+
+        #expect(vm.apps.map(\.bundleID) == ["real"])
+        #expect(vm.multiSelected.contains("stale") == false)
+    }
+
     @Test("lastUsed direction flips between most-recent and oldest first")
     func sortByLastUsedFlips() async {
         let now = Date()

@@ -406,7 +406,7 @@ public struct EventHorizonConsoleView: View {
                     .foregroundStyle(GargantuaColors.accretion)
             }
 
-            Text("[TARS] Humor: 60% · Honesty: 95% · Pragmatism: 100%")
+            Text("[KIPP] Humor: 0% · Honesty: 100% · Salvage: 100%")
                 .font(GargantuaFonts.monoPath)
                 .foregroundStyle(GargantuaColors.ink3)
         }

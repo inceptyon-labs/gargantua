@@ -9,12 +9,13 @@ func makeApp(
     isRunning: Bool = false,
     isSystemApp: Bool = false,
     size: Int64? = 100_000_000,
-    lastUsed: Date? = nil
+    lastUsed: Date? = nil,
+    bundlePath: String? = nil
 ) -> AppInfo {
     AppInfo(
         bundleID: bundleID,
         name: name,
-        bundlePath: "/Applications/\(name).app",
+        bundlePath: bundlePath ?? "/Applications/\(name).app",
         lastUsedDate: lastUsed,
         isRunning: isRunning,
         isSystemApp: isSystemApp,

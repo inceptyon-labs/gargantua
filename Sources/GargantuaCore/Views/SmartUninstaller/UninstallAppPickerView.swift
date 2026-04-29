@@ -91,6 +91,7 @@ struct UninstallAppPickerView: View {
                 .foregroundStyle(GargantuaColors.ink3)
 
             refreshButton
+            rescanButton
         }
         .padding(.horizontal, GargantuaSpacing.space5)
         .padding(.vertical, GargantuaSpacing.space3)
@@ -150,7 +151,7 @@ struct UninstallAppPickerView: View {
 
     private var refreshButton: some View {
         Button {
-            Task { await viewModel.refreshApps() }
+            viewModel.pruneMissingApps()
         } label: {
             HStack(spacing: GargantuaSpacing.space1) {
                 Image(systemName: "arrow.clockwise")
@@ -163,7 +164,25 @@ struct UninstallAppPickerView: View {
         .buttonStyle(.plain)
         .keyboardShortcut("r", modifiers: .command)
         .accessibilityLabel("Refresh installed apps")
-        .help("Re-scan installed apps (⌘R)")
+        .help("Drop apps that were just uninstalled (⌘R)")
+    }
+
+    private var rescanButton: some View {
+        Button {
+            Task { await viewModel.rescanApps() }
+        } label: {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Rescan")
+                    .font(GargantuaFonts.label)
+            }
+            .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("r", modifiers: [.command, .shift])
+        .accessibilityLabel("Rescan installed apps")
+        .help("Re-enumerate every installed app from scratch (⇧⌘R)")
     }
 
     private var emptyState: some View {
@@ -351,14 +370,15 @@ private struct AppRow: View {
                         .font(GargantuaFonts.monoData)
                         .foregroundStyle(GargantuaColors.ink2)
                 }
+                if let date = app.lastUsedDate {
+                    Text(relativeDate(date))
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink4)
+                }
                 if let count = categoryCount, count > 0 {
                     Text(count == 1 ? "1 category" : "\(count) categories")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
-                } else if let date = app.lastUsedDate {
-                    Text(relativeDate(date))
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink4)
                 }
             }
         }

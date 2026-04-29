@@ -243,9 +243,18 @@ public final class SmartUninstallerViewModel {
     }
 
     /// Re-run the installed-app enumeration without resetting selections.
-    /// Triggered by the picker's refresh button.
-    public func refreshApps() async {
+    /// Triggered by the picker's Rescan button — discards the cached list and
+    /// rebuilds it from scratch (filesystem walk + size scan).
+    public func rescanApps() async {
         await loadApps()
+    }
+
+    /// Cheap refresh: stat() every cached app's bundle path and drop the rows
+    /// whose bundles no longer exist on disk. Used by the picker's Refresh
+    /// button to clear out apps the user just uninstalled (or removed via
+    /// Finder) without paying for a full enumeration.
+    public func pruneMissingApps() {
+        pruneUninstalledApps(apps)
     }
 
     /// Toggle a row's checkbox for batch uninstall. Idempotent.
