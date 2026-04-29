@@ -306,11 +306,15 @@ struct AppScannerTests {
 
     // MARK: - Enumerator defaults
 
-    @Test("DefaultAppBundleEnumerator default roots include /Applications and ~/Applications")
+    @Test("DefaultAppBundleEnumerator default roots include /Applications, ~/Applications, and /System/Applications")
     func defaultSearchRoots() {
         let roots = DefaultAppBundleEnumerator.defaultSearchRoots()
         let paths = roots.map(\.path)
+        let homePath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications").path
+
         #expect(paths.contains("/Applications"))
-        #expect(paths.contains { $0.hasSuffix("/Applications") && $0 != "/Applications" })
+        #expect(paths.contains(homePath))
+        #expect(paths.contains("/System/Applications"))
     }
 }

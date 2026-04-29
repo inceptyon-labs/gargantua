@@ -27,14 +27,18 @@ public struct DefaultAppBundleEnumerator: AppBundleEnumerating {
         self.includeRunningApps = includeRunningApps
     }
 
-    /// `/Applications` plus `~/Applications`. `/System/Applications` is excluded
-    /// from the default set to keep routine scans focused on user-installed apps;
-    /// callers that need the system apps (e.g., smoke tests) can pass their own
-    /// roots.
+    /// `/Applications`, `~/Applications`, and `/System/Applications`. The system
+    /// root is included so the picker's "Show system apps" toggle has something
+    /// meaningful to reveal — apps under `/System/Applications` are flagged
+    /// `isSystemApp = true` by `DefaultAppScanner` and stay hidden until the
+    /// user opts in. Without this root the toggle only filters a handful of
+    /// background services picked up via `NSWorkspace.runningApplications`,
+    /// which to the user looks like the toggle does nothing.
     public static func defaultSearchRoots() -> [URL] {
         var roots: [URL] = [URL(fileURLWithPath: "/Applications", isDirectory: true)]
         let home = FileManager.default.homeDirectoryForCurrentUser
         roots.append(home.appendingPathComponent("Applications", isDirectory: true))
+        roots.append(URL(fileURLWithPath: "/System/Applications", isDirectory: true))
         return roots
     }
 
