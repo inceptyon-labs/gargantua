@@ -245,14 +245,17 @@ struct LocalAIServiceNarrateTests {
 
     // MARK: - Fallback paths
 
-    @Test("No model available → template narrative with .rule source")
-    func noModelAvailableFallsBackToTemplate() async {
+    @Test("No model + Template engine → template narrative with .template source")
+    func noModelAvailableUsesTemplateEngine() async {
         let manager = makeNeverDownloadedManager()
+        // Default engine is `TemplateInferenceEngine`. It runs without a
+        // model now, so the narrative is `.template`-sourced rather than
+        // the raw `.rule` fallback this test originally pinned.
         let service = LocalAIService(downloadManager: manager)
 
         let narrative = await service.narrate(cleanup: makeResult())
 
-        #expect(narrative.source == .rule)
+        #expect(narrative.source == .template)
         #expect(narrative.text == CleanupNarrativeTemplate.text(for: makeResult()))
         #expect(!narrative.text.isEmpty)
     }
@@ -404,6 +407,7 @@ private enum NarrateFakeError: Error { case boom }
 
 @MainActor
 private final class NarrateFakeEngine: AIInferenceEngine {
+    let kind: AIEnginePreference = .mlx
     private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
@@ -446,6 +450,7 @@ private final class NarrateFakeEngine: AIInferenceEngine {
 /// default-implementation behavior.
 @MainActor
 private final class NarrateFakeEngineNoOverride: AIInferenceEngine {
+    let kind: AIEnginePreference = .mlx
     private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 

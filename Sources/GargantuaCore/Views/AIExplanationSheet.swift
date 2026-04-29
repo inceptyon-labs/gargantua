@@ -9,6 +9,10 @@ public struct AIExplanationSheet: View {
     /// `MainContentView` uses this to switch sidebar selection to settings.
     public let onOpenSettings: (() -> Void)?
 
+    @Environment(\.aiEngineNeedsFirstWarmup) private var needsFirstWarmup
+    @Environment(\.openAIModelSettings) private var openAIModelSettings
+    @Environment(\.preferredAIEngineKind) private var preferredAIEngineKind
+
     /// Mirror of `controller.presentation` retained across the sheet's
     /// dismiss animation. Without this (and the `ZStack`/background pattern
     /// below), `controller.dismiss` flips `presentation` to `nil`, the body
@@ -103,6 +107,12 @@ public struct AIExplanationSheet: View {
             Text("Generating explanation…")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
+
+            if needsFirstWarmup {
+                Text("Compiling shaders for first use…")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -117,9 +127,28 @@ public struct AIExplanationSheet: View {
                     .foregroundStyle(GargantuaColors.ink)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if explanation.source == .template, preferredAIEngineKind == .template {
+                    enableAIFooterNote
+                }
             }
             .padding(GargantuaSpacing.space4)
         }
+    }
+
+    private var enableAIFooterNote: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12))
+                .foregroundStyle(GargantuaColors.ink3)
+            Text("This is rule-based. Enable local AI in Settings → AI Model for generated explanations.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(GargantuaSpacing.space3)
+        .background(GargantuaColors.surface3)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
     private func failedView(_ message: String) -> some View {
@@ -151,6 +180,12 @@ public struct AIExplanationSheet: View {
                 icon: "sparkles",
                 color: GargantuaColors.accent
             )
+        case .template:
+            badge(
+                label: "Rule-based · enable local AI for generated text",
+                icon: "doc.text",
+                color: GargantuaColors.ink3
+            )
         case .rule:
             badge(
                 label: "From YAML rule · AI model unavailable",
@@ -178,16 +213,8 @@ public struct AIExplanationSheet: View {
 
     private func footer(for presentation: AIExplanationPresentation) -> some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            if case .loaded(_, let explanation) = presentation,
-               explanation.source == .rule,
-               !controller.isModelAvailable,
-               onOpenSettings != nil {
-                Button("Download Model") {
-                    controller.dismiss()
-                    onOpenSettings?()
-                }
-                .buttonStyle(AIModalButtonStyle(tone: .accent))
-                .focusable(false)
+            if case .loaded(_, let explanation) = presentation {
+                footerCTA(for: explanation)
             }
 
             if case .failed = presentation {
@@ -207,6 +234,49 @@ public struct AIExplanationSheet: View {
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    /// Footer CTA differs by source AND by the user's toggle:
+    /// - `.template` + AI toggle off → "Enable AI" (flip the toggle).
+    /// - `.template` + AI toggle on (model missing/corrupt fallback) →
+    ///   "Download Model" — the user already wants AI, the engine just
+    ///   couldn't run.
+    /// - `.rule` (engine error / no-model fallback) → "Download Model".
+    /// - `.ai` → no CTA needed.
+    @ViewBuilder
+    private func footerCTA(for explanation: AIExplanation) -> some View {
+        switch explanation.source {
+        case .ai:
+            EmptyView()
+        case .template:
+            if preferredAIEngineKind == .template {
+                if let openSettings = onOpenSettings ?? openAIModelSettings {
+                    Button("Enable AI") {
+                        controller.dismiss()
+                        openSettings()
+                    }
+                    .buttonStyle(AIModalButtonStyle(tone: .accent))
+                    .focusable(false)
+                    .help("Open Settings → AI Model")
+                }
+            } else if !controller.isModelAvailable, onOpenSettings != nil {
+                Button("Download Model") {
+                    controller.dismiss()
+                    onOpenSettings?()
+                }
+                .buttonStyle(AIModalButtonStyle(tone: .accent))
+                .focusable(false)
+            }
+        case .rule:
+            if !controller.isModelAvailable, onOpenSettings != nil {
+                Button("Download Model") {
+                    controller.dismiss()
+                    onOpenSettings?()
+                }
+                .buttonStyle(AIModalButtonStyle(tone: .accent))
+                .focusable(false)
+            }
+        }
     }
 }
 

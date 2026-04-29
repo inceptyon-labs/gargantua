@@ -58,9 +58,11 @@ struct AIAdvisoryControllerTests {
 
     // MARK: - Request: YAML fallback path (no model staged)
 
-    @Test("request yields loaded state with YAML-sourced advisories when no model")
-    func requestProducesYAMLFallback() async throws {
+    @Test("request yields loaded state with .template advisories when no model")
+    func requestProducesTemplateOutputWithoutModel() async throws {
         let manager = makeNeverDownloadedManager()
+        // Default engine is `TemplateInferenceEngine` — runs without a model
+        // and stamps `.template` on every advisory.
         let service = LocalAIService(downloadManager: manager)
         let controller = AIAdvisoryController(service: service)
 
@@ -78,7 +80,7 @@ struct AIAdvisoryControllerTests {
             return
         }
         #expect(advisories.count == 2)
-        #expect(advisories.allSatisfy { $0.source == .rule })
+        #expect(advisories.allSatisfy { $0.source == .template })
     }
 
     @Test("request filters non-review items")

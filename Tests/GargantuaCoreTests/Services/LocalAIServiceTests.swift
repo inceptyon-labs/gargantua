@@ -64,9 +64,11 @@ struct LocalAIServiceTests {
 
     // MARK: - Fallback to YAML
 
-    @Test("Returns YAML rule explanation when no model downloaded")
-    func fallbackWhenNoModel() async throws {
+    @Test("No model + Template engine produces .template output without loading model")
+    func templateRunsWithoutModel() async throws {
         let manager = makeNeverDownloadedManager()
+        // Default engine is `TemplateInferenceEngine` which doesn't need
+        // model weights; the service should run it directly.
         let service = LocalAIService(downloadManager: manager)
 
         let rule = makeRule(explanation: "Browser cache — safe to remove.")
@@ -74,8 +76,27 @@ struct LocalAIServiceTests {
 
         let explanation = try await service.explain(result: result, rule: rule)
 
+        #expect(explanation.source == .template)
+        // Structured template output stitches rule.explanation in.
+        #expect(explanation.text.contains("Browser cache — safe to remove."))
+        #expect(service.lifecycleState == .unloaded)
+    }
+
+    @Test("No model + Template engine error falls back to .rule + raw YAML")
+    func templateEngineErrorFallsBackToRule() async throws {
+        let manager = makeNeverDownloadedManager()
+        let engine = FakeInferenceEngine(
+            output: "unused",
+            kind: .template,
+            generateError: FakeEngineError.boom
+        )
+        let service = LocalAIService(downloadManager: manager, engine: engine)
+
+        let rule = makeRule(explanation: "Raw YAML fallback text.")
+        let explanation = try await service.explain(result: makeResult(), rule: rule)
+
         #expect(explanation.source == .rule)
-        #expect(explanation.text == "Browser cache — safe to remove.")
+        #expect(explanation.text == "Raw YAML fallback text.")
     }
 
     @Test("isModelAvailable is false when no model downloaded")
@@ -381,7 +402,7 @@ struct LocalAIServiceTests {
         #expect(filter.pathGlobs.contains(where: { $0.localizedCaseInsensitiveContains("Xcode") }))
     }
 
-    @Test("Template selected with model directory produces template AI output")
+    @Test("Template engine produces .template-sourced output, not .ai")
     func templateSelectionWorksWithModelDirectory() async throws {
         let model = try makeTempModelDirectory()
         defer { try? FileManager.default.removeItem(at: model.url) }
@@ -392,9 +413,35 @@ struct LocalAIServiceTests {
 
         let explanation = try await service.explain(result: makeResult(), rule: makeRule())
 
-        #expect(explanation.source == .ai)
+        #expect(explanation.source == .template)
         #expect(explanation.text.contains("Chrome Browser Cache"))
-        #expect(service.lifecycleState == .ready)
+        // Template engine doesn't trigger model load anymore — lifecycle stays
+        // unloaded even when a model file is present on disk.
+        #expect(service.lifecycleState == .unloaded)
+    }
+
+    @Test("First MLX inference flips warmup flag; Template inference does not")
+    func firstMLXInferenceMarksWarmup() async throws {
+        let tmp = try makeTempModelFile(contents: "abc")
+        defer { try? FileManager.default.removeItem(atPath: tmp.path) }
+
+        let manager = ModelDownloadManager()
+        manager._setStateForTesting(.downloaded(path: tmp.path, size: tmp.size))
+
+        let templateEngine = FakeInferenceEngine(output: "out", kind: .template)
+        let service = LocalAIService(downloadManager: manager, engine: templateEngine)
+
+        let templateExplanation = try await service.explain(result: makeResult(), rule: makeRule())
+        #expect(templateExplanation.source == .template)
+        #expect(service.hasCompletedFirstMLXInference == false)
+
+        let mlxEngine = FakeInferenceEngine(output: "out", kind: .mlx)
+        service.configureEngine(mlxEngine)
+        #expect(service.hasCompletedFirstMLXInference == false)
+
+        let mlxExplanation = try await service.explain(result: makeResult(), rule: makeRule())
+        #expect(mlxExplanation.source == .ai)
+        #expect(service.hasCompletedFirstMLXInference == true)
     }
 
     // MARK: - Test helpers
@@ -433,6 +480,7 @@ private enum FakeEngineError: Error { case boom }
 
 @MainActor
 private final class FakeInferenceEngine: AIInferenceEngine {
+    let kind: AIEnginePreference
     private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
@@ -453,6 +501,7 @@ private final class FakeInferenceEngine: AIInferenceEngine {
 
     init(
         output: String,
+        kind: AIEnginePreference = .mlx,
         loadError: Error? = nil,
         generateError: Error? = nil,
         scanFilter: ScanFilterSet? = nil,
@@ -461,6 +510,7 @@ private final class FakeInferenceEngine: AIInferenceEngine {
         reportedMemoryUsage: Int64? = nil
     ) {
         self.output = output
+        self.kind = kind
         self.loadError = loadError
         self.generateError = generateError
         self.scanFilter = scanFilter

@@ -186,9 +186,11 @@ struct LocalAIServiceAdvisoryTests {
         #expect(advisory.suggestedSafety == .review, "fallback carries through current safety")
     }
 
-    @Test("advisory falls back to YAML rule text when no model downloaded")
-    func fallsBackWhenNoModel() async throws {
+    @Test("advisory uses Template engine when no model is downloaded")
+    func templateAdvisoryWithoutModel() async throws {
         let manager = makeNeverDownloadedManager()
+        // Default engine is `TemplateInferenceEngine`, which doesn't need a
+        // model — the service runs it directly and stamps `.template`.
         let service = LocalAIService(downloadManager: manager)
 
         let result = makeResult()
@@ -199,8 +201,10 @@ struct LocalAIServiceAdvisoryTests {
         )
 
         let advisory = try #require(advisories.first)
-        #expect(advisory.source == .rule)
-        #expect(advisory.rationale == "YAML rule text.")
+        #expect(advisory.source == .template)
+        // Template stitches rule.explanation in, so the rationale contains it
+        // even though it's structured prose, not raw YAML.
+        #expect(advisory.rationale.contains("YAML rule text."))
     }
 
     @Test("advisory falls back per-item — some AI, some YAML when engine partially fails")
@@ -363,6 +367,7 @@ private enum FakeAdvisoryError: Error { case boom }
 
 @MainActor
 private final class FakeAdvisoryEngine: AIInferenceEngine {
+    let kind: AIEnginePreference
     private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
@@ -375,11 +380,13 @@ private final class FakeAdvisoryEngine: AIInferenceEngine {
 
     init(
         rationale: String,
+        kind: AIEnginePreference = .mlx,
         advisoryError: Error? = nil,
         failForResultIds: Set<String> = [],
         overrideSuggestedSafety: SafetyLevel? = nil
     ) {
         self.rationale = rationale
+        self.kind = kind
         self.advisoryError = advisoryError
         self.failForResultIds = failForResultIds
         self.overrideSuggestedSafety = overrideSuggestedSafety

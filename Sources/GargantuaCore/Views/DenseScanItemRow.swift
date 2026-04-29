@@ -19,7 +19,7 @@ struct ConfidenceOrbit: View {
 
     public var body: some View {
         HStack(alignment: .bottom, spacing: barGap) {
-            ForEach(0..<barCount, id: \.self) { index in
+            ForEach(0 ..< barCount, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1)
                     .fill(index < litBarCount ? safetyColor : safetyColor.opacity(0.18))
                     .frame(width: barWidth, height: barHeight(at: index))
@@ -73,6 +73,7 @@ public struct DenseScanItemRow: View {
     let onExplain: (() -> Void)?
 
     @State private var isHovered = false
+    @Environment(\.activeAIEngineKind) private var activeAIEngineKind
 
     public var body: some View {
         HStack(spacing: GargantuaSpacing.space2) {
@@ -135,20 +136,24 @@ public struct DenseScanItemRow: View {
                 .foregroundStyle(GargantuaColors.ink)
                 .lineLimit(1)
 
-            // Explain button (revealed on hover)
+            // Explain button (revealed on hover). Glyph mirrors the active
+            // engine: sparkles when MLX is on (real generated output), the
+            // plain question mark when the rule-based template is in play.
             if isHovered, onExplain != nil {
                 Button(action: onExplain ?? {}) {
-                    Image(systemName: "questionmark.circle.fill")
+                    Image(systemName: explainGlyph)
                         .font(.system(size: 14))
                         .foregroundStyle(GargantuaColors.accent)
                 }
                 .buttonStyle(.plain)
-                .help("Show explanation")
+                .help(explainHelpText)
+                .accessibilityLabel(explainHelpText)
             } else if onExplain != nil {
-                // Placeholder space to prevent layout shift
-                Image(systemName: "questionmark.circle.fill")
+                // Placeholder space to prevent layout shift; hidden from a11y.
+                Image(systemName: explainGlyph)
                     .font(.system(size: 14))
                     .foregroundStyle(.clear)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.vertical, GargantuaSpacing.space2)
@@ -172,6 +177,20 @@ public struct DenseScanItemRow: View {
         case .safe: GargantuaColors.safe
         case .review: GargantuaColors.review
         case .protected_: GargantuaColors.protected_
+        }
+    }
+
+    private var explainGlyph: String {
+        switch activeAIEngineKind {
+        case .mlx: return "sparkles"
+        case .template: return "questionmark.circle.fill"
+        }
+    }
+
+    private var explainHelpText: String {
+        switch activeAIEngineKind {
+        case .mlx: return "Show AI explanation"
+        case .template: return "Show rule-based explanation"
         }
     }
 

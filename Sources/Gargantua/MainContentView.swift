@@ -156,6 +156,10 @@ struct MainContentView: View {
                     }
                 }
                 .environment(\.cleanupNarrator, narrateHandler)
+                .environment(\.activeAIEngineKind, activeAIEngineKind)
+                .environment(\.preferredAIEngineKind, preferredAIEngine)
+                .environment(\.aiEngineNeedsFirstWarmup, aiEngineNeedsFirstWarmup)
+                .environment(\.openAIModelSettings, { sidebarSelection = "settings" })
                 .onAppear {
                     initializePersistenceIfNeeded()
                     refreshAIEngineSelection()
@@ -186,6 +190,20 @@ struct MainContentView: View {
                 }
             }
         }
+    }
+
+    /// True when local AI is selected but hasn't returned its first inference
+    /// yet — the cue to surface "Compiling shaders for first use…" while
+    /// the MLX backend JIT-compiles GPU kernels.
+    private var aiEngineNeedsFirstWarmup: Bool {
+        activeAIEngineKind == .mlx && !aiService.hasCompletedFirstMLXInference
+    }
+
+    /// The user's persisted toggle preference, decoupled from whatever the
+    /// factory actually selected (MLX may have fallen back to Template if the
+    /// model isn't downloaded). Used for honest CTA labeling.
+    private var preferredAIEngine: AIEnginePreference {
+        AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
     }
 
     /// Closure handed to scan views so their per-row Explain button can kick

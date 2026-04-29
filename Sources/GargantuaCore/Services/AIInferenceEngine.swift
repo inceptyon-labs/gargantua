@@ -12,6 +12,12 @@ import Foundation
 /// any held memory from `unload()`.
 @MainActor
 public protocol AIInferenceEngine: AnyObject, Sendable {
+    /// Identity of this engine. `LocalAIService` reads this to stamp the
+    /// correct `ExplanationSource` on returned text — `.ai` for `.mlx`,
+    /// `.template` for `.template` — without engines having to know about
+    /// presentation labels.
+    var kind: AIEnginePreference { get }
+
     /// Whether the engine is currently holding model state in memory.
     var isLoaded: Bool { get }
 
