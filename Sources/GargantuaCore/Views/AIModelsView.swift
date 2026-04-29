@@ -10,21 +10,16 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "AIModels
 /// CTA because there's only one logical scope (AI models) — no per-category
 /// checkboxes. Runs a `NativeScanAdapter` against the `aiModels` profile and
 /// renders results with `ScanBucketListView`.
+///
+/// State lives on an injected `AIModelsState` so a scan triggered here
+/// survives sidebar navigation. The header's Refresh / Rescan buttons are
+/// the only ways to clear cached results.
 public struct AIModelsView: View {
     private let profile: CleanupProfile
     private let adapterOverride: (any ScanAdapter)?
     private let scanRoots: [URL]?
+    private let session: AIModelsState
 
-    @State private var scanProgress = ScanProgress()
-    @State private var scanResults: [ScanResult]?
-    @State private var scanDuration: TimeInterval = 0
-    @State private var selectedResultIDs: Set<String> = []
-    @State private var isScanRequested = false
-    @State private var showConfirmation = false
-    @State private var activeCleanupMethod: CleanupMethod = .trash
-    @State private var cleanupResult: CleanupResult?
-    @State private var phase: DeepCleanPhase = .idle
-    @State private var pathStream = PathStreamViewModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let onExplain: ((ScanResult) -> Void)?
@@ -35,6 +30,7 @@ public struct AIModelsView: View {
         profile: CleanupProfile = .aiModels,
         scanRoots: [URL]? = nil,
         adapter: (any ScanAdapter)? = nil,
+        session: AIModelsState,
         onExplain: ((ScanResult) -> Void)? = nil,
         onAdvisory: (([ScanResult]) -> Void)? = nil,
         onResolveFilter: ((String) async -> ScanFilterSet?)? = nil
@@ -42,9 +38,26 @@ public struct AIModelsView: View {
         self.profile = profile
         self.scanRoots = scanRoots
         self.adapterOverride = adapter
+        self.session = session
         self.onExplain = onExplain
         self.onAdvisory = onAdvisory
         self.onResolveFilter = onResolveFilter
+    }
+
+    @MainActor
+    public init(
+        profile: CleanupProfile = .aiModels,
+        adapter: (any ScanAdapter)? = nil
+    ) {
+        self.init(
+            profile: profile,
+            scanRoots: nil,
+            adapter: adapter,
+            session: AIModelsState(),
+            onExplain: nil,
+            onAdvisory: nil,
+            onResolveFilter: nil
+        )
     }
 
     public var body: some View {
@@ -53,42 +66,42 @@ public struct AIModelsView: View {
                 .ignoresSafeArea()
 
             ZStack {
-                switch phase {
+                switch session.phase {
                 case .idle:
                     idleView
                         .transition(phaseTransition)
                 case .scanning, .cleaning:
                     EventHorizonConsoleView(
-                        context: .aiModels(phase: phase, profileName: profile.name),
-                        stream: pathStream
+                        context: .aiModels(phase: session.phase, profileName: profile.name),
+                        stream: session.pathStream
                     )
                     .transition(phaseTransition)
                 case .results:
-                    if let results = scanResults {
+                    if let results = session.scanResults {
                         resultsView(results)
                             .transition(phaseTransition)
                     }
                 case .summary:
-                    if let result = cleanupResult {
+                    if let result = session.cleanupResult {
                         summaryState(result: result)
                             .transition(phaseTransition)
                     }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.65), value: phase)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.65), value: session.phase)
 
-            if showConfirmation, let results = scanResults {
-                let selected = results.filter { selectedResultIDs.contains($0.id) }
+            if session.showConfirmation, let results = session.scanResults {
+                let selected = results.filter { session.selectedResultIDs.contains($0.id) }
                 ConfirmationModalView(
                     items: selected,
                     onConfirm: { method in confirmCleanup(selected, method: method) },
-                    onCancel: { showConfirmation = false }
+                    onCancel: { session.showConfirmation = false }
                 )
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: showConfirmation)
+        .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
     }
 
     /// Asymmetric phase transition matching SmartUninstaller / Deep Clean / Dev Purge.
@@ -140,6 +153,18 @@ public struct AIModelsView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
 
+                if !session.scanProgress.errors.isEmpty {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.review)
+                        Text(session.scanProgress.errors.first ?? "Scan error")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.review)
+                            .lineLimit(1)
+                    }
+                }
+
                 Button(action: startScan) {
                     Text("Scan AI Models")
                         .font(GargantuaFonts.label)
@@ -154,10 +179,6 @@ public struct AIModelsView: View {
             }
 
             Spacer()
-
-            if !scanProgress.errors.isEmpty {
-                scanWarningsBanner
-            }
 
             if !profile.safetyOverrides.isEmpty {
                 profileOverrideBanner
@@ -199,7 +220,7 @@ public struct AIModelsView: View {
 
     private var scanWarningsBanner: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            ForEach(Array(scanProgress.errors.enumerated()), id: \.offset) { _, message in
+            ForEach(Array(session.scanProgress.errors.enumerated()), id: \.offset) { _, message in
                 HStack(spacing: GargantuaSpacing.space1) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 12))
@@ -223,13 +244,9 @@ public struct AIModelsView: View {
         VStack(spacing: 0) {
             ScanResultsHeader(
                 title: "AI Models",
-                onBack: {
-                    scanResults = nil
-                    pathStream.clear()
-                    phase = .idle
-                },
+                onBack: { session.clearResults() },
                 onRescan: { startScan() },
-                isBusy: scanProgress.isScanning
+                isBusy: session.isScanning
             )
 
             if !profile.safetyOverrides.isEmpty {
@@ -240,7 +257,7 @@ public struct AIModelsView: View {
                     .frame(height: 1)
             }
 
-            if !scanProgress.errors.isEmpty {
+            if !session.scanProgress.errors.isEmpty {
                 scanWarningsBanner
 
                 Rectangle()
@@ -250,24 +267,25 @@ public struct AIModelsView: View {
 
             ScanBucketListView(
                 results: results,
-                scanDuration: scanDuration,
-                selectedIDs: $selectedResultIDs,
+                scanDuration: session.scanDuration,
+                selectedIDs: Binding(
+                    get: { session.selectedResultIDs },
+                    set: { session.selectedResultIDs = $0 }
+                ),
                 onExplain: onExplain,
-                onClean: { showConfirmation = true },
-                onCancel: {
-                    scanResults = nil
-                    pathStream.clear()
-                    phase = .idle
-                },
+                onClean: { session.showConfirmation = true },
+                onCancel: { session.clearResults() },
                 onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter
             )
         }
     }
+}
 
-    // MARK: - Summary
+// MARK: - Summary + color helpers
 
-    private func summaryState(result: CleanupResult) -> some View {
+extension AIModelsView {
+    fileprivate func summaryState(result: CleanupResult) -> some View {
         let outcome = SingularityCloseMessage.Outcome.from(result: result)
         let accent = outcomeAccentColor(outcome.accent)
         return VStack(spacing: GargantuaSpacing.space2) {
@@ -285,17 +303,13 @@ public struct AIModelsView: View {
                     .frame(maxWidth: 480)
             }
             CleanupSummaryView(result: result, outcomeAccent: accent) {
-                dismissSummary()
+                session.dismissSummary()
             }
             Spacer()
         }
         .padding(GargantuaSpacing.space6)
     }
-}
 
-// MARK: - Color helpers
-
-extension AIModelsView {
     fileprivate func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {
         switch accent {
         case .safe: return GargantuaColors.safe
@@ -317,13 +331,10 @@ extension AIModelsView {
 
 extension AIModelsView {
     fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
-        showConfirmation = false
-        activeCleanupMethod = method
-        pathStream.clear()
-        phase = .cleaning
+        session.beginCleanup(method: method)
         Task {
             let engine = CleanupEngine()
-            let result = await engine.clean(items, method: method, observer: pathStream)
+            let result = await engine.clean(items, method: method, observer: session.pathStream)
             do {
                 try AuditWriter().record(result: result)
             } catch {
@@ -334,45 +345,23 @@ extension AIModelsView {
             if !result.itemResults.filter(\.succeeded).isEmpty, !reduceMotion {
                 try? await Task.sleep(nanoseconds: 750_000_000)
             }
-            cleanupResult = result
-            phase = .summary
+            session.finishCleanup(result: result)
         }
     }
 
-    private func dismissSummary() {
-        cleanupResult = nil
-        scanResults = nil
-        activeCleanupMethod = .trash
-        pathStream.clear()
-        phase = .idle
-    }
-
     fileprivate func startScan() {
-        isScanRequested = true
-        scanProgress = ScanProgress()
-        pathStream.clear()
-        phase = .scanning
+        session.prepareForScan()
         Task {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
                     ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
-                let results = try await adapter.scan(progress: scanProgress, observer: pathStream)
+                let results = try await adapter.scan(progress: session.scanProgress, observer: session.pathStream)
 
-                scanDuration = Date().timeIntervalSince(start)
-                // Default selection mirrors Dev Purge: pre-check `safe` items
-                // so the user can fast-path obvious wins. AI model rules are
-                // mostly `review`, so this nudges nothing destructive.
-                selectedResultIDs = Set(
-                    results.filter { $0.safety == .safe }.map(\.id)
-                )
-                scanResults = results
-                isScanRequested = false
-                phase = .results
+                let duration = Date().timeIntervalSince(start)
+                session.finishScan(results: results, duration: duration)
             } catch {
-                scanProgress.recordError(error.localizedDescription)
-                isScanRequested = false
-                phase = .idle
+                session.failScan(error.localizedDescription)
             }
         }
     }
