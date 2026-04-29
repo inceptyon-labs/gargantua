@@ -19,8 +19,8 @@ public struct ClaudeCodeAgentView: View {
                 .frame(height: 1)
 
             HStack(alignment: .top, spacing: GargantuaSpacing.space5) {
-                controlPanel
-                    .frame(width: 340)
+                promptSection
+                    .frame(width: 360)
 
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
                     approvalGateSection
@@ -28,7 +28,7 @@ public struct ClaudeCodeAgentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(GargantuaSpacing.space4)
+            .padding(GargantuaSpacing.space5)
         }
         .background(GargantuaColors.void_)
     }
@@ -47,51 +47,46 @@ public struct ClaudeCodeAgentView: View {
 
             Text("Run Claude Code against Gargantua MCP with a live transcript and explicit destructive-step gates.")
                 .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
+                .foregroundStyle(GargantuaColors.ink2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space4)
     }
 
+    private var promptSection: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            Text("PROMPT")
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            controlPanel
+        }
+    }
+
     private var controlPanel: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                Text("PROMPT")
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.ink4)
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+                Text("Preset")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
 
-                Picker("Prompt", selection: $selectedTemplate) {
+                Picker("Preset", selection: $selectedTemplate) {
                     ForEach(ClaudeCodeAgentPromptTemplate.allCases) { template in
                         Label(template.title, systemImage: template.icon)
                             .tag(template)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
-
-                TextEditor(text: $userContext)
-                    .font(GargantuaFonts.body)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .scrollContentBackground(.hidden)
-                    .padding(GargantuaSpacing.space2)
-                    .frame(minHeight: 140)
-                    .background(GargantuaColors.surface3)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                    .overlay(alignment: .topLeading) {
-                        if userContext.isEmpty {
-                            Text(selectedTemplate.placeholder)
-                                .font(GargantuaFonts.body)
-                                .foregroundStyle(GargantuaColors.ink4)
-                                .padding(GargantuaSpacing.space3)
-                                .allowsHitTesting(false)
-                        }
-                    }
             }
+
+            promptInput
 
             HStack(spacing: GargantuaSpacing.space3) {
                 Button(action: startSession) {
-                    Label("Start", systemImage: "play.fill")
+                    Label("Start session", systemImage: "play.fill")
                         .font(GargantuaFonts.label)
                         .foregroundStyle(.white)
                         .padding(.horizontal, GargantuaSpacing.space4)
@@ -100,6 +95,7 @@ public struct ClaudeCodeAgentView: View {
                         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: .command)
                 .disabled(controller.status.isRunning)
 
                 Button(action: controller.cancel) {
@@ -113,7 +109,13 @@ public struct ClaudeCodeAgentView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!controller.status.isRunning)
-                .opacity(controller.status.isRunning ? 1 : 0.5)
+                .opacity(controller.status.isRunning ? 1 : 0.65)
+
+                Spacer()
+
+                Text("⌘↩")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
             }
 
             statusCard
@@ -125,6 +127,26 @@ public struct ClaudeCodeAgentView: View {
                 .stroke(GargantuaColors.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+
+    private var promptInput: some View {
+        TextField(
+            selectedTemplate.placeholder,
+            text: $userContext,
+            axis: .vertical
+        )
+        .font(GargantuaFonts.body)
+        .foregroundStyle(GargantuaColors.ink)
+        .textFieldStyle(.plain)
+        .lineLimit(3...12)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .padding(.vertical, GargantuaSpacing.space3)
+        .background(GargantuaColors.surface3)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
     private var statusCard: some View {
@@ -141,7 +163,7 @@ public struct ClaudeCodeAgentView: View {
 
                 Text(statusDetail)
                     .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
+                    .foregroundStyle(GargantuaColors.ink2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -158,7 +180,7 @@ public struct ClaudeCodeAgentView: View {
                 Text("PENDING GATES")
                     .font(GargantuaFonts.sectionLabel)
                     .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.ink4)
+                    .foregroundStyle(GargantuaColors.ink2)
 
                 ForEach(gates) { gate in
                     ApprovalGateRow(
@@ -173,20 +195,22 @@ public struct ClaudeCodeAgentView: View {
 
     private var transcriptSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-            Text("TRANSCRIPT")
-                .font(GargantuaFonts.sectionLabel)
-                .tracking(0.8)
-                .foregroundStyle(GargantuaColors.ink4)
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("LIVE OUTPUT")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(0.8)
+                    .foregroundStyle(GargantuaColors.ink2)
+
+                Text("Streaming stdout, stderr, and audit events from the Claude Code subprocess.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
 
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
                         if controller.events.isEmpty {
-                            Text("No session transcript yet.")
-                                .font(GargantuaFonts.body)
-                                .foregroundStyle(GargantuaColors.ink4)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(GargantuaSpacing.space4)
+                            transcriptEmptyState
                         } else {
                             ForEach(controller.events) { event in
                                 TranscriptEventRow(event: event)
@@ -195,7 +219,9 @@ public struct ClaudeCodeAgentView: View {
                         }
                     }
                     .padding(GargantuaSpacing.space3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxHeight: .infinity)
                 .background(GargantuaColors.surface1)
                 .overlay(
                     RoundedRectangle(cornerRadius: GargantuaRadius.medium)
@@ -208,6 +234,26 @@ public struct ClaudeCodeAgentView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var transcriptEmptyState: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            Image(systemName: "terminal")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(GargantuaColors.ink3)
+
+            Text("Waiting for a session.")
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Text("Compose a prompt on the left and press **Start session**. The agent's output, tool calls, and any approval gates will appear here in real time.")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(GargantuaSpacing.space5)
     }
 
     private func startSession() {
@@ -226,7 +272,7 @@ public struct ClaudeCodeAgentView: View {
 
     private var statusTone: Color {
         switch controller.status {
-        case .idle: GargantuaColors.ink4
+        case .idle: GargantuaColors.ink2
         case .running: GargantuaColors.accent
         case .completed: GargantuaColors.safe
         case .failed, .cancelled: GargantuaColors.review

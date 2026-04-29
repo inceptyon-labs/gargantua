@@ -152,9 +152,10 @@ public struct DeepCleanView: View {
             Spacer()
 
             VStack(spacing: GargantuaSpacing.space3) {
-                Image(systemName: "bubbles.and.sparkles")
-                    .font(.system(size: 36))
-                    .foregroundStyle(GargantuaColors.ink3)
+                GargantuaBrandIcon(
+                    resourceName: "deep-clean-gargantua-gpt2",
+                    fallbackSystemName: "bubbles.and.sparkles"
+                )
 
                 Text("System Cleanup")
                     .font(GargantuaFonts.heading)

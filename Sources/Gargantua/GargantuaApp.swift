@@ -11,6 +11,7 @@ struct GargantuaApp: App {
     @StateObject private var menuBarStatusModel: MenuBarStatusModel
 
     init() {
+        MetallibStager.stageIfNeeded()
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
         }
@@ -41,6 +42,7 @@ struct GargantuaApp: App {
         WindowGroup("Gargantua", id: "main") {
             MainContentView(updateSettingsViewModel: updateController.settingsViewModel)
                 .frame(minWidth: 700, minHeight: 500)
+                .preferredColorScheme(.dark)
         }
         .defaultSize(width: 900, height: 600)
         .commands {
@@ -53,6 +55,7 @@ struct GargantuaApp: App {
     private var menuBarScene: some Scene {
         MenuBarExtra(isInserted: $menuBarWidgetEnabled) {
             GargantuaMenuBarSceneContent(model: menuBarStatusModel)
+                .preferredColorScheme(.dark)
         } label: {
             MenuBarStatusLabel(snapshot: menuBarStatusModel.snapshot)
         }
@@ -149,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.regular)
+        NSApp.appearance = NSAppearance(named: .darkAqua)
         DispatchQueue.main.async { [weak self] in
             self?.configureMainWindow()
             self?.activateMainWindow()
@@ -165,6 +169,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureMainWindow() {
         guard let window = Self.findMainWindow() else { return }
+
+        // Force dark chrome for native AppKit-backed controls (segmented
+        // pickers, form fields, popups) so they don't render light text on
+        // the void background.
+        window.appearance = NSAppearance(named: .darkAqua)
 
         // Persist window position and size across launches
         window.identifier = Self.mainWindowIdentifier

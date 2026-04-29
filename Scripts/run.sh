@@ -3,12 +3,19 @@
 # Gargantua binary so any MLX-touching UI (Explain button, etc.) can
 # actually init Metal without crashing.
 #
-# Why: `swift run` launches the executable from
+# Note: as of the BuildMetallibPlugin SwiftPM plugin attached to the
+# Gargantua target, plain `swift run Gargantua` also stages the metallib —
+# the plugin runs build-metallib.sh as a prebuild command and the runtime
+# `MetallibStager` copies it next to the binary at launch. This wrapper is
+# retained as a defense-in-depth path and for anyone who prefers an
+# explicit, scripted pre-step.
+#
+# Why the staging exists at all: `swift run` launches the executable from
 # `.build/<arch>/<config>/Gargantua`, and mlx-swift's runtime looks for a
 # colocated `mlx.metallib` at that path first. The release pipeline stages
-# this via `Scripts/release/build.sh`; `swift run` does not. Without it,
-# MLXInferenceEngine.load aborts inside MLX C++ with "Failed to load the
-# default metallib" — an un-catchable crash from the Swift side.
+# this via `Scripts/release/build.sh`. Without it, MLXInferenceEngine.load
+# aborts inside MLX C++ with "Failed to load the default metallib" — an
+# un-catchable crash from the Swift side.
 #
 # This wrapper:
 #   1. Runs `swift package resolve` (if needed) so the mlx-swift shader

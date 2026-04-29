@@ -131,9 +131,11 @@ public struct DeveloperToolsView: View {
 
     private var idleView: some View {
         VStack(spacing: GargantuaSpacing.space4) {
-            Image(systemName: "hammer")
-                .font(.system(size: 32))
-                .foregroundStyle(GargantuaColors.ink4)
+            GargantuaBrandIcon(
+                resourceName: "developer-tools-gargantua-gpt2",
+                fallbackSystemName: "hammer",
+                fallbackColor: GargantuaColors.ink4
+            )
 
             VStack(spacing: GargantuaSpacing.space2) {
                 Text("Scan developer tools")

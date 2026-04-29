@@ -135,9 +135,7 @@ public struct AIModelsView: View {
             Spacer()
 
             VStack(spacing: GargantuaSpacing.space3) {
-                Image(systemName: "brain")
-                    .font(.system(size: 36))
-                    .foregroundStyle(GargantuaColors.ink3)
+                aiModelsIcon
 
                 Text("Locate your downloaded AI models")
                     .font(GargantuaFonts.heading)
@@ -180,6 +178,14 @@ public struct AIModelsView: View {
 
             Spacer()
         }
+    }
+
+    @ViewBuilder
+    private var aiModelsIcon: some View {
+        GargantuaBrandIcon(
+            resourceName: "ai-models-gargantua-gpt2",
+            fallbackSystemName: "brain"
+        )
     }
 
     private var scanWarningsBanner: some View {

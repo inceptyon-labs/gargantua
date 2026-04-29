@@ -2,31 +2,42 @@ import SwiftUI
 
 // MARK: - Confidence Orbit
 
-/// A circular progress indicator showing scan confidence as a thin arc.
-///
-/// The confidence orbit is the signature design element, inspired by Gargantua's
-/// orbital rings. It displays as a thin circular arc from 0° to (confidence * 3.6)°,
-/// scaled to fit a 24x24 size. The color matches the item's safety level.
+/// Confidence indicator drawn as ascending signal-strength bars (like a
+/// cell-signal icon). Five vertical bars step up in height left-to-right;
+/// bars at or below the confidence bucket light up in the safety color,
+/// the rest stay faint. Buckets: 0–19→1, 20–39→2, 40–59→3, 60–79→4, 80+→5.
 struct ConfidenceOrbit: View {
     let confidence: Int
     let safety: SafetyLevel
 
-    private let size: CGFloat = 24
-    private let lineWidth: CGFloat = 1.5
+    private let barCount = 5
+    private let barWidth: CGFloat = 3
+    private let barGap: CGFloat = 1.5
+    private let frameHeight: CGFloat = 24
+    private let minBarHeight: CGFloat = 6
+    private let maxBarHeight: CGFloat = 20
 
     public var body: some View {
-        ZStack(alignment: .center) {
-            // Subtle background circle (very faint)
-            Circle()
-                .stroke(safetyColor.opacity(0.2), lineWidth: lineWidth)
-
-            // Confidence arc — rotated so 0% starts at top and sweeps clockwise
-            Circle()
-                .trim(from: 0, to: Double(confidence) / 100)
-                .stroke(safetyColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+        HStack(alignment: .bottom, spacing: barGap) {
+            ForEach(0..<barCount, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(index < litBarCount ? safetyColor : safetyColor.opacity(0.18))
+                    .frame(width: barWidth, height: barHeight(at: index))
+            }
         }
-        .frame(width: size, height: size)
+        .frame(height: frameHeight, alignment: .bottom)
+        .accessibilityLabel("Confidence \(confidence) percent")
+    }
+
+    private var litBarCount: Int {
+        let clamped = max(0, min(100, confidence))
+        return min(barCount, max(1, clamped / 20 + 1))
+    }
+
+    private func barHeight(at index: Int) -> CGFloat {
+        guard barCount > 1 else { return maxBarHeight }
+        let step = (maxBarHeight - minBarHeight) / CGFloat(barCount - 1)
+        return minBarHeight + step * CGFloat(index)
     }
 
     private var safetyColor: Color {

@@ -69,9 +69,7 @@ public struct DiskExplorerView: View {
             Spacer()
 
             VStack(spacing: GargantuaSpacing.space3) {
-                Image(systemName: "externaldrive")
-                    .font(.system(size: 36))
-                    .foregroundStyle(GargantuaColors.ink3)
+                diskScanIcon
 
                 Text("Disk Map")
                     .font(GargantuaFonts.heading)
@@ -98,6 +96,14 @@ public struct DiskExplorerView: View {
 
             Spacer()
         }
+    }
+
+    @ViewBuilder
+    private var diskScanIcon: some View {
+        GargantuaBrandIcon(
+            resourceName: "disk-explorer-gargantua-gpt2-v2",
+            fallbackSystemName: "externaldrive"
+        )
     }
 
     // MARK: - Results

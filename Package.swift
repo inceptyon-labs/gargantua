@@ -33,7 +33,15 @@ let package = Package(
                 "GargantuaCore",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
-            path: "Sources/Gargantua"
+            path: "Sources/Gargantua",
+            plugins: [
+                "BuildMetallibPlugin"
+            ]
+        ),
+        .plugin(
+            name: "BuildMetallibPlugin",
+            capability: .buildTool(),
+            path: "Plugins/BuildMetallibPlugin"
         ),
         .executableTarget(
             name: "GargantuaMCP",

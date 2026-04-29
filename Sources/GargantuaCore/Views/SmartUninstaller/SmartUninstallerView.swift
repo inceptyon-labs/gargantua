@@ -105,9 +105,10 @@ public struct SmartUninstallerView: View {
 
     private var idleView: some View {
         VStack(spacing: GargantuaSpacing.space4) {
-            Image(systemName: "trash.slash")
-                .font(.system(size: 36))
-                .foregroundStyle(GargantuaColors.ink3)
+            GargantuaBrandIcon(
+                resourceName: "smart-uninstaller-gargantua-gpt2",
+                fallbackSystemName: "trash.slash"
+            )
 
             VStack(spacing: GargantuaSpacing.space2) {
                 Text("Smart Uninstaller")

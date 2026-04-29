@@ -109,9 +109,11 @@ public struct FileHealthContainerView: View {
 
     private var idleView: some View {
         VStack(spacing: GargantuaSpacing.space4) {
-            Image(systemName: "stethoscope")
-                .font(.system(size: 32))
-                .foregroundStyle(GargantuaColors.ink4)
+            GargantuaBrandIcon(
+                resourceName: "file-health-gargantua-gpt2",
+                fallbackSystemName: "stethoscope",
+                fallbackColor: GargantuaColors.ink4
+            )
 
             VStack(spacing: GargantuaSpacing.space2) {
                 Text("Audit file health")

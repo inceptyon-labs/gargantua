@@ -81,9 +81,11 @@ public struct DuplicateFinderContainerView: View {
 
     private var idleView: some View {
         VStack(spacing: GargantuaSpacing.space4) {
-            Image(systemName: "doc.on.doc")
-                .font(.system(size: 32))
-                .foregroundStyle(GargantuaColors.ink4)
+            GargantuaBrandIcon(
+                resourceName: "duplicates-gargantua-gpt2",
+                fallbackSystemName: "doc.on.doc",
+                fallbackColor: GargantuaColors.ink4
+            )
 
             VStack(spacing: GargantuaSpacing.space2) {
                 Text("Find duplicate files")
