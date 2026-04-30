@@ -10,6 +10,7 @@ public struct ClaudeCodeAgentView: View {
     @State private var rawTranscriptExpanded = false
     @State private var runDetailsExpanded = false
     @State private var didCopyPrompt = false
+    @State private var helpSheetPresented = false
     private let configurationStore: ClaudeCodeAgentConfigurationStore
 
     @MainActor
@@ -42,6 +43,9 @@ public struct ClaudeCodeAgentView: View {
             .padding(GargantuaSpacing.space5)
         }
         .background(GargantuaColors.void_)
+        .sheet(isPresented: $helpSheetPresented) {
+            ClaudeCodeAgentHelpView()
+        }
     }
 
     private var header: some View {
@@ -54,6 +58,17 @@ public struct ClaudeCodeAgentView: View {
                 Text("Agent Run")
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
+
+                Button {
+                    helpSheetPresented = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+                .buttonStyle(.plain)
+                .help("When to use Agent Run vs Deep Scan, with example prompts")
+                .accessibilityLabel("When to use Agent Run")
 
                 Spacer()
 
@@ -84,6 +99,8 @@ public struct ClaudeCodeAgentView: View {
 
     private var controlPanel: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
+            disclaimerCard
+
             VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
                 Text("Preset")
                     .font(GargantuaFonts.caption)
@@ -167,6 +184,41 @@ public struct ClaudeCodeAgentView: View {
         .padding(.horizontal, GargantuaSpacing.space3)
         .padding(.vertical, GargantuaSpacing.space3)
         .background(GargantuaColors.surface3)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    }
+
+    /// One-line expectations card shown above the preset picker. Two clauses
+    /// drawn from `ClaudeCodeAgentHelpContent` so both this disclaimer and the
+    /// `?` help sheet read from the same copy — no duplicated strings to drift.
+    private var disclaimerCard: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            (
+                Text(ClaudeCodeAgentHelpContent.disclaimerLeadIn).bold()
+                + Text(" — ")
+                + Text(ClaudeCodeAgentHelpContent.disclaimerLeadInDetail)
+            )
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(GargantuaColors.ink2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            (
+                Text(ClaudeCodeAgentHelpContent.disclaimerFallback).bold()
+                + Text(" — ")
+                + Text(ClaudeCodeAgentHelpContent.disclaimerFallbackDetail)
+            )
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(GargantuaColors.ink3)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(GargantuaSpacing.space3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GargantuaColors.surface2)
         .overlay(
             RoundedRectangle(cornerRadius: GargantuaRadius.small)
                 .stroke(GargantuaColors.borderSoft, lineWidth: 1)
