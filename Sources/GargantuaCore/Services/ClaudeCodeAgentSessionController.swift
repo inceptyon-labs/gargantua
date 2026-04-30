@@ -20,6 +20,11 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         self.runner = runner
     }
 
+    /// Root under which the runner creates per-session scratch directories.
+    /// Surfaced for the trust-pass UI so users can see where the agent is
+    /// allowed to write before they hit Start.
+    public var sessionsRoot: URL { runner.sessionsRoot }
+
     deinit {
         task?.cancel()
         runner.cancel()

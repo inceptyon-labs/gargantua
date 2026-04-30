@@ -304,6 +304,10 @@ public enum ClaudeCodeAgentPromptBuilder {
         - Destructive cleanup must go through the MCP clean tool with explicit item IDs from a prior scan.
         - Treat destructive steps as default deny unless the Gargantua UI records user approval.
         - Prefer Trash over permanent delete.
+
+        Output rules:
+        - Your deliverable is the conversation. Do not create files as your output.
+        - Do not use shell output redirection (>, >>, tee, /dev/stdout to file) — Claude Code's sandbox blocks these and the redirected data is lost. Hold scan results in memory and report findings inline as text.
         - Return a concise transcript-ready report with evidence, proposed actions, and any skipped risky items.
         """
     }

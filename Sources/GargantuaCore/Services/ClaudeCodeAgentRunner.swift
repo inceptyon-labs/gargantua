@@ -213,6 +213,24 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             fileManager: fileManager
         )
 
+        // Resolve the working directory the agent process will launch in.
+        // When the caller doesn't supply one, default to a per-session scratch
+        // directory under tempDirectory rather than inheriting the parent
+        // process CWD (which would expose whatever the user happened to launch
+        // Gargantua from to Claude Code's allowed-write sandbox). The scratch
+        // dir gives Claude a predictable, isolated place to work; nothing in
+        // it survives across sessions.
+        let resolvedWorkingDirectory: URL
+        if let workingDirectory {
+            resolvedWorkingDirectory = workingDirectory
+        } else {
+            let scratch = tempDirectory
+                .appendingPathComponent("sessions", isDirectory: true)
+                .appendingPathComponent(sessionID.uuidString, isDirectory: true)
+            try? fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+            resolvedWorkingDirectory = scratch
+        }
+
         let allowDestructiveMCPTools = allowDestructiveMCPToolsOverride ?? configuration.allowDestructiveMCPTools
         var allowedTools = ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist
         if allowDestructiveMCPTools {
@@ -253,9 +271,17 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             environment: [
                 "GARGANTUA_AGENT_SESSION_ID": sessionID.uuidString,
             ],
-            workingDirectory: workingDirectory,
+            workingDirectory: resolvedWorkingDirectory,
             mcpConfigURL: mcpConfigURL
         )
+    }
+
+    /// Root under which `makeLaunchPlan` creates per-session scratch
+    /// directories when the caller doesn't supply an explicit working
+    /// directory. Surfaced so the agent UI can show users where the agent
+    /// can write.
+    public var sessionsRoot: URL {
+        tempDirectory.appendingPathComponent("sessions", isDirectory: true)
     }
 
     /// Starts Claude Code, streams transcript events, and captures destructive-action gates.

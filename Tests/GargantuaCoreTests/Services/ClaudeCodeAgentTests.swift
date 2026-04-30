@@ -76,6 +76,62 @@ struct ClaudeCodeAgentTests {
         #expect(plan.environment["GARGANTUA_AGENT_SESSION_ID"] == sessionID.uuidString)
     }
 
+    @Test("Launch plan defaults workingDirectory to a fresh per-session scratch dir under tempDirectory")
+    func launchPlanCreatesPerSessionScratchDirectory() throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(isEnabled: true, cliPath: executable.path))
+        let tempDirectory = try makeTemporaryDirectory()
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            mcpServerLaunch: ClaudeCodeMCPServerLaunch(command: "/usr/local/bin/GargantuaMCP", args: ["--stdio"]),
+            processExecutor: FakeClaudeCodeProcessExecutor(),
+            auditWriter: AuditWriter(logDirectory: tempDirectory.appendingPathComponent("audit")),
+            tempDirectory: tempDirectory
+        )
+
+        let sessionID = UUID()
+        let plan = try runner.makeLaunchPlan(prompt: "go", sessionID: sessionID)
+
+        let scratch = try #require(plan.workingDirectory)
+        // Path shape: <tempDirectory>/sessions/<sessionID>/
+        #expect(scratch.path.hasPrefix(tempDirectory.path))
+        #expect(scratch.path.contains("/sessions/"))
+        #expect(scratch.lastPathComponent == sessionID.uuidString)
+
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: scratch.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue, "Per-session scratch must exist as a directory before launch")
+
+        // Two runs in a row must use distinct scratch dirs so cross-session
+        // residue can never end up in another agent's allowed-write surface.
+        let second = try runner.makeLaunchPlan(prompt: "go", sessionID: UUID())
+        #expect(second.workingDirectory?.path != scratch.path)
+    }
+
+    @Test("Explicit workingDirectory passed to makeLaunchPlan is honored verbatim")
+    func launchPlanHonorsExplicitWorkingDirectory() throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(isEnabled: true, cliPath: executable.path))
+        let tempDirectory = try makeTemporaryDirectory()
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            mcpServerLaunch: ClaudeCodeMCPServerLaunch(command: "/usr/local/bin/GargantuaMCP", args: ["--stdio"]),
+            processExecutor: FakeClaudeCodeProcessExecutor(),
+            auditWriter: AuditWriter(logDirectory: tempDirectory.appendingPathComponent("audit")),
+            tempDirectory: tempDirectory
+        )
+
+        let explicit = URL(fileURLWithPath: "/var/empty")
+        let plan = try runner.makeLaunchPlan(prompt: "go", sessionID: UUID(), workingDirectory: explicit)
+        #expect(plan.workingDirectory == explicit)
+    }
+
     @Test("Launch plan forwards selectedModel as --model when set, omits the flag when blank")
     func launchPlanForwardsSelectedModel() throws {
         let defaults = try makeDefaults()

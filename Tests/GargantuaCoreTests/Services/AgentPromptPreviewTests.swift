@@ -86,4 +86,17 @@ struct AgentPromptPreviewTests {
         #expect(ClaudeCodeAgentPromptTemplate.projectArchaeology.title == "Find Stale Dev Projects")
         #expect(ClaudeCodeAgentPromptTemplate.customCleanupScript.title == "Generate Cleanup Script")
     }
+
+    @Test("Prompt forbids shell output redirection so Claude doesn't hit the Bash sandbox")
+    func promptForbidsShellRedirection() {
+        // Claude Code's Bash sandbox blocks all write redirects regardless of
+        // path. Without this rule, Claude reaches for `... > scan.tsv` to
+        // organize MCP scan output and the run breaks mid-execution. The rule
+        // keeps the deliverable in the conversation, where it belongs.
+        for template in ClaudeCodeAgentPromptTemplate.allCases {
+            let prompt = ClaudeCodeAgentPromptBuilder.prompt(template: template, userContext: "x")
+            #expect(prompt.contains("Do not use shell output redirection"))
+            #expect(prompt.contains("Your deliverable is the conversation"))
+        }
+    }
 }

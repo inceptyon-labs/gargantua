@@ -405,6 +405,7 @@ public struct ClaudeCodeAgentView: View {
             metadataRow(label: "Model", value: previewModelLabel)
             metadataRow(label: "MCP server", value: "gargantua (local)")
             metadataRow(label: "Allowed tools", value: previewToolList)
+            metadataRow(label: "Working dir", value: previewWorkingDirectoryLabel)
         }
     }
 
@@ -491,6 +492,15 @@ public struct ClaudeCodeAgentView: View {
         let configuration = configurationStore.load()
         let trimmed = configuration.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Claude Code CLI default" : trimmed
+    }
+
+    /// Path the agent will be allowed to write inside. Each run gets a fresh
+    /// scratch under this root; we show the parent + "<per-session UUID>" so
+    /// users see the shape without us pre-allocating an ID before they click
+    /// Start.
+    private var previewWorkingDirectoryLabel: String {
+        let path = controller.sessionsRoot.path
+        return "\(path)/<per-session>"
     }
 
     private func copyPromptToPasteboard() {
