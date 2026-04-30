@@ -4,8 +4,10 @@ import Foundation
 public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
     /// UserDefaults key used for the encoded configuration.
     public static let defaultsKey = "claudeCodeAgentConfiguration"
-    /// Default conversation-turn budget for an agent session.
-    public static let defaultMaxTurns = 5
+    /// Default conversation-turn budget for an agent session. Picked from
+    /// the typical scan→analyze→explain→report loop length; 5 was too tight
+    /// and had users hitting `error_max_turns` after spending real money.
+    public static let defaultMaxTurns = 15
 
     /// Whether the Claude Code agent integration is enabled.
     public var isEnabled: Bool

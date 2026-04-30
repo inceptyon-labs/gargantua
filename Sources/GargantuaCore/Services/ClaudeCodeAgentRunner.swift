@@ -254,13 +254,19 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
     }
 
     /// Starts Claude Code, streams transcript events, and captures destructive-action gates.
+    ///
+    /// `onStreamEvent` receives parsed `--output-format stream-json` events
+    /// alongside the raw text fed to `onEvent`. Callers that don't need the
+    /// parsed feed (existing tests, scheduled audits) can pass `nil` and rely
+    /// on the raw transcript only.
     public func run(
         prompt: String,
         sessionID: UUID = UUID(),
         workingDirectory: URL? = nil,
         allowDestructiveMCPToolsOverride: Bool? = nil,
         onEvent: @escaping @Sendable (ClaudeCodeAgentTranscriptEvent) -> Void,
-        onGate: @escaping @Sendable (ClaudeCodeAgentApprovalGate) -> Void
+        onGate: @escaping @Sendable (ClaudeCodeAgentApprovalGate) -> Void,
+        onStreamEvent: (@Sendable (ClaudeCodeStreamEvent) -> Void)? = nil
     ) async throws -> ClaudeCodeAgentSessionResult {
         let plan = try makeLaunchPlan(
             prompt: prompt,
@@ -270,11 +276,15 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
         )
         let gates = GateAccumulator()
         let detector = ClaudeCodeDestructiveActionDetector(sessionID: sessionID)
+        let parser = ClaudeCodeStreamJSONParser()
         let lineBuffer = ClaudeCodeLineBuffer { line in
             if let gate = detector.detect(line) {
                 gates.append(gate)
                 onGate(gate)
                 self.recordAgentAudit(command: "agent_gate_detected", sessionID: sessionID)
+            }
+            if let onStreamEvent, let event = parser.parse(line: line) {
+                onStreamEvent(event)
             }
         }
 
