@@ -204,12 +204,15 @@ public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, S
     /// Stable identifier used by SwiftUI lists and pickers.
     public var id: String { rawValue }
 
-    /// Short user-facing template name.
+    /// Short user-facing template name. Action-oriented so the label alone
+    /// telegraphs what artifact comes back ("an audit", "a script", etc.).
+    /// The raw enum values are kept stable so persisted selections don't
+    /// silently flip when the labels change.
     public var title: String {
         switch self {
-        case .investigateSpace: "Investigate Space"
-        case .projectArchaeology: "Project Archaeology"
-        case .customCleanupScript: "Custom Script"
+        case .investigateSpace: "Audit Disk Space"
+        case .projectArchaeology: "Find Stale Dev Projects"
+        case .customCleanupScript: "Generate Cleanup Script"
         }
     }
 
@@ -219,6 +222,20 @@ public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, S
         case .investigateSpace: "magnifyingglass.circle"
         case .projectArchaeology: "folder.badge.questionmark"
         case .customCleanupScript: "terminal"
+        }
+    }
+
+    /// One-line description shown directly under the picker so users know
+    /// what the preset will actually do without having to expand the full
+    /// prompt preview.
+    public var summary: String {
+        switch self {
+        case .investigateSpace:
+            "Reviews the whole Mac via the read-only MCP scan/analyze tools and returns an evidence-backed cleanup report. Nothing is deleted."
+        case .projectArchaeology:
+            "Looks at a development directory you specify, flagging stale repos, build artifacts, and archive candidates. Produces a written report; no files are touched."
+        case .customCleanupScript:
+            "Produces a reviewable shell script with every command annotated. The script is shown for review only — the agent never runs it."
         }
     }
 
@@ -234,7 +251,10 @@ public enum ClaudeCodeAgentPromptTemplate: String, CaseIterable, Identifiable, S
         }
     }
 
-    fileprivate var baseGoal: String {
+    /// The "Goal:" sentence that gets stamped into the prompt builder. Made
+    /// non-fileprivate so the trust-pass UI can render the same string the
+    /// builder uses, and tests can pin them in lockstep.
+    public var baseGoal: String {
         switch self {
         case .investigateSpace:
             "Investigate what is taking disk space and produce an evidence-backed cleanup report."

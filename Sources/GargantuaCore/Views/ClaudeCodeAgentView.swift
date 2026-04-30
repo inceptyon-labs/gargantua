@@ -1,10 +1,15 @@
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
 public struct ClaudeCodeAgentView: View {
     @StateObject private var controller: ClaudeCodeAgentSessionController
     @State private var selectedTemplate: ClaudeCodeAgentPromptTemplate = .investigateSpace
     @State private var userContext = ""
     @State private var rawTranscriptExpanded = false
+    @State private var runDetailsExpanded = false
+    @State private var didCopyPrompt = false
     private let configurationStore: ClaudeCodeAgentConfigurationStore
 
     @MainActor
@@ -92,9 +97,17 @@ public struct ClaudeCodeAgentView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
+
+                Text(selectedTemplate.summary)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             promptInput
+
+            runDetailsDisclosure
 
             HStack(spacing: GargantuaSpacing.space3) {
                 Button(action: startSession) {
@@ -350,6 +363,146 @@ public struct ClaudeCodeAgentView: View {
 
     private func startSession() {
         controller.start(template: selectedTemplate, userContext: userContext)
+    }
+
+    /// Trust pass: show the user exactly what the agent will send to Claude
+    /// before they hit Start. Renders the same prompt string the runner will
+    /// fork claude with, plus the model and the tool allowlist that
+    /// `makeLaunchPlan` derives from the same configuration.
+    private var runDetailsDisclosure: some View {
+        DisclosureGroup(isExpanded: $runDetailsExpanded) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                runDetailMetadata
+                Divider().overlay(GargantuaColors.borderSoft)
+                runPromptPreview
+            }
+            .padding(.top, GargantuaSpacing.space3)
+        } label: {
+            HStack(spacing: GargantuaSpacing.space2) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(GargantuaColors.ink3)
+                Text("Run details")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                Text("— see exactly what gets sent to Claude")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink4)
+            }
+        }
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface2)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    }
+
+    private var runDetailMetadata: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            metadataRow(label: "Model", value: previewModelLabel)
+            metadataRow(label: "MCP server", value: "gargantua (local)")
+            metadataRow(label: "Allowed tools", value: previewToolList)
+        }
+    }
+
+    private func metadataRow(label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
+            Text(label)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .frame(width: 92, alignment: .leading)
+            Text(value)
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink2)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var runPromptPreview: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            HStack {
+                Text("Full prompt")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                Spacer()
+                Button {
+                    copyPromptToPasteboard()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: didCopyPrompt ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(didCopyPrompt ? "Copied" : "Copy")
+                            .font(GargantuaFonts.caption)
+                    }
+                    .foregroundStyle(GargantuaColors.accent)
+                }
+                .buttonStyle(.plain)
+                .help("Copy the full prompt to the clipboard")
+            }
+
+            ScrollView {
+                Text(renderedPrompt)
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(GargantuaSpacing.space3)
+            }
+            .frame(maxHeight: 280)
+            .background(GargantuaColors.surface3)
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        }
+    }
+
+    /// The exact text that `ClaudeCodeAgentSessionRunner` will pass to
+    /// `claude -p`. Re-built on each access so the preview tracks the user's
+    /// typed context live.
+    private var renderedPrompt: String {
+        ClaudeCodeAgentPromptBuilder.prompt(
+            template: selectedTemplate,
+            userContext: userContext
+        )
+    }
+
+    /// Comma-separated tool list mirroring the --allowedTools argument that
+    /// `makeLaunchPlan` will inject — including the destructive tool when the
+    /// user has flipped the opt-in toggle in Settings.
+    private var previewToolList: String {
+        var tools = ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist
+        let configuration = configurationStore.load()
+        if configuration.allowDestructiveMCPTools {
+            tools.append(ClaudeCodeAgentPromptBuilder.destructiveTool)
+        }
+        return tools.joined(separator: ", ")
+    }
+
+    /// Display label for the model that the runner will pass via --model.
+    /// Empty string ("CLI default") is surfaced so users know they're letting
+    /// the binary pick rather than seeing a misleading model name.
+    private var previewModelLabel: String {
+        let configuration = configurationStore.load()
+        let trimmed = configuration.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Claude Code CLI default" : trimmed
+    }
+
+    private func copyPromptToPasteboard() {
+        #if canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(renderedPrompt, forType: .string)
+        #endif
+        didCopyPrompt = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            await MainActor.run { didCopyPrompt = false }
+        }
     }
 
     private var statusIcon: String {
