@@ -203,27 +203,40 @@ struct MCPToolSchemasTests {
         #expect(decoded == output)
     }
 
-    // MARK: explain schema oneOf advertising
+    // MARK: explain schema — top-level oneOf is forbidden by the Anthropic API
 
-    @Test("explain schema advertises oneOf for path/item_id mutual exclusion")
-    func explainSchemaAdvertisesOneOf() {
-        let oneOf = MCPPhase2Tools.explain.inputSchema.oneOf
-        #expect(oneOf?.count == 2)
-        #expect(oneOf?[0].required == ["path"])
-        #expect(oneOf?[1].required == ["item_id"])
-        #expect(oneOf?[0].type == .object)
-        #expect(oneOf?[1].type == .object)
+    @Test("explain schema does not declare top-level oneOf (Anthropic API rejects it)")
+    func explainSchemaOmitsTopLevelOneOf() {
+        // The Anthropic tool-use API errors with HTTP 400 on top-level
+        // oneOf/allOf/anyOf in input_schema. The path-vs-item_id mutual
+        // exclusion is enforced at runtime by MCPExplainInput's decoder.
+        #expect(MCPPhase2Tools.explain.inputSchema.oneOf == nil)
     }
 
-    @Test("explain descriptor JSON exposes oneOf branches for schema-driven clients")
-    func explainDescriptorOneOfJSON() throws {
+    @Test("explain descriptor JSON omits oneOf so tool registration with the Anthropic API succeeds")
+    func explainDescriptorJSONHasNoTopLevelOneOf() throws {
         let data = try JSONEncoder().encode(MCPPhase2Tools.explain)
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let schema = obj?["inputSchema"] as? [String: Any]
-        let oneOf = schema?["oneOf"] as? [[String: Any]]
-        #expect(oneOf?.count == 2)
-        let requiredSets = Set(oneOf?.compactMap { $0["required"] as? [String] } ?? [])
-        #expect(requiredSets == [["path"], ["item_id"]])
+        #expect(schema?["oneOf"] == nil)
+        #expect(schema?["allOf"] == nil)
+        #expect(schema?["anyOf"] == nil)
+    }
+
+    @Test("no Phase 2 or Phase 3 tool advertises top-level oneOf/allOf/anyOf")
+    func noToolAdvertisesTopLevelSchemaCombinator() throws {
+        for tool in MCPPhase2Tools.all + MCPPhase3Tools.all {
+            #expect(
+                tool.inputSchema.oneOf == nil,
+                "Tool \(tool.name) declares top-level oneOf — the Anthropic API rejects this."
+            )
+            let data = try JSONEncoder().encode(tool)
+            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let schema = obj?["inputSchema"] as? [String: Any]
+            #expect(schema?["oneOf"] == nil, "Tool \(tool.name) JSON has top-level oneOf")
+            #expect(schema?["allOf"] == nil, "Tool \(tool.name) JSON has top-level allOf")
+            #expect(schema?["anyOf"] == nil, "Tool \(tool.name) JSON has top-level anyOf")
+        }
     }
 
     @Test("MCPJSONSchema round-trips a schema carrying oneOf")

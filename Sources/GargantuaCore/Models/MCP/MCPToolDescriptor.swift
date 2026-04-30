@@ -207,27 +207,29 @@ public enum MCPPhase2Tools {
 
     // MARK: explain
 
+    /// The schema deliberately avoids top-level `oneOf` for the path-vs-item_id
+    /// mutual exclusion. The Anthropic tool-use API rejects top-level
+    /// `oneOf`/`allOf`/`anyOf` in `input_schema`, so the constraint is encoded
+    /// in the descriptions and enforced at runtime by `MCPExplainInput`'s
+    /// custom decoder, which throws on neither / both supplied.
     public static let explain = MCPToolDescriptor(
         name: .explain,
-        description: "Explain what a file or directory is, its safety level, and whether it can be cleaned.",
+        description: "Explain what a file or directory is, its safety level, and whether it can be cleaned. "
+            + "Provide exactly one of `path` or `item_id` — supplying neither or both is a client error.",
         inputSchema: MCPJSONSchema(
             type: .object,
-            description: "Provide either a filesystem path or an item id from a prior scan.",
+            description: "Provide exactly one of path or item_id from a prior scan.",
             properties: [
                 "path": MCPJSONSchema(
                     type: .string,
-                    description: "Absolute filesystem path to explain. Mutually exclusive with item_id."
+                    description: "Absolute filesystem path to explain. Supply this OR item_id, not both."
                 ),
                 "item_id": MCPJSONSchema(
                     type: .string,
-                    description: "Item id from a prior scan result. Mutually exclusive with path."
+                    description: "Item id from a prior scan result. Supply this OR path, not both."
                 ),
             ],
-            required: [],
-            oneOf: [
-                MCPJSONSchema(type: .object, required: ["path"]),
-                MCPJSONSchema(type: .object, required: ["item_id"]),
-            ]
+            required: []
         )
     )
 
