@@ -149,6 +149,8 @@ public struct ClaudeCodeAgentView: View {
                     .foregroundStyle(GargantuaColors.ink3)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                tryThisPromptChips
             }
 
             promptInput
@@ -198,6 +200,10 @@ public struct ClaudeCodeAgentView: View {
                 .stroke(GargantuaColors.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+
+    private var tryThisPromptChips: some View {
+        AgentRunTryPromptChips(template: selectedTemplate, userContext: $userContext)
     }
 
     private var promptInput: some View {
@@ -1089,5 +1095,60 @@ private struct SmartUninstallerNote: View {
     private var headline: String {
         let noun = unresolvedCount == 1 ? "item" : "items"
         return "Claude proposed \(unresolvedCount) additional \(noun) — use Smart Uninstaller"
+    }
+}
+
+// MARK: - Try-this-prompt chips
+
+/// Tap-to-fill chip strip surfaced beneath the preset summary. Each chip
+/// writes its prompt body into `userContext` so the user can run as-is or
+/// edit before pressing Start. Hidden once the user has typed anything so
+/// in-progress text isn't clobbered.
+private struct AgentRunTryPromptChips: View {
+    let template: ClaudeCodeAgentPromptTemplate
+    @Binding var userContext: String
+
+    var body: some View {
+        let chips = ClaudeCodeAgentHelpContent.chips(for: template)
+        let trimmed = userContext.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !chips.isEmpty, trimmed.isEmpty {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+                Text("TRY")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(0.8)
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                HStack(spacing: GargantuaSpacing.space2) {
+                    ForEach(chips) { chip in
+                        chipButton(chip)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.top, GargantuaSpacing.space1)
+        }
+    }
+
+    private func chipButton(_ chip: ClaudeCodeAgentHelpContent.ExamplePrompt) -> some View {
+        Button {
+            userContext = chip.prompt
+        } label: {
+            Text(chip.chipLabel)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink)
+                .lineLimit(1)
+                .padding(.horizontal, GargantuaSpacing.space3)
+                .padding(.vertical, GargantuaSpacing.space1)
+                .background(GargantuaColors.surface3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                        .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        }
+        .buttonStyle(.plain)
+        .help(chip.prompt)
+        .accessibilityLabel("Try prompt: \(chip.chipLabel)")
+        .accessibilityHint("Fills the prompt field with an example question")
     }
 }

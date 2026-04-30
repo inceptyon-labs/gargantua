@@ -27,6 +27,10 @@ public enum ClaudeCodeAgentHelpContent {
     public struct ExamplePrompt: Identifiable, Hashable {
         public let id: String
         public let useCase: String
+        /// Compact topic phrase (≤24 chars) used when the prompt is rendered as
+        /// a tap-to-fill chip under a preset. Distinct from `useCase`, which
+        /// can be longer phrasing for the help-sheet listing.
+        public let chipLabel: String
         public let prompt: String
     }
 
@@ -34,29 +38,56 @@ public enum ClaudeCodeAgentHelpContent {
         ExamplePrompt(
             id: "pre-event-triage",
             useCase: "Pre-event triage",
+            chipLabel: "Pre-upgrade triage",
             prompt: "I\u{2019}m doing a macOS upgrade tomorrow. What should I clean up first to free space and reduce migration risk?"
         ),
         ExamplePrompt(
             id: "orphan-cache-hunting",
             useCase: "Orphan / dead-app cache hunting",
+            chipLabel: "Orphan caches",
             prompt: "Show me caches that are safe to delete because the apps that wrote them aren\u{2019}t installed anymore."
         ),
         ExamplePrompt(
             id: "version-cleanup",
             useCase: "Version cleanup",
+            chipLabel: "Adobe version cleanup",
             prompt: "I have multiple versions of [Adobe X / Xcode / Node / etc.] installed. Recommend keeping just the latest stable release."
         ),
         ExamplePrompt(
             id: "criterion-filtering",
             useCase: "Criterion filtering",
+            chipLabel: "Criterion filtering",
             prompt: "Find [Adobe / Steam / dev] apps and assets I haven\u{2019}t touched in 6+ months. Don\u{2019}t recommend things I\u{2019}m actively using."
         ),
         ExamplePrompt(
             id: "project-archaeology",
             useCase: "Project archaeology",
+            chipLabel: "Stale dev projects",
             prompt: "What is the biggest potential cleanup in my ~/Development folder? Are there any project repositories I haven\u{2019}t opened in 6+ months that I could archive?"
         )
     ]
+
+    // MARK: Per-preset chip mapping
+
+    /// Maps each preset to the example-prompt IDs surfaced as chips beneath
+    /// its picker. Edit this map in one place to change which prompts appear
+    /// where — the chip labels and prompt bodies still come from
+    /// `examplePrompts`, so there are no duplicated copy strings.
+    public static let chipsByTemplate: [ClaudeCodeAgentPromptTemplate: [String]] = [
+        .investigateSpace: ["pre-event-triage", "orphan-cache-hunting"],
+        .projectArchaeology: ["project-archaeology"],
+        .customCleanupScript: ["version-cleanup", "criterion-filtering"],
+    ]
+
+    /// Resolved chip prompts for a preset. Returns the matching
+    /// `ExamplePrompt`s in the order specified by `chipsByTemplate`. IDs that
+    /// don't resolve are silently dropped (kept defensive — the test suite
+    /// pins both halves of the mapping so this is never expected at runtime).
+    public static func chips(for template: ClaudeCodeAgentPromptTemplate) -> [ExamplePrompt] {
+        let ids = chipsByTemplate[template] ?? []
+        let lookup = Dictionary(uniqueKeysWithValues: examplePrompts.map { ($0.id, $0) })
+        return ids.compactMap { lookup[$0] }
+    }
 
     // MARK: When to use Deep Scan instead
 

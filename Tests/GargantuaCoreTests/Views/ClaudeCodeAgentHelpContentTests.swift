@@ -74,4 +74,51 @@ struct ClaudeCodeAgentHelpContentTests {
         #expect(lines.contains { $0.lowercased().contains("most space") })
         #expect(lines.contains { $0.lowercased().contains("weekly") })
     }
+
+    // MARK: - Try-this-prompt chips
+
+    @Test("Every preset surfaces at least one try-this-prompt chip")
+    func everyPresetHasChips() {
+        for template in ClaudeCodeAgentPromptTemplate.allCases {
+            let chips = ClaudeCodeAgentHelpContent.chips(for: template)
+            #expect(!chips.isEmpty, "preset \(template.rawValue) should have ≥1 chip")
+        }
+    }
+
+    @Test("Every chip ID resolves to an existing example prompt")
+    func chipIDsResolveToExamplePrompts() {
+        let knownIDs = Set(ClaudeCodeAgentHelpContent.examplePrompts.map(\.id))
+        for (template, ids) in ClaudeCodeAgentHelpContent.chipsByTemplate {
+            for id in ids {
+                #expect(knownIDs.contains(id), "preset \(template.rawValue) references unknown prompt ID '\(id)'")
+            }
+        }
+    }
+
+    @Test("Chip labels are short topic phrases, not full prompts")
+    func chipLabelsAreShortTopics() {
+        for example in ClaudeCodeAgentHelpContent.examplePrompts {
+            #expect(!example.chipLabel.isEmpty, "prompt \(example.id) has empty chipLabel")
+            #expect(example.chipLabel.count <= 24, "chipLabel '\(example.chipLabel)' (\(example.chipLabel.count) chars) exceeds 24-char budget")
+        }
+    }
+
+    @Test("Chip mapping covers every prompt template case")
+    func chipMappingIsExhaustive() {
+        for template in ClaudeCodeAgentPromptTemplate.allCases {
+            #expect(
+                ClaudeCodeAgentHelpContent.chipsByTemplate[template] != nil,
+                "preset \(template.rawValue) is missing from chipsByTemplate"
+            )
+        }
+    }
+
+    @Test("chips(for:) returns prompts in mapping order")
+    func chipsPreserveMappingOrder() {
+        for template in ClaudeCodeAgentPromptTemplate.allCases {
+            let expectedIDs = ClaudeCodeAgentHelpContent.chipsByTemplate[template] ?? []
+            let resolvedIDs = ClaudeCodeAgentHelpContent.chips(for: template).map(\.id)
+            #expect(resolvedIDs == expectedIDs, "preset \(template.rawValue) chip order drifted")
+        }
+    }
 }
