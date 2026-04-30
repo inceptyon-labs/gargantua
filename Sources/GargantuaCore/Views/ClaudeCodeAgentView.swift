@@ -48,13 +48,30 @@ public struct ClaudeCodeAgentView: View {
         }
         .overlay(alignment: .center) {
             if let pending = controller.pendingApproval {
-                ConfirmationModalView(
-                    items: pending.items,
-                    onConfirm: { method in
-                        Task { await controller.confirmPendingApproval(method: method) }
-                    },
-                    onCancel: { controller.cancelPendingApproval() }
-                )
+                VStack(spacing: GargantuaSpacing.space3) {
+                    if !pending.unresolvedItemIDs.isEmpty {
+                        SmartUninstallerNote(
+                            unresolvedCount: pending.unresolvedItemIDs.count,
+                            // When the modal is also showing, dismiss is
+                            // handled by the modal's own buttons; the note
+                            // is purely informational. When there are no
+                            // resolved items, the note IS the modal — it
+                            // needs its own dismiss path.
+                            onAcknowledge: pending.items.isEmpty
+                                ? { Task { await controller.confirmPendingApproval() } }
+                                : nil
+                        )
+                    }
+                    if !pending.items.isEmpty {
+                        ConfirmationModalView(
+                            items: pending.items,
+                            onConfirm: { method in
+                                Task { await controller.confirmPendingApproval(method: method) }
+                            },
+                            onCancel: { controller.cancelPendingApproval() }
+                        )
+                    }
+                }
                 .transition(.opacity)
             }
         }
@@ -1003,5 +1020,74 @@ private struct MaxTurnsRecoveryCard: View {
                 .stroke(GargantuaColors.review.opacity(0.6), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+}
+
+// MARK: - Smart Uninstaller note
+
+/// Inline companion to `ConfirmationModalView` shown when the agent's
+/// `mcp__gargantua__clean` call referenced item IDs the host scan cache
+/// couldn't resolve — typically app-bundle paths the agent wrote out by
+/// hand instead of scan-cache IDs. We can't run those through
+/// `CleanupEngine` (it expects `ScanResult`s), so we explain the gap and
+/// point the user at Smart Uninstaller for app removal.
+///
+/// `onAcknowledge` is non-nil only when the note is standing in for the
+/// modal (every proposed ID was unresolved). In the mixed case the modal
+/// owns dismissal and this view is purely informational.
+private struct SmartUninstallerNote: View {
+    let unresolvedCount: Int
+    let onAcknowledge: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+            HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+                Image(systemName: "app.badge.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(GargantuaColors.review)
+                    .frame(width: 20, alignment: .center)
+
+                VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                    Text(headline)
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+
+                    Text("These items aren't in the scan cache — likely application bundles. Use Smart Uninstaller to remove apps cleanly.")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if let onAcknowledge {
+                HStack {
+                    Spacer()
+                    Button(action: onAcknowledge) {
+                        Text("Got it")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, GargantuaSpacing.space4)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .background(GargantuaColors.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(GargantuaSpacing.space4)
+        .frame(maxWidth: 520, alignment: .leading)
+        .background(GargantuaColors.surface2)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .stroke(GargantuaColors.review.opacity(0.6), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+
+    private var headline: String {
+        let noun = unresolvedCount == 1 ? "item" : "items"
+        return "Claude proposed \(unresolvedCount) additional \(noun) — use Smart Uninstaller"
     }
 }

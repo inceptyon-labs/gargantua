@@ -147,12 +147,12 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// Approve a gate. When the gate carries structured `proposedItemIDs`,
     /// the controller hydrates them against its scan mirror and exposes a
     /// `pendingApproval` state for the view to render the confirmation
-    /// modal — the gate is NOT marked `.approved` until the user actually
-    /// confirms cleanup via `confirmPendingApproval(method:)`. When the
-    /// gate has no structured IDs (substring-fallback case, no scan was
-    /// observed yet, or every ID is unresolved), the controller falls
-    /// back to the previous status-flip-with-audit behavior so the UI
-    /// stays consistent.
+    /// modal and/or the unresolved-IDs note — the gate is NOT marked
+    /// `.approved` until the user confirms via
+    /// `confirmPendingApproval(method:)`. When the gate has no structured
+    /// IDs at all (substring-fallback case), there is nothing to hydrate
+    /// or warn about, so the controller falls back to the previous
+    /// status-flip-with-audit behavior.
     public func approve(_ gate: ClaudeCodeAgentApprovalGate) {
         guard !gate.proposedItemIDs.isEmpty else {
             // No structured IDs to hydrate — record the decision and move on.
@@ -161,10 +161,11 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             return
         }
         let (found, unknown) = scanCache.lookupAll(ids: gate.proposedItemIDs)
-        guard !found.isEmpty else {
-            // Every ID was unresolved (no observed scan, or all bundle paths).
-            // Treat as a no-op approval with audit and surface the gate as
-            // approved so the UI doesn't get stuck pending.
+        guard !found.isEmpty || !unknown.isEmpty else {
+            // Defensive: lookupAll partitions every requested id into one
+            // bucket, so this shouldn't fire — but if both come back empty
+            // we keep the prior auto-approve shape so the gate doesn't
+            // wedge in pending.
             decide(gate, status: .approved)
             return
         }
@@ -184,19 +185,27 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// drives — no parallel pipeline, no agent-specific cleanup code. Marks
     /// the originating gate `.approved` once cleanup completes (success or
     /// fail) so the UI can transition out of the pending state.
+    ///
+    /// When `pending.items` is empty (only-unresolved case — every ID the
+    /// agent proposed was outside the scan cache, typically app bundles),
+    /// there is nothing to clean. We still mark the gate approved with
+    /// audit so the user's acknowledgement of the Smart Uninstaller note
+    /// is recorded.
     public func confirmPendingApproval(method: CleanupMethod = .trash) async {
         guard let pending = pendingApproval else { return }
         pendingApproval = nil
-        let result = await cleanupEngine.clean(pending.items, method: method)
-        do {
-            try auditWriter.record(result: result)
-        } catch {
-            // Audit write failure doesn't unwind cleanup — log and continue,
-            // matching DeepCleanView's behavior in the same situation.
-            events.append(ClaudeCodeAgentTranscriptEvent(
-                stream: .system,
-                message: "Audit write failed: \(error.localizedDescription)"
-            ))
+        if !pending.items.isEmpty {
+            let result = await cleanupEngine.clean(pending.items, method: method)
+            do {
+                try auditWriter.record(result: result)
+            } catch {
+                // Audit write failure doesn't unwind cleanup — log and continue,
+                // matching DeepCleanView's behavior in the same situation.
+                events.append(ClaudeCodeAgentTranscriptEvent(
+                    stream: .system,
+                    message: "Audit write failed: \(error.localizedDescription)"
+                ))
+            }
         }
         if let index = approvalGates.firstIndex(where: { $0.id == pending.gateID }) {
             approvalGates[index].status = .approved
