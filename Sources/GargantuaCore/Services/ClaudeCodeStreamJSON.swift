@@ -22,8 +22,13 @@ public enum ClaudeCodeStreamEvent: Sendable, Equatable {
     /// approval gates); nil for every other tool call.
     case toolUse(name: String, inputSummary: String, payload: ClaudeCodeToolUsePayload?)
     /// The MCP server returned a result for a previous `toolUse`.
-    /// `summary` is a clipped preview of the response.
-    case toolResult(toolUseID: String, isError: Bool, summary: String)
+    /// `summary` is a clipped preview of the response. `payload` carries
+    /// structured data the host needs to mirror — currently only
+    /// `mcp__gargantua__scan` responses (decoded from the top-level
+    /// `tool_use_result.structuredContent` field, which Claude Code retains
+    /// even when the inner text content is redacted to a saved-to-disk
+    /// pointer for large payloads). Nil for everything else.
+    case toolResult(toolUseID: String, isError: Bool, summary: String, payload: ClaudeCodeToolResultPayload?)
     /// Terminal event marking the end of a session.
     case terminal(ClaudeCodeStreamTerminalResult)
     /// A line we recognised as JSON but whose `type` we don't model.
@@ -37,9 +42,21 @@ public enum ClaudeCodeToolUsePayload: Sendable, Equatable {
     /// Item IDs the agent is requesting to clean via `mcp__gargantua__clean`.
     /// Used by `ClaudeCodeDestructiveActionDetector` to attach
     /// `proposedItemIDs` to the approval gate it raises, so the host can
-    /// resolve them later (PHASE 2 — scan-result mirroring) and present
-    /// them in the confirmation UI.
+    /// resolve them later against its scan-result mirror.
     case cleanRequest(itemIDs: [String])
+}
+
+/// Structured payload extracted from a `tool_use_result` block, when the
+/// host recognises the originating tool by the response shape. Currently
+/// only `mcp__gargantua__scan` responses are decoded; other tools surface
+/// as `nil`.
+public enum ClaudeCodeToolResultPayload: Sendable, Equatable {
+    /// Wire-shape scan items from a `mcp__gargantua__scan` response.
+    /// `MCPScanItem` is what Claude Code's `tool_use_result.structuredContent`
+    /// carries verbatim; the consumer (host-side scan-result mirror)
+    /// converts to `ScanResult` lazily, accepting the lossy size /
+    /// missing-tags round-trip at that layer.
+    case scanResults(items: [MCPScanItem])
 }
 
 /// Aggregated facts about a finished agent run, parsed from the `result`
@@ -189,7 +206,12 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
             let id = block["tool_use_id"] as? String ?? ""
             let isError = (block["is_error"] as? Bool) ?? false
             let summary = Self.summarize(json: block["content"])
-            return .toolResult(toolUseID: id, isError: isError, summary: summary)
+            // The structured payload lives at the TOP level of the line under
+            // `tool_use_result.structuredContent` — not inside this content
+            // block. Claude Code keeps it intact even when the inline text
+            // gets redacted to a saved-to-disk pointer for oversized results.
+            let payload = Self.toolResultPayload(topLevel: obj)
+            return .toolResult(toolUseID: id, isError: isError, summary: summary, payload: payload)
         }
         return nil
     }
@@ -240,6 +262,44 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
         let ids = array.compactMap { $0 as? String }
         guard !ids.isEmpty else { return nil }
         return .cleanRequest(itemIDs: ids)
+    }
+
+    /// Decode the structured response payload for a tool_result line. Looks
+    /// at the top-level `tool_use_result.structuredContent` field that
+    /// Claude Code surfaces alongside the message-content text. Currently
+    /// recognises only the `MCPScanOutput` shape (presence of an `items`
+    /// array of objects with id/path/safety keys); other tools — analyze,
+    /// status, list_profiles, explain — could be added here as needed.
+    private static func toolResultPayload(topLevel obj: [String: Any]) -> ClaudeCodeToolResultPayload? {
+        guard let result = obj["tool_use_result"] as? [String: Any],
+              let structured = result["structuredContent"] as? [String: Any]
+        else { return nil }
+        // Disambiguate from other tools that happen to use an `items` array
+        // (none today, but defensively): require the per-item shape that
+        // uniquely identifies a scan result.
+        guard let items = structured["items"] as? [[String: Any]],
+              !items.isEmpty,
+              items.first?["id"] is String,
+              items.first?["path"] is String,
+              items.first?["safety"] is String
+        else { return nil }
+        let decoded = items.compactMap(decodeMCPScanItem(_:))
+        guard !decoded.isEmpty else { return nil }
+        return .scanResults(items: decoded)
+    }
+
+    /// Round-trip one wire-shape item through `JSONSerialization` and the
+    /// `MCPScanItem` Codable so we get the same struct the host uses for
+    /// its own MCP responses, with the same coding-key conventions
+    /// (snake_case `last_accessed`). Returns nil when required fields are
+    /// missing or types mismatch.
+    private static func decodeMCPScanItem(_ raw: [String: Any]) -> MCPScanItem? {
+        guard let data = try? JSONSerialization.data(withJSONObject: raw, options: []) else {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(MCPScanItem.self, from: data)
     }
 
     /// Stringify an arbitrary JSON value into a single-line, length-capped

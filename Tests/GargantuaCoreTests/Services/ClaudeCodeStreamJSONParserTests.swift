@@ -109,13 +109,53 @@ struct ClaudeCodeStreamJSONParserTests {
             {"type":"tool_result","tool_use_id":"toolu_1","content":"Found 482 cache items totaling 2.1 GB.","is_error":false}
         ]}}
         """#
-        guard case let .toolResult(id, isError, summary) = try #require(parser.parse(line: line)) else {
+        guard case let .toolResult(id, isError, summary, _) = try #require(parser.parse(line: line)) else {
             Issue.record("Expected toolResult")
             return
         }
         #expect(id == "toolu_1")
         #expect(isError == false)
         #expect(summary == "Found 482 cache items totaling 2.1 GB.")
+    }
+
+    @Test("user tool_result for mcp__gargantua__scan exposes structuredContent items as a hydrated payload")
+    func scanToolResultExposesStructuredContent() throws {
+        // Captured shape from /tmp/agent-vs-deepscan-2026-04-30/transcripts —
+        // top-level `tool_use_result.structuredContent` carries the typed
+        // MCPScanOutput even when the inner `content` text is the
+        // saved-to-disk error pointer for oversized payloads.
+        let line = #"""
+        {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_scan_1","type":"tool_result","content":"Error: result exceeds maximum allowed tokens. Output saved to /tmp/scan.txt."}]},"tool_use_result":{"content":"Error: result exceeds...","structuredContent":{"items":[{"id":"nextjs_cache-0","name":"Next.js Cache — cache","path":"/Users/Jason/dev/.next/cache","size":"4.1 KB","safety":"safe","confidence":90,"explanation":"Next.js build cache.","source":"Next.js","last_accessed":"2026-03-13T02:01:43Z","category":"dev_artifacts"},{"id":"chrome_cache-0","name":"Chrome Cache","path":"/Users/Jason/Library/Caches/Chrome","size":"23 GB","safety":"review","confidence":80,"explanation":"Browser cache.","source":"Chrome","last_accessed":"2026-04-29T10:00:00Z","category":"browser_cache"}],"summary":{"safe_count":1,"safe_size":"4.1 KB","review_count":1,"review_size":"23 GB","protected_count":0},"total_reclaimable":"23 GB"}}}
+        """#
+        guard case let .toolResult(_, _, _, payload) = try #require(parser.parse(line: line)) else {
+            Issue.record("Expected toolResult")
+            return
+        }
+        guard case let .scanResults(items) = try #require(payload) else {
+            Issue.record("Expected scanResults payload")
+            return
+        }
+        #expect(items.count == 2)
+        #expect(items[0].id == "nextjs_cache-0")
+        #expect(items[0].path == "/Users/Jason/dev/.next/cache")
+        #expect(items[0].safety == "safe")
+        #expect(items[0].size == "4.1 KB")
+        #expect(items[1].id == "chrome_cache-0")
+        #expect(items[1].safety == "review")
+    }
+
+    @Test("user tool_result for non-scan tools (analyze) does not produce a scanResults payload")
+    func nonScanToolResultHasNilPayload() throws {
+        // Analyze response has structuredContent but no `items` array — must
+        // not be misclassified as a scan result.
+        let line = #"""
+        {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_analyze_1","type":"tool_result","content":"{\"health_score\":44}"}]},"tool_use_result":{"content":"{\"health_score\":44}","structuredContent":{"health_score":44,"disk":{"free":"64 GB","total":"994 GB","used":"929 GB"},"recommendations":[],"top_consumers":[]}}}
+        """#
+        guard case let .toolResult(_, _, _, payload) = try #require(parser.parse(line: line)) else {
+            Issue.record("Expected toolResult")
+            return
+        }
+        #expect(payload == nil)
     }
 
     @Test("user tool_result honours is_error true")
@@ -125,7 +165,7 @@ struct ClaudeCodeStreamJSONParserTests {
             {"type":"tool_result","tool_use_id":"toolu_2","content":"Profile not found","is_error":true}
         ]}}
         """#
-        guard case let .toolResult(_, isError, summary) = try #require(parser.parse(line: line)) else {
+        guard case let .toolResult(_, isError, summary, _) = try #require(parser.parse(line: line)) else {
             Issue.record("Expected toolResult")
             return
         }
@@ -206,7 +246,7 @@ struct ClaudeCodeStreamJSONParserTests {
             {"type":"tool_result","tool_use_id":"toolu_long","content":"\#(huge)","is_error":false}
         ]}}
         """#
-        guard case let .toolResult(_, _, summary) = try #require(parser.parse(line: line)) else {
+        guard case let .toolResult(_, _, summary, _) = try #require(parser.parse(line: line)) else {
             Issue.record("Expected toolResult")
             return
         }

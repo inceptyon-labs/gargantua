@@ -779,7 +779,7 @@ private struct ParsedActivityRow: View {
                         .textSelection(.enabled)
                 }
             }
-        case .toolResult(_, let isError, let summary):
+        case .toolResult(_, let isError, let summary, _):
             VStack(alignment: .leading, spacing: 2) {
                 Text(isError ? "Tool error" : "Tool result")
                     .font(GargantuaFonts.label)
@@ -827,7 +827,7 @@ private struct ParsedActivityRow: View {
         case .sessionInit: "bolt.horizontal.circle.fill"
         case .assistantText: "text.bubble.fill"
         case .toolUse: "wrench.and.screwdriver.fill"
-        case .toolResult(_, let isError, _): isError ? "exclamationmark.triangle.fill" : "arrow.uturn.left.circle.fill"
+        case .toolResult(_, let isError, _, _): isError ? "exclamationmark.triangle.fill" : "arrow.uturn.left.circle.fill"
         case .terminal(let result):
             switch result.kind {
             case .success: "checkmark.seal.fill"
@@ -843,7 +843,7 @@ private struct ParsedActivityRow: View {
         case .sessionInit: GargantuaColors.accent
         case .assistantText: GargantuaColors.ink2
         case .toolUse: GargantuaColors.accent
-        case .toolResult(_, let isError, _): isError ? GargantuaColors.review : GargantuaColors.safe
+        case .toolResult(_, let isError, _, _): isError ? GargantuaColors.review : GargantuaColors.safe
         case .terminal(let result):
             switch result.kind {
             case .success: GargantuaColors.safe
