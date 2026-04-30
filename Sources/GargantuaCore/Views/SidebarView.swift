@@ -69,7 +69,7 @@ extension SidebarSection {
             items: [
                 SidebarItem(id: "devPurge", label: "Dev Artifact Purge", icon: "hammer"),
                 SidebarItem(id: "devTools", label: "Developer Tools", icon: "wrench.and.screwdriver"),
-                SidebarItem(id: "agentSessions", label: "Agent Sessions", icon: "brain.head.profile"),
+                SidebarItem(id: "agentSessions", label: "Agent Run", icon: "brain.head.profile"),
             ]
         ),
         SidebarSection(

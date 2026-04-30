@@ -98,7 +98,7 @@ public struct ClaudeCodeAgentView: View {
 
             HStack(spacing: GargantuaSpacing.space3) {
                 Button(action: startSession) {
-                    Label("Start session", systemImage: "play.fill")
+                    Label("Start run", systemImage: "play.fill")
                         .font(GargantuaFonts.label)
                         .foregroundStyle(.white)
                         .padding(.horizontal, GargantuaSpacing.space4)
@@ -339,7 +339,7 @@ public struct ClaudeCodeAgentView: View {
 
             Text(controller.status.isRunning
                  ? "The model is starting up. Tool calls and assistant messages will appear here as the run progresses."
-                 : "Compose a prompt on the left and press **Start session**. Tool calls, assistant messages, and the final result will appear here.")
+                 : "Compose a prompt on the left and press **Start run**. Tool calls, assistant messages, and the final result will appear here.")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -374,11 +374,11 @@ public struct ClaudeCodeAgentView: View {
     private var statusDetail: String {
         switch controller.status {
         case .idle:
-            "Choose a prompt preset and start a session."
+            "Choose a prompt preset and start a run."
         case .running:
             "Claude Code is connected to the generated Gargantua MCP config."
         case .completed:
-            "Session finished. Review the transcript and audit log."
+            "Run finished. Review the transcript and audit log."
         case .failed(let message):
             message
         case .cancelled:
@@ -646,7 +646,7 @@ private struct ParsedActivityRow: View {
         var parts: [String] = []
         if let model { parts.append(model) }
         if !mcpServers.isEmpty { parts.append("MCP: \(mcpServers.joined(separator: ", "))") }
-        return parts.isEmpty ? "Session started" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "Run started" : parts.joined(separator: " · ")
     }
 
     /// Strip the `mcp__<server>__` prefix Claude Code adds to MCP tool names so

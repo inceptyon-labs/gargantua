@@ -153,7 +153,7 @@ struct ClaudeCodeAgentSettingsSection: View {
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("Non-interactive sessions run through Gargantua MCP with read-only tools by default.")
+                Text("Non-interactive runs go through Gargantua MCP with read-only tools by default.")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -245,7 +245,7 @@ struct ClaudeCodeAgentSettingsSection: View {
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("Off keeps agent sessions read-only; detected clean attempts still appear as approval gates.")
+                Text("Off keeps agent runs read-only; detected clean attempts still appear as approval gates.")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
             }
