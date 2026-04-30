@@ -9,12 +9,22 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
     /// and had users hitting `error_max_turns` after spending real money.
     public static let defaultMaxTurns = 15
 
+    /// Default model identifier. Sonnet rather than Opus — Opus 4.7 cost
+    /// $0.45/run for what was meant to be a scan loop. Users can override
+    /// in Settings; the catalog ships a baked-in fallback list and refreshes
+    /// from `/v1/models` whenever an API key is configured.
+    public static let defaultSelectedModel = "claude-sonnet-4-6"
+
     /// Whether the Claude Code agent integration is enabled.
     public var isEnabled: Bool
     /// Configured filesystem path to the `claude` executable.
     public var cliPath: String
     /// Maximum number of conversation turns per agent session.
     public var maxTurns: Int
+    /// Anthropic model identifier passed to `claude --model`. Empty string
+    /// means "let the CLI pick its default" — kept distinct from the typed
+    /// default so users can opt out without us picking a stale ID.
+    public var selectedModel: String
     /// Whether the agent may invoke the destructive MCP `clean` tool.
     public var allowDestructiveMCPTools: Bool
     /// Whether an audit agent runs after each scheduled scan.
@@ -25,12 +35,14 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
         isEnabled: Bool = false,
         cliPath: String = "",
         maxTurns: Int = Self.defaultMaxTurns,
+        selectedModel: String = Self.defaultSelectedModel,
         allowDestructiveMCPTools: Bool = false,
         runAfterScheduledScans: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.cliPath = cliPath.trimmingCharacters(in: .whitespacesAndNewlines)
         self.maxTurns = min(max(maxTurns, 1), 20)
+        self.selectedModel = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         self.allowDestructiveMCPTools = allowDestructiveMCPTools
         self.runAfterScheduledScans = runAfterScheduledScans
     }
@@ -39,6 +51,7 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
         case isEnabled
         case cliPath
         case maxTurns
+        case selectedModel
         case allowDestructiveMCPTools
         case runAfterScheduledScans
     }
@@ -50,6 +63,7 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
             isEnabled: try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false,
             cliPath: try c.decodeIfPresent(String.self, forKey: .cliPath) ?? "",
             maxTurns: try c.decodeIfPresent(Int.self, forKey: .maxTurns) ?? Self.defaultMaxTurns,
+            selectedModel: try c.decodeIfPresent(String.self, forKey: .selectedModel) ?? Self.defaultSelectedModel,
             allowDestructiveMCPTools: try c.decodeIfPresent(Bool.self, forKey: .allowDestructiveMCPTools) ?? false,
             runAfterScheduledScans: try c.decodeIfPresent(Bool.self, forKey: .runAfterScheduledScans) ?? false
         )
@@ -61,6 +75,7 @@ public struct ClaudeCodeAgentConfiguration: Codable, Sendable, Equatable {
         try c.encode(isEnabled, forKey: .isEnabled)
         try c.encode(cliPath, forKey: .cliPath)
         try c.encode(maxTurns, forKey: .maxTurns)
+        try c.encode(selectedModel, forKey: .selectedModel)
         try c.encode(allowDestructiveMCPTools, forKey: .allowDestructiveMCPTools)
         try c.encode(runAfterScheduledScans, forKey: .runAfterScheduledScans)
     }

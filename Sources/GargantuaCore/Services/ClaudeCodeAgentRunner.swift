@@ -234,6 +234,11 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             allowedTools.joined(separator: ","),
         ]
 
+        let modelOverride = configuration.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !modelOverride.isEmpty {
+            arguments += ["--model", modelOverride]
+        }
+
         if !allowDestructiveMCPTools {
             arguments += [
                 "--disallowedTools",

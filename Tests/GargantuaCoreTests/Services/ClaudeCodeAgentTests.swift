@@ -76,6 +76,40 @@ struct ClaudeCodeAgentTests {
         #expect(plan.environment["GARGANTUA_AGENT_SESSION_ID"] == sessionID.uuidString)
     }
 
+    @Test("Launch plan forwards selectedModel as --model when set, omits the flag when blank")
+    func launchPlanForwardsSelectedModel() throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(
+            isEnabled: true,
+            cliPath: executable.path,
+            selectedModel: "claude-haiku-4-5-20251001"
+        ))
+        let tempDirectory = try makeTemporaryDirectory()
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            mcpServerLaunch: ClaudeCodeMCPServerLaunch(command: "/usr/local/bin/GargantuaMCP", args: ["--stdio"]),
+            processExecutor: FakeClaudeCodeProcessExecutor(),
+            auditWriter: AuditWriter(logDirectory: tempDirectory.appendingPathComponent("audit")),
+            tempDirectory: tempDirectory
+        )
+
+        let plan = try runner.makeLaunchPlan(prompt: "go", sessionID: UUID())
+        let modelIndex = try #require(plan.arguments.firstIndex(of: "--model"))
+        #expect(plan.arguments[modelIndex + 1] == "claude-haiku-4-5-20251001")
+
+        // Empty selectedModel must NOT inject --model (let the CLI pick its default).
+        configStore.save(ClaudeCodeAgentConfiguration(
+            isEnabled: true,
+            cliPath: executable.path,
+            selectedModel: ""
+        ))
+        let blankPlan = try runner.makeLaunchPlan(prompt: "go", sessionID: UUID())
+        #expect(!blankPlan.arguments.contains("--model"))
+    }
+
     @Test("Prompt builder pins MCP and safety-floor instructions")
     func promptBuilderPinsSafetyInstructions() {
         let prompt = ClaudeCodeAgentPromptBuilder.prompt(
