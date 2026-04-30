@@ -47,9 +47,22 @@ public final class FoundationClaudeCodeProcessExecutor: ClaudeCodeAgentProcessEx
             try await withCheckedThrowingContinuation { continuation in
                 let resumeState = ResumeState<Int32>()
 
-                let finish: @Sendable (Result<Int32, Error>) -> Void = { [weak self] result in
+                let finish: @Sendable (Result<Int32, Error>, Bool) -> Void = { [weak self] result, drainPipes in
                     stdout.fileHandleForReading.readabilityHandler = nil
                     stderr.fileHandleForReading.readabilityHandler = nil
+                    if drainPipes {
+                        // Short-lived processes (e.g. `echo`) can terminate before the
+                        // readabilityHandler ever fires; without this drain their output
+                        // sits buffered in the pipe and is lost when the handler is cleared.
+                        let remainingStdout = stdout.fileHandleForReading.availableData
+                        if !remainingStdout.isEmpty {
+                            onOutput(.stdout(String(data: remainingStdout, encoding: .utf8) ?? ""))
+                        }
+                        let remainingStderr = stderr.fileHandleForReading.availableData
+                        if !remainingStderr.isEmpty {
+                            onOutput(.stderr(String(data: remainingStderr, encoding: .utf8) ?? ""))
+                        }
+                    }
                     self?.clearCurrentProcess(process)
                     resumeState.resume(result, continuation: continuation)
                 }
@@ -65,13 +78,13 @@ public final class FoundationClaudeCodeProcessExecutor: ClaudeCodeAgentProcessEx
                     onOutput(.stderr(String(data: data, encoding: .utf8) ?? ""))
                 }
                 process.terminationHandler = { process in
-                    finish(.success(process.terminationStatus))
+                    finish(.success(process.terminationStatus), true)
                 }
 
                 do {
                     try process.run()
                 } catch {
-                    finish(.failure(error))
+                    finish(.failure(error), false)
                 }
             }
         } onCancel: { [weak self] in
