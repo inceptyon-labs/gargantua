@@ -95,6 +95,91 @@ struct ClaudeCodeAgentSessionControllerTests {
         })
     }
 
+    @Test("approve() on a substring-fallback gate (no proposed IDs) falls back to status flip — no modal is presented")
+    func approveWithoutProposedIDsFallsBackToStatusFlip() async throws {
+        // Substring-only line — the parser doesn't extract item_ids, so the
+        // detector raises a gate with proposedItemIDs == [].
+        let substringLine = #"{"name":"mcp__gargantua__clean","input":{"item_ids":["safe-1"]}}"#
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(substringLine + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(runner: runner)
+        controller.start(template: .investigateSpace, userContext: "scan")
+        _ = await waitForTerminalStatus(controller)
+
+        let gate = try #require(controller.approvalGates.first)
+        #expect(gate.proposedItemIDs == [])
+
+        controller.approve(gate)
+
+        #expect(controller.pendingApproval == nil)
+        #expect(controller.approvalGates.first?.status == .approved)
+    }
+
+    @Test("approve() with proposedItemIDs but empty scan cache falls back to status flip — no items to hydrate")
+    func approveWithProposedIDsButEmptyCacheFallsBack() async throws {
+        // Stream-json clean call without a preceding scan tool_result.
+        // Detector parses item_ids onto the gate; controller's host cache
+        // is empty so lookupAll resolves nothing.
+        let cleanLine = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_clean_empty","name":"mcp__gargantua__clean","input":{"item_ids":["chrome_cache-1"],"method":"trash","confirm":true}}]}}
+        """#
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(cleanLine + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(runner: runner)
+        controller.start(template: .investigateSpace, userContext: "scan")
+        _ = await waitForTerminalStatus(controller)
+
+        let gate = try #require(controller.approvalGates.first)
+        #expect(gate.proposedItemIDs == ["chrome_cache-1"])
+
+        controller.approve(gate)
+
+        #expect(controller.pendingApproval == nil)
+        #expect(controller.approvalGates.first?.status == .approved)
+    }
+
+    @Test("stream-json scan tool_result populates the host cache; approve() then hydrates matching IDs into pendingApproval")
+    func approveHydratesItemsAfterScanStreamEvent() async throws {
+        // Two stream-json lines: first a scan tool_result the controller
+        // mirrors into its cache, then a clean tool_use whose item_ids
+        // overlap. After session ends, approve(_:) on the captured gate
+        // should hydrate items[0] from the cache.
+        let scanResultLine = #"""
+        {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_scan_xaad","type":"tool_result","content":"summary text"}]},"tool_use_result":{"content":"summary text","structuredContent":{"items":[{"id":"chrome_cache-1","name":"Chrome","path":"/tmp/chrome-cache","size":"1.2 KB","safety":"safe","confidence":90,"explanation":"cache","source":"Chrome","category":"browser_cache"},{"id":"npm_cache-2","name":"npm","path":"/tmp/npm-cache","size":"500 bytes","safety":"safe","confidence":85,"explanation":"npm cache","source":"npm","category":"dev_artifacts"}],"summary":{"safe_count":2,"safe_size":"1.7 KB","review_count":0,"review_size":"0 bytes","protected_count":0},"total_reclaimable":"1.7 KB"}}}
+        """#
+        let cleanCallLine = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_clean_xaad","name":"mcp__gargantua__clean","input":{"item_ids":["chrome_cache-1","unknown-99"],"method":"trash","confirm":true}}]}}
+        """#
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(scanResultLine + "\n"),
+            .stdout(cleanCallLine + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(runner: runner)
+
+        controller.start(template: .investigateSpace, userContext: "scan")
+        _ = await waitForTerminalStatus(controller)
+
+        let gate = try #require(controller.approvalGates.first)
+        #expect(gate.proposedItemIDs == ["chrome_cache-1", "unknown-99"])
+
+        controller.approve(gate)
+
+        let pending = try #require(controller.pendingApproval)
+        #expect(pending.gateID == gate.id)
+        #expect(pending.items.count == 1)
+        #expect(pending.items.first?.id == "chrome_cache-1")
+        #expect(pending.unresolvedItemIDs == ["unknown-99"])
+        // Gate stays pending until the user confirms in the modal.
+        #expect(controller.approvalGates.first?.status == .pending)
+
+        // Verify cancel path tears it back down without touching the gate.
+        controller.cancelPendingApproval()
+        #expect(controller.pendingApproval == nil)
+        #expect(controller.approvalGates.first?.status == .pending)
+    }
+
     @Test("non-zero process exits move the lifecycle to failed and keep detected approval gates")
     func nonzeroExitMovesLifecycleToFailed() async throws {
         let runner = try makeRunner(

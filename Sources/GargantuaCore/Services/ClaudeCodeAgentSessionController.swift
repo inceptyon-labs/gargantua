@@ -1,6 +1,26 @@
 import Combine
 import Foundation
 
+/// Hydrated approval state surfaced when the user clicks Approve on a gate
+/// that carries structured `proposedItemIDs`. Carries the gate's original
+/// id (so the controller can mark the gate `.approved` once cleanup
+/// finishes), the resolved scan items (subset of the requested IDs that
+/// were found in the host's scan-result mirror), and the unresolved IDs
+/// (so the UI can warn the user that a portion of the agent's
+/// recommendation references items the host never observed — typically
+/// app bundles, which `MCPCleanToolHandler` cannot handle anyway).
+public struct ClaudeCodeAgentPendingApproval: Sendable {
+    public let gateID: UUID
+    public let items: [ScanResult]
+    public let unresolvedItemIDs: [String]
+
+    public init(gateID: UUID, items: [ScanResult], unresolvedItemIDs: [String]) {
+        self.gateID = gateID
+        self.items = items
+        self.unresolvedItemIDs = unresolvedItemIDs
+    }
+}
+
 @MainActor
 public final class ClaudeCodeAgentSessionController: ObservableObject {
     @Published public private(set) var status: ClaudeCodeAgentSessionStatus = .idle
@@ -9,15 +29,34 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     @Published public private(set) var terminalResult: ClaudeCodeStreamTerminalResult?
     @Published public private(set) var approvalGates: [ClaudeCodeAgentApprovalGate] = []
     @Published public private(set) var activeSessionID: UUID?
+    /// Set when the user approves a gate that has hydratable item IDs.
+    /// The agent view binds a `ConfirmationModalView` to its non-nil state
+    /// so the cleanup confirmation goes through the same UI Deep Clean uses.
+    /// Cleared by `confirmPendingApproval(method:)` or `cancelPendingApproval()`.
+    @Published public internal(set) var pendingApproval: ClaudeCodeAgentPendingApproval?
 
     private let runner: ClaudeCodeAgentSessionRunner
+    private let cleanupEngine: CleanupEngine
+    private let auditWriter: AuditWriter
+    /// Host-side mirror of the agent's scan-session cache. Populated from
+    /// `mcp__gargantua__scan` tool_result events (parsed via the
+    /// `ClaudeCodeToolResultPayload.scanResults` payload). Last-scan-wins,
+    /// matching the MCP server's own cache semantics — the agent's most
+    /// recent scan is what the host can hydrate against.
+    private let scanCache = MCPScanSessionCache()
     private var task: Task<Void, Never>?
     private var lastStartTemplate: ClaudeCodeAgentPromptTemplate?
     private var lastStartUserContext: String?
     private var lastStartWorkingDirectory: URL?
 
-    public init(runner: ClaudeCodeAgentSessionRunner = ClaudeCodeAgentSessionRunner()) {
+    public init(
+        runner: ClaudeCodeAgentSessionRunner = ClaudeCodeAgentSessionRunner(),
+        cleanupEngine: CleanupEngine = CleanupEngine(),
+        auditWriter: AuditWriter = AuditWriter()
+    ) {
         self.runner = runner
+        self.cleanupEngine = cleanupEngine
+        self.auditWriter = auditWriter
     }
 
     /// Root under which the runner creates per-session scratch directories.
@@ -105,12 +144,75 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         runner.cancel()
     }
 
+    /// Approve a gate. When the gate carries structured `proposedItemIDs`,
+    /// the controller hydrates them against its scan mirror and exposes a
+    /// `pendingApproval` state for the view to render the confirmation
+    /// modal — the gate is NOT marked `.approved` until the user actually
+    /// confirms cleanup via `confirmPendingApproval(method:)`. When the
+    /// gate has no structured IDs (substring-fallback case, no scan was
+    /// observed yet, or every ID is unresolved), the controller falls
+    /// back to the previous status-flip-with-audit behavior so the UI
+    /// stays consistent.
     public func approve(_ gate: ClaudeCodeAgentApprovalGate) {
-        decide(gate, status: .approved)
+        guard !gate.proposedItemIDs.isEmpty else {
+            // No structured IDs to hydrate — record the decision and move on.
+            // Substring-fallback gates land here.
+            decide(gate, status: .approved)
+            return
+        }
+        let (found, unknown) = scanCache.lookupAll(ids: gate.proposedItemIDs)
+        guard !found.isEmpty else {
+            // Every ID was unresolved (no observed scan, or all bundle paths).
+            // Treat as a no-op approval with audit and surface the gate as
+            // approved so the UI doesn't get stuck pending.
+            decide(gate, status: .approved)
+            return
+        }
+        pendingApproval = ClaudeCodeAgentPendingApproval(
+            gateID: gate.id,
+            items: found,
+            unresolvedItemIDs: unknown
+        )
     }
 
     public func deny(_ gate: ClaudeCodeAgentApprovalGate) {
         decide(gate, status: .denied)
+    }
+
+    /// Run cleanup against the items the user has confirmed in the modal.
+    /// Uses the same `CleanupEngine` + `AuditWriter` pipeline `DeepCleanView`
+    /// drives — no parallel pipeline, no agent-specific cleanup code. Marks
+    /// the originating gate `.approved` once cleanup completes (success or
+    /// fail) so the UI can transition out of the pending state.
+    public func confirmPendingApproval(method: CleanupMethod = .trash) async {
+        guard let pending = pendingApproval else { return }
+        pendingApproval = nil
+        let result = await cleanupEngine.clean(pending.items, method: method)
+        do {
+            try auditWriter.record(result: result)
+        } catch {
+            // Audit write failure doesn't unwind cleanup — log and continue,
+            // matching DeepCleanView's behavior in the same situation.
+            events.append(ClaudeCodeAgentTranscriptEvent(
+                stream: .system,
+                message: "Audit write failed: \(error.localizedDescription)"
+            ))
+        }
+        if let index = approvalGates.firstIndex(where: { $0.id == pending.gateID }) {
+            approvalGates[index].status = .approved
+            approvalGates[index].decidedAt = Date()
+            runner.recordAgentAudit(
+                command: "agent_gate_approved",
+                sessionID: approvalGates[index].sessionID
+            )
+        }
+    }
+
+    /// Dismiss the modal without cleaning anything. Leaves the gate in
+    /// `.pending` state — the user can re-approve later if they change
+    /// their mind.
+    public func cancelPendingApproval() {
+        pendingApproval = nil
     }
 
     private func decide(
@@ -135,6 +237,60 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         if case .terminal(let result) = event {
             terminalResult = result
         }
+        // Mirror agent scan results into the host-side cache so a later
+        // approve(_:) can hydrate gate.proposedItemIDs into ScanResults.
+        // Last-scan-wins matches the MCP server's own cache semantics.
+        if case let .toolResult(_, _, _, .scanResults(items)) = event {
+            let scanResults = items.compactMap(Self.scanResult(from:))
+            if !scanResults.isEmpty {
+                scanCache.replace(with: scanResults)
+            }
+        }
+    }
+
+    /// Convert a wire-shape `MCPScanItem` (carried in the parser's payload)
+    /// back to the `ScanResult` shape `CleanupEngine` and `DeepCleanView`
+    /// consume. Lossy on `size` (round-trips through the formatted display
+    /// string), `tags` (not on wire), `regenerates` and `regenerateCommand`
+    /// (not on wire). Returns nil when the safety raw value is unknown.
+    static func scanResult(from item: MCPScanItem) -> ScanResult? {
+        guard let safety = SafetyLevel(rawValue: item.safety) else { return nil }
+        return ScanResult(
+            id: item.id,
+            name: item.name,
+            path: item.path,
+            size: bytesFromFormattedSize(item.size) ?? 0,
+            safety: safety,
+            confidence: item.confidence,
+            explanation: item.explanation,
+            source: SourceAttribution(name: item.source),
+            lastAccessed: item.lastAccessed,
+            category: item.category
+        )
+    }
+
+    /// Inverse of `AlertItem.formatBytes(_:)` — best-effort parser for the
+    /// formatted size strings (e.g. "4.1 KB", "23 GB") the MCP wire shape
+    /// carries. Approximate at small magnitudes; the agent's
+    /// recommendations are coarse-grained anyway, so the difference between
+    /// 4_100 and 4_096 bytes doesn't matter for cleanup display.
+    private static func bytesFromFormattedSize(_ raw: String) -> Int64? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard parts.count == 2, let value = Double(parts[0]) else {
+            return Int64(trimmed)
+        }
+        let unit = parts[1].lowercased()
+        let multiplier: Double
+        switch unit {
+        case "bytes", "byte", "b": multiplier = 1
+        case "kb": multiplier = 1_000
+        case "mb": multiplier = 1_000_000
+        case "gb": multiplier = 1_000_000_000
+        case "tb": multiplier = 1_000_000_000_000
+        default: return nil
+        }
+        return Int64(value * multiplier)
     }
 
     /// Re-fire the last prompt that ran (via `start`). Used by the UI to give

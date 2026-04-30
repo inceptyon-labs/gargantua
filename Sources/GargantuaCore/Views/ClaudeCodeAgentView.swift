@@ -46,6 +46,18 @@ public struct ClaudeCodeAgentView: View {
         .sheet(isPresented: $helpSheetPresented) {
             ClaudeCodeAgentHelpView()
         }
+        .overlay(alignment: .center) {
+            if let pending = controller.pendingApproval {
+                ConfirmationModalView(
+                    items: pending.items,
+                    onConfirm: { method in
+                        Task { await controller.confirmPendingApproval(method: method) }
+                    },
+                    onCancel: { controller.cancelPendingApproval() }
+                )
+                .transition(.opacity)
+            }
+        }
     }
 
     private var header: some View {
