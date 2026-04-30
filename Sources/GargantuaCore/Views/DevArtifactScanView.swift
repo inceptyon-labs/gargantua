@@ -3,37 +3,6 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "com.gargantua.core", category: "DevArtifactScanView")
 
-// MARK: - Dev Artifact Category
-
-/// A scannable category of developer artifacts.
-public struct DevArtifactCategory: Identifiable, Sendable {
-    public let id: String
-    public let label: String
-    public let icon: String // SF Symbol name
-    /// Estimated size in bytes from the last scan, if available.
-    public var estimatedSize: Int64?
-
-    public init(id: String, label: String, icon: String, estimatedSize: Int64? = nil) {
-        self.id = id
-        self.label = label
-        self.icon = icon
-        self.estimatedSize = estimatedSize
-    }
-}
-
-extension DevArtifactCategory {
-    /// The default set of dev artifact categories.
-    public static let defaults: [DevArtifactCategory] = [
-        DevArtifactCategory(id: "node_modules", label: "node_modules", icon: "shippingbox"),
-        DevArtifactCategory(id: "xcode", label: "Xcode Derived Data", icon: "hammer"),
-        DevArtifactCategory(id: "docker", label: "Docker", icon: "cube"),
-        DevArtifactCategory(id: "homebrew", label: "Homebrew", icon: "mug"),
-        DevArtifactCategory(id: "python", label: "Python", icon: "chevron.left.forwardslash.chevron.right"),
-        DevArtifactCategory(id: "rust", label: "Rust / Cargo", icon: "gearshape.2"),
-        DevArtifactCategory(id: "go", label: "Go", icon: "shippingbox.and.arrow.backward"),
-    ]
-}
-
 // MARK: - Dev Artifact Scan View
 
 /// Category-based view for scanning and cleaning developer artifacts.
@@ -47,8 +16,9 @@ public struct DevArtifactScanView: View {
     private let adapterOverride: (any ScanAdapter)?
     private let scanRoots: [URL]?
 
-    @State private var categories: [DevArtifactCategory] = DevArtifactCategory.defaults
-    @State private var selectedCategoryIDs: Set<String> = Set(DevArtifactCategory.defaults.map(\.id))
+    @State private var selectedBucketIDs: Set<String> = Set(DevArtifactBucket.catalog.map(\.id))
+    /// Per-bucket size totals from the most recent scan. Keyed by bucket id.
+    @State private var bucketEstimates: [String: Int64] = [:]
     @State private var scanProgress = ScanProgress()
     @State private var scanResults: [ScanResult]?
     @State private var scanDuration: TimeInterval = 0
@@ -167,7 +137,7 @@ public struct DevArtifactScanView: View {
         }
     }
 
-    // MARK: - Category Selection
+    // MARK: - Bucket Selection
 
     private var categorySelectionView: some View {
         VStack(spacing: 0) {
@@ -185,16 +155,18 @@ public struct DevArtifactScanView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            // Category list
+            // Bucket list — two tiers (ecosystem, then cross-cutting)
             ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(categories) { category in
-                        categoryRow(category)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    bucketSection(
+                        title: "ECOSYSTEMS",
+                        buckets: bucketsInTier(.ecosystem)
+                    )
 
-                        Rectangle()
-                            .fill(GargantuaColors.borderSoft)
-                            .frame(height: 1)
-                    }
+                    bucketSection(
+                        title: "CROSS-CUTTING",
+                        buckets: bucketsInTier(.crossCutting)
+                    )
                 }
             }
 
@@ -212,11 +184,37 @@ public struct DevArtifactScanView: View {
         }
     }
 
-    private func categoryRow(_ category: DevArtifactCategory) -> some View {
-        let isSelected = selectedCategoryIDs.contains(category.id)
+    private func bucketsInTier(_ tier: DevArtifactBucket.Tier) -> [DevArtifactBucket] {
+        DevArtifactBucket.catalog
+            .filter { $0.tier == tier }
+            .sorted(by: { $0.priority < $1.priority })
+    }
+
+    private func bucketSection(title: String, buckets: [DevArtifactBucket]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink3)
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.top, GargantuaSpacing.space3)
+                .padding(.bottom, GargantuaSpacing.space2)
+
+            ForEach(buckets) { bucket in
+                bucketRow(bucket)
+
+                Rectangle()
+                    .fill(GargantuaColors.borderSoft)
+                    .frame(height: 1)
+            }
+        }
+    }
+
+    private func bucketRow(_ bucket: DevArtifactBucket) -> some View {
+        let isSelected = selectedBucketIDs.contains(bucket.id)
 
         return Button {
-            toggleCategory(category.id)
+            toggleBucket(bucket.id)
         } label: {
             HStack(spacing: GargantuaSpacing.space3) {
                 // Checkbox
@@ -240,20 +238,20 @@ public struct DevArtifactScanView: View {
                 }
 
                 // Icon
-                Image(systemName: category.icon)
+                Image(systemName: bucket.icon)
                     .font(.system(size: 14))
                     .foregroundStyle(GargantuaColors.ink2)
                     .frame(width: 20, alignment: .center)
 
                 // Label
-                Text(category.label)
+                Text(bucket.label)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
 
                 Spacer()
 
                 // Estimated size from last scan
-                if let size = category.estimatedSize {
+                if let size = bucketEstimates[bucket.id], size > 0 {
                     Text(AlertItem.formatBytes(size))
                         .font(GargantuaFonts.monoData)
                         .foregroundStyle(GargantuaColors.ink2)
@@ -343,7 +341,7 @@ public struct DevArtifactScanView: View {
                 Spacer()
 
                 Button(action: startScan) {
-                    Text("Scan Selected Categories")
+                    Text("Scan Selected Buckets")
                         .font(GargantuaFonts.label)
                         .foregroundStyle(.white)
                         .padding(.horizontal, GargantuaSpacing.space4)
@@ -352,8 +350,8 @@ public struct DevArtifactScanView: View {
                         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)
-                .disabled(selectedCategoryIDs.isEmpty)
-                .opacity(selectedCategoryIDs.isEmpty ? 0.5 : 1)
+                .disabled(selectedBucketIDs.isEmpty)
+                .opacity(selectedBucketIDs.isEmpty ? 0.5 : 1)
             }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
@@ -454,11 +452,11 @@ extension DevArtifactScanView {
         phase = .idle
     }
 
-    private func toggleCategory(_ id: String) {
-        if selectedCategoryIDs.contains(id) {
-            selectedCategoryIDs.remove(id)
+    private func toggleBucket(_ id: String) {
+        if selectedBucketIDs.contains(id) {
+            selectedBucketIDs.remove(id)
         } else {
-            selectedCategoryIDs.insert(id)
+            selectedBucketIDs.insert(id)
         }
     }
 
@@ -474,17 +472,20 @@ extension DevArtifactScanView {
                     ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
                 let results = try await adapter.scan(progress: scanProgress, observer: pathStream)
 
-                // Filter results to selected categories by matching against
-                // category or tag patterns
+                // Filter results to the user's selected buckets. A result
+                // is kept if any of its derived buckets is selected — so
+                // a Gradle log (JVM ecosystem + Build caches + Logs)
+                // shows up if any of those three buckets is on.
                 let filtered = results.filter { result in
-                    selectedCategoryIDs.contains(where: { categoryID in
-                        matchesCategory(result: result, categoryID: categoryID)
-                    })
+                    let derivedIDs = DevArtifactBucket.derive(from: result).map(\.id)
+                    return derivedIDs.contains(where: selectedBucketIDs.contains)
                 }
 
                 scanDuration = Date().timeIntervalSince(start)
 
-                // Update category estimated sizes from scan results
+                // Update bucket estimated sizes from the full result set
+                // (not the filtered set) so the user sees what's available
+                // even in buckets they currently have unchecked.
                 updateEstimatedSizes(from: results)
 
                 // Pre-select safe items
@@ -503,46 +504,19 @@ extension DevArtifactScanView {
     }
 
     private func updateEstimatedSizes(from results: [ScanResult]) {
-        for index in categories.indices {
-            let categoryID = categories[index].id
-            let matching = results.filter { Self.matchesCategory(result: $0, categoryID: categoryID) }
-            if !matching.isEmpty {
-                categories[index].estimatedSize = matching.reduce(0) { $0 + $1.size }
+        var totals: [String: Int64] = [:]
+        for result in results {
+            for bucket in DevArtifactBucket.derive(from: result) {
+                totals[bucket.id, default: 0] += result.size
             }
         }
+        bucketEstimates = totals
     }
 }
 
-// MARK: - Category Matching
+// MARK: - Helpers
 
 extension DevArtifactScanView {
-    fileprivate func matchesCategory(result: ScanResult, categoryID: String) -> Bool {
-        Self.matchesCategory(result: result, categoryID: categoryID)
-    }
-
-    fileprivate static func matchesCategory(result: ScanResult, categoryID: String) -> Bool {
-        switch categoryID {
-        case "node_modules":
-            return result.category == "dev_artifacts"
-                && result.path.contains("node_modules")
-        case "xcode":
-            return result.category == "dev_artifacts"
-                && (result.path.contains("DerivedData") || result.path.contains("Xcode"))
-        case "docker":
-            return result.category == "docker"
-        case "homebrew":
-            return result.category == "homebrew"
-        case "python":
-            return result.tags.contains("python")
-        case "rust":
-            return result.tags.contains("rust")
-        case "go":
-            return result.tags.contains("go")
-        default:
-            return false
-        }
-    }
-
     fileprivate func safetyColor(_ level: SafetyLevel) -> Color {
         switch level {
         case .safe: GargantuaColors.safe
