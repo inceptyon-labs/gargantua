@@ -66,6 +66,12 @@ public struct ClaudeCodeAgentApprovalGate: Identifiable, Codable, Equatable, Sen
     public let summary: String
     /// Raw transcript line that triggered the gate.
     public let rawTranscript: String
+    /// Item IDs the agent requested to clean, parsed from the structured
+    /// `mcp__gargantua__clean` tool_use payload. Empty when only the
+    /// substring fallback fired (older transcript shapes, malformed JSON,
+    /// or future schema drift) — in that case the host has nothing to
+    /// hydrate against and approval becomes a no-op confirmation.
+    public let proposedItemIDs: [String]
 
     /// Creates an approval gate for a detected destructive action.
     public init(
@@ -75,7 +81,8 @@ public struct ClaudeCodeAgentApprovalGate: Identifiable, Codable, Equatable, Sen
         decidedAt: Date? = nil,
         status: ClaudeCodeAgentApprovalStatus = .pending,
         summary: String,
-        rawTranscript: String
+        rawTranscript: String,
+        proposedItemIDs: [String] = []
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -84,6 +91,7 @@ public struct ClaudeCodeAgentApprovalGate: Identifiable, Codable, Equatable, Sen
         self.status = status
         self.summary = summary
         self.rawTranscript = rawTranscript
+        self.proposedItemIDs = proposedItemIDs
     }
 }
 
@@ -309,12 +317,21 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
         let detector = ClaudeCodeDestructiveActionDetector(sessionID: sessionID)
         let parser = ClaudeCodeStreamJSONParser()
         let lineBuffer = ClaudeCodeLineBuffer { line in
-            if let gate = detector.detect(line) {
+            // Parse first so the detector can consume any structured payload
+            // (clean tool_use → item IDs) the parser exposes. Falls back to
+            // pure substring detection when the line doesn't JSON-parse —
+            // covers free-form transcript fragments and parser drift.
+            let parsedEvent = parser.parse(line: line)
+            var proposedItemIDs: [String] = []
+            if case let .toolUse(_, _, .cleanRequest(itemIDs)) = parsedEvent {
+                proposedItemIDs = itemIDs
+            }
+            if let gate = detector.detect(line, proposedItemIDs: proposedItemIDs) {
                 gates.append(gate)
                 onGate(gate)
                 self.recordAgentAudit(command: "agent_gate_detected", sessionID: sessionID)
             }
-            if let onStreamEvent, let event = parser.parse(line: line) {
+            if let onStreamEvent, let event = parsedEvent {
                 onStreamEvent(event)
             }
         }
@@ -441,18 +458,46 @@ public struct ClaudeCodeDestructiveActionDetector: Sendable {
     }
 
     /// Returns an approval gate when the transcript line mentions MCP cleanup with item IDs.
-    public func detect(_ line: String) -> ClaudeCodeAgentApprovalGate? {
-        let normalized = line.lowercased()
-        let mentionsCleanTool = normalized.contains("mcp__gargantua__clean")
-            || normalized.contains("\"name\":\"clean\"")
-            || normalized.contains("\"name\": \"clean\"")
-        let mentionsItemIDs = normalized.contains("item_ids") || normalized.contains("item ids")
-        guard mentionsCleanTool && mentionsItemIDs else { return nil }
+    ///
+    /// `proposedItemIDs` carries IDs already extracted by the structured
+    /// stream parser (`ClaudeCodeStreamJSONParser` — see `cleanRequest`
+    /// payload). When non-empty, the gate fires regardless of substring
+    /// match — the parser has already confirmed this is a clean call. When
+    /// empty, the substring fallback is the gating signal: it covers
+    /// non-JSON output (errors, free-form text mentioning the tool name)
+    /// and hardens against parser drift, but produces a gate with no IDs
+    /// the host can hydrate.
+    public func detect(
+        _ line: String,
+        proposedItemIDs: [String] = []
+    ) -> ClaudeCodeAgentApprovalGate? {
+        let parsed = !proposedItemIDs.isEmpty
+        let bySubstring: Bool
+        if parsed {
+            bySubstring = false
+        } else {
+            let normalized = line.lowercased()
+            let mentionsCleanTool = normalized.contains("mcp__gargantua__clean")
+                || normalized.contains("\"name\":\"clean\"")
+                || normalized.contains("\"name\": \"clean\"")
+            let mentionsItemIDs = normalized.contains("item_ids") || normalized.contains("item ids")
+            bySubstring = mentionsCleanTool && mentionsItemIDs
+        }
+        guard parsed || bySubstring else { return nil }
 
+        let summary: String
+        if parsed {
+            summary = proposedItemIDs.count == 1
+                ? "Claude Code requested Gargantua MCP clean for 1 item."
+                : "Claude Code requested Gargantua MCP clean for \(proposedItemIDs.count) items."
+        } else {
+            summary = "Claude Code requested Gargantua MCP clean."
+        }
         return ClaudeCodeAgentApprovalGate(
             sessionID: sessionID,
-            summary: "Claude Code requested Gargantua MCP clean.",
-            rawTranscript: line
+            summary: summary,
+            rawTranscript: line,
+            proposedItemIDs: proposedItemIDs
         )
     }
 }

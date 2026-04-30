@@ -766,7 +766,7 @@ private struct ParsedActivityRow: View {
                 .foregroundStyle(GargantuaColors.ink)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-        case .toolUse(let name, let inputSummary):
+        case .toolUse(let name, let inputSummary, _):
             VStack(alignment: .leading, spacing: 2) {
                 Text(toolDisplayName(name))
                     .font(GargantuaFonts.label)

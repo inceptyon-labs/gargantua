@@ -16,8 +16,11 @@ public enum ClaudeCodeStreamEvent: Sendable, Equatable {
     case assistantText(String)
     /// The assistant requested a tool call. `inputSummary` is a single-line
     /// abbreviation suitable for a status row; the raw input is dropped to
-    /// keep memory bounded for long sessions.
-    case toolUse(name: String, inputSummary: String)
+    /// keep memory bounded for long sessions. `payload` carries structured
+    /// data the host needs to observe (currently only `mcp__gargantua__clean`
+    /// item IDs, used by the destructive-action detector to attach them to
+    /// approval gates); nil for every other tool call.
+    case toolUse(name: String, inputSummary: String, payload: ClaudeCodeToolUsePayload?)
     /// The MCP server returned a result for a previous `toolUse`.
     /// `summary` is a clipped preview of the response.
     case toolResult(toolUseID: String, isError: Bool, summary: String)
@@ -25,6 +28,18 @@ public enum ClaudeCodeStreamEvent: Sendable, Equatable {
     case terminal(ClaudeCodeStreamTerminalResult)
     /// A line we recognised as JSON but whose `type` we don't model.
     case unknown(type: String)
+}
+
+/// Structured payload extracted from a `tool_use` content block, when the
+/// host recognises the tool by name. Currently only the gargantua MCP
+/// `clean` request is parsed; everything else surfaces as `nil`.
+public enum ClaudeCodeToolUsePayload: Sendable, Equatable {
+    /// Item IDs the agent is requesting to clean via `mcp__gargantua__clean`.
+    /// Used by `ClaudeCodeDestructiveActionDetector` to attach
+    /// `proposedItemIDs` to the approval gate it raises, so the host can
+    /// resolve them later (PHASE 2 — scan-result mirroring) and present
+    /// them in the confirmation UI.
+    case cleanRequest(itemIDs: [String])
 }
 
 /// Aggregated facts about a finished agent run, parsed from the `result`
@@ -150,7 +165,8 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
             if (block["type"] as? String) == "tool_use" {
                 let name = block["name"] as? String ?? "tool"
                 let inputSummary = Self.summarize(json: block["input"])
-                return .toolUse(name: name, inputSummary: inputSummary)
+                let payload = Self.toolUsePayload(name: name, input: block["input"])
+                return .toolUse(name: name, inputSummary: inputSummary, payload: payload)
             }
         }
         let texts: [String] = content.compactMap {
@@ -206,6 +222,25 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Extract a structured payload for tool calls the host needs to inspect.
+    /// Returns nil for every tool we don't model — keeping memory bounded
+    /// for long sessions where `Bash`/`Read`/`Grep` calls dominate.
+    private static func toolUsePayload(name: String, input: Any?) -> ClaudeCodeToolUsePayload? {
+        // Match the wire name exactly. The host only parses gargantua's own
+        // `clean` tool; built-in Claude Code tools (Bash, Read, etc.) are
+        // not destructive in a way the gate cares about.
+        guard name == "mcp__gargantua__clean" else { return nil }
+        guard let object = input as? [String: Any] else { return nil }
+        // The MCP `clean` schema names the field `item_ids` (snake_case);
+        // accept the camelCase variant defensively in case the agent or
+        // a future schema migration uses it.
+        let raw = object["item_ids"] ?? object["itemIDs"] ?? object["itemIds"]
+        guard let array = raw as? [Any] else { return nil }
+        let ids = array.compactMap { $0 as? String }
+        guard !ids.isEmpty else { return nil }
+        return .cleanRequest(itemIDs: ids)
+    }
 
     /// Stringify an arbitrary JSON value into a single-line, length-capped
     /// preview suitable for a status row. Strings round-trip directly so we

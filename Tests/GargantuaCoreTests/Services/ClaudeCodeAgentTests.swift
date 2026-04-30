@@ -254,6 +254,59 @@ struct ClaudeCodeAgentTests {
         #expect(gate?.sessionID == sessionID)
         #expect(gate?.status == .pending)
         #expect(gate?.rawTranscript == line)
+        // Substring fallback path produces an empty proposedItemIDs — only
+        // the structured parser path attaches IDs.
+        #expect(gate?.proposedItemIDs == [])
+    }
+
+    @Test("Detector with structured proposedItemIDs stamps them on the gate and includes the count in the summary")
+    func detectorAttachesProposedItemIDs() {
+        let sessionID = UUID()
+        let detector = ClaudeCodeDestructiveActionDetector(sessionID: sessionID)
+        let line = "free-form agent narration that doesn't substring-match"
+
+        let gate = detector.detect(line, proposedItemIDs: ["chrome_cache-1", "npm_cache-2"])
+
+        #expect(gate?.proposedItemIDs == ["chrome_cache-1", "npm_cache-2"])
+        #expect(gate?.summary.contains("2 items") == true)
+    }
+
+    @Test("Runner attaches parsed item IDs to the gate when stream-json carries a clean tool_use")
+    func runnerAttachesParsedItemIDsFromStreamJSON() async throws {
+        let defaults = try makeDefaults()
+        let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
+        let executable = try makeExecutable(named: "claude")
+        configStore.save(ClaudeCodeAgentConfiguration(isEnabled: true, cliPath: executable.path))
+        let tempDirectory = try makeTemporaryDirectory()
+        let auditDirectory = tempDirectory.appendingPathComponent("audit")
+        let auditWriter = AuditWriter(logDirectory: auditDirectory)
+        // Stream-json `assistant` event wrapping a clean tool_use so the
+        // structured parser path is exercised end-to-end.
+        let cleanLine = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_clean_runner","name":"mcp__gargantua__clean","input":{"item_ids":["chrome_cache-3","npm_cache-9"],"method":"trash","confirm":true}}]}}
+        """#
+        let fakeExecutor = FakeClaudeCodeProcessExecutor(outputs: [
+            .stdout(cleanLine + "\n"),
+        ])
+        let runner = ClaudeCodeAgentSessionRunner(
+            configurationStore: configStore,
+            cliResolver: ClaudeCodeCLIResolver(environment: [:]),
+            mcpServerLaunch: ClaudeCodeMCPServerLaunch(command: "swift", args: ["run", "GargantuaMCP"]),
+            processExecutor: fakeExecutor,
+            auditWriter: auditWriter,
+            tempDirectory: tempDirectory
+        )
+        let gates = LockedArray<ClaudeCodeAgentApprovalGate>()
+
+        _ = try await runner.run(
+            prompt: "audit",
+            onEvent: { _ in },
+            onGate: { gates.append($0) }
+        )
+
+        let collected = gates.all()
+        #expect(collected.count == 1)
+        #expect(collected.first?.proposedItemIDs == ["chrome_cache-3", "npm_cache-9"])
     }
 
     @Test("Runner streams transcript, detects clean gates, and writes audit entries")

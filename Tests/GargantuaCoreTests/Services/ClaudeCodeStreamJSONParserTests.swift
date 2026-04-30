@@ -57,7 +57,7 @@ struct ClaudeCodeStreamJSONParserTests {
             {"type":"tool_use","id":"toolu_1","name":"mcp__gargantua__scan","input":{"profile":"default","dry_run":true}}
         ]}}
         """#
-        guard case let .toolUse(name, summary) = try #require(parser.parse(line: line)) else {
+        guard case let .toolUse(name, summary, payload) = try #require(parser.parse(line: line)) else {
             Issue.record("Expected toolUse")
             return
         }
@@ -65,6 +65,41 @@ struct ClaudeCodeStreamJSONParserTests {
         // Summary should contain the input keys, on a single line, and not be empty.
         #expect(summary.contains("profile"))
         #expect(!summary.contains("\n"))
+        // Scan tool calls don't carry a structured payload — only `clean` does.
+        #expect(payload == nil)
+    }
+
+    @Test("assistant tool_use for mcp__gargantua__clean exposes the requested item_ids as a structured payload")
+    func cleanToolUseExposesItemIDs() throws {
+        let line = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[
+            {"type":"tool_use","id":"toolu_clean_1","name":"mcp__gargantua__clean","input":{"item_ids":["chrome_cache-1","chrome_cache-2","npm_cache-7"],"method":"trash","confirm":true}}
+        ]}}
+        """#
+        guard case let .toolUse(name, _, payload) = try #require(parser.parse(line: line)) else {
+            Issue.record("Expected toolUse")
+            return
+        }
+        #expect(name == "mcp__gargantua__clean")
+        guard case let .cleanRequest(itemIDs) = try #require(payload) else {
+            Issue.record("Expected cleanRequest payload")
+            return
+        }
+        #expect(itemIDs == ["chrome_cache-1", "chrome_cache-2", "npm_cache-7"])
+    }
+
+    @Test("clean tool_use with no item_ids field surfaces a nil payload rather than crashing")
+    func cleanToolUseMissingItemIDs() throws {
+        let line = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[
+            {"type":"tool_use","id":"toolu_clean_2","name":"mcp__gargantua__clean","input":{"method":"trash"}}
+        ]}}
+        """#
+        guard case let .toolUse(_, _, payload) = try #require(parser.parse(line: line)) else {
+            Issue.record("Expected toolUse")
+            return
+        }
+        #expect(payload == nil)
     }
 
     @Test("user tool_result emits toolResult with id, error flag, and clipped summary")
