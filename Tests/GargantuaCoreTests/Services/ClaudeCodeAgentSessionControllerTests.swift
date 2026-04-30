@@ -116,11 +116,14 @@ struct ClaudeCodeAgentSessionControllerTests {
         #expect(controller.approvalGates.first?.status == .approved)
     }
 
-    @Test("approve() with proposedItemIDs but empty scan cache falls back to status flip — no items to hydrate")
-    func approveWithProposedIDsButEmptyCacheFallsBack() async throws {
+    @Test("approve() with proposedItemIDs but empty scan cache surfaces unresolved IDs — view renders Smart Uninstaller note")
+    func approveWithProposedIDsButEmptyCacheSurfacesUnresolved() async throws {
         // Stream-json clean call without a preceding scan tool_result.
         // Detector parses item_ids onto the gate; controller's host cache
-        // is empty so lookupAll resolves nothing.
+        // is empty so lookupAll resolves nothing — but we still surface
+        // pendingApproval with empty items + the unresolved IDs so the
+        // agent view can render the inline "use Smart Uninstaller" note
+        // for app-bundle paths the agent proposed by hand.
         let cleanLine = #"""
         {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_clean_empty","name":"mcp__gargantua__clean","input":{"item_ids":["chrome_cache-1"],"method":"trash","confirm":true}}]}}
         """#
@@ -135,6 +138,38 @@ struct ClaudeCodeAgentSessionControllerTests {
         #expect(gate.proposedItemIDs == ["chrome_cache-1"])
 
         controller.approve(gate)
+
+        let pending = try #require(controller.pendingApproval)
+        #expect(pending.gateID == gate.id)
+        #expect(pending.items.isEmpty)
+        #expect(pending.unresolvedItemIDs == ["chrome_cache-1"])
+        // Gate stays pending until user dismisses the note.
+        #expect(controller.approvalGates.first?.status == .pending)
+    }
+
+    @Test("confirmPendingApproval with empty items still marks gate approved — Smart Uninstaller note acknowledged")
+    func confirmPendingApprovalWithEmptyItemsMarksGateApproved() async throws {
+        // Same all-unresolved setup as above. After the user dismisses the
+        // Smart Uninstaller note via confirm, the gate transitions to
+        // approved with audit even though no cleanup ran.
+        let cleanLine = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_clean_only_unresolved","name":"mcp__gargantua__clean","input":{"item_ids":["bundle-path-1","bundle-path-2"],"method":"trash","confirm":true}}]}}
+        """#
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(cleanLine + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(runner: runner)
+        controller.start(template: .investigateSpace, userContext: "scan")
+        _ = await waitForTerminalStatus(controller)
+
+        let gate = try #require(controller.approvalGates.first)
+        controller.approve(gate)
+
+        let pending = try #require(controller.pendingApproval)
+        #expect(pending.items.isEmpty)
+        #expect(pending.unresolvedItemIDs.count == 2)
+
+        await controller.confirmPendingApproval()
 
         #expect(controller.pendingApproval == nil)
         #expect(controller.approvalGates.first?.status == .approved)
