@@ -113,6 +113,40 @@ public final class SmartUninstallerViewModel {
     /// `loadApps` starts so we don't keep planning a stale app list.
     private var categoryCountTask: Task<Void, Never>?
 
+    /// In-flight scan / select / execute task. Stored so the EventHorizon
+    /// console's "Sever Tether" button can cancel it. Always overwrite when
+    /// starting new work — see `runTracked`.
+    public var activeTask: Task<Void, Never>?
+
+    /// Wrap an async entry point in a tracked `Task` so a sever-tether abort
+    /// can cancel it. Cancels any previously stored task before replacing —
+    /// callers that need to chain (e.g. `quickUninstall` → `selectApp`) should
+    /// invoke the inner async functions directly rather than nesting tracked
+    /// tasks, which would orphan the parent.
+    public func runTracked(_ work: @escaping @MainActor @Sendable () async -> Void) {
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            await work()
+        }
+    }
+
+    /// User-initiated abort from the EventHorizon console. Cancels the
+    /// in-flight task, clears the live path stream, and returns the surface
+    /// to the most useful upstream phase: the picker if apps are loaded,
+    /// otherwise the welcome screen. Any item already trashed during an
+    /// in-progress execute() stays trashed — partial state is intentional and
+    /// the audit log will reflect what actually ran.
+    public func severTether() {
+        activeTask?.cancel()
+        activeTask = nil
+        pathStream.clear()
+        selectedIDs = []
+        includeProtected = false
+        batchPlans = []
+        quickConfirmActive = false
+        phase = apps.isEmpty ? .idle : .pickingApp
+    }
+
     // MARK: - Plan review state
 
     /// IDs of remnants the user has selected for removal. The app bundle is
@@ -237,6 +271,9 @@ public final class SmartUninstallerViewModel {
         phase = .loadingApps
         let scanner = observing(appScanner)
         let loaded = await scanner.scanApps()
+        // If the user severed the tether mid-scan, severTether() has already
+        // routed the phase — don't pivot to .pickingApp on top of it.
+        guard !Task.isCancelled else { return }
         apps = loaded
         phase = .pickingApp
         startBackgroundCategoryCountScan()
@@ -378,6 +415,9 @@ public final class SmartUninstallerViewModel {
         phase = .scanning(app)
         let planner = observing(self.planner)
         let plan = await Task.detached { planner.plan(for: app, includeAppBundle: true) }.value
+        // Sever Tether routed elsewhere — don't surface the plan we just
+        // computed; severTether() already cleared selection state.
+        guard !Task.isCancelled else { return }
         selectedIDs = Set(plan.allItems
             .filter { $0.safety.isSelectedByDefault }
             .map(\.id))
@@ -475,8 +515,13 @@ public final class SmartUninstallerViewModel {
             // summary card and SwiftUI cancels the per-row .task before its
             // dwell timer fires, so the swallow effect is invisible.
             await lingerForSpaghettify(after: result)
+            // If the user severed the tether mid-execute, severTether()
+            // already routed to picker/idle and the audit trail records what
+            // actually ran. Don't pivot to a summary in that case.
+            guard !Task.isCancelled else { return }
             phase = .summary(prunedPlan, result)
         } catch {
+            guard !Task.isCancelled else { return }
             phase = .failed(message: error.localizedDescription)
         }
     }
@@ -541,11 +586,13 @@ extension SmartUninstallerViewModel {
         let planner = observing(self.planner)
         var plans: [UninstallPlan] = []
         for (idx, app) in appsToScan.enumerated() {
+            if Task.isCancelled { return }
             let plan = await Task.detached { planner.plan(for: app, includeAppBundle: true) }.value
             plans.append(plan)
             phase = .batchScanning(completed: idx + 1, total: appsToScan.count)
         }
 
+        guard !Task.isCancelled else { return }
         batchPlans = plans
         // Pre-select every actionable item (safe + review). For batch flow
         // the user has chosen "uninstall N apps" without inspecting the
@@ -570,6 +617,7 @@ extension SmartUninstallerViewModel {
 
         let exec = observing(executor)
         for (idx, plan) in plans.enumerated() {
+            if Task.isCancelled { break }
             let selected = plan.allItems.filter { selectedIDs.contains($0.id) }
             guard !selected.isEmpty else {
                 phase = .batchExecuting(completed: idx + 1, total: total)
@@ -618,6 +666,9 @@ extension SmartUninstallerViewModel {
         }
 
         await lingerForBatchSpaghettify(results: results)
+        // If severed mid-batch, the partial results were already audit-logged
+        // by each successful plan's executor; severTether() routed to picker.
+        guard !Task.isCancelled else { return }
         phase = .batchSummary(results)
         batchPlans = []
         multiSelected = []

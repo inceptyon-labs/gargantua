@@ -236,7 +236,7 @@ struct UninstallPlanReviewView: View {
                         .foregroundStyle(.white)
                         .padding(.vertical, GargantuaSpacing.space2)
                         .padding(.horizontal, GargantuaSpacing.space4)
-                        .background(viewModel.canProceed ? GargantuaColors.protected_ : GargantuaColors.protected_.opacity(0.4))
+                        .background(viewModel.canProceed ? GargantuaColors.accent : GargantuaColors.accent.opacity(0.4))
                         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)

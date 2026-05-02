@@ -101,6 +101,11 @@ public final class CleanupEngine: Sendable {
         var results: [CleanupItemResult] = []
 
         for item in items {
+            // Honor cooperative cancellation between items so the user's
+            // "Sever Tether" abort actually stops the loop. Items already
+            // deleted stay deleted; the partial CleanupResult flows through
+            // to the summary so the user can see what got cleaned.
+            if Task.isCancelled { break }
             let url = URL(fileURLWithPath: item.path)
             let result = await cleanSingle(url: url, item: item, method: method)
             if let observer {

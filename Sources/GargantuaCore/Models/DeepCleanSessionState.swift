@@ -30,6 +30,11 @@ public final class DeepCleanSessionState {
     public var isCleaning = false
     public var activeCleanupMethod: CleanupMethod = .trash
     public var cleanupResult: CleanupResult?
+    /// In-flight scan or cleanup task. Stored so "Sever Tether" can cancel it
+    /// from the EventHorizon console. Cleared by `prepareForScan` /
+    /// `beginCleanup` / `clearResults` so a stale handle from a prior phase
+    /// can't be cancelled by accident.
+    public var activeTask: Task<Void, Never>?
     /// Live path-streaming view model backing the EventHorizon console
     /// during scan + cleaning phases. Persists across navigation alongside
     /// other session state.
@@ -40,6 +45,28 @@ public final class DeepCleanSessionState {
     }
 
     public func clearResults() {
+        activeTask?.cancel()
+        activeTask = nil
+        scanProgress = ScanProgress()
+        scanDuration = 0
+        scanResults = nil
+        selectedResultIDs = []
+        cleanupResult = nil
+        showConfirmation = false
+        activeCleanupMethod = .trash
+        pathStream.clear()
+        phase = .idle
+    }
+
+    /// User-initiated abort from the EventHorizon console. Cancels the
+    /// in-flight scan or cleanup task, resets state, and returns the surface
+    /// to idle. Items that were already cleaned stay cleaned — partial state
+    /// is intentional, the audit trail will reflect what actually ran.
+    public func severTether() {
+        activeTask?.cancel()
+        activeTask = nil
+        isScanning = false
+        isCleaning = false
         scanProgress = ScanProgress()
         scanDuration = 0
         scanResults = nil
@@ -52,6 +79,8 @@ public final class DeepCleanSessionState {
     }
 
     public func prepareForScan() {
+        activeTask?.cancel()
+        activeTask = nil
         isScanning = true
         scanProgress = ScanProgress()
         scanResults = nil
@@ -79,6 +108,8 @@ public final class DeepCleanSessionState {
     }
 
     public func beginCleanup(method: CleanupMethod) {
+        activeTask?.cancel()
+        activeTask = nil
         showConfirmation = false
         isCleaning = true
         activeCleanupMethod = method
@@ -87,12 +118,15 @@ public final class DeepCleanSessionState {
     }
 
     public func finishCleanup(result: CleanupResult) {
+        activeTask = nil
         isCleaning = false
         cleanupResult = result
         phase = .summary
     }
 
     public func dismissSummary() {
+        activeTask?.cancel()
+        activeTask = nil
         scanProgress = ScanProgress()
         scanDuration = 0
         cleanupResult = nil

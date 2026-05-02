@@ -69,16 +69,43 @@ public struct DenseScanItemRow: View {
     let item: ScanResult
     let isSelected: Bool
     let isFocused: Bool
+    /// True for the first row in a cluster of items that share the same
+    /// explanation. False for subsequent rows so the same prose doesn't
+    /// repeat down the list — the path becomes the differentiator.
+    let showExplanation: Bool
     let onToggleSelection: () -> Void
     let onExplain: (() -> Void)?
 
     @State private var isHovered = false
     @Environment(\.activeAIEngineKind) private var activeAIEngineKind
 
+    public init(
+        item: ScanResult,
+        isSelected: Bool,
+        isFocused: Bool,
+        showExplanation: Bool = true,
+        onToggleSelection: @escaping () -> Void,
+        onExplain: (() -> Void)?
+    ) {
+        self.item = item
+        self.isSelected = isSelected
+        self.isFocused = isFocused
+        self.showExplanation = showExplanation
+        self.onToggleSelection = onToggleSelection
+        self.onExplain = onExplain
+    }
+
     public var body: some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            // Confidence orbit
-            ConfidenceOrbit(confidence: item.confidence, safety: item.safety)
+            // Confidence orbit only for Review tier — Safe rows have all five
+            // bars lit by definition (it's the high-confidence bucket) and
+            // Protected rows render a lock instead, so the orbit there is
+            // pure decoration. Reserving it for Review keeps the indicator
+            // doing what it was designed for: showing variance where the
+            // user actually has to weigh evidence.
+            if item.safety == .review {
+                ConfidenceOrbit(confidence: item.confidence, safety: item.safety)
+            }
 
             // Checkbox
             Button(action: onToggleSelection) {
@@ -103,16 +130,19 @@ public struct DenseScanItemRow: View {
             }
             .buttonStyle(.plain)
 
-            // Content block: name + explanation on first line if room, else stacked
+            // Content block: name + (optional) explanation, with path as the
+            // primary differentiator on the second line. The path gets ink2
+            // weight because for repeated-explanation items (every Node
+            // Modules row, every cache row) the path IS the only thing that
+            // differs between rows.
             VStack(alignment: .leading, spacing: 2) {
-                // Name + explanation on same line if space permits
                 HStack(spacing: GargantuaSpacing.space1) {
                     Text(item.name)
                         .font(GargantuaFonts.label)
                         .foregroundStyle(GargantuaColors.ink)
                         .lineLimit(1)
 
-                    if !item.explanation.isEmpty {
+                    if showExplanation, !item.explanation.isEmpty {
                         Text(item.explanation)
                             .font(GargantuaFonts.body)
                             .foregroundStyle(GargantuaColors.ink2)
@@ -120,10 +150,9 @@ public struct DenseScanItemRow: View {
                     }
                 }
 
-                // File path below
                 Text(item.path)
                     .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink3)
+                    .foregroundStyle(GargantuaColors.ink2)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }

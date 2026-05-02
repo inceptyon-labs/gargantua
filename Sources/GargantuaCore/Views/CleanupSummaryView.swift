@@ -170,9 +170,7 @@ public struct CleanupSummaryView: View {
 
     private var narrativeLoadingSection: some View {
         HStack(alignment: .center, spacing: GargantuaSpacing.space2) {
-            ProgressView()
-                .controlSize(.small)
-                .tint(GargantuaColors.accent)
+            AccretionDiskView(activityRate: 0, size: 14, color: GargantuaColors.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Composing summary…")
                     .font(GargantuaFonts.caption)

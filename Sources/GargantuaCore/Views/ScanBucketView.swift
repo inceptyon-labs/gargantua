@@ -1,58 +1,5 @@
 import SwiftUI
 
-// MARK: - Summary Bar
-
-/// Top bar showing total items, reclaimable space, and scan duration.
-public struct ScanSummaryBar: View {
-    public let totalItems: Int
-    public let reclaimableBytes: Int64
-    public let scanDuration: TimeInterval
-
-    public init(totalItems: Int, reclaimableBytes: Int64, scanDuration: TimeInterval) {
-        self.totalItems = totalItems
-        self.reclaimableBytes = reclaimableBytes
-        self.scanDuration = scanDuration
-    }
-
-    public var body: some View {
-        HStack(spacing: GargantuaSpacing.space4) {
-            label("\(totalItems) items")
-            separator
-            label(AlertItem.formatBytes(reclaimableBytes) + " reclaimable")
-            separator
-            label(formattedDuration)
-            Spacer()
-        }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .background(GargantuaColors.surface2)
-    }
-
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .font(GargantuaFonts.caption)
-            .foregroundStyle(GargantuaColors.ink2)
-    }
-
-    private var separator: some View {
-        Text("·")
-            .font(GargantuaFonts.caption)
-            .foregroundStyle(GargantuaColors.ink3)
-    }
-
-    private var formattedDuration: String {
-        if scanDuration < 1 {
-            return String(format: "%.0f ms", scanDuration * 1000)
-        } else if scanDuration < 60 {
-            return String(format: "%.1f s", scanDuration)
-        } else {
-            let minutes = Int(scanDuration) / 60
-            let seconds = Int(scanDuration) % 60
-            return "\(minutes)m \(seconds)s"
-        }
-    }
-}
-
 // MARK: - Scan Bucket List View
 
 /// Scan results list with switchable grouping (safety / folder / category).
@@ -89,6 +36,7 @@ public struct ScanBucketListView: View {
     @State private var filterStatus: String?
     @State private var isResolvingFilter = false
     @State private var showsRefineControls = false
+    @State private var showsHelpLegend = false
     @FocusState private var isSearchFocused: Bool
 
     public init(
@@ -167,17 +115,21 @@ public struct ScanBucketListView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            ScanSummaryBar(
-                totalItems: displayedResults.count,
-                reclaimableBytes: reclaimableBytes,
-                scanDuration: scanDuration
-            )
+            controlsRow
 
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+            if showsHelpLegend {
+                Rectangle()
+                    .fill(GargantuaColors.borderSoft)
+                    .frame(height: 1)
+                helpLegendPanel
+            }
 
-            controlsSection
+            if hasRefinementTools && shouldShowRefineDetails {
+                Rectangle()
+                    .fill(GargantuaColors.borderSoft)
+                    .frame(height: 1)
+                refineFieldPanel
+            }
 
             Rectangle()
                 .fill(GargantuaColors.border)
@@ -287,188 +239,164 @@ public struct ScanBucketListView: View {
         }
     }
 
-    private var controlsSection: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: GargantuaSpacing.space4) {
-                VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                    Text("RESULTS")
-                        .font(GargantuaFonts.sectionLabel)
-                        .tracking(0.8)
-                        .foregroundStyle(GargantuaColors.ink4)
+    /// Single condensed row replacing the previous summary bar + RESULTS card +
+    /// REVIEW REQUIRED panel + Refine disclosure stack. Counts and the grouping
+    /// picker stay visible at all times; the safety legend, refine field, and
+    /// per-bucket "AI Review" chip live behind progressive disclosure so the
+    /// list starts as close to the top as possible.
+    private var controlsRow: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            Text("RESULTS")
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink4)
 
-                    Text(resultsHeadline)
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
+            Text(controlsSummary)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+                .lineLimit(1)
 
-                    Text(resultsDetail)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            ScanGroupingPicker(mode: $groupingMode)
+                .onChange(of: groupingMode) { _, _ in
+                    expandedGroupIDs = Set(groups.map(\.id))
+                    focusedItemID = nil
                 }
-
-                Spacer(minLength: GargantuaSpacing.space4)
-
-                ScanGroupingPicker(mode: $groupingMode)
-                    .onChange(of: groupingMode) { _, _ in
-                        expandedGroupIDs = Set(groups.map(\.id))
-                        focusedItemID = nil
-                    }
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
-            .background(GargantuaColors.surface2)
-
-            if let onAdvisoryForReview, hasReviewItems {
-                Rectangle()
-                    .fill(GargantuaColors.border)
-                    .frame(height: 1)
-
-                Button {
-                    onAdvisoryForReview(displayedResults)
-                } label: {
-                    HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-                        Image(systemName: "sparkles.rectangle.stack")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(GargantuaColors.review)
-                            .frame(width: 16, height: 16)
-                            .padding(.top, 1)
-
-                        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                            Text("REVIEW REQUIRED")
-                                .font(GargantuaFonts.sectionLabel)
-                                .tracking(0.8)
-                                .foregroundStyle(GargantuaColors.review)
-
-                            Text("\(reviewItemCount) item\(reviewItemCount == 1 ? "" : "s") need a second look")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-
-                            Text("Open AI Review to summarize why these items were flagged before you confirm cleanup.")
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(GargantuaColors.ink2)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            HStack(spacing: GargantuaSpacing.space2) {
-                                reviewMetaPill("\(reviewItemCount) review")
-                                reviewMetaPill(AlertItem.formatBytes(reviewReclaimableBytes))
-                            }
-                            .padding(.top, GargantuaSpacing.space1)
-                        }
-
-                        Spacer(minLength: GargantuaSpacing.space3)
-
-                        HStack(spacing: GargantuaSpacing.space2) {
-                            Text("Open AI Review")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(GargantuaColors.review)
-                        }
-                    }
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space3)
-                    .background(GargantuaColors.reviewDim)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
 
             if hasRefinementTools {
-                Rectangle()
-                    .fill(GargantuaColors.border)
-                    .frame(height: 1)
-
-                Button {
+                controlIconButton(
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    isActive: activeFilter != nil || showsRefineControls,
+                    accessibility: "Refine results",
+                    help: activeFilter != nil ? "Filter active — tap to edit or clear" : "Search and filter results"
+                ) {
                     showsRefineControls.toggle()
-                } label: {
-                    HStack(spacing: GargantuaSpacing.space2) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(activeFilter != nil ? GargantuaColors.accent : GargantuaColors.ink3)
-                            .frame(width: 16, height: 16)
-
-                        Text("Refine Results")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink2)
-
-                        Text("Search and filter")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink3)
-
-                        Spacer()
-
-                        if activeFilter != nil {
-                            Text("Filter Active")
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(GargantuaColors.accent)
-                                .padding(.horizontal, GargantuaSpacing.space2)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule(style: .continuous)
-                                        .fill(GargantuaColors.accent.opacity(0.12))
-                                )
-                        }
-
-                        Image(systemName: shouldShowRefineDetails ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(GargantuaColors.ink3)
-                            .frame(width: 12, height: 12)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, GargantuaSpacing.space4)
-                .padding(.vertical, GargantuaSpacing.space2)
-                .background(GargantuaColors.surface1)
-
-                if shouldShowRefineDetails {
-                    Rectangle()
-                        .fill(GargantuaColors.border)
-                        .frame(height: 1)
-
-                    VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                        if onResolveNaturalLanguageFilter != nil {
-                            VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-                                Text("Filter the visible results before selecting items.")
-                                    .font(GargantuaFonts.caption)
-                                    .foregroundStyle(GargantuaColors.ink3)
-
-                                HStack(spacing: GargantuaSpacing.space2) {
-                                    filterField
-                                    Spacer(minLength: GargantuaSpacing.space3)
-                                    if let filterStatus {
-                                        filterStatusView(filterStatus)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space3)
-                    .background(GargantuaColors.surface1)
                 }
             }
+
+            controlIconButton(
+                systemImage: "questionmark.circle",
+                isActive: showsHelpLegend,
+                accessibility: "Safety legend",
+                help: "What do Safe, Review, and Protected mean?"
+            ) {
+                showsHelpLegend.toggle()
+            }
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface2)
+    }
+
+    /// Compact summary in the controls row. When selection equals total, we
+    /// drop the redundant "selected" qualifier; when it differs, both numbers
+    /// are shown so the user always has the scan-total context (the previous
+    /// "X GB selected" alone hid whether that was X of X or X of much-more).
+    private var controlsSummary: String {
+        let count = displayedResults.count
+        let countText = "\(count) item\(count == 1 ? "" : "s")"
+        let totalBytes = displayedResults.reduce(Int64(0)) { $0 + $1.size }
+        let totalText = AlertItem.formatBytes(totalBytes)
+        let durationText = formattedScanDuration
+
+        if reclaimableBytes == totalBytes {
+            return "\(countText) · \(totalText) · \(durationText)"
+        }
+        let selectedText = AlertItem.formatBytes(reclaimableBytes)
+        return "\(countText) · \(totalText) total · \(selectedText) selected · \(durationText)"
+    }
+
+    private var formattedScanDuration: String {
+        if scanDuration < 1 {
+            return String(format: "%.0f ms", scanDuration * 1000)
+        } else if scanDuration < 60 {
+            return String(format: "%.1f s", scanDuration)
+        } else {
+            let minutes = Int(scanDuration) / 60
+            let seconds = Int(scanDuration) % 60
+            return "\(minutes)m \(seconds)s"
         }
     }
 
-    private var resultsHeadline: String {
-        switch groupingMode {
-        case .safety:
-            return "Start with safe items, then review anything uncertain."
-        case .folder:
-            return "Compare cleanup piles by location."
-        case .category:
-            return "Compare cleanup piles by artifact type."
+    /// Three-line legend revealing what Safe / Review / Protected actually
+    /// mean. Inline panel rather than a tooltip so the explanation reads on a
+    /// trackpad without a hover gesture, which `mac` users on small Macs miss.
+    private var helpLegendPanel: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            legendRow(
+                color: GargantuaColors.safe,
+                label: "Safe",
+                detail: "Pre-selected, low-risk to remove. Caches, logs, and temp files."
+            )
+            legendRow(
+                color: GargantuaColors.review,
+                label: "Review",
+                detail: "Flagged for a second look. Open AI Review on the bucket to summarize before you commit."
+            )
+            legendRow(
+                color: GargantuaColors.protected_,
+                label: "Protected",
+                detail: "Locked. Removing these can break apps or system state."
+            )
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space3)
+        .background(GargantuaColors.surface1)
+    }
+
+    /// Inline filter input revealed when the user taps the refine icon. The
+    /// status string surfaces NL-resolution errors and the active match count.
+    private var refineFieldPanel: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            filterField
+            if let filterStatus {
+                filterStatusView(filterStatus)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface1)
+    }
+
+    private func legendRow(color: Color, label: String, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+                .frame(width: 64, alignment: .leading)
+            Text(detail)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var resultsDetail: String {
-        if hasReviewItems {
-            return "Protected items stay locked. Safe items can be selected now, and review-tier items stay visible for a second pass."
+    private func controlIconButton(
+        systemImage: String,
+        isActive: Bool,
+        accessibility: String,
+        help helpText: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(isActive ? GargantuaColors.accent : GargantuaColors.ink3)
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small, style: .continuous)
+                        .fill(isActive ? GargantuaColors.accent.opacity(0.12) : Color.clear)
+                )
+                .contentShape(Rectangle())
         }
-        return "Protected items stay locked. Select the safe items you want to include in the cleanup plan."
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibility)
+        .help(helpText)
     }
 }
 
@@ -479,22 +407,6 @@ public struct ScanBucketListView: View {
 // primary body stays under the 350-line type_body_length threshold.
 
 extension ScanBucketListView {
-
-    fileprivate func reviewMetaPill(_ text: String) -> some View {
-        Text(text)
-            .font(GargantuaFonts.monoData)
-            .foregroundStyle(GargantuaColors.review)
-            .padding(.horizontal, GargantuaSpacing.space2)
-            .padding(.vertical, 3)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.black.opacity(0.16))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(GargantuaColors.review.opacity(0.22), lineWidth: 1)
-            )
-    }
 
     private func filterStatusView(_ status: String) -> some View {
         HStack(spacing: GargantuaSpacing.space2) {
@@ -559,8 +471,8 @@ extension ScanBucketListView {
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(
                         selectedIDs.isEmpty
-                            ? GargantuaColors.protected_.opacity(0.4)
-                            : GargantuaColors.protected_
+                            ? GargantuaColors.accent.opacity(0.4)
+                            : GargantuaColors.accent
                     )
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             }
@@ -576,21 +488,37 @@ extension ScanBucketListView {
     private func groupSection(_ group: ScanGroup) -> some View {
         let isExpanded = expandedGroupIDs.contains(group.id)
 
-        ScanGroupHeader(
-            group: group,
-            isExpanded: isExpanded,
-            selectedIDs: selectedIDs,
-            onToggle: { toggleGroup(group.id) },
-            onToggleSelection: { toggleGroupSelection(group) }
-        )
+        ZStack(alignment: .trailing) {
+            ScanGroupHeader(
+                group: group,
+                isExpanded: isExpanded,
+                selectedIDs: selectedIDs,
+                onToggle: { toggleGroup(group.id) },
+                onToggleSelection: { toggleGroupSelection(group) }
+            )
+
+            if isReviewSafetyGroup(group),
+               let onAdvisoryForReview,
+               !group.items.isEmpty {
+                reviewBucketAccessory(reviewBytes: group.totalSize) {
+                    onAdvisoryForReview(displayedResults)
+                }
+                .padding(.trailing, GargantuaSpacing.space4)
+            }
+        }
 
         Rectangle()
             .fill(GargantuaColors.borderSoft)
             .frame(height: 1)
 
         if isExpanded {
+            // First-occurrence dedup: track which explanations have already
+            // been printed in this group and skip the prose on later rows
+            // that repeat it. The path stays visible on every row so the
+            // user can still see *which* npm project / cache the entry is.
+            let explanationFirstSeen = firstOccurrenceIDs(in: group)
             ForEach(group.items) { item in
-                itemRow(item)
+                itemRow(item, showExplanation: explanationFirstSeen.contains(item.id))
 
                 Rectangle()
                     .fill(GargantuaColors.borderSoft)
@@ -599,11 +527,72 @@ extension ScanBucketListView {
         }
     }
 
-    private func itemRow(_ item: ScanResult) -> some View {
+    /// IDs of items that are the first in `group` to carry their explanation
+    /// string. Used to dedupe identical descriptions across many rows
+    /// (e.g. "Node Modules — npm/yarn/pnpm dependencies. Restored with...").
+    private func firstOccurrenceIDs(in group: ScanGroup) -> Set<String> {
+        var seen = Set<String>()
+        var firstIDs = Set<String>()
+        for item in group.items where !item.explanation.isEmpty {
+            if !seen.contains(item.explanation) {
+                seen.insert(item.explanation)
+                firstIDs.insert(item.id)
+            }
+        }
+        // Always treat empty-explanation rows as "show" so a later non-empty
+        // version of an empty-explanation item still surfaces its prose.
+        for item in group.items where item.explanation.isEmpty {
+            firstIDs.insert(item.id)
+        }
+        return firstIDs
+    }
+
+    private func isReviewSafetyGroup(_ group: ScanGroup) -> Bool {
+        if case .safety(let level) = group.kind, level == .review { return true }
+        return false
+    }
+
+    /// Compact "AI Review →" chip that floats on the trailing edge of the
+    /// review-safety bucket header. Replaces the previous full-width REVIEW
+    /// REQUIRED panel between the controls row and the bucket list.
+    private func reviewBucketAccessory(
+        reviewBytes: Int64,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("AI Review")
+                    .font(GargantuaFonts.caption)
+                Text(AlertItem.formatBytes(reviewBytes))
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.review.opacity(0.8))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(GargantuaColors.review)
+            .padding(.horizontal, GargantuaSpacing.space2)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.black.opacity(0.18))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(GargantuaColors.review.opacity(0.32), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Open AI review for these items before confirming cleanup")
+    }
+
+    private func itemRow(_ item: ScanResult, showExplanation: Bool) -> some View {
         ScanResultRowView(
             item: item,
             isSelected: selectedIDs.contains(item.id),
             isFocused: focusedItemID == item.id,
+            showExplanation: showExplanation,
             onToggleSelection: { toggleSelection(item.id) },
             onExplain: onExplain,
             onAddToExclusions: onAddToExclusions,

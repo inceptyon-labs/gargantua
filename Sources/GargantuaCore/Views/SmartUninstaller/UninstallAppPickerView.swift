@@ -27,8 +27,8 @@ struct UninstallAppPickerView: View {
                                 isChecked: viewModel.multiSelected.contains(app.bundleID),
                                 categoryCount: viewModel.categoryCounts[app.bundleID],
                                 onToggleCheck: { viewModel.toggleMultiSelect(bundleID: app.bundleID) },
-                                onQuickUninstall: { Task { await viewModel.quickUninstall(app) } },
-                                onOpen: { Task { await viewModel.selectApp(app) } }
+                                onQuickUninstall: { viewModel.runTracked { await viewModel.quickUninstall(app) } },
+                                onOpen: { viewModel.runTracked { await viewModel.selectApp(app) } }
                             )
                             .accessibilityLabel(Text(accessibilityLabel(for: app)))
 
@@ -124,7 +124,7 @@ struct UninstallAppPickerView: View {
             .accessibilityLabel("Clear app selection")
 
             Button {
-                Task { await viewModel.startBatchUninstall() }
+                viewModel.runTracked { await viewModel.startBatchUninstall() }
             } label: {
                 Text(viewModel.multiSelected.count == 1
                     ? "Uninstall 1 app"
@@ -169,7 +169,7 @@ struct UninstallAppPickerView: View {
 
     private var rescanButton: some View {
         Button {
-            Task { await viewModel.rescanApps() }
+            viewModel.runTracked { await viewModel.rescanApps() }
         } label: {
             HStack(spacing: GargantuaSpacing.space1) {
                 Image(systemName: "arrow.triangle.2.circlepath")

@@ -53,7 +53,8 @@ public struct DeepCleanView: View {
                 case .scanning, .cleaning:
                     EventHorizonConsoleView(
                         context: .deepClean(phase: session.phase, profileName: profile.name),
-                        stream: session.pathStream
+                        stream: session.pathStream,
+                        onAbort: { session.severTether() }
                     )
                     .transition(phaseTransition)
                 case .results:
@@ -228,7 +229,7 @@ public struct DeepCleanView: View {
 
     private func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         session.beginCleanup(method: method)
-        Task {
+        session.activeTask = Task {
             let engine = CleanupEngine()
             let result = await engine.clean(items, method: method, observer: session.pathStream)
             do {
@@ -242,6 +243,9 @@ public struct DeepCleanView: View {
             if !result.itemResults.filter(\.succeeded).isEmpty, !reduceMotion {
                 try? await Task.sleep(nanoseconds: 750_000_000)
             }
+            // If the user severed the tether mid-cleanup, the session was
+            // already reset to idle — don't pivot to a summary.
+            guard !Task.isCancelled else { return }
             session.finishCleanup(result: result)
         }
     }
@@ -252,7 +256,7 @@ public struct DeepCleanView: View {
 
     private func startScan() {
         session.prepareForScan()
-        Task {
+        session.activeTask = Task {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
@@ -261,8 +265,10 @@ public struct DeepCleanView: View {
                     progress: session.scanProgress,
                     observer: session.pathStream
                 )
+                guard !Task.isCancelled else { return }
                 session.finishScan(results: results, duration: Date().timeIntervalSince(start))
             } catch {
+                guard !Task.isCancelled else { return }
                 session.failScan(error.localizedDescription)
             }
         }

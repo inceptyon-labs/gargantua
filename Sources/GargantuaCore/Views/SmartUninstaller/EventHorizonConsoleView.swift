@@ -329,6 +329,10 @@ extension EventHorizonContext {
 public struct EventHorizonConsoleView: View {
     let context: EventHorizonContext
     @Bindable var stream: PathStreamViewModel
+    /// Invoked when the user severs the tether (cancels). Optional — when
+    /// `nil`, the Sever Tether button is hidden. Callers that wire this up
+    /// must also drop the in-flight `Task` so the abort actually halts work.
+    let onAbort: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -354,9 +358,14 @@ public struct EventHorizonConsoleView: View {
     /// for the current executing phase.
     @State private var showTimeDilation = false
 
-    public init(context: EventHorizonContext, stream: PathStreamViewModel) {
+    public init(
+        context: EventHorizonContext,
+        stream: PathStreamViewModel,
+        onAbort: (() -> Void)? = nil
+    ) {
         self.context = context
         self._stream = Bindable(stream)
+        self.onAbort = onAbort
     }
 
     public var body: some View {
@@ -385,16 +394,10 @@ public struct EventHorizonConsoleView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            HStack {
-                Text(context.header)
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(2)
-                    .foregroundStyle(GargantuaColors.ink2)
-
-                Spacer()
-
-                AccretionDiskView(activityRate: activityRate)
-            }
+            Text(context.header)
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(2)
+                .foregroundStyle(GargantuaColors.ink2)
 
             HStack(spacing: GargantuaSpacing.space5) {
                 Text("TARGET: \(context.target)")
@@ -406,32 +409,78 @@ public struct EventHorizonConsoleView: View {
                     .foregroundStyle(GargantuaColors.accretion)
             }
 
-            Text("[KIPP] Humor: 0% · Honesty: 100% · Salvage: 100%")
+            Text(kippLine)
                 .font(GargantuaFonts.monoPath)
                 .foregroundStyle(GargantuaColors.ink3)
         }
     }
 
+    /// Live KIPP status line. Honesty stays at 100 — we never lie about what
+    /// got cleaned. Humor stays at 0 — KIPP is settable but nobody's bothered.
+    /// Salvage is the running match count so the user can watch it climb.
+    private var kippLine: String {
+        let salvage: String
+        if context.isInProgress {
+            salvage = "\(stream.matchCount) artifact\(stream.matchCount == 1 ? "" : "s")"
+        } else {
+            salvage = "standby"
+        }
+        return "[KIPP] Humor: 0% · Honesty: 100% · Salvage: \(salvage)"
+    }
+
     private var subtitleLine: some View {
-        // Spinning disk sits right next to the phase text so motion is always
-        // in eyeline during long scans — the header disk can be easy to miss
-        // on big apps during quiet event stretches.
+        // Spinning disk sits in eyeline next to the phase text so motion is
+        // always visible during long scans, and the cosmic phrase changes when
+        // the scanner crosses into a new directory — the metaphor itself is
+        // the activity signal.
         HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space2) {
             AccretionDiskView(activityRate: activityRate, size: 11)
             subtitleText
-            if context.isInProgress {
-                activityEllipsis
-            }
         }
     }
 
+    /// Cosmic phrase bound to the current scan domain when possible. When the
+    /// scanner is actively walking a recognized root (`~/Library/Caches`,
+    /// `DerivedData`, etc.), the phrase describes that domain and the trailing
+    /// metadata anchors it to a real path count. When no domain is known yet
+    /// or the path falls outside the mapping, falls back to the per-tool
+    /// rotating pool so first-paint and edge cases still feel alive.
     @ViewBuilder
     private var subtitleText: some View {
+        if let domain = currentDomain {
+            HStack(spacing: GargantuaSpacing.space2) {
+                Text(domain.phrase)
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink2)
+                Text("·")
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink4)
+                Text("\(stream.matchCount + checkedCount) paths")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink3)
+                Text("·")
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink4)
+                Text(domain.displayRoot)
+                    .font(GargantuaFonts.monoPath)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .id(domain.displayRoot)
+            .transition(.opacity)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: domain.displayRoot)
+        } else {
+            fallbackSubtitle
+        }
+    }
+
+    /// Per-tool rotating pool, used when no scan path has arrived yet or the
+    /// current path falls outside our domain mappings.
+    @ViewBuilder
+    private var fallbackSubtitle: some View {
         let pool = context.subtitlePool
         if context.isInProgress && pool.count > 1 && !reduceMotion {
-            // Rotate through the pool every 4 seconds. Using a TimelineView
-            // with a periodic schedule keeps SwiftUI from re-evaluating the
-            // whole body — only this subtree updates on each tick.
             TimelineView(.periodic(from: .now, by: 4.0)) { tlContext in
                 let step = Int(tlContext.date.timeIntervalSinceReferenceDate / 4.0) % pool.count
                 Text(pool[step])
@@ -448,25 +497,23 @@ public struct EventHorizonConsoleView: View {
         }
     }
 
-    @ViewBuilder
-    private var activityEllipsis: some View {
-        // Both branches reserve the same width so toggling reduce-motion
-        // doesn't shift the subtitle baseline.
-        if reduceMotion {
-            Text("…")
-                .font(GargantuaFonts.body.italic())
-                .foregroundStyle(GargantuaColors.ink2)
-                .frame(width: 18, alignment: .leading)
-                .accessibilityHidden(true)
-        } else {
-            TimelineView(.periodic(from: .now, by: 0.45)) { context in
-                let step = Int(context.date.timeIntervalSinceReferenceDate / 0.45) % 3
-                Text(String(repeating: ".", count: step + 1))
-                    .font(GargantuaFonts.body.italic())
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .frame(width: 18, alignment: .leading)
-                    .accessibilityHidden(true)
-            }
+    /// Resolve the cosmic domain for the latest path emitted by the scanner.
+    /// Only consults the live stream while the console is in progress so a
+    /// stale tail event from a prior phase doesn't leak into idle copy.
+    private var currentDomain: CosmicDomain? {
+        guard context.isInProgress else { return nil }
+        guard let lastPath = stream.events.last?.path else { return nil }
+        return EventHorizonContext.cosmicDomain(forPath: lastPath)
+    }
+
+    /// Approximate inspected-path count: matches are tracked exactly, but
+    /// "checked" outcomes aren't — the buffer is bounded so we expose the
+    /// in-buffer count as a floor. Good enough to give the user a number that
+    /// climbs visibly during long scans.
+    private var checkedCount: Int {
+        stream.events.reduce(0) { count, event in
+            if case .checked = event.outcome { return count + 1 }
+            return count
         }
     }
 
@@ -544,7 +591,40 @@ public struct EventHorizonConsoleView: View {
                 .foregroundStyle(stream.failureCount == 0 ? GargantuaColors.ink2 : GargantuaColors.protected_)
 
             Spacer()
+
+            if let onAbort, context.isInProgress {
+                severTetherButton(action: onAbort)
+            }
         }
+    }
+
+    /// Endurance docking reference — sever the tether, return to safe orbit.
+    /// Copy switches based on phase so the user knows whether they're aborting
+    /// a survey or halting an in-flight cleanup.
+    private func severTetherButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "xmark.octagon")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(context.isExecuting ? "Halt Cleanup" : "Sever Tether")
+                    .font(GargantuaFonts.label)
+            }
+            .foregroundStyle(GargantuaColors.ink2)
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .padding(.vertical, GargantuaSpacing.space1)
+            .background(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small, style: .continuous)
+                    .fill(Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small, style: .continuous)
+                    .stroke(GargantuaColors.borderEm, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(context.isExecuting
+            ? "Halt cleanup. Items already removed stay removed."
+            : "Sever the tether and return to start.")
     }
 
     private var timeDilationLine: some View {

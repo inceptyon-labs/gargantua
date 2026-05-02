@@ -30,6 +30,10 @@ public struct DevArtifactScanView: View {
     @State private var cleanupResult: CleanupResult?
     @State private var phase: DeepCleanPhase = .idle
     @State private var pathStream = PathStreamViewModel()
+    /// In-flight scan or cleanup task. Held so "Sever Tether" can cancel
+    /// from inside the EventHorizon console. Always overwrite when starting
+    /// new work so a stale handle can't leak across phases.
+    @State private var activeTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let onExplain: ((ScanResult) -> Void)?
@@ -62,7 +66,8 @@ public struct DevArtifactScanView: View {
                 case .scanning, .cleaning:
                     EventHorizonConsoleView(
                         context: .devPurge(phase: phase, profileName: profile.name),
-                        stream: pathStream
+                        stream: pathStream,
+                        onAbort: severTether
                     )
                     .transition(phaseTransition)
                 case .results:
@@ -419,12 +424,13 @@ public struct DevArtifactScanView: View {
 extension DevArtifactScanView {
 
     fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
+        activeTask?.cancel()
         showConfirmation = false
         isCleaning = true
         activeCleanupMethod = method
         pathStream.clear()
         phase = .cleaning
-        Task {
+        activeTask = Task {
             let engine = CleanupEngine()
             let result = await engine.clean(items, method: method, observer: pathStream)
             do {
@@ -438,10 +444,32 @@ extension DevArtifactScanView {
             if !result.itemResults.filter(\.succeeded).isEmpty, !reduceMotion {
                 try? await Task.sleep(nanoseconds: 750_000_000)
             }
+            // If the user severed the tether mid-cleanup, the view is
+            // already idle — do not pivot to a summary.
+            guard !Task.isCancelled else { return }
             isCleaning = false
             cleanupResult = result
             phase = .summary
         }
+    }
+
+    /// User-initiated abort from the EventHorizon console. Cancels the
+    /// in-flight scan or cleanup task and rewinds to the category-selection
+    /// idle screen. Items already cleaned during this run stay cleaned.
+    fileprivate func severTether() {
+        activeTask?.cancel()
+        activeTask = nil
+        isScanRequested = false
+        isCleaning = false
+        showConfirmation = false
+        scanProgress = ScanProgress()
+        scanDuration = 0
+        scanResults = nil
+        selectedResultIDs = []
+        cleanupResult = nil
+        activeCleanupMethod = .trash
+        pathStream.clear()
+        phase = .idle
     }
 
     private func dismissSummary() {
@@ -461,16 +489,18 @@ extension DevArtifactScanView {
     }
 
     private func startScan() {
+        activeTask?.cancel()
         isScanRequested = true
         scanProgress = ScanProgress()
         pathStream.clear()
         phase = .scanning
-        Task {
+        activeTask = Task {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
                     ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
                 let results = try await adapter.scan(progress: scanProgress, observer: pathStream)
+                guard !Task.isCancelled else { return }
 
                 // Filter results to the user's selected buckets. A result
                 // is kept if any of its derived buckets is selected — so
@@ -496,6 +526,7 @@ extension DevArtifactScanView {
                 isScanRequested = false
                 phase = .results
             } catch {
+                guard !Task.isCancelled else { return }
                 scanProgress.recordError(error.localizedDescription)
                 isScanRequested = false
                 phase = .idle

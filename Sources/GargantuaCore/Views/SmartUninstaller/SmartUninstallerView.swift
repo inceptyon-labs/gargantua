@@ -31,7 +31,8 @@ public struct SmartUninstallerView: View {
                      .batchScanning, .batchExecuting:
                     EventHorizonConsoleView(
                         context: .uninstaller(phase: viewModel.phase),
-                        stream: viewModel.pathStream
+                        stream: viewModel.pathStream,
+                        onAbort: { viewModel.severTether() }
                     )
                     .transition(phaseTransition)
                 case .pickingApp:
@@ -68,7 +69,7 @@ public struct SmartUninstallerView: View {
                     onConfirm: { _ in
                         showingConfirmation = false
                         viewModel.quickConfirmActive = false
-                        Task { await viewModel.execute() }
+                        viewModel.runTracked { await viewModel.execute() }
                     },
                     onCancel: {
                         showingConfirmation = false
@@ -91,7 +92,7 @@ public struct SmartUninstallerView: View {
                 ConfirmationModalView(
                     items: viewModel.batchSelectedScanResults,
                     onConfirm: { _ in
-                        Task { await viewModel.executeBatch() }
+                        viewModel.runTracked { await viewModel.executeBatch() }
                     },
                     onCancel: { viewModel.cancelBatch() }
                 )
@@ -123,7 +124,7 @@ public struct SmartUninstallerView: View {
             }
 
             Button {
-                Task { await viewModel.loadApps() }
+                viewModel.runTracked { await viewModel.loadApps() }
             } label: {
                 Text("Scan Installed Apps")
                     .font(GargantuaFonts.label)

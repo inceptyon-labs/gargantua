@@ -6,10 +6,33 @@ struct ScanResultRowView: View {
     let item: ScanResult
     let isSelected: Bool
     let isFocused: Bool
+    /// Set by `ScanBucketListView.groupSection` to dedupe identical-explanation
+    /// rows in the same group: only the first occurrence shows the prose.
+    let showExplanation: Bool
     let onToggleSelection: () -> Void
     let onExplain: ((ScanResult) -> Void)?
     let onAddToExclusions: ((ScanResult) -> Void)?
     let onViewRule: ((ScanResult) -> Void)?
+
+    init(
+        item: ScanResult,
+        isSelected: Bool,
+        isFocused: Bool,
+        showExplanation: Bool = true,
+        onToggleSelection: @escaping () -> Void,
+        onExplain: ((ScanResult) -> Void)?,
+        onAddToExclusions: ((ScanResult) -> Void)?,
+        onViewRule: ((ScanResult) -> Void)?
+    ) {
+        self.item = item
+        self.isSelected = isSelected
+        self.isFocused = isFocused
+        self.showExplanation = showExplanation
+        self.onToggleSelection = onToggleSelection
+        self.onExplain = onExplain
+        self.onAddToExclusions = onAddToExclusions
+        self.onViewRule = onViewRule
+    }
 
     var body: some View {
         Group {
@@ -29,16 +52,17 @@ struct ScanResultRowView: View {
             item: item,
             isSelected: isSelected,
             isFocused: isFocused,
+            showExplanation: showExplanation,
             onToggleSelection: onToggleSelection,
             onExplain: onExplain.map { handler in { handler(item) } }
         )
     }
 
-    /// Protected items: shown but dimmed, locked indicator, no checkbox.
+    /// Protected items: shown but dimmed, locked indicator, no checkbox. The
+    /// confidence orbit is dropped here — the lock already conveys the row's
+    /// state and confidence is moot when the row can't be acted on.
     private var protectedRow: some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            ConfidenceOrbit(confidence: item.confidence, safety: item.safety)
-
             Image(systemName: "lock.fill")
                 .font(.system(size: 11))
                 .foregroundStyle(GargantuaColors.ink4)
@@ -51,7 +75,7 @@ struct ScanResultRowView: View {
                         .foregroundStyle(GargantuaColors.ink3)
                         .lineLimit(1)
 
-                    if !item.explanation.isEmpty {
+                    if showExplanation, !item.explanation.isEmpty {
                         Text(item.explanation)
                             .font(GargantuaFonts.body)
                             .foregroundStyle(GargantuaColors.ink4)
@@ -61,7 +85,7 @@ struct ScanResultRowView: View {
 
                 Text(item.path)
                     .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink4)
+                    .foregroundStyle(GargantuaColors.ink3)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
