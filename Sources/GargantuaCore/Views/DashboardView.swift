@@ -67,7 +67,6 @@ public struct DashboardView: View {
                     VStack(spacing: GargantuaSpacing.space5) {
                         triageOverviewSection
                         roadmapSection
-                        systemSnapshotSection
                         integrationsSection
                         scheduledScanSection
                         triageEvidenceSection
@@ -124,8 +123,13 @@ public struct DashboardView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: GargantuaSpacing.space2) {
+                    DashboardHealthScorePill(
+                        score: healthScore,
+                        tone: HealthScoreRange(score: healthScore).color,
+                        summary: healthSummaryText,
+                        explanation: healthScoreExplanation
+                    )
                     DashboardEvidencePill(text: "\(freeDiskGB) GB free")
-                    DashboardEvidencePill(text: healthSummaryText)
                     DashboardEvidencePill(text: triageStatusPill)
                 }
             }
@@ -211,14 +215,6 @@ public struct DashboardView: View {
         }
     }
 
-    // MARK: - System Snapshot
-
-    private var systemSnapshotSection: some View {
-        DashboardSection(title: "SYSTEM SNAPSHOT") {
-            DashboardMetricStrip(metrics: systemMetrics)
-        }
-    }
-
     private var integrationsSection: some View {
         DashboardSection(title: "INTEGRATIONS") {
             ViewThatFits(in: .horizontal) {
@@ -255,35 +251,6 @@ public struct DashboardView: View {
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-    }
-
-    private var systemMetrics: [DashboardMetricSummary] {
-        [
-            DashboardMetricSummary(
-                label: "Health",
-                value: "\(healthScore)",
-                detail: healthSummaryText,
-                tone: HealthScoreRange(score: healthScore).color
-            ),
-            DashboardMetricSummary(
-                label: "Disk",
-                value: "\(freeDiskGB) GB free",
-                detail: "\(diskUsedGB) / \(diskTotalGB) GB used",
-                tone: diskBarColor
-            ),
-            DashboardMetricSummary(
-                label: "Memory",
-                value: "\(Int((memoryPressure * 100).rounded()))%",
-                detail: "\(memoryUsedGB) / \(memoryTotalGB) GB in use",
-                tone: memoryTone
-            ),
-            DashboardMetricSummary(
-                label: "Thermal",
-                value: thermalTitle,
-                detail: thermalDetail,
-                tone: thermalTone
-            ),
-        ]
     }
 
     // MARK: - Alerts Section
@@ -1097,87 +1064,6 @@ private struct DashboardSection<Content: View>: View {
     }
 }
 
-private struct DashboardMetricSummary: Identifiable {
-    let label: String
-    let value: String
-    let detail: String
-    let tone: Color
-
-    var id: String { label }
-}
-
-private struct DashboardMetricStrip: View {
-    let metrics: [DashboardMetricSummary]
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
-                    DashboardMetricCell(metric: metric)
-
-                    if index < metrics.count - 1 {
-                        Rectangle()
-                            .fill(GargantuaColors.borderSoft)
-                            .frame(width: 1)
-                    }
-                }
-            }
-
-            VStack(spacing: 0) {
-                ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
-                    DashboardMetricCell(metric: metric)
-
-                    if index < metrics.count - 1 {
-                        Rectangle()
-                            .fill(GargantuaColors.borderSoft)
-                            .frame(height: 1)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(GargantuaColors.surface1)
-        .overlay(
-            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                .stroke(GargantuaColors.border, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
-    }
-}
-
-private struct DashboardMetricCell: View {
-    let metric: DashboardMetricSummary
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            Text(metric.label.uppercased())
-                .font(GargantuaFonts.sectionLabel)
-                .tracking(0.8)
-                .foregroundStyle(GargantuaColors.ink4)
-
-            Text(metric.value)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(GargantuaColors.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-
-            Text(metric.detail)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(GargantuaSpacing.space4)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
-        .overlay(alignment: .topLeading) {
-            Rectangle()
-                .fill(metric.tone)
-                .frame(width: 28, height: 2)
-                .padding(.horizontal, GargantuaSpacing.space4)
-        }
-    }
-}
-
 private extension DashboardView {
     var freeDiskGB: Int {
         max(diskTotalGB - diskUsedGB, 0)
@@ -1187,20 +1073,6 @@ private extension DashboardView {
         if diskUsage > 0.9 { return GargantuaColors.protected_ }
         if diskUsage > 0.75 { return GargantuaColors.review }
         return GargantuaColors.safe
-    }
-
-    var memoryTone: Color {
-        if memoryPressure > 0.85 { return GargantuaColors.protected_ }
-        if memoryPressure > 0.65 { return GargantuaColors.review }
-        return GargantuaColors.safe
-    }
-
-    var thermalTone: Color {
-        switch thermalLevel {
-        case .nominal: return GargantuaColors.safe
-        case .fair: return GargantuaColors.review
-        case .serious, .critical: return GargantuaColors.protected_
-        }
     }
 
     var healthSummaryText: String {
@@ -1214,17 +1086,17 @@ private extension DashboardView {
         }
     }
 
-    var thermalTitle: String {
-        thermalLevel.rawValue.capitalized
+    var healthScoreExplanation: String {
+        """
+        Health is a 0-100 pressure score from disk headroom, memory pressure, and thermal state. \
+        This reading uses \(Int((diskUsage * 100).rounded()))% disk used, \
+        \(Int((memoryPressure * 100).rounded()))% memory pressure, and \(thermalTitle.lowercased()) thermal state. \
+        Lower scores mean the Mac is under more sustained pressure; the score does not identify cleanup items by itself.
+        """
     }
 
-    var thermalDetail: String {
-        switch thermalLevel {
-        case .nominal: return "No thermal pressure."
-        case .fair: return "Warm, but still stable."
-        case .serious: return "Performance may throttle."
-        case .critical: return "System is heavily constrained."
-        }
+    var thermalTitle: String {
+        thermalLevel.rawValue.capitalized
     }
 
     func destinationLabel(_ destination: AlertDestination) -> String {
@@ -1235,16 +1107,48 @@ private extension DashboardView {
         }
     }
 
-    func primaryLabel(for destination: AlertDestination) -> String {
-        "Open \(destinationLabel(destination))"
-    }
-
     func tone(for destination: AlertDestination) -> Color {
         switch destination {
         case .deepClean: return GargantuaColors.accent
         case .devPurge: return GargantuaColors.review
         case .diskExplorer: return GargantuaColors.safe
         }
+    }
+}
+
+private struct DashboardHealthScorePill: View {
+    let score: Int
+    let tone: Color
+    let summary: String
+    let explanation: String
+
+    var body: some View {
+        HStack(spacing: GargantuaSpacing.space1) {
+            Circle()
+                .fill(tone)
+                .frame(width: 6, height: 6)
+
+            Text("Health \(score)")
+
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(GargantuaColors.ink4)
+        }
+        .font(GargantuaFonts.caption)
+        .foregroundStyle(GargantuaColors.ink2)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .padding(.vertical, GargantuaSpacing.space1)
+        .background(
+            Capsule()
+                .fill(GargantuaColors.surface3)
+        )
+        .overlay(
+            Capsule()
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
+        .help("\(summary) \(explanation)")
+        .accessibilityLabel("Health \(score). \(summary)")
+        .accessibilityHint(explanation)
     }
 }
 
