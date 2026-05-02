@@ -61,33 +61,46 @@ struct HealthScoreRangeTests {
 
 @Suite("HealthGaugeView")
 struct HealthGaugeViewTests {
-    @Test("Score clamped to 0 minimum")
-    func clampMin() {
-        let gauge = HealthGaugeView(score: -10)
-        #expect(gauge.score == 0)
+    @Test("diskUsage clamped to 0 minimum")
+    func clampDiskMin() {
+        let gauge = HealthGaugeView(diskUsage: -0.5)
+        #expect(gauge.diskUsage == 0)
     }
 
-    @Test("Score clamped to 100 maximum")
-    func clampMax() {
-        let gauge = HealthGaugeView(score: 150)
-        #expect(gauge.score == 100)
+    @Test("diskUsage clamped to 1 maximum")
+    func clampDiskMax() {
+        let gauge = HealthGaugeView(diskUsage: 1.5)
+        #expect(gauge.diskUsage == 1)
     }
 
-    @Test("Score within range is not clamped")
+    @Test("reclaimableFraction clamped to 0 minimum")
+    func clampReclaimMin() {
+        let gauge = HealthGaugeView(diskUsage: 0.5, reclaimableFraction: -0.1)
+        #expect(gauge.reclaimableFraction == 0)
+    }
+
+    @Test("reclaimableFraction clamped to 1 maximum")
+    func clampReclaimMax() {
+        let gauge = HealthGaugeView(diskUsage: 0.5, reclaimableFraction: 2.0)
+        #expect(gauge.reclaimableFraction == 1)
+    }
+
+    @Test("Values within range are not clamped")
     func noClamp() {
-        let gauge = HealthGaugeView(score: 75)
-        #expect(gauge.score == 75)
+        let gauge = HealthGaugeView(diskUsage: 0.74, reclaimableFraction: 0.08)
+        #expect(gauge.diskUsage == 0.74)
+        #expect(gauge.reclaimableFraction == 0.08)
     }
 
     @Test("Default size is 120")
     func defaultSize() {
-        let gauge = HealthGaugeView(score: 50)
+        let gauge = HealthGaugeView(diskUsage: 0.5)
         #expect(gauge.size == 120)
     }
 
     @Test("Custom size is respected")
     func customSize() {
-        let gauge = HealthGaugeView(score: 50, size: 200, lineWidth: 12)
+        let gauge = HealthGaugeView(diskUsage: 0.5, size: 200, lineWidth: 12)
         #expect(gauge.size == 200)
         #expect(gauge.lineWidth == 12)
     }

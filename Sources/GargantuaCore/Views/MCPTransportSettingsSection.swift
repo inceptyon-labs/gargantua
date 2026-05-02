@@ -5,6 +5,7 @@ struct MCPTransportSettingsSection: View {
     @State private var tokenStatus = "Token not generated"
     @State private var generatedToken: String?
     @State private var hasBearerToken = false
+    @StateObject private var serverModel = MCPServerStatusViewModel()
 
     private let configurationStore = MCPSSEConfigurationStore()
     private let tokenManager = MCPBearerTokenManager()
@@ -17,6 +18,11 @@ struct MCPTransportSettingsSection: View {
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
                 statusHeader
+
+                Divider()
+                    .overlay(GargantuaColors.border)
+
+                runtimeRow
 
                 Divider()
                     .overlay(GargantuaColors.border)
@@ -44,7 +50,55 @@ struct MCPTransportSettingsSection: View {
         .task {
             configuration = configurationStore.load()
             refreshTokenStatus()
+            serverModel.refresh()
         }
+    }
+
+    private var runtimeRow: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            Image(systemName: "play.circle")
+                .font(.system(size: 14))
+                .foregroundStyle(GargantuaColors.ink3)
+                .frame(width: 20, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Server")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(runtimeStatusLine)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+
+            Spacer()
+
+            if serverModel.snapshot.isRunning {
+                transportActionButton(
+                    label: "Stop",
+                    icon: "stop.fill",
+                    color: GargantuaColors.protected_,
+                    action: { serverModel.stop() }
+                )
+            } else {
+                transportActionButton(
+                    label: "Start",
+                    icon: "play.fill",
+                    color: GargantuaColors.accent,
+                    action: { serverModel.start() }
+                )
+            }
+        }
+    }
+
+    private var runtimeStatusLine: String {
+        let snapshot = serverModel.snapshot
+        if snapshot.isRunning {
+            let count = snapshot.clients.count
+            return count == 0 ? "Running, no clients connected" : "Running, \(count) connected"
+        }
+        if let message = snapshot.lastErrorMessage { return message }
+        return "Stopped"
     }
 
     private var statusHeader: some View {

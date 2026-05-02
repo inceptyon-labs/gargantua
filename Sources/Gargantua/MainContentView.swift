@@ -77,8 +77,7 @@ struct MainContentView: View {
                             case "dashboard":
                                 DashboardView(
                                     sidebarSelection: $sidebarSelection,
-                                    persistence: persistence,
-                                    mcpStatusModel: mcpStatusModel
+                                    persistence: persistence
                                 )
                             case "profiles":
                                 if let persistence {

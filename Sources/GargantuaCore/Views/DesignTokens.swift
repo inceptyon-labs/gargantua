@@ -88,6 +88,8 @@ public enum GargantuaColors {
 public enum GargantuaFonts {
     /// Section headers. 16px, 600 weight.
     public static let heading = Font.system(size: 16, weight: .semibold)
+    /// Panel names, dynamic state headlines, status titles. 15px, 600 weight.
+    public static let title = Font.system(size: 15, weight: .semibold)
     /// List item names. 13px, 500 weight.
     public static let label = Font.system(size: 13, weight: .medium)
     /// Descriptions, explanations. 13px, 400 weight.

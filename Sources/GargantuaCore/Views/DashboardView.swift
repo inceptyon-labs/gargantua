@@ -12,22 +12,14 @@ public struct DashboardView: View {
 
     private let persistence: PersistenceController?
 
-    @State private var healthScore: Int = 0
     @State private var diskUsedGB: Int = 0
     @State private var diskTotalGB: Int = 0
     @State private var diskUsage: Double = 0
-    @State private var memoryUsedGB: Int = 0
-    @State private var memoryTotalGB: Int = 0
-    @State private var memoryPressure: Double = 0
-    @State private var thermalLevel: ThermalLevel = .nominal
     @State private var alerts: [AlertItem] = []
     @State private var scanProgress = ScanProgress()
     @State private var isLoading = true
     @State private var hasRunTriageScan = false
-    @State private var cloudStatus: CloudAIStatus?
-    @State private var tier3AgentStatus: DashboardTier3AgentStatus?
     @State private var scheduledScanSummary: ScheduledScanSummary?
-    @StateObject private var mcpStatusModel: MCPServerStatusViewModel
 
     private let collector = SystemMetricCollector()
 
@@ -35,18 +27,6 @@ public struct DashboardView: View {
     public init(sidebarSelection: Binding<String?>, persistence: PersistenceController? = nil) {
         self._sidebarSelection = sidebarSelection
         self.persistence = persistence
-        self._mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
-    }
-
-    @MainActor
-    public init(
-        sidebarSelection: Binding<String?>,
-        persistence: PersistenceController? = nil,
-        mcpStatusModel: MCPServerStatusViewModel
-    ) {
-        self._sidebarSelection = sidebarSelection
-        self.persistence = persistence
-        self._mcpStatusModel = StateObject(wrappedValue: mcpStatusModel)
     }
 
     public var body: some View {
@@ -59,15 +39,13 @@ public struct DashboardView: View {
 
             if isLoading {
                 Spacer()
-                ProgressView()
-                    .controlSize(.regular)
+                AccretionDiskView(activityRate: 18, size: 28, color: GargantuaColors.accretion)
                 Spacer()
             } else {
                 ScrollView {
                     VStack(spacing: GargantuaSpacing.space5) {
                         triageOverviewSection
                         roadmapSection
-                        integrationsSection
                         scheduledScanSection
                         triageEvidenceSection
                     }
@@ -80,7 +58,6 @@ public struct DashboardView: View {
         .background(GargantuaColors.void_)
         .task {
             await loadMetrics()
-            await refreshMCPStatusLoop()
         }
     }
 
@@ -105,14 +82,20 @@ public struct DashboardView: View {
 
     private var triageOverviewSection: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space5) {
+            HealthGaugeView(
+                diskUsage: diskUsage,
+                reclaimableFraction: reclaimableFraction
+            )
+            .help(gaugeHelpText)
+
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
                 Text("CLEANUP ROADMAP")
                     .font(GargantuaFonts.sectionLabel)
                     .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.accent)
+                    .foregroundStyle(GargantuaColors.ink4)
 
                 Text(roadmapHeadline)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(GargantuaFonts.title)
                     .foregroundStyle(GargantuaColors.ink)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -123,57 +106,14 @@ public struct DashboardView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: GargantuaSpacing.space2) {
-                    DashboardHealthScorePill(
-                        score: healthScore,
-                        tone: HealthScoreRange(score: healthScore).color,
-                        summary: healthSummaryText,
-                        explanation: healthScoreExplanation
-                    )
-                    DashboardEvidencePill(text: "\(freeDiskGB) GB free")
+                    DashboardEvidencePill(text: "\(freeDiskGB) GB free", monospaced: true)
+                    if reclaimableFraction > 0 {
+                        DashboardEvidencePill(text: reclaimableSummary, monospaced: true)
+                    }
                     DashboardEvidencePill(text: triageStatusPill)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: GargantuaSpacing.space5)
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                Text("TRIAGE")
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.ink4)
-
-                Text(triageStatusTitle)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(triageStatusDetail)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button(action: startTriageScan) {
-                    Label(triageButtonLabel, systemImage: scanProgress.isScanning ? "hourglass" : "list.bullet.clipboard")
-                        .font(GargantuaFonts.label)
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .frame(maxWidth: .infinity)
-                        .background(scanProgress.isScanning ? GargantuaColors.ink4 : GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-                .disabled(scanProgress.isScanning)
-            }
-            .padding(GargantuaSpacing.space4)
-            .frame(width: 260, alignment: .leading)
-            .background(GargantuaColors.surface2)
-            .overlay(
-                RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                    .stroke(GargantuaColors.borderSoft, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
         }
         .padding(GargantuaSpacing.space5)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -183,6 +123,25 @@ public struct DashboardView: View {
                 .stroke(GargantuaColors.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+
+    private var reclaimableFraction: Double {
+        let totalBytes = Double(diskTotalGB) * 1_073_741_824
+        guard totalBytes > 0 else { return 0 }
+        return min(max(Double(totalAlertBytes) / totalBytes, 0), 1)
+    }
+
+    private var reclaimableSummary: String {
+        "\(AlertItem.formatBytes(totalAlertBytes)) reclaimable"
+    }
+
+    private var gaugeHelpText: String {
+        let used = Int((diskUsage * 100).rounded())
+        if reclaimableFraction > 0 {
+            let pct = Int((reclaimableFraction * 100).rounded())
+            return "\(used)% disk used. Triage found \(reclaimableSummary) (\(pct)% of disk)."
+        }
+        return "\(used)% disk used. Run triage to estimate reclaim potential."
     }
 
     // MARK: - Roadmap
@@ -215,44 +174,6 @@ public struct DashboardView: View {
         }
     }
 
-    private var integrationsSection: some View {
-        DashboardSection(title: "INTEGRATIONS") {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-                    DashboardCloudAIMetricCard(status: cloudStatus)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-
-                    DashboardTier3AgentStatusCard(
-                        status: tier3AgentStatus,
-                        onOpenAgent: { sidebarSelection = "agentSessions" },
-                        onOpenSettings: { sidebarSelection = "settings" }
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-
-                    DashboardMCPStatusCard(
-                        model: mcpStatusModel,
-                        onOpenAuditLog: openMCPAuditLog
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-
-                VStack(spacing: GargantuaSpacing.space3) {
-                    DashboardCloudAIMetricCard(status: cloudStatus)
-                    DashboardTier3AgentStatusCard(
-                        status: tier3AgentStatus,
-                        onOpenAgent: { sidebarSelection = "agentSessions" },
-                        onOpenSettings: { sidebarSelection = "settings" }
-                    )
-                    DashboardMCPStatusCard(
-                        model: mcpStatusModel,
-                        onOpenAuditLog: openMCPAuditLog
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-    }
-
     // MARK: - Alerts Section
 
     @ViewBuilder
@@ -269,15 +190,18 @@ public struct DashboardView: View {
         }
     }
 
+    @ViewBuilder
     private var triageEvidenceSection: some View {
-        DashboardSection(title: "TRIAGE EVIDENCE") {
-            DashboardTriageEvidenceView(
-                alerts: alerts,
-                hasRunTriage: hasRunTriageScan,
-                scanProgress: scanProgress,
-                onNavigate: navigateTo,
-                onScan: startTriageScan
-            )
+        if hasRunTriageScan || scanProgress.isScanning {
+            DashboardSection(title: "TRIAGE EVIDENCE") {
+                DashboardTriageEvidenceView(
+                    alerts: alerts,
+                    hasRunTriage: hasRunTriageScan,
+                    scanProgress: scanProgress,
+                    onNavigate: navigateTo,
+                    onScan: startTriageScan
+                )
+            }
         }
     }
 
@@ -315,35 +239,11 @@ public struct DashboardView: View {
         }
     }
 
-    private func openMCPAuditLog() {
-        let logFile = AuditWriter().logFile
-        if FileManager.default.fileExists(atPath: logFile.path) {
-            NSWorkspace.shared.activateFileViewerSelecting([logFile])
-        }
-    }
-
-    private func refreshMCPStatusLoop() async {
-        while !Task.isCancelled {
-            await MainActor.run {
-                mcpStatusModel.refresh()
-                tier3AgentStatus = DashboardTier3AgentStatusProvider.snapshot()
-            }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-        }
-    }
-
     private func loadMetrics() async {
         let metrics = await collector.collect()
-        healthScore = metrics.healthScore
         diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
         diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
         diskUsage = metrics.diskUsage
-        memoryTotalGB = Int(metrics.memoryTotal / (1024 * 1024 * 1024))
-        memoryUsedGB = Int(metrics.memoryUsed / (1024 * 1024 * 1024))
-        memoryPressure = metrics.memoryPressure
-        thermalLevel = metrics.thermalLevel
-        cloudStatus = await CloudAIStatusProvider.snapshot()
-        tier3AgentStatus = DashboardTier3AgentStatusProvider.snapshot()
         scheduledScanSummary = try? persistence?.fetchPendingScheduledScanSummary()
         isLoading = false
     }
@@ -370,7 +270,6 @@ fileprivate struct DashboardRoadmapStep: Identifiable {
     let evidence: [String]
     let actionLabel: String
     let systemImage: String
-    let tone: Color
     let action: DashboardRoadmapAction
 }
 
@@ -467,7 +366,6 @@ private extension DashboardView {
                 ],
                 actionLabel: "Scanning",
                 systemImage: "hourglass",
-                tone: GargantuaColors.accent,
                 action: .scan
             ),
         ]
@@ -484,7 +382,6 @@ private extension DashboardView {
                 evidence: ["local only", "safe + review items", "no deletion"],
                 actionLabel: "Run Triage",
                 systemImage: "list.bullet.clipboard",
-                tone: GargantuaColors.accent,
                 action: .scan
             ),
             baselineStep(
@@ -495,7 +392,6 @@ private extension DashboardView {
                 detail: "Caches, logs, temporary files, trash, and installers. Triage can usually route concrete findings here.",
                 evidence: ["caches", "logs", "trash"],
                 systemImage: "bubbles.and.sparkles",
-                tone: GargantuaColors.accent,
                 selection: "deepClean"
             ),
             baselineStep(
@@ -506,7 +402,6 @@ private extension DashboardView {
                 detail: "Node, Docker, Homebrew, Xcode, and build outputs. This is where developer-disk pressure usually lives.",
                 evidence: ["node_modules", "Docker", "build caches"],
                 systemImage: "hammer",
-                tone: GargantuaColors.review,
                 selection: "devPurge"
             ),
             baselineStep(
@@ -517,7 +412,6 @@ private extension DashboardView {
                 detail: "Use when large apps or remnants are the real target. Triage does not decide which apps you want removed.",
                 evidence: ["apps", "remnants", "user intent"],
                 systemImage: "trash.slash",
-                tone: GargantuaColors.ink3,
                 selection: "smartUninstaller"
             ),
             baselineStep(
@@ -528,7 +422,6 @@ private extension DashboardView {
                 detail: "Run after obvious bulk cleanup. Duplicate matching costs more time than triage, so it belongs later.",
                 evidence: ["content match", "review required"],
                 systemImage: "doc.on.doc",
-                tone: GargantuaColors.safe,
                 selection: "duplicateFinder"
             ),
         ]
@@ -544,7 +437,6 @@ private extension DashboardView {
                 detail: "Use this when the numbers still feel wrong. It shows where space is going without relying on cleanup rules.",
                 evidence: ["manual inspection", "\(freeDiskGB) GB free"],
                 systemImage: "internaldrive",
-                tone: diskBarColor,
                 selection: "diskExplorer"
             ),
             baselineStep(
@@ -555,7 +447,6 @@ private extension DashboardView {
                 detail: "Look for large apps and remnants that triage intentionally avoids because app removal needs user intent.",
                 evidence: ["apps", "remnants"],
                 systemImage: "trash.slash",
-                tone: GargantuaColors.ink3,
                 selection: "smartUninstaller"
             ),
             baselineStep(
@@ -566,7 +457,6 @@ private extension DashboardView {
                 detail: "Check duplicate files after the cheap cleanup pass is clear.",
                 evidence: ["content match", "manual review"],
                 systemImage: "doc.on.doc",
-                tone: GargantuaColors.safe,
                 selection: "duplicateFinder"
             ),
             baselineStep(
@@ -577,7 +467,6 @@ private extension DashboardView {
                 detail: "Review broken links, risky leftovers, and file-health issues that are not primarily space reclamation.",
                 evidence: ["broken links", "risk review"],
                 systemImage: "stethoscope",
-                tone: GargantuaColors.review,
                 selection: "fileHealth"
             ),
         ]
@@ -605,7 +494,6 @@ private extension DashboardView {
                 detail: "Use after reclaimable groups if installed apps or orphaned remnants are the likely source.",
                 evidence: ["apps + remnants", "not triage-owned"],
                 systemImage: "trash.slash",
-                tone: GargantuaColors.ink3,
                 selection: "smartUninstaller"
             ),
             baselineStep(
@@ -616,7 +504,6 @@ private extension DashboardView {
                 detail: "Run once the obvious cleanup is handled. Duplicate matching is slower and needs explicit review.",
                 evidence: ["content match", "review required"],
                 systemImage: "doc.on.doc",
-                tone: GargantuaColors.safe,
                 selection: "duplicateFinder"
             ),
             baselineStep(
@@ -627,7 +514,6 @@ private extension DashboardView {
                 detail: "Use if free space is still tight after the recommended cleanup passes.",
                 evidence: ["space map", "\(freeDiskGB) GB free"],
                 systemImage: "internaldrive",
-                tone: diskBarColor,
                 selection: "diskExplorer"
             ),
         ].filter { followUp in
@@ -675,7 +561,6 @@ private extension DashboardView {
             ].filter { !$0.isEmpty },
             actionLabel: "Open",
             systemImage: systemImage(for: destination),
-            tone: tone(for: destination),
             action: .navigate(destination.rawValue)
         )
     }
@@ -688,7 +573,6 @@ private extension DashboardView {
         detail: String,
         evidence: [String],
         systemImage: String,
-        tone: Color,
         selection: String
     ) -> DashboardRoadmapStep {
         DashboardRoadmapStep(
@@ -700,7 +584,6 @@ private extension DashboardView {
             evidence: evidence,
             actionLabel: "Open",
             systemImage: systemImage,
-            tone: tone,
             action: .navigate(selection)
         )
     }
@@ -736,18 +619,20 @@ private struct DashboardRoadmapRow: View {
         isScanning && step.action == .scan
     }
 
+    private var isPrimary: Bool { step.rank == 1 }
+
     var body: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
             Text("\(step.rank)")
                 .font(GargantuaFonts.monoData.weight(.semibold))
-                .foregroundStyle(step.tone)
+                .foregroundStyle(isPrimary ? GargantuaColors.ink : GargantuaColors.ink2)
                 .frame(width: 28, height: 28)
-                .background(step.tone.opacity(0.12))
+                .background(isPrimary ? GargantuaColors.accent : GargantuaColors.surface3)
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
 
             Image(systemName: step.systemImage)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(step.tone)
+                .foregroundStyle(isPrimary ? GargantuaColors.accent : GargantuaColors.ink2)
                 .frame(width: 24, height: 28, alignment: .center)
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
@@ -760,7 +645,7 @@ private struct DashboardRoadmapRow: View {
                     Text(step.status.uppercased())
                         .font(GargantuaFonts.sectionLabel)
                         .tracking(0.8)
-                        .foregroundStyle(step.tone)
+                        .foregroundStyle(GargantuaColors.ink3)
                         .lineLimit(1)
                 }
 
@@ -790,7 +675,7 @@ private struct DashboardRoadmapRow: View {
                 Label(actionIsDisabled ? "Scanning" : step.actionLabel, systemImage: buttonSystemImage)
                     .font(GargantuaFonts.label)
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(step.action == .scan ? .white : GargantuaColors.ink)
+                    .foregroundStyle(GargantuaColors.ink)
                     .frame(width: 120)
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(buttonBackground)
@@ -922,7 +807,7 @@ private struct DashboardTriageEvidenceView: View {
             Button(action: onScan) {
                 Text(hasRunTriage ? "Refresh Triage" : "Run Triage")
                     .font(GargantuaFonts.label)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(GargantuaColors.ink)
                     .padding(.horizontal, GargantuaSpacing.space3)
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(GargantuaColors.accent)
@@ -1008,7 +893,7 @@ private struct ScheduledScanDashboardCard: View {
                 Button(action: onReview) {
                     Text("Review")
                         .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(GargantuaColors.ink)
                         .padding(.horizontal, GargantuaSpacing.space3)
                         .padding(.vertical, GargantuaSpacing.space2)
                         .background(GargantuaColors.accent)
@@ -1075,30 +960,6 @@ private extension DashboardView {
         return GargantuaColors.safe
     }
 
-    var healthSummaryText: String {
-        switch HealthScoreRange(score: healthScore) {
-        case .healthy:
-            return "System looks stable overall."
-        case .moderate:
-            return "Some pressure is building."
-        case .poor:
-            return "The machine is under sustained pressure."
-        }
-    }
-
-    var healthScoreExplanation: String {
-        """
-        Health is a 0-100 pressure score from disk headroom, memory pressure, and thermal state. \
-        This reading uses \(Int((diskUsage * 100).rounded()))% disk used, \
-        \(Int((memoryPressure * 100).rounded()))% memory pressure, and \(thermalTitle.lowercased()) thermal state. \
-        Lower scores mean the Mac is under more sustained pressure; the score does not identify cleanup items by itself.
-        """
-    }
-
-    var thermalTitle: String {
-        thermalLevel.rawValue.capitalized
-    }
-
     func destinationLabel(_ destination: AlertDestination) -> String {
         switch destination {
         case .deepClean: return "Deep Clean"
@@ -1107,67 +968,18 @@ private extension DashboardView {
         }
     }
 
-    func tone(for destination: AlertDestination) -> Color {
-        switch destination {
-        case .deepClean: return GargantuaColors.accent
-        case .devPurge: return GargantuaColors.review
-        case .diskExplorer: return GargantuaColors.safe
-        }
-    }
-}
-
-private struct DashboardHealthScorePill: View {
-    let score: Int
-    let tone: Color
-    let summary: String
-    let explanation: String
-
-    var body: some View {
-        HStack(spacing: GargantuaSpacing.space1) {
-            Circle()
-                .fill(tone)
-                .frame(width: 6, height: 6)
-
-            Text("Health \(score)")
-
-            Image(systemName: "questionmark.circle")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(GargantuaColors.ink4)
-        }
-        .font(GargantuaFonts.caption)
-        .foregroundStyle(GargantuaColors.ink2)
-        .padding(.horizontal, GargantuaSpacing.space3)
-        .padding(.vertical, GargantuaSpacing.space1)
-        .background(
-            Capsule()
-                .fill(GargantuaColors.surface3)
-        )
-        .overlay(
-            Capsule()
-                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
-        )
-        .help("\(summary) \(explanation)")
-        .accessibilityLabel("Health \(score). \(summary)")
-        .accessibilityHint(explanation)
-    }
 }
 
 private struct DashboardEvidencePill: View {
     let text: String
+    var monospaced: Bool = false
 
     var body: some View {
         Text(text)
-            .font(GargantuaFonts.caption)
+            .font(monospaced ? GargantuaFonts.monoData : GargantuaFonts.caption)
             .foregroundStyle(GargantuaColors.ink2)
             .padding(.horizontal, GargantuaSpacing.space3)
             .padding(.vertical, GargantuaSpacing.space1)
-            .background(
-                Capsule()
-                    .fill(GargantuaColors.surface3)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(GargantuaColors.borderSoft, lineWidth: 1)
-            )
+            .background(Capsule().fill(GargantuaColors.surface3))
     }
 }

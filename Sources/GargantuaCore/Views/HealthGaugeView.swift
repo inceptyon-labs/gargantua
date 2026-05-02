@@ -28,73 +28,107 @@ public enum HealthScoreRange: Equatable {
 
 // MARK: - Health Gauge View
 
-/// Circular arc gauge displaying a 0-100 health score.
+/// Dual-ring gauge: outer arc shows disk usage, inner arc shows reclaim potential.
 ///
-/// The gauge renders as a 270° arc with the gap at the bottom,
-/// consistent with the confidence orbit aesthetic. The score number
-/// sits prominently in the center with a "Health" caption below.
+/// Both arcs span 270° with the gap at the bottom — the orbital signature
+/// element from PRODUCT.md, driven by data the cleanup app actually moves.
 public struct HealthGaugeView: View {
-    /// Current health score (clamped to 0-100).
-    public let score: Int
+    /// Disk usage 0-1 (drives the outer ring; thresholded color).
+    public let diskUsage: Double
 
-    /// Diameter of the gauge.
+    /// Reclaim potential 0-1 (drives the inner ring; appears only when > 0).
+    public let reclaimableFraction: Double
+
+    /// Diameter of the outer ring.
     public var size: CGFloat = 120
 
-    /// Line width of the arc stroke.
-    public var lineWidth: CGFloat = 8
+    /// Stroke width of each arc.
+    public var lineWidth: CGFloat = 6
 
-    public init(score: Int, size: CGFloat = 120, lineWidth: CGFloat = 8) {
-        self.score = min(max(score, 0), 100)
+    public init(
+        diskUsage: Double,
+        reclaimableFraction: Double = 0,
+        size: CGFloat = 120,
+        lineWidth: CGFloat = 6
+    ) {
+        self.diskUsage = min(max(diskUsage, 0), 1)
+        self.reclaimableFraction = min(max(reclaimableFraction, 0), 1)
         self.size = size
         self.lineWidth = lineWidth
     }
 
-    private var range: HealthScoreRange { HealthScoreRange(score: score) }
-    private var progress: Double { Double(score) / 100.0 }
+    private var diskColor: Color {
+        if diskUsage > 0.9 { return GargantuaColors.protected_ }
+        if diskUsage > 0.75 { return GargantuaColors.review }
+        return GargantuaColors.safe
+    }
 
     /// Arc spans 270° (¾ of a circle), gap at the bottom.
     private static let arcSpan: Double = 270
     private static let startAngle = Angle.degrees(135)
 
+    /// Inner ring sits inside the outer with a small breathing gap.
+    private var innerSize: CGFloat { size - lineWidth * 3 }
+
     public var body: some View {
         ZStack {
-            // Track (background arc)
-            arcShape(progress: 1.0)
-                .stroke(
-                    GargantuaColors.surface3,
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
+            arcShape(diameter: size, progress: 1.0)
+                .stroke(GargantuaColors.surface3,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
 
-            // Fill (foreground arc)
-            arcShape(progress: progress)
-                .stroke(
-                    range.color,
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .animation(.linear(duration: 0.3), value: score)
+            arcShape(diameter: size, progress: diskUsage)
+                .stroke(diskColor,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .animation(.linear(duration: 0.3), value: diskUsage)
 
-            // Score + caption
-            VStack(spacing: GargantuaSpacing.space1) {
-                Text("\(score)")
-                    .font(GargantuaFonts.display)
+            arcShape(diameter: innerSize, progress: 1.0)
+                .stroke(GargantuaColors.borderSoft,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+
+            if reclaimableFraction > 0 {
+                arcShape(diameter: innerSize, progress: reclaimableFraction)
+                    .stroke(GargantuaColors.accent,
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .animation(.linear(duration: 0.3), value: reclaimableFraction)
+            }
+
+            VStack(spacing: 2) {
+                Text("\(Int((diskUsage * 100).rounded()))%")
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(GargantuaColors.ink)
                     .contentTransition(.numericText())
-                    .animation(.linear(duration: 0.3), value: score)
+                    .animation(.linear(duration: 0.3), value: diskUsage)
 
-                Text("Health")
+                Text("used")
                     .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink2)
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                if reclaimableFraction > 0 {
+                    Rectangle()
+                        .fill(GargantuaColors.borderSoft)
+                        .frame(width: 24, height: 1)
+                        .padding(.vertical, 2)
+
+                    Text("\(Int((reclaimableFraction * 100).rounded()))%")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(GargantuaColors.accent)
+                        .contentTransition(.numericText())
+                        .animation(.linear(duration: 0.3), value: reclaimableFraction)
+
+                    Text("reclaim")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
             }
         }
         .frame(width: size, height: size)
     }
 
-    /// Creates an arc path for the given progress (0-1).
-    private func arcShape(progress: Double) -> Path {
+    private func arcShape(diameter: CGFloat, progress: Double) -> Path {
         Path { path in
             path.addArc(
                 center: CGPoint(x: size / 2, y: size / 2),
-                radius: (size - lineWidth) / 2,
+                radius: (diameter - lineWidth) / 2,
                 startAngle: Self.startAngle,
                 endAngle: Angle.degrees(135 + Self.arcSpan * progress),
                 clockwise: false
