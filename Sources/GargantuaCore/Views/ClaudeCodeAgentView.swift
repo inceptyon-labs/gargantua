@@ -30,15 +30,15 @@ public struct ClaudeCodeAgentView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            HStack(alignment: .top, spacing: GargantuaSpacing.space5) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space5) {
                 promptSection
-                    .frame(width: 360)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
                     approvalGateSection
                     transcriptSection
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .padding(GargantuaSpacing.space5)
         }
@@ -49,6 +49,9 @@ public struct ClaudeCodeAgentView: View {
         .overlay(alignment: .center) {
             if let pending = controller.pendingApproval {
                 VStack(spacing: GargantuaSpacing.space3) {
+                    if !controller.lastAssistantText.isEmpty, !pending.items.isEmpty {
+                        AgentReasoningCard(text: controller.lastAssistantText)
+                    }
                     if !pending.unresolvedItemIDs.isEmpty {
                         SmartUninstallerNote(
                             unresolvedCount: pending.unresolvedItemIDs.count,
@@ -72,6 +75,20 @@ public struct ClaudeCodeAgentView: View {
                         )
                     }
                 }
+                .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .center) {
+            // Non-dismissable progress overlay shown while CleanupEngine is
+            // moving items to Trash or permanently removing them. The
+            // controller publishes incremental progress via its
+            // ScanProgressObserving observer; when isCleaning flips back to
+            // false the overlay disappears on its own.
+            if controller.isCleaning {
+                CleanupProgressOverlay(
+                    progress: controller.cleaningProgress,
+                    total: controller.cleaningTotal
+                )
                 .transition(.opacity)
             }
         }
@@ -112,7 +129,7 @@ public struct ClaudeCodeAgentView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space3)
     }
 
     private var promptSection: some View {
@@ -135,14 +152,7 @@ public struct ClaudeCodeAgentView: View {
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
 
-                Picker("Preset", selection: $selectedTemplate) {
-                    ForEach(ClaudeCodeAgentPromptTemplate.allCases) { template in
-                        Label(template.title, systemImage: template.icon)
-                            .tag(template)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                presetMenu
 
                 Text(selectedTemplate.summary)
                     .font(GargantuaFonts.caption)
@@ -206,6 +216,50 @@ public struct ClaudeCodeAgentView: View {
         AgentRunTryPromptChips(template: selectedTemplate, userContext: $userContext)
     }
 
+    /// Three pill buttons, one per preset, all visible at once. Replaces an
+    /// earlier Menu dropdown that hid the alternatives behind a chevron —
+    /// users were asking "what is the Preset? there is only one?" because
+    /// the dropdown affordance wasn't obvious. With the vertical layout
+    /// freeing horizontal space, we can show the full set unambiguously.
+    private var presetMenu: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            ForEach(ClaudeCodeAgentPromptTemplate.allCases) { template in
+                presetPill(template)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func presetPill(_ template: ClaudeCodeAgentPromptTemplate) -> some View {
+        let isSelected = template == selectedTemplate
+        return Button {
+            selectedTemplate = template
+        } label: {
+            HStack(spacing: GargantuaSpacing.space2) {
+                Image(systemName: template.icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isSelected ? .white : GargantuaColors.accent)
+                Text(template.title)
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(isSelected ? .white : GargantuaColors.ink)
+            }
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .padding(.vertical, GargantuaSpacing.space2)
+            .background(isSelected ? GargantuaColors.accent : GargantuaColors.surface3)
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(
+                        isSelected ? Color.clear : GargantuaColors.borderSoft,
+                        lineWidth: 1
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Preset: \(template.title)")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
     private var promptInput: some View {
         TextField(
             selectedTemplate.placeholder,
@@ -226,32 +280,31 @@ public struct ClaudeCodeAgentView: View {
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
-    /// One-line expectations card shown above the preset picker. Two clauses
-    /// drawn from `ClaudeCodeAgentHelpContent` so both this disclaimer and the
-    /// `?` help sheet read from the same copy — no duplicated strings to drift.
+    /// Compact one-line disclaimer above the preset picker. Combines both
+    /// clauses from `ClaudeCodeAgentHelpContent` (lead-in and Deep-Scan
+    /// fallback) so the full framing stays present without consuming the
+    /// ~80pt the previous two-paragraph card took. Detail copy lives in the
+    /// `?` help sheet, which is one click away in the header.
     private var disclaimerCard: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(GargantuaColors.ink3)
+                .padding(.top, 1)
+
             (
                 Text(ClaudeCodeAgentHelpContent.disclaimerLeadIn).bold()
                 + Text(" — ")
-                + Text(ClaudeCodeAgentHelpContent.disclaimerLeadInDetail)
+                + Text(ClaudeCodeAgentHelpContent.disclaimerFallback).foregroundColor(GargantuaColors.ink3)
+                + Text(".")
             )
             .font(GargantuaFonts.caption)
             .foregroundStyle(GargantuaColors.ink2)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            (
-                Text(ClaudeCodeAgentHelpContent.disclaimerFallback).bold()
-                + Text(" — ")
-                + Text(ClaudeCodeAgentHelpContent.disclaimerFallbackDetail)
-            )
-            .font(GargantuaFonts.caption)
-            .foregroundStyle(GargantuaColors.ink3)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(GargantuaSpacing.space3)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .padding(.vertical, GargantuaSpacing.space2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(GargantuaColors.surface2)
         .overlay(
@@ -261,27 +314,35 @@ public struct ClaudeCodeAgentView: View {
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
+    /// Status card. Hidden during `.idle` because the transcript empty state
+    /// already says "Compose a prompt on the left and press Start run" —
+    /// repeating "Choose a prompt preset and start a run" alongside it just
+    /// crowds the column. Surfaced once the controller transitions to a
+    /// state worth communicating (running / completed / failed / cancelled).
+    @ViewBuilder
     private var statusCard: some View {
-        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Image(systemName: statusIcon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(statusTone)
-                .frame(width: 20, alignment: .center)
+        if !controller.status.isIdle {
+            HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+                Image(systemName: statusIcon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(statusTone)
+                    .frame(width: 20, alignment: .center)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(controller.status.label)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(controller.status.label)
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
 
-                Text(statusDetail)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(statusDetail)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .padding(GargantuaSpacing.space3)
+            .background(GargantuaColors.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
         }
-        .padding(GargantuaSpacing.space3)
-        .background(GargantuaColors.surface2)
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
     @ViewBuilder
@@ -289,7 +350,7 @@ public struct ClaudeCodeAgentView: View {
         let gates = controller.approvalGates
         if !gates.isEmpty {
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                Text("PENDING GATES")
+                Text("CLEANUP REVIEW")
                     .font(GargantuaFonts.sectionLabel)
                     .tracking(0.8)
                     .foregroundStyle(GargantuaColors.ink2)
@@ -561,15 +622,12 @@ public struct ClaudeCodeAgentView: View {
     }
 
     /// Comma-separated tool list mirroring the --allowedTools argument that
-    /// `makeLaunchPlan` will inject — including the destructive tool when the
-    /// user has flipped the opt-in toggle in Settings.
+    /// `makeLaunchPlan` will inject. `clean` is included for every interactive
+    /// session because the agent uses it in dry-run mode to propose a cleanup
+    /// set; the host gate routes that proposal into the same review modal
+    /// Deep Scan uses.
     private var previewToolList: String {
-        var tools = ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist
-        let configuration = configurationStore.load()
-        if configuration.allowDestructiveMCPTools {
-            tools.append(ClaudeCodeAgentPromptBuilder.destructiveTool)
-        }
-        return tools.joined(separator: ", ")
+        ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.joined(separator: ", ")
     }
 
     /// Display label for the model that the runner will pass via --model.
@@ -666,19 +724,20 @@ private struct ApprovalGateRow: View {
 
             HStack(spacing: GargantuaSpacing.space2) {
                 Button(action: onApprove) {
-                    Label("Approve", systemImage: "checkmark.circle.fill")
+                    Label(primaryActionTitle, systemImage: primaryActionIcon)
                         .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.safe)
+                        .foregroundStyle(primaryActionTone)
                         .padding(.horizontal, GargantuaSpacing.space3)
                         .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.safe.opacity(0.12))
+                        .background(primaryActionTone.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)
                 .disabled(gate.status != .pending)
+                .help(primaryActionHelp)
 
                 Button(action: onDeny) {
-                    Label("Deny", systemImage: "xmark.circle.fill")
+                    Label(secondaryActionTitle, systemImage: "xmark.circle.fill")
                         .font(GargantuaFonts.label)
                         .foregroundStyle(GargantuaColors.protected_)
                         .padding(.horizontal, GargantuaSpacing.space3)
@@ -688,10 +747,18 @@ private struct ApprovalGateRow: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(gate.status != .pending)
+                .help(secondaryActionHelp)
 
-                Text(gate.status.rawValue.capitalized)
+                Text(statusLabel)
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
+            }
+
+            if gate.status == .pending, isReviewGate {
+                Text("Review opens the cleanup modal. Nothing is removed until you confirm there.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(GargantuaSpacing.space4)
@@ -716,6 +783,49 @@ private struct ApprovalGateRow: View {
         case .pending: GargantuaColors.review
         case .approved: GargantuaColors.safe
         case .denied: GargantuaColors.protected_
+        }
+    }
+
+    private var isReviewGate: Bool {
+        !gate.proposedItemIDs.isEmpty
+    }
+
+    private var primaryActionTitle: String {
+        isReviewGate ? "Review" : "Approve"
+    }
+
+    private var primaryActionIcon: String {
+        isReviewGate ? "doc.text.magnifyingglass" : "checkmark.circle.fill"
+    }
+
+    private var primaryActionTone: Color {
+        isReviewGate ? GargantuaColors.review : GargantuaColors.safe
+    }
+
+    private var primaryActionHelp: String {
+        isReviewGate
+            ? "Open the cleanup review modal before approving."
+            : "Approve this gate."
+    }
+
+    private var secondaryActionTitle: String {
+        isReviewGate ? "Reject" : "Deny"
+    }
+
+    private var secondaryActionHelp: String {
+        isReviewGate
+            ? "Reject this cleanup proposal without removing anything."
+            : "Deny this gate."
+    }
+
+    private var statusLabel: String {
+        switch gate.status {
+        case .pending:
+            isReviewGate ? "Needs review" : "Pending"
+        case .approved:
+            "Approved"
+        case .denied:
+            isReviewGate ? "Rejected" : "Denied"
         }
     }
 }
@@ -1098,6 +1208,104 @@ private struct SmartUninstallerNote: View {
     }
 }
 
+// MARK: - Agent reasoning card
+
+/// Shows the agent's most recent prose summary above the cleanup review
+/// modal so the user understands WHY each row was selected. The agent's
+/// prompt asks for a one-or-two-sentence rationale alongside the clean
+/// call ("These are stale Adobe caches the parent app no longer reads,
+/// safe to remove for a macOS upgrade.") — surfacing it here closes the
+/// gap where the user couldn't see the agent's reasoning without scrolling
+/// the transcript.
+private struct AgentReasoningCard: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GargantuaColors.accent)
+                .frame(width: 20, alignment: .center)
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("WHY THESE ITEMS")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(0.8)
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                Text(text)
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(GargantuaSpacing.space4)
+        .frame(maxWidth: 520, alignment: .leading)
+        .background(GargantuaColors.surface1)
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .stroke(GargantuaColors.accent.opacity(0.45), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+    }
+}
+
+// MARK: - Cleanup progress overlay
+
+/// Non-dismissable overlay shown while CleanupEngine is running. Blocks
+/// interaction so the user can't fire a second cleanup mid-flight, surfaces
+/// a per-item counter, and uses the AccretionDisk spinner to match the
+/// app's ambient motion language. Without this overlay, large permanent
+/// deletes left the user staring at a beach ball with no signal that
+/// anything was happening.
+private struct CleanupProgressOverlay: View {
+    let progress: Int
+    let total: Int
+
+    var body: some View {
+        ZStack {
+            GargantuaColors.void_.opacity(0.85)
+                .ignoresSafeArea()
+
+            VStack(spacing: GargantuaSpacing.space4) {
+                AccretionDiskView(activityRate: 60, size: 56)
+                    .frame(width: 80, height: 80)
+
+                VStack(spacing: GargantuaSpacing.space1) {
+                    Text("Cleaning…")
+                        .font(GargantuaFonts.heading)
+                        .foregroundStyle(GargantuaColors.ink)
+
+                    Text(progressLabel)
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .contentTransition(.numericText())
+                }
+
+                Text("Don't quit Gargantua until this finishes.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+            .padding(.horizontal, GargantuaSpacing.space6)
+            .padding(.vertical, GargantuaSpacing.space5)
+            .background(GargantuaColors.surface1)
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                    .stroke(GargantuaColors.border, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
+    }
+
+    private var progressLabel: String {
+        if total <= 0 {
+            return "Preparing…"
+        }
+        return "\(progress) of \(total)"
+    }
+}
+
 // MARK: - Try-this-prompt chips
 
 /// Tap-to-fill chip strip surfaced beneath the preset summary. Each chip
@@ -1118,12 +1326,16 @@ private struct AgentRunTryPromptChips: View {
                     .tracking(0.8)
                     .foregroundStyle(GargantuaColors.ink3)
 
-                HStack(spacing: GargantuaSpacing.space2) {
+                // FlowLayout (shared with ProfileListView's tag chips) wraps
+                // chips to additional rows when they overflow the prompt
+                // panel's width — important now that each preset surfaces
+                // 3-4 chips instead of 1-2.
+                FlowLayout(spacing: GargantuaSpacing.space2) {
                     ForEach(chips) { chip in
                         chipButton(chip)
                     }
-                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.top, GargantuaSpacing.space1)
         }

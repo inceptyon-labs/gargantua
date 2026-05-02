@@ -1,0 +1,288 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-02T15:52:30Z",
+  "title": "Design System: Gargantua",
+  "extensions": {
+    "colorMeta": {
+      "void": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "hsl(220, 14%, 9%)",
+        "tonalRamp": ["#14161A", "#191B1F", "#202228", "#272A30", "#2E3138", "#464A53", "#67707E", "#EDF0F3"]
+      },
+      "surface-1": {
+        "role": "neutral",
+        "displayName": "Outer Surface",
+        "canonical": "hsl(220, 12%, 11%)",
+        "tonalRamp": ["#14161A", "#191B1F", "#202228", "#272A30", "#2E3138", "#464A53", "#67707E", "#EDF0F3"]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Inner Surface",
+        "canonical": "hsl(220, 11%, 14%)",
+        "tonalRamp": ["#14161A", "#191B1F", "#202228", "#272A30", "#2E3138", "#464A53", "#67707E", "#EDF0F3"]
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Raised Surface",
+        "canonical": "hsl(220, 10%, 17%)",
+        "tonalRamp": ["#14161A", "#191B1F", "#202228", "#272A30", "#2E3138", "#464A53", "#67707E", "#EDF0F3"]
+      },
+      "surface-4": {
+        "role": "neutral",
+        "displayName": "Top Surface",
+        "canonical": "hsl(220, 10%, 20%)",
+        "tonalRamp": ["#14161A", "#191B1F", "#202228", "#272A30", "#2E3138", "#464A53", "#67707E", "#EDF0F3"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Star Ink",
+        "canonical": "hsl(210, 20%, 94%)",
+        "tonalRamp": ["#464A53", "#67707E", "#8A93A0", "#9BA4B0", "#B8C0CA", "#D2D8DF", "#EDF0F3", "#F4F6F8"]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Dim Star Ink",
+        "canonical": "hsl(215, 12%, 65%)",
+        "tonalRamp": ["#303640", "#464A53", "#67707E", "#9BA4B0", "#B8C0CA", "#D2D8DF", "#EDF0F3", "#F4F6F8"]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Nebula Ink",
+        "canonical": "hsl(218, 10%, 45%)",
+        "tonalRamp": ["#202228", "#2E3138", "#464A53", "#67707E", "#8A93A0", "#9BA4B0", "#D2D8DF", "#EDF0F3"]
+      },
+      "ink-4": {
+        "role": "neutral",
+        "displayName": "Dormant Ink",
+        "canonical": "hsl(220, 8%, 30%)",
+        "tonalRamp": ["#14161A", "#202228", "#2E3138", "#464A53", "#67707E", "#9BA4B0", "#D2D8DF", "#EDF0F3"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Hawking Blue",
+        "canonical": "hsl(213, 90%, 55%)",
+        "tonalRamp": ["#08254C", "#0C3B78", "#1255AD", "#1B70E0", "#2582F4", "#5BA3F7", "#A4CCFB", "#E7F2FE"]
+      },
+      "safe": {
+        "role": "secondary",
+        "displayName": "Terminal Green",
+        "canonical": "hsl(148, 45%, 42%)",
+        "tonalRamp": ["#0E2A1B", "#174429", "#215F39", "#2C7D4D", "#3B9B68", "#6DB98E", "#ABD8BF", "#E7F4EC"]
+      },
+      "review": {
+        "role": "secondary",
+        "displayName": "Accretion Amber",
+        "canonical": "hsl(38, 85%, 52%)",
+        "tonalRamp": ["#3F2604", "#654007", "#945F0B", "#C98511", "#EDA01D", "#F3BC5A", "#F9D99E", "#FEF3DF"]
+      },
+      "protected": {
+        "role": "tertiary",
+        "displayName": "Red Ember",
+        "canonical": "hsl(0, 62%, 48%)",
+        "tonalRamp": ["#3A0E0E", "#5B1717", "#842121", "#A92A2A", "#C62F2F", "#D96B6B", "#EDAAAA", "#FAE6E6"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display Metric",
+        "purpose": "Large metric numbers and dedicated permission-flow focal points."
+      },
+      "headline": {
+        "displayName": "Screen Heading",
+        "purpose": "Page titles and compact headers."
+      },
+      "title": {
+        "displayName": "Panel Title",
+        "purpose": "Strong panel names and brand header labels."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Explanatory copy and row context."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, list item names, and primary row text."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Metadata, timestamps, and quiet helper text."
+      },
+      "section-label": {
+        "displayName": "Section Label",
+        "purpose": "Uppercase navigation and dashboard group labels."
+      },
+      "mono-data": {
+        "displayName": "Mono Data",
+        "purpose": "Aligned file sizes, costs, scores, and percentages."
+      },
+      "mono-path": {
+        "displayName": "Mono Path",
+        "purpose": "Filesystem paths, commands, and code-like fragments."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "sidebar-state",
+        "value": "120ms ease-out",
+        "purpose": "Fast hover and selection feedback in navigation."
+      },
+      {
+        "name": "gauge-update",
+        "value": "300ms linear",
+        "purpose": "Health gauge arc and numeric score changes."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-panel",
+        "value": "adaptive minimum 150px",
+        "purpose": "Dashboard metric strip adapts without resizing text."
+      },
+      {
+        "name": "integration-grid",
+        "value": "adaptive minimum 220px",
+        "purpose": "Integration cards split or stack depending on window width."
+      },
+      {
+        "name": "sidebar-fixed",
+        "value": "200px",
+        "purpose": "Primary macOS sidebar width."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action button for scans, opens, and confirmations.",
+      "html": "<button class=\"ds-btn-primary\">Run Quick Scan</button>",
+      "css": ".ds-btn-primary { background: #2582F4; color: #EDF0F3; border: 0; border-radius: 4px; padding: 8px 16px; font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; transition: background 120ms ease-out; } .ds-btn-primary:hover { background: #5BA3F7; } .ds-btn-primary:focus-visible { outline: 2px solid #2582F4; outline-offset: 2px; } .ds-btn-primary:active { background: #1B70E0; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral action for refresh, cancel, reveal, and low-risk operations.",
+      "html": "<button class=\"ds-btn-secondary\">Refresh</button>",
+      "css": ".ds-btn-secondary { background: #272A30; color: #EDF0F3; border: 1px solid #FFFFFF21; border-radius: 4px; padding: 8px 16px; font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; transition: background 120ms ease-out, border-color 120ms ease-out; } .ds-btn-secondary:hover { background: #2E3138; } .ds-btn-secondary:focus-visible { outline: 2px solid #2582F4; outline-offset: 2px; } .ds-btn-secondary:active { background: #202228; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive confirmation button for permanent delete and revocation.",
+      "html": "<button class=\"ds-btn-danger\">Delete 3 items</button>",
+      "css": ".ds-btn-danger { background: #C62F2F; color: #EDF0F3; border: 0; border-radius: 4px; padding: 8px 16px; font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; transition: background 120ms ease-out; } .ds-btn-danger:hover { background: #D96B6B; } .ds-btn-danger:focus-visible { outline: 2px solid #2582F4; outline-offset: 2px; } .ds-btn-danger:active { background: #A92A2A; }"
+    },
+    {
+      "name": "Evidence Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Compact metadata pill for scan evidence and recommendation context.",
+      "html": "<span class=\"ds-chip\">176 GB free</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; border-radius: 999px; background: #272A30; color: #9BA4B0; border: 1px solid #FFFFFF0A; padding: 4px 12px; font: 400 11px/1.3 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat bordered surface for dashboard panels and settings groups.",
+      "html": "<section class=\"ds-card\"><div class=\"ds-card-label\">SYSTEM SNAPSHOT</div><div class=\"ds-card-value\">176 GB free</div><p>750 / 926 GB used</p></section>",
+      "css": ".ds-card { background: #191B1F; color: #EDF0F3; border: 1px solid #FFFFFF12; border-radius: 6px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; } .ds-card-label { color: #464A53; font: 600 10px/1.2 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: 0.8px; } .ds-card-value { margin-top: 12px; color: #EDF0F3; font: 600 20px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; } .ds-card p { margin: 8px 0 0; color: #67707E; font: 400 11px/1.3 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Sidebar Item",
+      "kind": "nav",
+      "refersTo": "sidebar-item-selected",
+      "description": "Active navigation row with the leading Hawking Blue capsule.",
+      "html": "<button class=\"ds-sidebar-item\"><span class=\"ds-sidebar-active\"></span><span class=\"ds-sidebar-icon\">⌘</span><span>Dashboard</span></button>",
+      "css": ".ds-sidebar-item { position: relative; display: flex; align-items: center; gap: 8px; width: 184px; background: #202228; color: #EDF0F3; border: 1px solid #FFFFFF21; border-radius: 6px; padding: 8px 16px; font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-align: left; } .ds-sidebar-active { position: absolute; left: 6px; width: 3px; height: 22px; border-radius: 999px; background: #2582F4; } .ds-sidebar-icon { width: 20px; color: #EDF0F3; text-align: center; } .ds-sidebar-item:hover { background: #191B1F; } .ds-sidebar-item:focus-visible { outline: 2px solid #2582F4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Scan Row",
+      "kind": "custom",
+      "refersTo": "scan-row",
+      "description": "Dense cleanup evidence row with confidence bars, path, size, and safety tint.",
+      "html": "<div class=\"ds-scan-row\"><span class=\"ds-bars\"><i></i><i></i><i></i><i></i><i></i></span><span class=\"ds-checkbox\">✓</span><span class=\"ds-copy\"><strong>node_modules</strong><em>/Users/jason/Development/app/node_modules</em></span><span class=\"ds-size\">1.2 GB</span></div>",
+      "css": ".ds-scan-row { display: flex; align-items: center; gap: 8px; background: rgba(59, 155, 104, 0.12); color: #EDF0F3; padding: 8px 12px; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; } .ds-bars { display: inline-flex; align-items: end; gap: 1.5px; width: 24px; height: 24px; } .ds-bars i { display: block; width: 3px; border-radius: 1px; background: #3B9B68; } .ds-bars i:nth-child(1) { height: 6px; } .ds-bars i:nth-child(2) { height: 9.5px; } .ds-bars i:nth-child(3) { height: 13px; } .ds-bars i:nth-child(4) { height: 16.5px; } .ds-bars i:nth-child(5) { height: 20px; } .ds-checkbox { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 3px; background: #3B9B68; color: #EDF0F3; font-size: 9px; font-weight: 700; } .ds-copy { display: grid; gap: 2px; min-width: 0; flex: 1; } .ds-copy strong { font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-copy em { color: #67707E; font: 400 11px/1.25 SFMono-Regular, ui-monospace, Menlo, Monaco, monospace; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-size { color: #EDF0F3; font: 400 12px/1.25 SFMono-Regular, ui-monospace, Menlo, Monaco, monospace; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-control",
+      "description": "Dark-mode-safe replacement for native segmented controls when contrast collapses.",
+      "html": "<div class=\"ds-segmented\"><button class=\"is-selected\">Treemap</button><button>List</button></div>",
+      "css": ".ds-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: #191B1F; } .ds-segmented button { min-width: 92px; border: 0; border-radius: 4px; background: #202228; color: #9BA4B0; padding: 8px 12px; font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; } .ds-segmented button.is-selected { background: #2582F4; color: #EDF0F3; } .ds-segmented button:focus-visible { outline: 2px solid #2582F4; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Event Horizon Console",
+    "overview": "Gargantua is a dark, precise product interface for developer Mac owners who want to clear accumulated build artifacts, caches, duplicates, and model debris without second-guessing the tool. The interface should feel like a space-cold terminal that grew up: dense, file-literate, and calm under pressure. Trust is the visual product. Color is classification first and decoration never. Warm safety signals are rare against a cold void; blue is reserved for direct interactivity and focus. Surfaces pull attention inward through borders, tonal contrast, and compact hierarchy, not glow.",
+    "keyCharacteristics": [
+      "Dark mode primary, tuned for developers working between coding sessions.",
+      "Restrained color, one interaction accent, warm safety states, no decorative palette.",
+      "Dense information with strong hierarchy: paths, sizes, confidence, and safety stay visible.",
+      "System fonts for UI, monospaced type for paths and byte counts.",
+      "Borders and tonal layers only. No shadows, no glass, no glow."
+    ],
+    "rules": [
+      {
+        "name": "The Classification Rule",
+        "body": "Safe, review, and protected colors belong only to safety classification, system state, or cleanup risk. They are prohibited as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Blue Means Click Rule",
+        "body": "Hawking Blue means direct interaction, focus, or current selection. Do not use it for static illustration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Void Holds Still Rule",
+        "body": "Backgrounds stay in the neutral stack. Do not introduce purple gradients, beige warmth, neon glows, or glass tints.",
+        "section": "colors"
+      },
+      {
+        "name": "The Path Precision Rule",
+        "body": "Paths and sizes always use monospace. Do not set file paths in the body font.",
+        "section": "typography"
+      },
+      {
+        "name": "The No Display Labels Rule",
+        "body": "UI labels, buttons, rows, and settings text stay compact. Display scale is reserved for metrics and dedicated hero-like permission moments.",
+        "section": "typography"
+      },
+      {
+        "name": "The No Point Light Rule",
+        "body": "Shadows are forbidden as the default elevation language. In this product, surfaces separate by tone, border, and placement.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Border Is Evidence Rule",
+        "body": "Borders confirm structure. Use standard Border for containers, Border Soft for internal dividers, Border Em for active control outlines, and Border Focus for keyboard focus.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Void, Surface 1, Surface 2, Surface 3, and Surface 4 as the complete depth ladder.",
+      "Do reserve Hawking Blue for actions, links, focus, and current selection.",
+      "Do keep safety colors tied to the Trust Layer: safe, review, protected.",
+      "Do show file paths, sizes, confidence, and safety together when cleanup decisions are being made.",
+      "Do use SF Symbols for tool and navigation icons, aligned to fixed-size icon slots.",
+      "Do use 4px spacing increments and compact radii. Density is allowed when hierarchy is clear.",
+      "Do make empty and loading states quiet, useful, and native."
+    ],
+    "donts": [
+      "Don't use CleanMyMac X marketing polish, oversized lifestyle hero sections, or subscription-cleaner gloss.",
+      "Don't use generic dashboard templates with equal-weight metric cards and decorative charts.",
+      "Don't use glassmorphism, blur panels, frosted cards, or translucent decoration.",
+      "Don't use neon-on-dark AI aesthetic, purple-blue gradients, glowing outlines, or bokeh backgrounds.",
+      "Don't use shadows as elevation. Borders and tonal layers are the system.",
+      "Don't use safety colors for decoration, badges without risk meaning, or arbitrary category color.",
+      "Don't hide paths or byte counts behind hover. Evidence must be visible when trust decisions happen.",
+      "Don't make cards inside cards. Group with sections, dividers, and full-width bands instead."
+    ]
+  }
+}

@@ -243,6 +243,53 @@ struct RuleSetIntegrationTests {
         #expect(categories.contains("trash"), "Missing trash category")
     }
 
+    @Test("System temp rules do not target macOS var/folders bucket roots")
+    func systemTempRulesDoNotTargetVarFoldersBuckets() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let forbiddenPatterns = try ProtectedRootPolicyLoader()
+            .loadBundled()
+            .entries
+            .map(\.path)
+            .filter { $0.contains("/var/folders/") }
+        let paths = result.rules.flatMap(\.paths)
+
+        for pattern in forbiddenPatterns {
+            #expect(!paths.contains(pattern), "Rule set must not remove macOS-managed bucket root \(pattern)")
+        }
+    }
+
+    @Test("Cleanup rules do not target protected directory roots")
+    func cleanupRulesDoNotTargetProtectedDirectoryRoots() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let policy = try ProtectedRootPolicyLoader()
+            .loadBundled()
+        let home = URL(fileURLWithPath: "/Users/gargantua-test", isDirectory: true)
+
+        for rule in result.rules {
+            for path in rule.paths {
+                let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+                let emitsResolvedPathDirectly = rule.pattern == nil && rule.exclude.isEmpty
+                if emitsResolvedPathDirectly {
+                    if !trimmed.contains("*") {
+                        let resolvedPath = ProtectedRootPolicy.normalizedPath(
+                            trimmed,
+                            homeDirectory: home,
+                            resolvesSymlinks: false
+                        )
+                        let protectionReason = policy.protectionReason(
+                            for: URL(fileURLWithPath: resolvedPath, isDirectory: true),
+                            homeDirectory: home
+                        )
+                        #expect(protectionReason == nil,
+                                "Rule '\(rule.id)' must not remove protected root \(trimmed)")
+                    }
+                    #expect(!trimmed.hasSuffix("*/Library"),
+                            "Rule '\(rule.id)' must not glob protected Library roots via \(trimmed)")
+                }
+            }
+        }
+    }
+
     @Test("System rules cover Mole-backed user and privileged cleanup families")
     func moleSystemUserCoverage() throws {
         let result = try loader.loadRules(from: rulesDirectory)

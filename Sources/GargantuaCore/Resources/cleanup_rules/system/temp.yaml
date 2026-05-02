@@ -24,30 +24,6 @@ rules:
           - developer
           - deep
 
-  - id: var_folders
-    name: Per-User Temp Folders
-    paths:
-      - "/var/folders/*/*/C"
-      - "/var/folders/*/*/T"
-    safety: safe
-    confidence: 85
-    explanation: "Per-user temporary and cache directories managed by macOS."
-    source:
-      name: macOS
-    regenerates: true
-    category: temp_files
-    tags:
-      - system
-      - temp
-    safety_overrides:
-      - condition: "age > 7d"
-        safety: safe
-        confidence: 95
-        explanation_suffix: "Temp data older than a week. Safe to reclaim."
-        profiles:
-          - developer
-          - deep
-
   - id: downloads_installers
     name: Installer Packages
     paths:

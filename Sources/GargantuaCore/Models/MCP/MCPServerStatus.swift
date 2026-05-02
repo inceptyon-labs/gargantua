@@ -2,6 +2,7 @@ import Foundation
 
 /// High-level lifecycle state for a Gargantua MCP server instance.
 public enum MCPServerRunState: String, Codable, Sendable, Equatable {
+    case starting
     case stopped
     case running
     case error

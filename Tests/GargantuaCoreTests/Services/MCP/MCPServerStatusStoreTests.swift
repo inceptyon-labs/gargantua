@@ -123,9 +123,52 @@ struct MCPServerStatusStoreTests {
         #expect(model.snapshot.recentActions.first?.bytesFreed == 42)
     }
 
+    @MainActor
+    @Test("view model starts asynchronously without refresh stomping the starting state")
+    func viewModelStartsAsynchronously() async throws {
+        let model = MCPServerStatusViewModel(
+            initialSnapshot: .stopped(updatedAt: Self.fixedDate),
+            snapshotProvider: { .stopped(updatedAt: Self.fixedDate) },
+            startAction: {
+                MCPServerStatusSnapshot(
+                    state: .running,
+                    transportMode: .sse,
+                    updatedAt: Self.fixedDate
+                )
+            },
+            auditReader: { [] }
+        )
+
+        model.start()
+        #expect(model.snapshot.state == .starting)
+
+        model.refresh()
+        #expect(model.snapshot.state == .starting)
+
+        try await waitUntil {
+            model.snapshot.state == .running
+        }
+        #expect(model.snapshot.transportMode == .sse)
+    }
+
     private func temporaryStatusURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
             .appendingPathComponent("mcp-status.json")
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeout: TimeInterval = 1,
+        condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            if Date() >= deadline {
+                Issue.record("condition was not met before timeout")
+                return
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
     }
 }

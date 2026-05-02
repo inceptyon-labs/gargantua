@@ -54,35 +54,37 @@ final class FinderFirstTrashMover: TrashMoving {
 final class FinderAutomationTrashMover: TrashMoving {
     @MainActor
     func moveToTrash(_ url: URL) async throws -> URL? {
-        let path = appleScriptString(url.path)
-        let source = """
-        tell application "Finder"
-            delete (POSIX file \(path) as alias)
-        end tell
-        """
-        guard let script = NSAppleScript(source: source) else {
-            throw TrashMoveFailure(message: "Could not create Finder Automation script.")
-        }
+        let path = Self.appleScriptString(url.path)
+        return try await Task.detached(priority: .userInitiated) {
+            let source = """
+            tell application "Finder"
+                delete (POSIX file \(path) as alias)
+            end tell
+            """
+            guard let script = NSAppleScript(source: source) else {
+                throw TrashMoveFailure(message: "Could not create Finder Automation script.")
+            }
 
-        var errorInfo: NSDictionary?
-        _ = script.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            throw TrashMoveFailure(message: finderErrorDescription(errorInfo))
-        }
+            var errorInfo: NSDictionary?
+            _ = script.executeAndReturnError(&errorInfo)
+            if let errorInfo {
+                throw TrashMoveFailure(message: Self.finderErrorDescription(errorInfo))
+            }
 
-        // Finder does not reliably return the final Trash URL, especially when
-        // it resolves name collisions. Preserve result shape without guessing.
-        return nil
+            // Finder does not reliably return the final Trash URL, especially when
+            // it resolves name collisions. Preserve result shape without guessing.
+            return nil
+        }.value
     }
 
-    private func appleScriptString(_ value: String) -> String {
+    private static func appleScriptString(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         return "\"\(escaped)\""
     }
 
-    private func finderErrorDescription(_ errorInfo: NSDictionary) -> String {
+    private static func finderErrorDescription(_ errorInfo: NSDictionary) -> String {
         let message = errorInfo[NSAppleScript.errorMessage] as? String
             ?? errorInfo[NSAppleScript.errorBriefMessage] as? String
             ?? "Finder Automation failed."

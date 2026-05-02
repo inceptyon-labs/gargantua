@@ -11,10 +11,24 @@ struct DashboardMCPStatusCardTests {
         )
 
         #expect(presentation.title == "Stopped")
-        #expect(presentation.detail == "stdio transport idle")
+        #expect(presentation.detail == "Local SSE transport idle")
         #expect(presentation.clientSummary == "No clients")
         #expect(presentation.actionLabel == "Start")
         #expect(presentation.tone == .muted)
+        #expect(presentation.isActionEnabled)
+    }
+
+    @Test("starting snapshot disables repeated start")
+    func startingPresentation() {
+        let presentation = DashboardMCPStatusPresentation.make(
+            from: MCPServerStatusSnapshot(state: .starting, transportMode: .sse)
+        )
+
+        #expect(presentation.title == "Starting")
+        #expect(presentation.detail == "Launching local SSE transport")
+        #expect(presentation.actionLabel == "Starting")
+        #expect(presentation.tone == .review)
+        #expect(!presentation.isActionEnabled)
     }
 
     @Test("running snapshot surfaces transport and connected client")
@@ -63,7 +77,7 @@ struct DashboardMCPStatusCardTests {
 
         #expect(presentation.title == "Needs attention")
         #expect(presentation.detail == "Launch agent unavailable.")
-        #expect(presentation.actionLabel == "Start")
+        #expect(presentation.actionLabel == "Retry")
         #expect(presentation.tone == .review)
     }
 }

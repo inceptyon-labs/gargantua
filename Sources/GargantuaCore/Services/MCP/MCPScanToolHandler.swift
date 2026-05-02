@@ -128,6 +128,23 @@ public struct MCPScanToolHandler: Sendable {
         )
     }
 
+    /// Cap on the number of items embedded in the wire payload. Deep scans
+    /// can return several hundred entries; with full explanations attached,
+    /// the JSON-encoded result was running 270+ KB and tripping Claude Code's
+    /// 256 KB Read-tool ceiling when the result got spilled to disk. Capping
+    /// to the top-N largest items keeps the heaviest cleanup candidates
+    /// reachable while keeping the agent's input window bounded. Aggregate
+    /// counts in `summary` still reflect the full scan.
+    public static let maxItemsInWireOutput = 100
+
+    /// Per-item explanation cap on the wire. Real scan rules generate
+    /// reasonably short text, but rule pipelines that concatenate context
+    /// (orphan-cache rationale, last-accessed dates, parent-app status) can
+    /// push individual explanations past 1 KB. Trimming to a hard cap keeps
+    /// the worst-case payload predictable. `mcp__gargantua__explain` is
+    /// available if the agent needs the full detail for a specific item.
+    public static let maxExplanationCharsInWireOutput = 240
+
     /// Shape `[ScanResult]` into the PRD §7.3 output:
     /// - `total_reclaimable` sums safe + review bytes (protected are not
     ///   actionable and are excluded from the reclaimable tally).
@@ -135,27 +152,16 @@ public struct MCPScanToolHandler: Sendable {
     ///   formatted byte totals per tier. Protected items have no size tally
     ///   per the PRD contract (only a count).
     static func makeOutput(from results: [ScanResult]) -> MCPScanOutput {
-        var items: [MCPScanItem] = []
-        items.reserveCapacity(results.count)
+        // Aggregate across the FULL result set so the summary counts and the
+        // total-reclaimable tally tell the truth even if we trim the items
+        // array below. Capping items hides rows from the agent; lying about
+        // how much there is would hide the trim itself.
         var safeCount = 0
         var reviewCount = 0
         var protectedCount = 0
         var safeBytes: Int64 = 0
         var reviewBytes: Int64 = 0
-
         for result in results {
-            items.append(MCPScanItem(
-                id: result.id,
-                name: result.name,
-                path: result.path,
-                size: AlertItem.formatBytes(result.size),
-                safety: result.safety.rawValue,
-                confidence: result.confidence,
-                explanation: result.explanation,
-                source: result.source.name,
-                lastAccessed: result.lastAccessed,
-                category: result.category
-            ))
             switch result.safety {
             case .safe:
                 safeCount += 1
@@ -166,6 +172,27 @@ public struct MCPScanToolHandler: Sendable {
             case .protected_:
                 protectedCount += 1
             }
+        }
+
+        // Sort by size descending so the trim keeps the highest-value
+        // cleanup candidates. Stable sort isn't required — ties on size
+        // are rare enough that ordering doesn't change agent behavior.
+        let trimmed = results.sorted { $0.size > $1.size }
+            .prefix(maxItemsInWireOutput)
+
+        let items = trimmed.map { result in
+            MCPScanItem(
+                id: result.id,
+                name: result.name,
+                path: result.path,
+                size: AlertItem.formatBytes(result.size),
+                safety: result.safety.rawValue,
+                confidence: result.confidence,
+                explanation: trimmedExplanation(result.explanation),
+                source: result.source.name,
+                lastAccessed: result.lastAccessed,
+                category: result.category
+            )
         }
 
         return MCPScanOutput(
@@ -181,11 +208,33 @@ public struct MCPScanToolHandler: Sendable {
         )
     }
 
+    /// Trim an explanation to a fixed character budget, suffixing with `…`
+    /// when truncated so the agent can tell the difference between
+    /// "naturally short" and "trimmed".
+    private static func trimmedExplanation(_ explanation: String) -> String {
+        guard explanation.count > maxExplanationCharsInWireOutput else { return explanation }
+        let endIndex = explanation.index(explanation.startIndex, offsetBy: maxExplanationCharsInWireOutput)
+        return explanation[..<endIndex] + "\u{2026}"
+    }
+
+    /// Total item count derived from the summary tier counts. Used by the
+    /// wire-summary string so it can report "showing top N of M" when the
+    /// items list was trimmed.
+    private static func totalItemCount(_ output: MCPScanOutput) -> Int {
+        output.summary.safeCount + output.summary.reviewCount + output.summary.protectedCount
+    }
+
     private static func summary(for output: MCPScanOutput) -> String {
         let tierSummary = "\(output.summary.safeCount) safe, "
             + "\(output.summary.reviewCount) review, "
             + "\(output.summary.protectedCount) protected"
-        return "Scan found \(output.items.count) items (\(tierSummary)); "
-            + "\(output.totalReclaimable) reclaimable."
+        let total = totalItemCount(output)
+        let header: String
+        if output.items.count < total {
+            header = "Scan found \(total) items, returning the top \(output.items.count) by size"
+        } else {
+            header = "Scan found \(output.items.count) items"
+        }
+        return "\(header) (\(tierSummary)); \(output.totalReclaimable) reclaimable."
     }
 }

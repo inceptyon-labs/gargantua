@@ -114,6 +114,15 @@ public enum ClaudeCodeAgentSessionStatus: Equatable, Sendable {
         return false
     }
 
+    /// True only when no session has been started yet (or the controller has
+    /// been reset to idle). Used by the Agent Run view to decide whether to
+    /// surface the status card — idle is already covered by the transcript
+    /// empty state.
+    public var isIdle: Bool {
+        if case .idle = self { return true }
+        return false
+    }
+
     /// Short user-facing status label.
     public var label: String {
         switch self {
@@ -239,10 +248,26 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             resolvedWorkingDirectory = scratch
         }
 
-        let allowDestructiveMCPTools = allowDestructiveMCPToolsOverride ?? configuration.allowDestructiveMCPTools
+        // Scheduled-audit hooks (the only call site that passes `false` here)
+        // force the agent into a strictly read-only launch — no clean tool at
+        // all, even in dry-run mode, because there is no user present to
+        // review a propose call. Interactive sessions ignore the legacy
+        // `allowDestructiveMCPTools` configuration field entirely; the agent
+        // is always given the `clean` tool, calls it with `dry_run: true` to
+        // propose a cleanup set, and the host's gate detector raises the
+        // review modal. Actual deletion runs in the host through
+        // `CleanupEngine` after the user clicks Clean — same pipeline Deep
+        // Scan uses.
+        let forceReadOnly: Bool
+        if let override = allowDestructiveMCPToolsOverride {
+            forceReadOnly = !override
+        } else {
+            forceReadOnly = false
+        }
+
         var allowedTools = ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist
-        if allowDestructiveMCPTools {
-            allowedTools.append(ClaudeCodeAgentPromptBuilder.destructiveTool)
+        if forceReadOnly {
+            allowedTools.removeAll { $0 == ClaudeCodeAgentPromptBuilder.destructiveTool }
         }
 
         var arguments = [
@@ -265,7 +290,7 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             arguments += ["--model", modelOverride]
         }
 
-        if !allowDestructiveMCPTools {
+        if forceReadOnly {
             arguments += [
                 "--disallowedTools",
                 ClaudeCodeAgentPromptBuilder.destructiveTool,
@@ -457,42 +482,26 @@ public struct ClaudeCodeDestructiveActionDetector: Sendable {
         self.sessionID = sessionID
     }
 
-    /// Returns an approval gate when the transcript line mentions MCP cleanup with item IDs.
+    /// Returns an approval gate when the structured stream parser has
+    /// identified a `mcp__gargantua__clean` tool_use with at least one
+    /// item ID.
     ///
-    /// `proposedItemIDs` carries IDs already extracted by the structured
-    /// stream parser (`ClaudeCodeStreamJSONParser` — see `cleanRequest`
-    /// payload). When non-empty, the gate fires regardless of substring
-    /// match — the parser has already confirmed this is a clean call. When
-    /// empty, the substring fallback is the gating signal: it covers
-    /// non-JSON output (errors, free-form text mentioning the tool name)
-    /// and hardens against parser drift, but produces a gate with no IDs
-    /// the host can hydrate.
+    /// The previous substring-matching fallback (firing when a transcript
+    /// line contained both `mcp__gargantua__clean` and `item_ids`) was
+    /// removed: the agent prompt now instructs the agent to use exactly those
+    /// tokens to describe its plan, so every assistant message echoing the
+    /// plan was tripping a duplicate gate. The structured parser is the only
+    /// reliable signal for "the agent is making a clean call", and it
+    /// populates `proposedItemIDs` on success.
     public func detect(
         _ line: String,
         proposedItemIDs: [String] = []
     ) -> ClaudeCodeAgentApprovalGate? {
-        let parsed = !proposedItemIDs.isEmpty
-        let bySubstring: Bool
-        if parsed {
-            bySubstring = false
-        } else {
-            let normalized = line.lowercased()
-            let mentionsCleanTool = normalized.contains("mcp__gargantua__clean")
-                || normalized.contains("\"name\":\"clean\"")
-                || normalized.contains("\"name\": \"clean\"")
-            let mentionsItemIDs = normalized.contains("item_ids") || normalized.contains("item ids")
-            bySubstring = mentionsCleanTool && mentionsItemIDs
-        }
-        guard parsed || bySubstring else { return nil }
+        guard !proposedItemIDs.isEmpty else { return nil }
 
-        let summary: String
-        if parsed {
-            summary = proposedItemIDs.count == 1
-                ? "Claude Code requested Gargantua MCP clean for 1 item."
-                : "Claude Code requested Gargantua MCP clean for \(proposedItemIDs.count) items."
-        } else {
-            summary = "Claude Code requested Gargantua MCP clean."
-        }
+        let summary = proposedItemIDs.count == 1
+            ? "Claude Code requested Gargantua MCP clean for 1 item."
+            : "Claude Code requested Gargantua MCP clean for \(proposedItemIDs.count) items."
         return ClaudeCodeAgentApprovalGate(
             sessionID: sessionID,
             summary: summary,

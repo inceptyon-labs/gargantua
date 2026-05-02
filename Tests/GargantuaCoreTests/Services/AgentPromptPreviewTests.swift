@@ -74,6 +74,11 @@ struct AgentPromptPreviewTests {
         #expect(ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.contains("mcp__gargantua__explain"))
         #expect(ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.contains("mcp__gargantua__list_profiles"))
         #expect(ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.contains("mcp__gargantua__status"))
+        // `clean` is now part of the always-on allowlist for interactive
+        // sessions: the agent uses dry-run-propose to hand items to the host
+        // review modal. The destructiveTool constant remains so the
+        // scheduled-audit override can still force it into --disallowedTools.
+        #expect(ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.contains("mcp__gargantua__clean"))
         #expect(ClaudeCodeAgentPromptBuilder.destructiveTool == "mcp__gargantua__clean")
     }
 
@@ -91,12 +96,43 @@ struct AgentPromptPreviewTests {
     func promptForbidsShellRedirection() {
         // Claude Code's Bash sandbox blocks all write redirects regardless of
         // path. Without this rule, Claude reaches for `... > scan.tsv` to
-        // organize MCP scan output and the run breaks mid-execution. The rule
-        // keeps the deliverable in the conversation, where it belongs.
+        // organize MCP scan output and the run breaks mid-execution.
         for template in ClaudeCodeAgentPromptTemplate.allCases {
             let prompt = ClaudeCodeAgentPromptBuilder.prompt(template: template, userContext: "x")
             #expect(prompt.contains("Do not use shell output redirection"))
-            #expect(prompt.contains("Your deliverable is the conversation"))
+        }
+    }
+
+    @Test("Prompt instructs the agent to end with a dry-run mcp__gargantua__clean call so the run is actionable")
+    func promptRequiresDryRunCleanHandoff() {
+        // The agent's deliverable is a structured handoff to Deep Scan's
+        // review modal, not a free-form report. The host's gate detector
+        // raises the modal only when the agent calls `mcp__gargantua__clean`
+        // — without this instruction the agent emits prose and the user
+        // never sees an actionable cleanup.
+        for template in ClaudeCodeAgentPromptTemplate.allCases {
+            let prompt = ClaudeCodeAgentPromptBuilder.prompt(template: template, userContext: "x")
+            #expect(prompt.contains("mcp__gargantua__clean"))
+            #expect(prompt.contains("dry_run: true"))
+            #expect(prompt.contains("item_ids"))
+        }
+    }
+
+    @Test("Prompt directs a turn-frugal flow so the agent doesn't burn through max_turns calling every tool")
+    func promptDrivesTurnFrugalFlow() {
+        // Regression: prior phrasing read as an ordered checklist
+        // ('Start with read-only MCP tools: list_profiles, status, analyze,
+        // scan, and explain') and the agent dutifully called each one before
+        // doing real work — runs hit the 12-turn ceiling without ever
+        // proposing items. The new prompt names the default 3-turn flow
+        // (scan → reason → dry-run clean) and tags the other tools as
+        // escape hatches, plus tells the agent the scan output already
+        // includes per-item explanations.
+        for template in ClaudeCodeAgentPromptTemplate.allCases {
+            let prompt = ClaudeCodeAgentPromptBuilder.prompt(template: template, userContext: "x")
+            #expect(prompt.contains("turn-frugal"))
+            #expect(prompt.contains("escape hatches"))
+            #expect(prompt.contains("you do NOT need to call `mcp__gargantua__explain`"))
         }
     }
 }

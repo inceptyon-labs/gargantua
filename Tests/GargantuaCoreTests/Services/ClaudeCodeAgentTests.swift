@@ -26,8 +26,8 @@ struct ClaudeCodeAgentTests {
         #expect(resolved == executable)
     }
 
-    @Test("Launch plan uses strict MCP config and read-only tools by default")
-    func launchPlanUsesStrictMCPConfigAndReadOnlyTools() throws {
+    @Test("Launch plan uses strict MCP config and includes the dry-run-propose clean tool by default")
+    func launchPlanUsesStrictMCPConfigAndIncludesCleanForDryRunPropose() throws {
         let defaults = try makeDefaults()
         let configStore = ClaudeCodeAgentConfigurationStore(defaults: defaults)
         let executable = try makeExecutable(named: "claude")
@@ -59,14 +59,17 @@ struct ClaudeCodeAgentTests {
         #expect(plan.arguments.contains("stream-json"))
         #expect(plan.arguments.contains("--max-turns"))
         #expect(plan.arguments.contains("7"))
-        #expect(plan.arguments.contains("--disallowedTools"))
-        #expect(plan.arguments.contains("mcp__gargantua__clean"))
+        // Interactive sessions: clean is allowed (agent uses dry_run: true to
+        // propose a cleanup set; host gate routes it into the review modal).
+        // No --disallowedTools argument — that's reserved for forced-read-only
+        // scheduled-audit launches.
+        #expect(!plan.arguments.contains("--disallowedTools"))
         #expect(plan.arguments.contains("--allowedTools"))
         let allowedToolsIndex = try #require(plan.arguments.firstIndex(of: "--allowedTools"))
         let allowedTools = plan.arguments[allowedToolsIndex + 1]
         #expect(allowedTools.contains("mcp__gargantua__scan"))
         #expect(allowedTools.contains("mcp__gargantua__analyze"))
-        #expect(!allowedTools.contains("mcp__gargantua__clean"))
+        #expect(allowedTools.contains("mcp__gargantua__clean"))
 
         let configText = try String(contentsOf: plan.mcpConfigURL, encoding: .utf8)
         #expect(configText.contains(#""gargantua""#))
@@ -176,8 +179,23 @@ struct ClaudeCodeAgentTests {
         #expect(prompt.contains("Gargantua MCP server"))
         #expect(prompt.contains("Never delete"))
         #expect(prompt.contains("Protected items are not eligible"))
-        #expect(prompt.contains("MCP clean tool"))
         #expect(prompt.contains("Find stale Docker and Xcode artifacts."))
+        // The dry-run-propose handoff is the actionable edge of the prompt:
+        // without it the agent emits prose, never calls clean, and the user
+        // never sees a review modal. Pin both the tool name and the dry_run
+        // requirement so accidental copy edits can't quietly regress this.
+        #expect(prompt.contains("mcp__gargantua__clean"))
+        #expect(prompt.contains("dry_run: true"))
+        #expect(prompt.contains("item_ids"))
+    }
+
+    @Test("Prompt forbids non-dry-run clean calls so the host modal stays the only deletion path")
+    func promptBuilderForbidsNonDryRunClean() {
+        let prompt = ClaudeCodeAgentPromptBuilder.prompt(
+            template: .investigateSpace,
+            userContext: ""
+        )
+        #expect(prompt.contains("Never call `mcp__gargantua__clean` without `dry_run: true`"))
     }
 
     @Test("Configuration decodes older stored payloads with scheduled audits off")
@@ -243,20 +261,34 @@ struct ClaudeCodeAgentTests {
         #expect(arguments.contains("mcp__gargantua__clean"))
     }
 
-    @Test("Destructive action detector creates default-deny approval gate")
+    @Test("Destructive action detector creates default-deny approval gate from structured tool_use payload")
     func destructiveActionDetectorCreatesGate() {
         let sessionID = UUID()
         let detector = ClaudeCodeDestructiveActionDetector(sessionID: sessionID)
         let line = #"{"type":"tool_use","name":"mcp__gargantua__clean","input":{"item_ids":["safe-1"],"confirm":true}}"#
 
-        let gate = detector.detect(line)
+        let gate = detector.detect(line, proposedItemIDs: ["safe-1"])
 
         #expect(gate?.sessionID == sessionID)
         #expect(gate?.status == .pending)
         #expect(gate?.rawTranscript == line)
-        // Substring fallback path produces an empty proposedItemIDs — only
-        // the structured parser path attaches IDs.
-        #expect(gate?.proposedItemIDs == [])
+        #expect(gate?.proposedItemIDs == ["safe-1"])
+    }
+
+    @Test("Detector ignores assistant text mentioning the clean tool — only structured tool_use payloads gate")
+    func detectorIgnoresPromptEcho() {
+        // The agent's prompt now instructs it to call mcp__gargantua__clean
+        // with item_ids, so its assistant messages frequently echo both
+        // tokens. Without this guard, every plan-narration message would
+        // trip a duplicate gate. Only structured tool_use payloads (which
+        // populate proposedItemIDs via the stream-json parser) should fire.
+        let sessionID = UUID()
+        let detector = ClaudeCodeDestructiveActionDetector(sessionID: sessionID)
+        let assistantNarration = #"{"type":"assistant","message":{"content":[{"type":"text","text":"I'll call mcp__gargantua__clean with item_ids: [\"safe-1\"] and dry_run: true."}]}}"#
+
+        let gate = detector.detect(assistantNarration, proposedItemIDs: [])
+
+        #expect(gate == nil)
     }
 
     @Test("Detector with structured proposedItemIDs stamps them on the gate and includes the count in the summary")
@@ -318,9 +350,15 @@ struct ClaudeCodeAgentTests {
         let tempDirectory = try makeTemporaryDirectory()
         let auditDirectory = tempDirectory.appendingPathComponent("audit")
         let auditWriter = AuditWriter(logDirectory: auditDirectory)
+        // Wrapped assistant event so the structured parser extracts the
+        // item_ids into proposedItemIDs — that is the only path that raises
+        // a gate now that the substring fallback has been removed.
+        let cleanLine = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_runner_audit","name":"mcp__gargantua__clean","input":{"item_ids":["safe-1"],"method":"trash","confirm":true,"dry_run":true}}]}}
+        """#
         let fakeExecutor = FakeClaudeCodeProcessExecutor(outputs: [
             .stdout("hello\n"),
-            .stdout(#"{"name":"mcp__gargantua__clean","input":{"item_ids":["safe-1"]}}"# + "\n"),
+            .stdout(cleanLine + "\n"),
             .stderr("warning\n"),
         ])
         let runner = ClaudeCodeAgentSessionRunner(
@@ -345,6 +383,7 @@ struct ClaudeCodeAgentTests {
         #expect(events.all().contains { $0.stream == .stderr && $0.message.contains("warning") })
         #expect(gates.all().count == 1)
         #expect(result.approvalGates.count == 1)
+        #expect(gates.all().first?.proposedItemIDs == ["safe-1"])
 
         let commands = try auditWriter.readEntries().map(\.command)
         #expect(commands.contains("agent_start"))

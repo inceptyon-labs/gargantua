@@ -34,6 +34,24 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// so the cleanup confirmation goes through the same UI Deep Clean uses.
     /// Cleared by `confirmPendingApproval(method:)` or `cancelPendingApproval()`.
     @Published public internal(set) var pendingApproval: ClaudeCodeAgentPendingApproval?
+    /// True while `confirmPendingApproval` is running cleanup through the
+    /// CleanupEngine pipeline. The agent view binds an overlay to this flag
+    /// so the user sees an explicit "Cleaning… N of M" state instead of the
+    /// modal vanishing into a beach ball while large items are removed.
+    @Published public private(set) var isCleaning: Bool = false
+    /// Number of items processed in the in-flight cleanup. Drives the
+    /// "N of M" counter in the progress overlay.
+    @Published public private(set) var cleaningProgress: Int = 0
+    /// Total items scheduled for the in-flight cleanup. Set when cleanup
+    /// begins, reset to 0 when it ends.
+    @Published public private(set) var cleaningTotal: Int = 0
+    /// The most recent assistant text the agent emitted during the run.
+    /// Surfaced above the items in the review modal as the "Why these
+    /// items" context — Sonnet's prose is typically a one-line rationale
+    /// pinned to the user's prompt ("upgrade macOS"), and surfacing it
+    /// alongside the items closes the gap where the user couldn't see why
+    /// each row was selected.
+    @Published public private(set) var lastAssistantText: String = ""
 
     private let runner: ClaudeCodeAgentSessionRunner
     private let cleanupEngine: CleanupEngine
@@ -87,6 +105,12 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         lastStartTemplate = template
         lastStartUserContext = userContext
         lastStartWorkingDirectory = workingDirectory
+        // Drop any items mirrored from a previous session. Within a session
+        // the cache accumulates so multi-scan runs don't lose IDs; across
+        // sessions we want a clean slate so a new run can't approve cleanup
+        // of items that no longer exist on disk.
+        scanCache.clear()
+        lastAssistantText = ""
 
         task = Task { [weak self] in
             guard let self else { return }
@@ -120,6 +144,17 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
                         self.status = result.exitCode == 0 ? .completed : .failed("Claude Code exited with status \(result.exitCode).")
                     }
                     self.approvalGates = self.merge(existing: self.approvalGates, incoming: result.approvalGates)
+                    // The agent's prompt asks it to end with a dry-run
+                    // `mcp__gargantua__clean` call so the host can route the
+                    // proposed items into the same review modal Deep Scan
+                    // uses. Sonnet doesn't always follow that instruction —
+                    // sometimes it just emits a prose report and stops. This
+                    // fallback closes that gap: if the run completed and the
+                    // agent did scan but never proposed items, hydrate the
+                    // cached scan results directly into pendingApproval so
+                    // the modal pops up automatically. The user gets the
+                    // actionable handoff regardless of what the agent did.
+                    self.surfaceScanCacheModalIfAgentDidNotPropose()
                 }
             } catch is CancellationError {
                 await MainActor.run {
@@ -161,7 +196,9 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             return
         }
         let (found, unknown) = scanCache.lookupAll(ids: gate.proposedItemIDs)
-        guard !found.isEmpty || !unknown.isEmpty else {
+        let actionable = found.filter(\.safety.isActionable)
+        let blocked = found.filter { !$0.safety.isActionable }
+        guard !actionable.isEmpty || !unknown.isEmpty || !blocked.isEmpty else {
             // Defensive: lookupAll partitions every requested id into one
             // bucket, so this shouldn't fire — but if both come back empty
             // we keep the prior auto-approve shape so the gate doesn't
@@ -169,9 +206,16 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             decide(gate, status: .approved)
             return
         }
+        if !blocked.isEmpty {
+            let ids = blocked.map(\.id).joined(separator: ", ")
+            events.append(ClaudeCodeAgentTranscriptEvent(
+                stream: .system,
+                message: "Skipped protected agent cleanup item(s): \(ids). Safety comes from Gargantua scan rules."
+            ))
+        }
         pendingApproval = ClaudeCodeAgentPendingApproval(
             gateID: gate.id,
-            items: found,
+            items: actionable,
             unresolvedItemIDs: unknown
         )
     }
@@ -194,8 +238,35 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     public func confirmPendingApproval(method: CleanupMethod = .trash) async {
         guard let pending = pendingApproval else { return }
         pendingApproval = nil
-        if !pending.items.isEmpty {
-            let result = await cleanupEngine.clean(pending.items, method: method)
+        let cleanupItems = pending.items.filter(\.safety.isActionable)
+        if cleanupItems.count != pending.items.count {
+            events.append(ClaudeCodeAgentTranscriptEvent(
+                stream: .system,
+                message: "Skipped protected cleanup item(s) before execution. Safety comes from Gargantua scan rules."
+            ))
+        }
+        if !cleanupItems.isEmpty {
+            // Surface progress so the user sees "Cleaning… N of M" instead
+            // of the modal disappearing into a beach ball while large items
+            // are deleted. The observer drives the counter; CleanupEngine
+            // emits an event per item.
+            isCleaning = true
+            cleaningProgress = 0
+            cleaningTotal = cleanupItems.count
+            await Task.yield()
+            let observer = AgentCleanupProgressObserver { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.cleaningProgress += 1
+                }
+            }
+            let result = await cleanupEngine.clean(
+                cleanupItems,
+                method: method,
+                observer: observer
+            )
+            isCleaning = false
+            cleaningProgress = 0
+            cleaningTotal = 0
             do {
                 try auditWriter.record(result: result)
             } catch {
@@ -241,6 +312,54 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         approvalGates = merge(existing: approvalGates, incoming: [gate])
     }
 
+    /// End-of-session fallback. Runs only when:
+    /// 1. The terminal status is `.completed` (failures and cancellations
+    ///    surface their own state and the user shouldn't be asked to clean
+    ///    items the agent never finished reasoning about).
+    /// 2. No gate with hydratable `proposedItemIDs` was raised — that means
+    ///    the agent did NOT call `mcp__gargantua__clean` with item_ids, so
+    ///    nothing routed into the review modal through the normal path.
+    /// 3. The host-side scan cache is non-empty — i.e. the agent at least
+    ///    ran a scan, even if it never proposed items.
+    /// 4. There is no pending approval already (a prior gate hydration may
+    ///    have set one).
+    ///
+    /// When all four hold, synthesize a gate carrying every cached safe/
+    /// review item ID, hydrate it into `pendingApproval`, and add it to
+    /// `approvalGates` so `confirmPendingApproval` can mark it `.approved`
+    /// once cleanup runs. Protected items are excluded — `MCPCleanToolHandler`
+    /// hard-rejects them and surfacing them in the modal would only invite
+    /// confusion.
+    private func surfaceScanCacheModalIfAgentDidNotPropose() {
+        guard case .completed = status else { return }
+        guard pendingApproval == nil else { return }
+        let agentAlreadyProposed = approvalGates.contains { !$0.proposedItemIDs.isEmpty }
+        guard !agentAlreadyProposed else { return }
+
+        let actionable = scanCache.allEntries().filter(\.safety.isActionable)
+        guard !actionable.isEmpty else { return }
+
+        // Sort by size desc so the modal opens with the heaviest cleanup
+        // candidates at the top — same ordering Deep Scan defaults to.
+        let sorted = actionable.sorted { $0.size > $1.size }
+        let proposedItemIDs = sorted.map(\.id)
+
+        let synthesizedGate = ClaudeCodeAgentApprovalGate(
+            sessionID: activeSessionID ?? UUID(),
+            summary: proposedItemIDs.count == 1
+                ? "Agent finished without proposing items — surfacing 1 scanned item."
+                : "Agent finished without proposing items — surfacing \(proposedItemIDs.count) scanned items.",
+            rawTranscript: "[host fallback: hydrated from scan cache]",
+            proposedItemIDs: proposedItemIDs
+        )
+        approvalGates.append(synthesizedGate)
+        pendingApproval = ClaudeCodeAgentPendingApproval(
+            gateID: synthesizedGate.id,
+            items: sorted,
+            unresolvedItemIDs: []
+        )
+    }
+
     private func appendStreamEvent(_ event: ClaudeCodeStreamEvent) {
         streamEvents.append(event)
         if case .terminal(let result) = event {
@@ -248,11 +367,28 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         }
         // Mirror agent scan results into the host-side cache so a later
         // approve(_:) can hydrate gate.proposedItemIDs into ScanResults.
-        // Last-scan-wins matches the MCP server's own cache semantics.
+        // Within a session we ACCUMULATE rather than replace: Sonnet may
+        // run more than one scan, and its final clean call can reference
+        // IDs from any of them. Replacing would evict earlier IDs and
+        // cause `lookupAll` to misclassify them as unresolved → the user
+        // would see the Smart Uninstaller fallback even though the IDs
+        // are perfectly valid scan results. The cache is cleared in
+        // `start()` so old sessions don't leak.
         if case let .toolResult(_, _, _, .scanResults(items)) = event {
             let scanResults = items.compactMap(Self.scanResult(from:))
             if !scanResults.isEmpty {
-                scanCache.replace(with: scanResults)
+                scanCache.merge(adding: scanResults)
+            }
+        }
+        // Capture the agent's prose summary so the review modal can show
+        // "Why these items" alongside the rows. Multiple assistant_text
+        // events can arrive during a run; we keep the most recent
+        // non-empty one because it's typically the agent's final summary
+        // accompanying the clean call.
+        if case let .assistantText(text) = event {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                lastAssistantText = trimmed
             }
         }
     }
@@ -322,5 +458,23 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             byID[gate.id] = gate
         }
         return byID.values.sorted { $0.requestedAt < $1.requestedAt }
+    }
+}
+
+/// Lightweight `ScanProgressObserving` adapter used by the agent's cleanup
+/// confirm path. CleanupEngine emits a `match` or `failed` event per item;
+/// we don't care which — both mean the engine finished one row, so the
+/// progress counter can advance. The closure is invoked from whatever
+/// isolation context CleanupEngine emits from; the caller is responsible
+/// for bouncing to the main actor.
+private final class AgentCleanupProgressObserver: ScanProgressObserving {
+    private let onAdvance: @Sendable () -> Void
+
+    init(onAdvance: @escaping @Sendable () -> Void) {
+        self.onAdvance = onAdvance
+    }
+
+    func didEmit(_ event: ScanProgressEvent) {
+        onAdvance()
     }
 }

@@ -75,3 +75,66 @@ struct SidebarItemTests {
         #expect(a != b)
     }
 }
+
+// MARK: - Footer Status
+
+@Suite("Sidebar footer service status")
+struct SidebarFooterStatusTests {
+    @Test("MCP running snapshot renders active")
+    func mcpRunningIsActive() {
+        let presentation = SidebarServiceIndicatorPresentation.mcp(
+            from: MCPServerStatusSnapshot(state: .running, transportMode: .sse)
+        )
+
+        #expect(presentation.label == "MCP")
+        #expect(presentation.tone == .active)
+        #expect(presentation.status == "SSE")
+    }
+
+    @Test("MCP stopped snapshot renders inactive")
+    func mcpStoppedIsInactive() {
+        let presentation = SidebarServiceIndicatorPresentation.mcp(
+            from: MCPServerStatusSnapshot.stopped()
+        )
+
+        #expect(presentation.label == "MCP")
+        #expect(presentation.tone == .inactive)
+        #expect(presentation.status == "Off")
+    }
+
+    @Test("Tier 3 enabled with CLI renders ready")
+    func tier3EnabledWithCLIIsActive() {
+        let presentation = SidebarServiceIndicatorPresentation.tier3(
+            configuration: ClaudeCodeAgentConfiguration(isEnabled: true),
+            cliAvailable: true
+        )
+
+        #expect(presentation.label == "Tier 3")
+        #expect(presentation.tone == .active)
+        #expect(presentation.status == "Ready")
+    }
+
+    @Test("Tier 3 enabled without CLI renders attention")
+    func tier3EnabledWithoutCLINeedsAttention() {
+        let presentation = SidebarServiceIndicatorPresentation.tier3(
+            configuration: ClaudeCodeAgentConfiguration(isEnabled: true),
+            cliAvailable: false
+        )
+
+        #expect(presentation.label == "Tier 3")
+        #expect(presentation.tone == .attention)
+        #expect(presentation.status == "Needs CLI")
+    }
+
+    @Test("Tier 3 disabled renders inactive")
+    func tier3DisabledIsInactive() {
+        let presentation = SidebarServiceIndicatorPresentation.tier3(
+            configuration: ClaudeCodeAgentConfiguration(isEnabled: false),
+            cliAvailable: true
+        )
+
+        #expect(presentation.label == "Tier 3")
+        #expect(presentation.tone == .inactive)
+        #expect(presentation.status == "Off")
+    }
+}

@@ -34,6 +34,7 @@ struct MainContentView: View {
     @StateObject private var aiService: LocalAIService
     @StateObject private var aiExplanation: AIExplanationController
     @StateObject private var aiAdvisory: AIAdvisoryController
+    @StateObject private var mcpStatusModel: MCPServerStatusViewModel
     private let updateSettingsViewModel: AppUpdateSettingsViewModel
 
     init(updateSettingsViewModel: AppUpdateSettingsViewModel) {
@@ -49,6 +50,7 @@ struct MainContentView: View {
         _aiService = StateObject(wrappedValue: service)
         _aiExplanation = StateObject(wrappedValue: AIExplanationController(service: service))
         _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(service: service))
+        _mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
     }
 
     var body: some View {
@@ -60,7 +62,7 @@ struct MainContentView: View {
                 PermissionRequestFlowView(isComplete: $hasCompletedOnboarding)
             } else {
                 HStack(spacing: 0) {
-                    SidebarView(selection: $sidebarSelection)
+                    SidebarView(selection: $sidebarSelection, mcpStatusModel: mcpStatusModel)
 
                     // Content area
                     VStack(spacing: 0) {
@@ -73,7 +75,11 @@ struct MainContentView: View {
                         Group {
                             switch sidebarSelection {
                             case "dashboard":
-                                DashboardView(sidebarSelection: $sidebarSelection, persistence: persistence)
+                                DashboardView(
+                                    sidebarSelection: $sidebarSelection,
+                                    persistence: persistence,
+                                    mcpStatusModel: mcpStatusModel
+                                )
                             case "profiles":
                                 if let persistence {
                                     ProfileContainerView(persistence: persistence)

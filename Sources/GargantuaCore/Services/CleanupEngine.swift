@@ -61,19 +61,23 @@ public final class CleanupEngine: Sendable {
     /// Override the home directory used to resolve `~/.Trash`. Tests only.
     private let homeDirectory: URL
     private let trashMover: any TrashMoving
+    private let protectedRootPolicy: ProtectedRootPolicy
 
     public init() {
         self.homeDirectory = FileManager.default.homeDirectoryForCurrentUser
         self.trashMover = FinderFirstTrashMover()
+        self.protectedRootPolicy = .loadDefault()
     }
 
     /// Test-only initializer. Use the default `init()` in app code.
     internal init(
         homeDirectoryForTesting: URL,
-        trashMover: any TrashMoving = FinderFirstTrashMover()
+        trashMover: any TrashMoving = FinderFirstTrashMover(),
+        protectedRootPolicy: ProtectedRootPolicy = .loadDefault()
     ) {
         self.homeDirectory = homeDirectoryForTesting
         self.trashMover = trashMover
+        self.protectedRootPolicy = protectedRootPolicy
     }
 
     /// Remove the given scan results with the selected cleanup method.
@@ -121,6 +125,14 @@ public final class CleanupEngine: Sendable {
 
     @MainActor
     private func cleanSingle(url: URL, item: ScanResult, method: CleanupMethod) async -> CleanupItemResult {
+        if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: "Skipped \(protectedRoot): \(url.path)"
+            )
+        }
+
         // Special case: the Trash container itself cannot be removed or
         // recycled. Empty its contents instead so "Move to Trash" and
         // "Delete Permanently" both do the right thing.
@@ -132,7 +144,7 @@ public final class CleanupEngine: Sendable {
         case .trash:
             return await recycleSingle(url: url, item: item)
         case .delete:
-            return deleteSingle(url: url, item: item)
+            return await deleteSingle(url: url, item: item)
         case .toolNative:
             return CleanupItemResult(
                 item: item,
@@ -158,10 +170,17 @@ public final class CleanupEngine: Sendable {
         }
     }
 
-    /// Permanently delete a single URL.
-    private func deleteSingle(url: URL, item: ScanResult) -> CleanupItemResult {
+    /// Permanently delete a single URL. Runs on a detached task so the
+    /// caller's MainActor thread isn't blocked while `FileManager.removeItem`
+    /// walks the directory tree — large dev caches can take several seconds
+    /// per item, which froze the UI (beach ball) every time the agent's
+    /// modal confirmed a "Delete Permanently" cleanup.
+    private func deleteSingle(url: URL, item: ScanResult) async -> CleanupItemResult {
+        let pathToRemove = url
         do {
-            try FileManager.default.removeItem(at: url)
+            try await Task.detached(priority: .userInitiated) {
+                try FileManager.default.removeItem(at: pathToRemove)
+            }.value
             return CleanupItemResult(item: item, succeeded: true)
         } catch {
             return CleanupItemResult(

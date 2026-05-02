@@ -73,10 +73,30 @@ public enum ClaudeCodeAgentHelpContent {
     /// its picker. Edit this map in one place to change which prompts appear
     /// where — the chip labels and prompt bodies still come from
     /// `examplePrompts`, so there are no duplicated copy strings.
+    ///
+    /// Multiple presets reference the same prompt where the question fits
+    /// either flow (e.g. orphan-cache-hunting and criterion-filtering both
+    /// answer "what's safe to remove" and "what haven't I used"). With the
+    /// vertical layout giving each preset a full-width chip row, we list
+    /// 3-4 chips per preset to give users more starting points.
     public static let chipsByTemplate: [ClaudeCodeAgentPromptTemplate: [String]] = [
-        .investigateSpace: ["pre-event-triage", "orphan-cache-hunting"],
-        .projectArchaeology: ["project-archaeology"],
-        .customCleanupScript: ["version-cleanup", "criterion-filtering"],
+        .investigateSpace: [
+            "pre-event-triage",
+            "orphan-cache-hunting",
+            "criterion-filtering",
+            "version-cleanup",
+        ],
+        .projectArchaeology: [
+            "project-archaeology",
+            "criterion-filtering",
+            "orphan-cache-hunting",
+        ],
+        .customCleanupScript: [
+            "version-cleanup",
+            "criterion-filtering",
+            "orphan-cache-hunting",
+            "pre-event-triage",
+        ],
     ]
 
     /// Resolved chip prompts for a preset. Returns the matching

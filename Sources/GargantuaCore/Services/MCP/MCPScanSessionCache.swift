@@ -43,6 +43,24 @@ public final class MCPScanSessionCache: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Insert/update entries from `results` without dropping anything that
+    /// is already in the cache. Used by the agent session controller's
+    /// host-side mirror: when Sonnet runs multiple scans in a single
+    /// session (e.g. one broad sweep then a focused follow-up), the agent's
+    /// final `clean` call may reference IDs from any of those scans.
+    /// Last-scan-wins semantics — what the in-process MCP server uses —
+    /// would evict the earlier IDs and cause `lookupAll` to return
+    /// everything as unknown, surfacing the wrong "use Smart Uninstaller"
+    /// fallback. Accumulating across scans preserves every ID the agent
+    /// could legitimately propose.
+    public func merge(adding results: [ScanResult]) {
+        lock.lock()
+        for item in results {
+            entries[item.id] = item
+        }
+        lock.unlock()
+    }
+
     /// Lookup a single item by ID. Returns nil for unknown IDs.
     public func lookup(id: String) -> ScanResult? {
         lock.lock()
@@ -96,5 +114,17 @@ public final class MCPScanSessionCache: @unchecked Sendable {
         lock.lock()
         entries.removeAll()
         lock.unlock()
+    }
+
+    /// Snapshot of every entry in the cache, in unspecified order. Used by
+    /// the agent session controller's end-of-run fallback: if the agent
+    /// finished without proposing items via `mcp__gargantua__clean`, the
+    /// controller hydrates the cache contents directly into the review
+    /// modal so the user gets the same actionable handoff Deep Scan
+    /// produces, regardless of what the agent did or didn't do.
+    public func allEntries() -> [ScanResult] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(entries.values)
     }
 }

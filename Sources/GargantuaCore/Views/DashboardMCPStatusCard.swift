@@ -23,10 +23,21 @@ struct DashboardMCPStatusPresentation: Equatable {
     let actionLabel: String
     let actionSystemImage: String
     let tone: Tone
+    let isActionEnabled: Bool
 
     static func make(from snapshot: MCPServerStatusSnapshot) -> DashboardMCPStatusPresentation {
         let clientSummary = Self.clientSummary(for: snapshot.clients)
         switch snapshot.state {
+        case .starting:
+            return DashboardMCPStatusPresentation(
+                title: "Starting",
+                detail: "Launching local SSE transport",
+                clientSummary: clientSummary,
+                actionLabel: "Starting",
+                actionSystemImage: "hourglass",
+                tone: .review,
+                isActionEnabled: false
+            )
         case .running:
             return DashboardMCPStatusPresentation(
                 title: "Running",
@@ -34,25 +45,28 @@ struct DashboardMCPStatusPresentation: Equatable {
                 clientSummary: clientSummary,
                 actionLabel: "Stop",
                 actionSystemImage: "stop.circle",
-                tone: .safe
+                tone: .safe,
+                isActionEnabled: true
             )
         case .stopped:
             return DashboardMCPStatusPresentation(
                 title: "Stopped",
-                detail: "\(snapshot.transportMode.displayName) transport idle",
+                detail: "Local SSE transport idle",
                 clientSummary: clientSummary,
                 actionLabel: "Start",
                 actionSystemImage: "play.circle",
-                tone: .muted
+                tone: .muted,
+                isActionEnabled: true
             )
         case .error:
             return DashboardMCPStatusPresentation(
                 title: "Needs attention",
                 detail: snapshot.lastErrorMessage ?? "Server status unavailable.",
                 clientSummary: clientSummary,
-                actionLabel: "Start",
+                actionLabel: "Retry",
                 actionSystemImage: "arrow.clockwise.circle",
-                tone: .review
+                tone: .review,
+                isActionEnabled: true
             )
         }
     }
@@ -70,7 +84,6 @@ struct DashboardMCPStatusCard: View {
     @ObservedObject var model: MCPServerStatusViewModel
     let onOpenAuditLog: () -> Void
 
-    @State private var isHovered = false
     @State private var isExpanded = false
     @State private var showsStopConfirmation = false
 
@@ -78,7 +91,7 @@ struct DashboardMCPStatusCard: View {
     private var presentation: DashboardMCPStatusPresentation {
         DashboardMCPStatusPresentation.make(from: snapshot)
     }
-    private var showsRecentActions: Bool { isHovered || isExpanded }
+    private var showsRecentActions: Bool { isExpanded }
 
     var body: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
@@ -160,6 +173,8 @@ struct DashboardMCPStatusCard: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .disabled(!presentation.isActionEnabled)
+                .opacity(presentation.isActionEnabled ? 1 : 0.6)
 
                 Button(action: onOpenAuditLog) {
                     Label("MCP Audit", systemImage: "doc.text.magnifyingglass")
@@ -185,7 +200,6 @@ struct DashboardMCPStatusCard: View {
                 .stroke(GargantuaColors.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
-        .onHover { isHovered = $0 }
         .confirmationDialog(
             "Stop MCP server?",
             isPresented: $showsStopConfirmation,
@@ -231,6 +245,8 @@ struct DashboardMCPStatusCard: View {
     }
 
     private func requestControlAction() {
+        guard presentation.isActionEnabled else { return }
+
         if snapshot.isRunning, !snapshot.clients.isEmpty {
             showsStopConfirmation = true
             return
@@ -244,7 +260,7 @@ struct DashboardMCPStatusCard: View {
     }
 }
 
-private struct MCPStatusMeta: View {
+struct MCPStatusMeta: View {
     let text: String
     let systemImage: String
 

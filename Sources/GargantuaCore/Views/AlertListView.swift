@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Dense list of actionable alerts for the dashboard, with optional Quick Scan button.
+/// Dense list of actionable alerts for the dashboard, with optional triage scan button.
 ///
 /// Each row shows reclaimable space by category with a click-through
 /// to the relevant cleanup screen. When `scanProgress` is provided and
@@ -28,7 +28,7 @@ public struct AlertListView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Quick Scan header (shown when onScan is provided)
+            // Triage scan header (shown when onScan is provided)
             if onScan != nil {
                 scanHeader
 
@@ -57,7 +57,7 @@ public struct AlertListView: View {
         }
     }
 
-    // MARK: - Quick Scan Header
+    // MARK: - Triage Scan Header
 
     private var scanHeader: some View {
         HStack {
@@ -73,7 +73,7 @@ public struct AlertListView: View {
                     HStack(spacing: GargantuaSpacing.space1) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 11, weight: .medium))
-                        Text("Quick Scan")
+                        Text("Triage Scan")
                             .font(GargantuaFonts.caption)
                     }
                     .foregroundStyle(.white)

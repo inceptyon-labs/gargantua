@@ -33,7 +33,6 @@ struct ClaudeCodeAgentSettingsSection: View {
                 modelPickerRow
                 maxTurnsStepper
                 scheduledAuditToggle
-                destructiveToggle
             }
             .padding(GargantuaSpacing.space4)
             .background(GargantuaColors.surface2)
@@ -232,26 +231,13 @@ struct ClaudeCodeAgentSettingsSection: View {
         }
     }
 
-    private var destructiveToggle: some View {
-        Toggle(isOn: Binding(
-            get: { configuration.allowDestructiveMCPTools },
-            set: {
-                configuration.allowDestructiveMCPTools = $0
-                saveConfiguration()
-            }
-        )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Allow MCP Clean Tool")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text("Off keeps agent runs read-only; detected clean attempts still appear as approval gates.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
-        }
-        .toggleStyle(.switch)
-    }
+    // The previous "Allow MCP Clean Tool" toggle was removed. With the
+    // dry-run-propose flow, every interactive session gives the agent the
+    // `clean` tool — its `dry_run: true` calls short-circuit server-side and
+    // surface as the same review modal Deep Scan uses, with the actual
+    // deletion run by the host's `CleanupEngine`. The `allowDestructiveMCPTools`
+    // field on the persisted configuration is retained for back-compat with
+    // older stored JSON but is no longer read by the runner.
 
     private var scheduledAuditToggle: some View {
         Toggle(isOn: Binding(
