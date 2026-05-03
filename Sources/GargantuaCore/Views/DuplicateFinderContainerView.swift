@@ -80,24 +80,29 @@ public struct DuplicateFinderContainerView: View {
     // MARK: - Phase views
 
     private var idleView: some View {
-        VStack(spacing: GargantuaSpacing.space4) {
-            GargantuaBrandIcon(
-                resourceName: "duplicates-gargantua-gpt2",
-                fallbackSystemName: "doc.on.doc",
-                fallbackColor: GargantuaColors.ink4
-            )
+        VStack(spacing: 0) {
+            PageHeaderView(title: "Duplicate Finder")
 
-            VStack(spacing: GargantuaSpacing.space2) {
-                Text("Find duplicate files")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
+            VStack(spacing: GargantuaSpacing.space4) {
+                Spacer()
 
-                Text(idleSubtitle)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
-            }
+                GargantuaBrandIcon(
+                    resourceName: "duplicates-gargantua-gpt2",
+                    fallbackSystemName: "doc.on.doc",
+                    fallbackColor: GargantuaColors.ink4
+                )
+
+                VStack(spacing: GargantuaSpacing.space2) {
+                    Text("Find duplicate files")
+                        .font(GargantuaFonts.heading)
+                        .foregroundStyle(GargantuaColors.ink)
+
+                    Text(idleSubtitle)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 420)
+                }
 
             HStack(spacing: GargantuaSpacing.space3) {
                 if state.cachedResults != nil {
@@ -141,6 +146,10 @@ public struct DuplicateFinderContainerView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

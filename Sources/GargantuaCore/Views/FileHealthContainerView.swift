@@ -108,40 +108,49 @@ public struct FileHealthContainerView: View {
     // MARK: - Phase views
 
     private var idleView: some View {
-        VStack(spacing: GargantuaSpacing.space4) {
-            GargantuaBrandIcon(
-                resourceName: "file-health-gargantua-gpt2",
-                fallbackSystemName: "stethoscope",
-                fallbackColor: GargantuaColors.ink4
-            )
+        VStack(spacing: 0) {
+            PageHeaderView(title: "File Health")
 
-            VStack(spacing: GargantuaSpacing.space2) {
-                Text("Audit file health")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
+            VStack(spacing: GargantuaSpacing.space4) {
+                Spacer()
 
-                Text(
-                    "Runs czkawka across your scan roots to surface empty, broken, temporary, oversized, "
-                        + "and visually similar files. Review-by-default — nothing is selected automatically."
+                GargantuaBrandIcon(
+                    resourceName: "file-health-gargantua-gpt2",
+                    fallbackSystemName: "stethoscope",
+                    fallbackColor: GargantuaColors.ink4
                 )
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
-            }
 
-            Button(action: startScan) {
-                Text("Scan file health")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(GargantuaColors.accent)
+                VStack(spacing: GargantuaSpacing.space2) {
+                    Text("Audit file health")
+                        .font(GargantuaFonts.heading)
+                        .foregroundStyle(GargantuaColors.ink)
+
+                    Text(
+                        "Runs czkawka across your scan roots to surface empty, broken, temporary, oversized, "
+                            + "and visually similar files. Review-by-default — nothing is selected automatically."
                     )
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 420)
+                }
+
+                Button(action: startScan) {
+                    Text("Scan file health")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(
+                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                .fill(GargantuaColors.accent)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

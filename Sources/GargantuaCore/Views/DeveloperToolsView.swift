@@ -168,35 +168,19 @@ public struct DeveloperToolsView: View {
     // MARK: Sections
 
     private var header: some View {
-        HStack(alignment: .center) {
-            if phase != .idle {
-                backButton
-            } else {
-                // Reserve symmetric width so the title doesn't shift between
-                // idle / results.
-                Color.clear.frame(width: 60, height: 1)
-            }
-            Spacer()
-            VStack(spacing: 2) {
-                Text("Developer Tools")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-                if phase != .idle {
-                    Text("Preview cleanup actions for Homebrew and Docker.")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                }
-            }
-            Spacer()
+        PageHeaderView(
+            title: "Developer Tools",
+            subtitle: phase == .idle
+                ? nil
+                : "Preview cleanup actions for Homebrew and Docker."
+        ) {
             HStack(spacing: GargantuaSpacing.space3) {
                 if phase != .idle {
+                    backButton
                     refreshButton
                 }
             }
-            .frame(minWidth: 60, alignment: .trailing)
         }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space4)
     }
 
     private var backButton: some View {

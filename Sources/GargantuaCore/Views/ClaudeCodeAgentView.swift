@@ -95,16 +95,11 @@ public struct ClaudeCodeAgentView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: "brain.head.profile")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(GargantuaColors.accent)
-
-                Text("Agent Run")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-
+        PageHeaderView(
+            title: "Agent Run",
+            subtitle: "Run Claude Code against Gargantua MCP with a live transcript and explicit destructive-step gates."
+        ) {
+            HStack(spacing: GargantuaSpacing.space3) {
                 Button {
                     helpSheetPresented = true
                 } label: {
@@ -116,20 +111,11 @@ public struct ClaudeCodeAgentView: View {
                 .help("When to use Agent Run vs Deep Scan, with example prompts")
                 .accessibilityLabel("When to use Agent Run")
 
-                Spacer()
-
                 if let result = controller.terminalResult {
                     SessionMetricsChip(result: result)
                 }
             }
-
-            Text("Run Claude Code against Gargantua MCP with a live transcript and explicit destructive-step gates.")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink2)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space3)
     }
 
     private var promptSection: some View {
