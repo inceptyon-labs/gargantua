@@ -217,37 +217,45 @@ public struct DiskExplorerView: View {
     }
 
     private var treemapView: some View {
-        GeometryReader { geometry in
-            let width = max(geometry.size.width - GargantuaSpacing.space6 * 2, 1)
-            let height = max(geometry.size.height - GargantuaSpacing.space6, 1)
-            let bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
-            let displayed = displayItems
-            let totalSize = displayed.reduce(0) { $0 + max($1.size, 0) }
-            let tiles = DiskTreemapLayout.tiles(for: displayed, in: bounds)
+        VStack(alignment: .leading, spacing: 0) {
+            DiskExplorerTreemapHintView()
 
-            ZStack(alignment: .topLeading) {
-                ForEach(tiles) { tile in
-                    DirectoryTreemapCellView(
-                        item: tile.item,
-                        totalSiblingSize: totalSize,
-                        onDrillDown: { drillDown(into: tile.item) }
-                    )
-                    .frame(width: max(tile.rect.width, 1), height: max(tile.rect.height, 1))
-                    .offset(x: tile.rect.minX, y: tile.rect.minY)
+            GeometryReader { geometry in
+                let width = max(geometry.size.width - GargantuaSpacing.space6 * 2, 1)
+                let height = max(geometry.size.height - GargantuaSpacing.space6, 1)
+                let bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
+                let displayed = displayItems
+                let totalSize = displayed.reduce(0) { $0 + max($1.size, 0) }
+                let tiles = DiskTreemapLayout.tiles(for: displayed, in: bounds)
+
+                ZStack(alignment: .topLeading) {
+                    ForEach(tiles) { tile in
+                        DirectoryTreemapCellView(
+                            item: tile.item,
+                            totalSiblingSize: totalSize,
+                            onDrillDown: { drillDown(into: tile.item) }
+                        )
+                        .frame(width: max(tile.rect.width, 1), height: max(tile.rect.height, 1))
+                        .offset(x: tile.rect.minX, y: tile.rect.minY)
+                    }
                 }
+                .frame(width: width, height: height, alignment: .topLeading)
+                .clipped()
+                .padding(.horizontal, GargantuaSpacing.space6)
+                .padding(.bottom, GargantuaSpacing.space6)
             }
-            .frame(width: width, height: height, alignment: .topLeading)
-            .clipped()
-            .padding(.horizontal, GargantuaSpacing.space6)
-            .padding(.bottom, GargantuaSpacing.space6)
+            .frame(minHeight: 320)
         }
-        .frame(minHeight: 320)
     }
 
     private var listView: some View {
+        // Use `displayItems` so list and treemap show the same set at the
+        // top level. For directories with ≥12 sized children, sub-1%
+        // folders collapse into an "Others (N)" row at the bottom; below
+        // that threshold every folder shows individually in both modes.
         ScrollView {
             LazyVStack(spacing: 1) {
-                ForEach(state.items) { item in
+                ForEach(displayItems) { item in
                     DirectoryRowView(
                         item: item,
                         maxSize: state.maxSize,

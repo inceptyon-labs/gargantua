@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct DirectoryTreemapCellView: View {
@@ -46,6 +47,24 @@ struct DirectoryTreemapCellView: View {
             isHovered = hovering
         }
         .accessibilityLabel(accessibilityLabel)
+        .contextMenu {
+            if canRevealInFinder {
+                Button("Reveal in Finder") { revealInFinder() }
+            }
+        }
+    }
+
+    private var canRevealInFinder: Bool {
+        !item.isPermissionDenied
+            && !item.isSizing
+            && !item.isFilesAggregate
+            && !item.isOthersAggregate
+    }
+
+    private func revealInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting(
+            [URL(fileURLWithPath: item.path)]
+        )
     }
 
     private enum LayoutTier {

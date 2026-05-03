@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct DirectoryRowView: View {
@@ -27,32 +28,33 @@ struct DirectoryRowView: View {
 
     var body: some View {
         Button {
-            if item.isPermissionDenied {
+            if item.isOthersAggregate {
+                // Aggregate row is informational; matches treemap behavior.
+            } else if item.isPermissionDenied {
                 openURL(Self.fullDiskAccessURL)
             } else if !isFilesAggregate {
                 onDrillDown()
             }
         } label: {
             HStack(spacing: GargantuaSpacing.space3) {
-                // Expand/collapse chevron (directories only, not aggregated files)
-                if !isFilesAggregate && !item.isPermissionDenied {
+                // Expand/collapse chevron (directories only — not aggregates,
+                // not permission-denied).
+                if !isFilesAggregate && !item.isPermissionDenied && !item.isOthersAggregate {
                     expandButton
                 } else {
                     Color.clear
                         .frame(width: 16, height: 16)
                 }
 
-                // Icon
                 Image(systemName: iconName)
                     .font(.system(size: 14))
-                    .foregroundStyle(item.isPermissionDenied ? GargantuaColors.ink4 : GargantuaColors.ink2)
+                    .foregroundStyle(iconTint)
                     .frame(width: 18, alignment: .center)
 
-                // Name + permission message
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name)
                         .font(GargantuaFonts.label)
-                        .foregroundStyle(item.isPermissionDenied ? GargantuaColors.ink4 : GargantuaColors.ink)
+                        .foregroundStyle(nameTint)
                         .lineLimit(1)
 
                     if item.isPermissionDenied {
@@ -64,8 +66,6 @@ struct DirectoryRowView: View {
 
                 Spacer()
 
-                // Size bar + size label, OR a Grant Access affordance when
-                // the row's underlying directory needs Full Disk Access.
                 HStack(spacing: GargantuaSpacing.space3) {
                     if item.isPermissionDenied {
                         grantAccessAffordance
@@ -74,6 +74,8 @@ struct DirectoryRowView: View {
                         ProgressView()
                             .controlSize(.mini)
                             .frame(width: 70, alignment: .trailing)
+                    } else if item.isOthersAggregate {
+                        sizeLabelView
                     } else {
                         sizeBar
                         sizeLabelView
@@ -83,13 +85,52 @@ struct DirectoryRowView: View {
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.leading, CGFloat(indentLevel) * GargantuaSpacing.space5)
             .padding(.vertical, GargantuaSpacing.space3)
-            .background(isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2)
+            .background(rowBackground)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
         }
+        .contextMenu {
+            if canRevealInFinder {
+                Button("Reveal in Finder") { revealInFinder() }
+            }
+        }
+    }
+
+    /// Aggregate rows render flat against `surface1` to read as informational;
+    /// regular rows lift to `surface3` on hover, matching the treemap's
+    /// hover-lift convention.
+    private var rowBackground: Color {
+        if item.isOthersAggregate { return GargantuaColors.surface1 }
+        return isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
+    }
+
+    private var nameTint: Color {
+        if item.isPermissionDenied { return GargantuaColors.ink4 }
+        if item.isOthersAggregate { return GargantuaColors.ink3 }
+        return GargantuaColors.ink
+    }
+
+    /// Icon stays one tonal step dimmer than the name across all states.
+    private var iconTint: Color {
+        if item.isPermissionDenied { return GargantuaColors.ink4 }
+        if item.isOthersAggregate { return GargantuaColors.ink4 }
+        return GargantuaColors.ink2
+    }
+
+    private var canRevealInFinder: Bool {
+        !item.isPermissionDenied
+            && !item.isSizing
+            && !item.isFilesAggregate
+            && !item.isOthersAggregate
+    }
+
+    private func revealInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting(
+            [URL(fileURLWithPath: item.path)]
+        )
     }
 
     private var expandButton: some View {
@@ -169,11 +210,13 @@ struct DirectoryRowView: View {
 
     private var sizeLabelColor: Color {
         if item.isPermissionDenied { return GargantuaColors.ink4 }
+        if item.isOthersAggregate { return GargantuaColors.ink3 }
         if item.isPartial { return GargantuaColors.ink2 }
         return GargantuaColors.ink
     }
 
     private var iconName: String {
+        if item.isOthersAggregate { return "ellipsis.circle" }
         if isFilesAggregate { return "doc" }
         if item.isPermissionDenied { return "lock.fill" }
         return "folder.fill"
