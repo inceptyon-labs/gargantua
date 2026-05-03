@@ -59,18 +59,28 @@ public struct DiskExplorerView: View {
     }
 
     private var scanSubtitle: String? {
-        let total = state.items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
-        let pending = state.items.filter { $0.isSizing }.count
-        let done = max(total - pending, 0)
-        if state.isLoading {
-            if total == 0 { return "Probing gravitational pull…" }
-            if pending == 0 { return "Finishing up…" }
-            return "Sizing \(done) of \(total) folders…"
-        }
+        if state.isLoading { return loadingMessage }
+        let total = countableItems
         if total > 0 {
             return "\(total) item\(total == 1 ? "" : "s")"
         }
         return nil
+    }
+
+    /// Single source of truth for the in-flight scan copy. Used by both the
+    /// `ScanResultsHeader` subtitle and the full-screen `scanningView` so the
+    /// two cannot drift out of sync.
+    private var loadingMessage: String {
+        let total = countableItems
+        let pending = state.items.filter { $0.isSizing }.count
+        if total == 0 { return "Probing gravitational pull…" }
+        if pending == 0 { return "Finishing up…" }
+        let done = max(total - pending, 0)
+        return "Sizing \(done) of \(total) folders…"
+    }
+
+    private var countableItems: Int {
+        state.items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
     }
 
     private var controlsBar: some View {
@@ -267,14 +277,7 @@ public struct DiskExplorerView: View {
     }
 
     private var scanningView: some View {
-        let total = state.items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
-        let pending = state.items.filter { $0.isSizing }.count
-        let done = max(total - pending, 0)
-        let primary: String = {
-            if total == 0 { return "Probing gravitational pull…" }
-            if pending == 0 { return "Finishing up…" }
-            return "Sizing \(done) of \(total) folders…"
-        }()
+        let primary = loadingMessage
         let folderName = state.pathStack.last?.name ?? "Home"
         return VStack(spacing: GargantuaSpacing.space4) {
             AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)

@@ -98,7 +98,7 @@ struct DiskExplorerDominantChildView: View {
             .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
             .overlay(
                 RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                    .strokeBorder(GargantuaColors.accent.opacity(0.5), lineWidth: 1.5)
+                    .strokeBorder(GargantuaColors.borderEm, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

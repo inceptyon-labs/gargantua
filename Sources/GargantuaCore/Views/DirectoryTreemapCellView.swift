@@ -91,9 +91,13 @@ struct DirectoryTreemapCellView: View {
                 RoundedRectangle(cornerRadius: GargantuaRadius.medium)
                     .fill(GargantuaColors.reviewDim)
             } else if item.isSizing {
+                // Neutral tonal pulse — sizing is a state, not interactivity,
+                // so we don't use Hawking Blue here. The breathing animation
+                // still conveys "this is computing" alongside the hourglass
+                // icon and `ProgressView`.
                 RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                    .fill(GargantuaColors.accent)
-                    .opacity(reduceMotion ? 0.18 : (sizingPulse ? 0.28 : 0.10))
+                    .fill(GargantuaColors.ink2)
+                    .opacity(reduceMotion ? 0.10 : (sizingPulse ? 0.16 : 0.04))
                     .animation(
                         reduceMotion
                             ? nil
@@ -222,14 +226,14 @@ struct DirectoryTreemapCellView: View {
     private var borderColor: Color {
         if item.isPermissionDenied { return GargantuaColors.protected_ }
         if item.isPartial { return GargantuaColors.review }
-        if item.isSizing { return GargantuaColors.accent }
+        if item.isSizing { return GargantuaColors.borderEm }
         return GargantuaColors.borderEm
     }
 
     private var iconColor: Color {
         if item.isPermissionDenied { return GargantuaColors.protected_ }
         if item.isPartial { return GargantuaColors.review }
-        if item.isSizing { return GargantuaColors.accent }
+        if item.isSizing { return GargantuaColors.ink3 }
         if item.isOthersAggregate { return GargantuaColors.ink3 }
         return GargantuaColors.ink2
     }

@@ -8,18 +8,7 @@ struct DiskExplorerIdleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Disk Explorer")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-                Spacer()
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space4)
-
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+            ScanResultsHeader(title: "Disk Explorer")
 
             Spacer()
 
@@ -29,7 +18,7 @@ struct DiskExplorerIdleView: View {
                     fallbackSystemName: "externaldrive"
                 )
 
-                Text("Disk Map")
+                Text("Folder Sizes")
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
