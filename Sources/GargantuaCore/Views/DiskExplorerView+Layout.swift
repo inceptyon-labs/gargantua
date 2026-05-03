@@ -2,6 +2,52 @@ import Foundation
 import SwiftUI
 
 extension DiskExplorerView {
+    /// Invisible Buttons that carry `.keyboardShortcut` for Disk Explorer
+    /// internal navigation. Placed in `.background` of the resultsView so
+    /// they fire only while the resultsView is in the active focus context.
+    /// All actions route through `state` directly so this can live in an
+    /// extension across files without bumping access on the view's private
+    /// helpers.
+    @ViewBuilder
+    var keyboardShortcutLayer: some View {
+        HStack(spacing: 0) {
+            Button("Back") { state.exitToIdle() }
+                .keyboardShortcut(.escape, modifiers: [])
+            Button("Up") {
+                guard state.pathStack.count > 1 else { return }
+                state.navigateTo(index: state.pathStack.count - 2)
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .disabled(state.pathStack.count <= 1)
+            Button("Refresh") { state.refreshCurrent() }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(state.isLoading)
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    var permissionBanner: some View {
+        if state.items.contains(where: { $0.isPermissionDenied }) {
+            PermissionBannerView.fullDiskAccess
+                .padding(.horizontal, GargantuaSpacing.space6)
+                .padding(.bottom, GargantuaSpacing.space3)
+        }
+    }
+
+    /// Skip the Rescan confirmation when the user is already at home — the
+    /// only thing Rescan does in that case is re-run the scan, which Refresh
+    /// already does without ceremony.
+    func requestRescan() {
+        if state.pathStack.count > 1 {
+            state.showRescanConfirmation = true
+        } else {
+            state.rescanFromHome()
+        }
+    }
+
     var scanningView: some View {
         let primary = loadingMessage
         let folderName = state.pathStack.last?.name ?? "Home"
@@ -47,8 +93,15 @@ extension DiskExplorerView {
     /// Bundle directories whose size is < 1% of the largest into a single
     /// synthetic "Others" tile. Avoids the ant-farm of unidentifiable
     /// 60×60-pixel icons that plague treemaps of skewed distributions.
+    ///
+    /// Skipped entirely for small directories — when fewer than 12 sized
+    /// items would land in the treemap, every folder gets a legible tile
+    /// without the rollup. The threshold matches the rule of thumb that
+    /// 12 squarified tiles in a typical viewport stay above ~80×60pt
+    /// where labels remain readable.
     static func collapseSmall(_ items: [DirectoryItem]) -> [DirectoryItem] {
         let sized = items.filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
+        guard sized.count >= 12 else { return items }
         guard let largest = sized.map(\.size).max(), largest > 0 else { return items }
 
         let threshold = max(largest / 100, 1)

@@ -95,7 +95,7 @@ struct DirectoryTreemapCellView: View {
     private var background: some View {
         ZStack {
             RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                .fill(canDrillDown && isHovered ? GargantuaColors.surface4 : GargantuaColors.surface3)
+                .fill(fillForHoverState)
 
             if item.isPermissionDenied {
                 RoundedRectangle(cornerRadius: GargantuaRadius.medium)
@@ -125,9 +125,32 @@ struct DirectoryTreemapCellView: View {
         }
     }
 
+    @ViewBuilder
     private var border: some View {
-        RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-            .strokeBorder(borderColor, lineWidth: emphasized ? 2 : 1)
+        // Aggregate "Others" tiles use a dashed stroke at lower opacity so
+        // they read as informational, not interactive. They aren't drillable
+        // and shouldn't compete with sibling tiles for click attention.
+        if item.isOthersAggregate {
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .strokeBorder(
+                    GargantuaColors.borderEm.opacity(0.5),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                )
+        } else {
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .strokeBorder(borderColor, lineWidth: emphasized ? 2 : 1)
+        }
+    }
+
+    /// Tile background fill, including hover lift. Hover lifts when the tile
+    /// is actually clickable — drillable folders, and permission-denied
+    /// folders that route taps to the Full Disk Access pane. Aggregate tiles
+    /// stay flat (recessed surface2) to underline their non-interactive role.
+    private var fillForHoverState: Color {
+        if item.isOthersAggregate { return GargantuaColors.surface2 }
+        let interactive = canDrillDown || item.isPermissionDenied
+        if interactive && isHovered { return GargantuaColors.surface4 }
+        return GargantuaColors.surface3
     }
 
     // MARK: Compact (top-left) layout
@@ -231,28 +254,43 @@ struct DirectoryTreemapCellView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         } else {
-            Text(sizeLabel)
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(item.isPartial ? GargantuaColors.review : GargantuaColors.ink2)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            HStack(spacing: GargantuaSpacing.space2) {
+                Text(sizeLabel)
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(item.isPartial ? GargantuaColors.review : GargantuaColors.ink2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let percentLabel {
+                    Text(percentLabel)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
         }
     }
+}
 
-    // MARK: Helpers
+// MARK: - Helper computed properties
+//
+// Hoisted into an extension so the view's struct body stays under SwiftLint's
+// type-body-length budget. These are all pure derivations from `item` /
+// `totalSiblingSize` and don't touch view state.
 
-    private var emphasized: Bool {
+extension DirectoryTreemapCellView {
+    var emphasized: Bool {
         item.isPermissionDenied || item.isPartial || item.isSizing
     }
 
-    private var borderColor: Color {
+    var borderColor: Color {
         if item.isPermissionDenied { return GargantuaColors.protected_ }
         if item.isPartial { return GargantuaColors.review }
         if item.isSizing { return GargantuaColors.borderEm }
         return GargantuaColors.borderEm
     }
 
-    private var iconColor: Color {
+    var iconColor: Color {
         if item.isPermissionDenied { return GargantuaColors.protected_ }
         if item.isPartial { return GargantuaColors.review }
         if item.isSizing { return GargantuaColors.ink3 }
@@ -260,12 +298,12 @@ struct DirectoryTreemapCellView: View {
         return GargantuaColors.ink2
     }
 
-    private var sizeLabel: String {
+    var sizeLabel: String {
         let prefix = item.isPartial ? "~" : ""
         return "\(prefix)\(AlertItem.formatBytes(item.size))"
     }
 
-    private var percentLabel: String? {
+    var percentLabel: String? {
         guard totalSiblingSize > 0, item.size > 0 else { return nil }
         let fraction = Double(item.size) / Double(totalSiblingSize)
         let percent = fraction * 100
@@ -278,7 +316,7 @@ struct DirectoryTreemapCellView: View {
         return "<1% of folder"
     }
 
-    private var accessibilityLabel: Text {
+    var accessibilityLabel: Text {
         if item.isPermissionDenied {
             return Text("\(item.name), requires Full Disk Access")
         }
@@ -288,7 +326,7 @@ struct DirectoryTreemapCellView: View {
         return Text("\(item.name), \(AlertItem.formatBytes(item.size))")
     }
 
-    private var iconName: String {
+    var iconName: String {
         if item.isOthersAggregate { return "ellipsis.circle" }
         if item.isFilesAggregate { return "doc" }
         if item.isPermissionDenied { return "lock.fill" }

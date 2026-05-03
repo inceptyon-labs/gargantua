@@ -61,6 +61,11 @@ public final class DiskExplorerState {
     public var displayModeIsExplicit: Bool = false
     public var phase: DiskExplorerPhase = .idle
     public var scanGeneration: Int = 0
+    /// Controls the Rescan confirmation dialog. The view flips this true
+    /// instead of calling `rescanFromHome` directly when the user has drilled
+    /// past the home directory, so they can't silently lose a deep
+    /// drill-down with one click.
+    public var showRescanConfirmation: Bool = false
     /// Per-path snapshot of the last successful scan. Lets the breadcrumb
     /// navigate back to a directory we've already mapped without paying for
     /// another recursive sizing pass. Invalidated by Refresh / Rescan / Back.

@@ -47,7 +47,7 @@ public struct DiskExplorerView: View {
                 subtitle: scanSubtitle,
                 onBack: { exitToIdle() },
                 onRefresh: { refreshCurrent() },
-                onRescan: { rescanFromHome() },
+                onRescan: { requestRescan() },
                 isBusy: state.isLoading
             )
 
@@ -57,14 +57,18 @@ public struct DiskExplorerView: View {
             contentView
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    @ViewBuilder
-    private var permissionBanner: some View {
-        if state.items.contains(where: { $0.isPermissionDenied }) {
-            PermissionBannerView.fullDiskAccess
-                .padding(.horizontal, GargantuaSpacing.space6)
-                .padding(.bottom, GargantuaSpacing.space3)
+        .background(keyboardShortcutLayer)
+        .confirmationDialog(
+            "Restart from Home?",
+            isPresented: $state.showRescanConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Restart Scan", role: .destructive) { rescanFromHome() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            // pathStack.count includes Home itself, so depth is count - 1.
+            let depth = max(state.pathStack.count - 1, 0)
+            Text("This discards your current drill-down (\(depth) level\(depth == 1 ? "" : "s") deep) and rescans from your home directory.")
         }
     }
 
@@ -96,15 +100,16 @@ public struct DiskExplorerView: View {
 
     private var controlsBar: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            if state.isLoading {
-                AccretionDiskView(activityRate: 14, size: 18, color: GargantuaColors.accent)
-                    .accessibilityHidden(true)
-            }
             Spacer()
             // Bridged binding: writes go through `setDisplayMode` so the
             // explicit-pick flag flips, suppressing future auto-promotions
             // for this directory. Auto-promote (state-driven) writes
             // `displayMode` directly without the flag.
+            //
+            // No scanning spinner here — the full-screen `scanningView`
+            // (rendered whenever `isLoading`) is the canonical scan
+            // indicator, and the header subtitle carries the live count.
+            // A third copy in this bar was redundant.
             DisplayModeToggle(selection: Binding(
                 get: { state.displayMode },
                 set: { state.setDisplayMode($0) }
