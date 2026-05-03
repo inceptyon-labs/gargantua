@@ -5,63 +5,58 @@ struct CloudAISettingsSection: View {
     @State private var apiKeyInput = ""
     @State private var apiKeyStatus = "Not configured"
     @State private var status: CloudAIStatus?
+    @State private var isShowingRevokeConfirm = false
 
     private let configurationStore = CloudAIConfigurationStore()
     private let keyStore: any CloudAPIKeyStore = KeychainCloudAPIKeyStore()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            Text("Cloud AI")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink2)
+        SettingsSectionContainer(
+            "Cloud AI (Anthropic)",
+            subtitle: "Hosted Claude reasoning over the public Anthropic API. Requires a user-supplied key; off by default."
+        ) {
+            statusHeader
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                statusHeader
+            Divider()
+                .overlay(GargantuaColors.border)
 
-                Divider()
-                    .overlay(GargantuaColors.border)
+            apiKeyRow
 
-                apiKeyRow
+            Text(apiKeyStatus)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(statusColor)
 
-                Text(apiKeyStatus)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(statusColor)
-
-                consentToggle
-                monthlyCapStepper
-                usageRows
-            }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            consentToggle
+            monthlyCapStepper
+            usageRows
         }
         .task {
             configuration = configurationStore.load()
             await refreshStatus()
         }
+        .sheet(isPresented: $isShowingRevokeConfirm) {
+            DestructiveConfirmSheet(
+                title: "Revoke Anthropic API key?",
+                message: "The key will be deleted from Keychain. Cloud AI will stop working until a new key is saved. This cannot be undone.",
+                confirmLabel: "Revoke key",
+                onCancel: { isShowingRevokeConfirm = false },
+                onConfirm: {
+                    isShowingRevokeConfirm = false
+                    revokeAPIKey()
+                }
+            )
+        }
     }
 
     private var statusHeader: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Image(systemName: statusIcon)
-                .font(.system(size: 18))
-                .foregroundStyle(statusColor)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(systemName: statusIcon, color: statusColor, size: 18)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Tier 2 Claude API")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(statusText)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            SettingsRowText(title: "Hosted Claude", detail: statusText)
 
             Spacer()
 
-            Toggle("", isOn: Binding(
+            Toggle("Enable cloud AI", isOn: Binding(
                 get: { configuration.isEnabled },
                 set: {
                     configuration.isEnabled = $0
@@ -70,15 +65,13 @@ struct CloudAISettingsSection: View {
             ))
             .labelsHidden()
             .toggleStyle(.switch)
+            .help(configuration.isEnabled ? "Disable cloud AI" : "Enable cloud AI (requires API key)")
         }
     }
 
     private var apiKeyRow: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "key")
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: "key", size: 14)
 
             SecureField("Anthropic API key", text: $apiKeyInput)
                 .textFieldStyle(.plain)
@@ -89,19 +82,23 @@ struct CloudAISettingsSection: View {
                 .background(GargantuaColors.surface3)
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
 
-            cloudActionButton(
-                label: "Save",
+            GargantuaButton(
+                "Save",
                 icon: "checkmark.circle.fill",
-                color: GargantuaColors.safe,
+                tone: .ghost(GargantuaColors.safe),
+                isDisabled: apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                 action: saveAPIKey
             )
+            .help("Save key to Keychain")
 
-            cloudActionButton(
-                label: "Revoke",
+            GargantuaButton(
+                "Revoke",
                 icon: "trash",
-                color: GargantuaColors.protected_,
-                action: revokeAPIKey
+                tone: .ghost(GargantuaColors.protected_),
+                isDisabled: status?.hasAPIKey != true,
+                action: { isShowingRevokeConfirm = true }
             )
+            .help("Delete the stored Anthropic key")
         }
     }
 
@@ -113,9 +110,10 @@ struct CloudAISettingsSection: View {
                 saveConfiguration()
             }
         )) {
-            Text("Allow explicit file-content previews")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink)
+            SettingsRowText(
+                title: "Allow file-content previews",
+                detail: "When on, Gargantua may include short snippets of file contents in cloud requests."
+            )
         }
         .toggleStyle(.switch)
     }
@@ -133,9 +131,7 @@ struct CloudAISettingsSection: View {
             step: 100
         ) {
             HStack {
-                Text("Monthly Cap")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
+                SettingsRowText(title: "Monthly cap", detail: nil)
 
                 Spacer()
 
@@ -144,52 +140,28 @@ struct CloudAISettingsSection: View {
                     .foregroundStyle(GargantuaColors.ink2)
             }
         }
+        .help("Hard ceiling on cloud spend per calendar month")
     }
 
     private var usageRows: some View {
         HStack(spacing: GargantuaSpacing.space3) {
             cloudSettingsRow(
                 icon: "creditcard",
-                label: "Cost to Date",
+                label: "Cost to date",
                 value: formatCents(status?.spentCents ?? 0)
             )
 
             cloudSettingsRow(
                 icon: "calendar",
-                label: "Last Run",
+                label: "Last run",
                 value: lastRunText
             )
         }
     }
 
-    private func cloudActionButton(
-        label: String,
-        icon: String,
-        color: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                Text(label)
-                    .font(GargantuaFonts.label)
-            }
-            .foregroundStyle(color)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(color.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
-    }
-
     private func cloudSettingsRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: icon, size: 14)
 
             Text(label)
                 .font(GargantuaFonts.label)
@@ -201,9 +173,10 @@ struct CloudAISettingsSection: View {
                 .font(GargantuaFonts.monoData)
                 .foregroundStyle(GargantuaColors.ink2)
         }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space3)
-        .background(GargantuaColors.surface2)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface3)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
     private func saveAPIKey() {
@@ -245,13 +218,13 @@ struct CloudAISettingsSection: View {
 
     private var statusText: String {
         guard let status else {
-            return "Checking Tier 2 status..."
+            return "Checking status…"
         }
         if !status.isEnabled {
             return "Off by default. Enable when you want cloud reasoning."
         }
         if !status.hasAPIKey {
-            return "Enabled, waiting for a user-supplied Anthropic key."
+            return "Enabled, waiting for an Anthropic API key."
         }
         return "\(formatCents(status.spentCents)) used of \(formatCents(status.monthlySpendCapCents)) this month."
     }

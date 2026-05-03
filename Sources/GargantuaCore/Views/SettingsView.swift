@@ -2,8 +2,9 @@ import SwiftUI
 
 /// Settings view with general preferences and AI model management.
 ///
-/// Shows app settings (profile, retention, auto-scan) and an AI model section
-/// with download progress, size info, and cancel/delete controls.
+/// Five tabs (AI · Automation · Network · Storage · About) replace the long
+/// flat scroll. Each tab owns one Surface-2 card per section and the page
+/// anchors with a Display-tier header.
 public struct SettingsView: View {
     let persistence: PersistenceController
 
@@ -26,6 +27,8 @@ public struct SettingsView: View {
     @State private var scheduledScanError: String?
     @State private var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     @State private var launchAtLoginError: String?
+    @State private var selectedTab: SettingsTab = .ai
+    @State private var isShowingDeleteModelConfirm = false
 
     public init(persistence: PersistenceController) {
         let manager = ModelDownloadManager()
@@ -52,26 +55,23 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space6) {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
                 headerView
-                modelSection
-                CloudAISettingsSection()
-                ClaudeCodeAgentSettingsSection()
-                MCPTransportSettingsSection()
-                updatesSection
-                menuBarSection
-                schedulingSection
-                ScanRootsSettingsSection(
-                    settings: settings,
-                    persistence: persistence,
-                    onSettingsChanged: { settings = $0 }
-                )
-                PathExclusionSettingsSection(persistence: persistence)
-                ProtectedRootsSettingsSection()
-                generalSection
+                SettingsTabBar(selection: $selectedTab)
             }
-            .padding(GargantuaSpacing.space6)
+            .padding(.horizontal, GargantuaSpacing.space6)
+            .padding(.top, GargantuaSpacing.space6)
+            .padding(.bottom, GargantuaSpacing.space4)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: GargantuaSpacing.space5) {
+                    tabContent
+                }
+                .padding(.horizontal, GargantuaSpacing.space6)
+                .padding(.bottom, GargantuaSpacing.space6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(GargantuaColors.void_)
@@ -93,534 +93,520 @@ public struct SettingsView: View {
             launchAtLoginStatus = LaunchAtLoginController().status()
             launchAtLoginEnabled = launchAtLoginStatus == .enabled || launchAtLoginStatus == .requiresApproval
         }
+        .sheet(isPresented: $isShowingDeleteModelConfirm) {
+            DestructiveConfirmSheet(
+                title: "Delete the local AI model?",
+                message: "Removes the downloaded model from disk. You can re-download anytime, but it will use bandwidth and storage again. This cannot be undone.",
+                confirmLabel: "Delete model",
+                onCancel: { isShowingDeleteModelConfirm = false },
+                onConfirm: {
+                    isShowingDeleteModelConfirm = false
+                    downloadManager.deleteModel()
+                }
+            )
+        }
     }
 
     // MARK: - Header
 
     private var headerView: some View {
-        Text("Settings")
-            .font(GargantuaFonts.heading)
-            .foregroundStyle(GargantuaColors.ink)
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            Text("Settings")
+                .font(GargantuaFonts.display)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text(headerSubtitle)
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink3)
+        }
+    }
+
+    private var headerSubtitle: String {
+        switch selectedTab {
+        case .ai: "Engines, providers, and agent runtimes."
+        case .automation: "Scheduled scans and menu bar visibility."
+        case .network: "MCP transport for external clients."
+        case .storage: "Scan roots, exclusions, and protected paths."
+        case .about: "Updates and version information."
+        }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .ai:
+            modelSection
+            CloudAISettingsSection()
+            ClaudeCodeAgentSettingsSection()
+        case .automation:
+            schedulingSection
+            menuBarSection
+        case .network:
+            MCPTransportSettingsSection()
+        case .storage:
+            ScanRootsSettingsSection(
+                settings: settings,
+                persistence: persistence,
+                onSettingsChanged: { settings = $0 }
+            )
+            PathExclusionSettingsSection(persistence: persistence)
+            ProtectedRootsSettingsSection()
+        case .about:
+            updatesSection
+            aboutSection
+        }
     }
 }
 
 // MARK: - Sections, helpers, and bindings
-
-//
-// Extracted into an in-file extension so SettingsView's primary
-// body stays under the 350-line type_body_length threshold. Same
-// file → @State setters and @StateObject access remain available.
 
 extension SettingsView {
 
     // MARK: - AI Model Section
 
     fileprivate var modelSection: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            sectionHeader("AI Model")
+        SettingsSectionContainer(
+            "Local AI Engine",
+            subtitle: "Toggle between the rule-based template engine and a local MLX model."
+        ) {
+            enginePreferenceRow
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                enginePreferenceRow
+            if useLocalAI {
+                Divider()
+                    .overlay(GargantuaColors.border)
 
-                if useLocalAI {
-                    Divider()
-                        .overlay(GargantuaColors.border)
+                modelInfoRow
 
-                    // Model info row
-                    HStack(spacing: GargantuaSpacing.space3) {
-                        Image(systemName: "cpu")
-                            .font(.system(size: 20))
-                            .foregroundStyle(GargantuaColors.accent)
-                            .frame(width: 24, alignment: .center)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(downloadManager.modelInfo.name)
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-
-                            Text(modelStatusText)
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(modelStatusColor)
-                        }
-
-                        Spacer()
-
-                        modelSizeLabel
-                    }
+                if shouldShowMLXDownloadNotice {
+                    SettingsNoticeRow(
+                        icon: "arrow.down.circle",
+                        message: "MLX needs the local model before it can be used. The app will use template explanations until the download is ready.",
+                        tone: .info
+                    )
                 }
 
-                if useLocalAI {
-                    if shouldShowMLXDownloadNotice {
-                        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
-                            Image(systemName: "arrow.down.circle")
-                                .font(.system(size: 12))
-                                .foregroundStyle(GargantuaColors.accent)
-                                .frame(width: 16, alignment: .center)
+                if case .downloading(let progress, _) = downloadManager.state {
+                    downloadProgressView(progress: progress)
+                }
 
-                            Text(
-                                "MLX needs the local model before it can be used. " +
-                                    "The app will use template explanations until the download is ready."
-                            )
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(GargantuaSpacing.space3)
-                        .background(GargantuaColors.accent.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                    }
+                if case .failed(let message) = downloadManager.state {
+                    SettingsNoticeRow(
+                        icon: "exclamationmark.triangle.fill",
+                        message: message,
+                        tone: .review
+                    )
+                }
 
-                    // Progress bar (when downloading)
-                    if case .downloading(let progress, _) = downloadManager.state {
-                        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(GargantuaColors.surface3)
+                modelActionRow
+            }
+        }
+    }
 
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(GargantuaColors.accent)
-                                        .frame(width: max(4, geo.size.width * progress))
-                                }
-                            }
-                            .frame(height: 6)
+    private var modelInfoRow: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "cpu", color: GargantuaColors.accent, size: 20)
 
-                            HStack {
-                                Text("\(Int(progress * 100))%")
-                                    .font(GargantuaFonts.monoData)
-                                    .foregroundStyle(GargantuaColors.ink2)
+            SettingsRowText(
+                title: downloadManager.modelInfo.name,
+                detail: modelStatusText,
+                detailColor: modelStatusColor
+            )
 
-                                Spacer()
+            Spacer()
 
-                                if case .downloading(_, let bytesReceived) = downloadManager.state {
-                                    Text(ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .file))
-                                        .font(GargantuaFonts.monoData)
-                                        .foregroundStyle(GargantuaColors.ink3)
-                                }
-                            }
-                        }
-                    }
+            modelSizeLabel
+        }
+    }
 
-                    // Error message
-                    if case .failed(let message) = downloadManager.state {
-                        HStack(spacing: GargantuaSpacing.space2) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(GargantuaColors.review)
-                            Text(message)
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(GargantuaColors.review)
-                                .lineLimit(2)
-                        }
-                    }
+    private func downloadProgressView(progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(GargantuaColors.surface3)
 
-                    // Action buttons
-                    HStack(spacing: GargantuaSpacing.space3) {
-                        switch downloadManager.state {
-                        case .notDownloaded, .failed:
-                            actionButton(
-                                label: "Download Model",
-                                icon: "arrow.down.circle.fill",
-                                color: GargantuaColors.accent
-                            ) {
-                                downloadManager.startDownload()
-                            }
-
-                            Text("~\(downloadManager.formattedExpectedSize)")
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(GargantuaColors.ink4)
-
-                        case .downloading:
-                            actionButton(
-                                label: "Cancel",
-                                icon: "xmark.circle.fill",
-                                color: GargantuaColors.protected_
-                            ) {
-                                downloadManager.cancelDownload()
-                            }
-
-                        case .downloaded:
-                            HStack(spacing: GargantuaSpacing.space2) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(GargantuaColors.safe)
-                                Text("Ready")
-                                    .font(GargantuaFonts.label)
-                                    .foregroundStyle(GargantuaColors.safe)
-                            }
-
-                            Spacer()
-
-                            actionButton(
-                                label: "Delete",
-                                icon: "trash",
-                                color: GargantuaColors.protected_
-                            ) {
-                                downloadManager.deleteModel()
-                            }
-                        }
-                    }
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(GargantuaColors.accent)
+                        .frame(width: max(4, geo.size.width * progress))
                 }
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            .frame(height: 6)
+
+            HStack {
+                Text("\(Int(progress * 100))%")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink2)
+
+                Spacer()
+
+                if case .downloading(_, let bytesReceived) = downloadManager.state {
+                    Text(ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .file))
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var modelActionRow: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            switch downloadManager.state {
+            case .notDownloaded, .failed:
+                GargantuaButton(
+                    "Download Model",
+                    icon: "arrow.down.circle.fill",
+                    tone: .primary,
+                    action: { downloadManager.startDownload() }
+                )
+                .help("Fetch the local MLX model")
+
+                Text("~\(downloadManager.formattedExpectedSize)")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink4)
+
+            case .downloading:
+                GargantuaButton(
+                    "Cancel",
+                    icon: "xmark.circle.fill",
+                    tone: .ghost(GargantuaColors.protected_),
+                    action: { downloadManager.cancelDownload() }
+                )
+
+            case .downloaded:
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(GargantuaColors.safe)
+                    Text("Ready")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.safe)
+                }
+
+                Spacer()
+
+                GargantuaButton(
+                    "Delete",
+                    icon: "trash",
+                    tone: .ghost(GargantuaColors.protected_),
+                    action: { isShowingDeleteModelConfirm = true }
+                )
+                .help("Remove the downloaded model from disk")
+            }
         }
     }
 
     // MARK: - Scheduling Section
 
-    private var schedulingSection: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            sectionHeader("Scheduling")
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 20))
-                        .foregroundStyle(GargantuaColors.accent)
-                        .frame(width: 24, alignment: .center)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Background Scans")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-
-                        Text(scheduledScanStatusLine)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(scheduledScanStatusColor)
-                    }
-
-                    Spacer(minLength: GargantuaSpacing.space3)
-
-                    Toggle("Background Scans", isOn: scheduledScansEnabledBinding)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-
-                Divider()
-                    .overlay(GargantuaColors.border)
-
-                schedulingPickerRow(
-                    icon: "clock",
-                    title: "Interval",
-                    detail: scheduledInterval.detail
-                ) {
-                    Picker("Interval", selection: scheduledIntervalBinding) {
-                        ForEach(ScheduledScanInterval.allCases) { interval in
-                            Text(interval.label).tag(interval)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(width: 220)
-                }
-
-                if scheduledInterval == .custom {
-                    HStack(spacing: GargantuaSpacing.space3) {
-                        Image(systemName: "terminal")
-                            .font(.system(size: 16))
-                            .foregroundStyle(GargantuaColors.ink3)
-                            .frame(width: 24, alignment: .center)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Cron")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-
-                            Text("Five fields: minute hour day month weekday")
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(customScheduleIsValid ? GargantuaColors.ink3 : GargantuaColors.review)
-                        }
-
-                        Spacer(minLength: GargantuaSpacing.space3)
-
-                        TextField("0 9 * * *", text: customScheduleBinding)
-                            .font(GargantuaFonts.monoData)
-                            .textFieldStyle(.plain)
-                            .padding(.horizontal, GargantuaSpacing.space3)
-                            .padding(.vertical, GargantuaSpacing.space2)
-                            .background(GargantuaColors.surface3)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                    .stroke(customScheduleIsValid ? GargantuaColors.border : GargantuaColors.review, lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                            .frame(width: 170)
-                    }
-                }
-
-                schedulingPickerRow(
-                    icon: "person.crop.circle",
-                    title: "Profile",
-                    detail: "Default is Light for low-impact background runs."
-                ) {
-                    Picker("Profile", selection: scheduledProfileBinding) {
-                        ForEach(availableProfiles) { profile in
-                            Text(profile.name).tag(profile.id)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 190)
-                }
-
-                updateToggleRow(
-                    icon: "battery.50",
-                    label: "Skip on Battery",
-                    isOn: skipScheduledScansOnBatteryBinding
+    fileprivate var schedulingSection: some View {
+        SettingsSectionContainer(
+            "Scheduling",
+            subtitle: "Background scans run via launchd. Use the Light profile for low-impact runs."
+        ) {
+            HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                SettingsRowIcon(
+                    systemName: "calendar.badge.clock",
+                    color: GargantuaColors.accent,
+                    size: 20
                 )
 
-                if let scheduledScanError {
-                    HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(GargantuaColors.review)
+                SettingsRowText(
+                    title: "Background scans",
+                    detail: scheduledScanStatusLine,
+                    detailColor: scheduledScanStatusColor
+                )
 
-                        Text(scheduledScanError)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.review)
-                            .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: GargantuaSpacing.space3)
+
+                Toggle("Background scans", isOn: scheduledScansEnabledBinding)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .help((settings?.autoScanEnabled ?? false) ? "Disable scheduled scans" : "Enable scheduled scans")
+            }
+
+            Divider()
+                .overlay(GargantuaColors.border)
+
+            schedulingPickerRow(
+                icon: "clock",
+                title: "Interval",
+                detail: scheduledInterval.detail
+            ) {
+                Picker("Interval", selection: scheduledIntervalBinding) {
+                    ForEach(ScheduledScanInterval.allCases) { interval in
+                        Text(interval.label).tag(interval)
                     }
                 }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 220)
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+
+            if scheduledInterval == .custom {
+                customCronRow
+            }
+
+            schedulingPickerRow(
+                icon: "person.crop.circle",
+                title: "Profile",
+                detail: "Cleanup profile applied to scheduled runs."
+            ) {
+                Picker("Profile", selection: scheduledProfileBinding) {
+                    ForEach(availableProfiles) { profile in
+                        Text(profile.name).tag(profile.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 190)
+            }
+
+            updateToggleRow(
+                icon: "battery.50",
+                label: "Skip on battery",
+                detail: "Pause scheduled scans while running on battery power.",
+                isOn: skipScheduledScansOnBatteryBinding
+            )
+
+            if let scheduledScanError {
+                SettingsNoticeRow(
+                    icon: "exclamationmark.triangle.fill",
+                    message: scheduledScanError,
+                    tone: .review
+                )
+            }
+        }
+    }
+
+    private var customCronRow: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "terminal", size: 16)
+
+            SettingsRowText(
+                title: "Cron",
+                detail: customScheduleIsValid
+                    ? "Five fields: minute hour day month weekday."
+                    : "Invalid cron expression — five fields: minute hour day month weekday.",
+                detailColor: customScheduleIsValid ? GargantuaColors.ink3 : GargantuaColors.review
+            )
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            TextField("0 9 * * *", text: customScheduleBinding)
+                .font(GargantuaFonts.monoData)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, GargantuaSpacing.space3)
+                .padding(.vertical, GargantuaSpacing.space2)
+                .background(GargantuaColors.surface3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                        .stroke(customScheduleIsValid ? GargantuaColors.border : GargantuaColors.review, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                .frame(width: 170)
+                .help("Standard 5-field cron expression")
         }
     }
 
     // MARK: - Updates Section
 
-    private var updatesSection: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            sectionHeader("Updates")
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                HStack(spacing: GargantuaSpacing.space3) {
-                    Image(systemName: "arrow.triangle.2.circlepath.circle")
-                        .font(.system(size: 20))
-                        .foregroundStyle(GargantuaColors.accent)
-                        .frame(width: 24, alignment: .center)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(updateFeedDisplay)
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-
-                        Text(updateLastCheckDisplay)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink3)
-                    }
-
-                    Spacer(minLength: GargantuaSpacing.space3)
-
-                    actionButton(
-                        label: "Check Now",
-                        icon: "arrow.clockwise",
-                        color: updateSettingsViewModel.canCheckForUpdates ? GargantuaColors.accent : GargantuaColors.ink4
-                    ) {
-                        updateSettingsViewModel.userCheckForUpdates()
-                    }
-                    .disabled(!updateSettingsViewModel.canCheckForUpdates)
-                }
-
-                Divider()
-                    .overlay(GargantuaColors.border)
-
-                HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 16))
-                        .foregroundStyle(GargantuaColors.accent)
-                        .frame(width: 24, alignment: .center)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Channel")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-
-                        Text(updateSettingsViewModel.channel.detail)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink3)
-                    }
-
-                    Spacer(minLength: GargantuaSpacing.space3)
-
-                    Picker("Channel", selection: updateChannelBinding) {
-                        ForEach(AppUpdateChannel.allCases) { channel in
-                            Text(channel.label).tag(channel)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(width: 150)
-                }
-
-                updateToggleRow(
-                    icon: "clock.arrow.circlepath",
-                    label: "Automatic Checks",
-                    isOn: Binding(
-                        get: { updateSettingsViewModel.automaticallyChecksForUpdates },
-                        set: { updateSettingsViewModel.userSetAutomaticallyChecksForUpdates($0) }
-                    )
+    fileprivate var updatesSection: some View {
+        SettingsSectionContainer(
+            "Updates",
+            subtitle: "App updates are delivered through Sparkle."
+        ) {
+            HStack(spacing: GargantuaSpacing.space3) {
+                SettingsRowIcon(
+                    systemName: "arrow.triangle.2.circlepath.circle",
+                    color: GargantuaColors.accent,
+                    size: 20
                 )
 
-                updateToggleRow(
-                    icon: "arrow.down.circle",
-                    label: "Automatic Downloads",
-                    isOn: Binding(
-                        get: { updateSettingsViewModel.automaticallyDownloadsUpdates },
-                        set: { updateSettingsViewModel.userSetAutomaticallyDownloadsUpdates($0) }
-                    )
+                SettingsRowText(title: updateFeedDisplay, detail: updateLastCheckDisplay)
+
+                Spacer(minLength: GargantuaSpacing.space3)
+
+                GargantuaButton(
+                    "Check now",
+                    icon: "arrow.clockwise",
+                    tone: .ghost(updateSettingsViewModel.canCheckForUpdates ? GargantuaColors.accent : GargantuaColors.ink4),
+                    isDisabled: !updateSettingsViewModel.canCheckForUpdates,
+                    action: { updateSettingsViewModel.userCheckForUpdates() }
                 )
-                .disabled(!updateSettingsViewModel.automaticallyChecksForUpdates || !updateSettingsViewModel.allowsAutomaticUpdates)
+                .help("Check the Sparkle feed for a newer release")
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+
+            Divider()
+                .overlay(GargantuaColors.border)
+
+            HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                SettingsRowIcon(
+                    systemName: "antenna.radiowaves.left.and.right",
+                    color: GargantuaColors.accent,
+                    size: 16
+                )
+
+                SettingsRowText(title: "Channel", detail: updateSettingsViewModel.channel.detail)
+
+                Spacer(minLength: GargantuaSpacing.space3)
+
+                Picker("Channel", selection: updateChannelBinding) {
+                    ForEach(AppUpdateChannel.allCases) { channel in
+                        Text(channel.label).tag(channel)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+            }
+
+            updateToggleRow(
+                icon: "clock.arrow.circlepath",
+                label: "Automatic checks",
+                detail: "Sparkle polls the feed in the background.",
+                isOn: Binding(
+                    get: { updateSettingsViewModel.automaticallyChecksForUpdates },
+                    set: { updateSettingsViewModel.userSetAutomaticallyChecksForUpdates($0) }
+                )
+            )
+
+            updateToggleRow(
+                icon: "arrow.down.circle",
+                label: "Automatic downloads",
+                detail: "Pre-fetch new releases without prompting.",
+                isOn: Binding(
+                    get: { updateSettingsViewModel.automaticallyDownloadsUpdates },
+                    set: { updateSettingsViewModel.userSetAutomaticallyDownloadsUpdates($0) }
+                ),
+                isDisabled: !updateSettingsViewModel.automaticallyChecksForUpdates || !updateSettingsViewModel.allowsAutomaticUpdates
+            )
         }
     }
 
     // MARK: - Menu Bar Section
 
-    private var menuBarSection: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            sectionHeader("Menu Bar")
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-                    Image(systemName: "menubar.rectangle")
-                        .font(.system(size: 20))
-                        .foregroundStyle(GargantuaColors.accent)
-                        .frame(width: 24, alignment: .center)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Menu Bar Widget")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-
-                        Text(menuBarWidgetStatusLine)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(menuBarWidgetStatusColor)
-                    }
-
-                    Spacer(minLength: GargantuaSpacing.space3)
-
-                    Toggle("Menu Bar Widget", isOn: $menuBarWidgetEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-
-                Divider()
-                    .overlay(GargantuaColors.border)
-
-                updateToggleRow(
-                    icon: "power.circle",
-                    label: "Launch at Login",
-                    isOn: launchAtLoginBinding
+    fileprivate var menuBarSection: some View {
+        SettingsSectionContainer(
+            "Menu Bar",
+            subtitle: "Glanceable Gargantua state from the menu bar."
+        ) {
+            HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                SettingsRowIcon(
+                    systemName: "menubar.rectangle",
+                    color: GargantuaColors.accent,
+                    size: 20
                 )
 
-                HStack(spacing: GargantuaSpacing.space3) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13))
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .frame(width: 24, alignment: .center)
+                SettingsRowText(
+                    title: "Menu bar widget",
+                    detail: menuBarWidgetStatusLine,
+                    detailColor: menuBarWidgetStatusColor
+                )
 
-                    Text(launchAtLoginStatusLine)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(launchAtLoginStatusColor)
+                Spacer(minLength: GargantuaSpacing.space3)
 
-                    Spacer()
-                }
-
-                if let launchAtLoginError {
-                    HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(GargantuaColors.review)
-
-                        Text(launchAtLoginError)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.review)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                Toggle("Menu bar widget", isOn: $menuBarWidgetEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .help(menuBarWidgetEnabled ? "Hide menu bar widget" : "Show menu bar widget")
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+
+            Divider()
+                .overlay(GargantuaColors.border)
+
+            updateToggleRow(
+                icon: "power.circle",
+                label: "Launch at login",
+                detail: launchAtLoginStatusLine,
+                detailColor: launchAtLoginStatusColor,
+                isOn: launchAtLoginBinding
+            )
+
+            if let launchAtLoginError {
+                SettingsNoticeRow(
+                    icon: "exclamationmark.triangle.fill",
+                    message: launchAtLoginError,
+                    tone: .review
+                )
+            }
         }
     }
 
-    // MARK: - General Section
+    // MARK: - About Section
 
-    private var generalSection: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            sectionHeader("General")
+    fileprivate var aboutSection: some View {
+        SettingsSectionContainer(
+            "About",
+            subtitle: "Version, status, and links."
+        ) {
+            aboutRow(icon: "app.badge", label: "App", value: appVersionString)
+            aboutRow(icon: "doc.text", label: "License", value: "AGPL-3.0")
+            aboutRow(
+                icon: "person.2",
+                label: "Active profile",
+                value: settings?.activeProfileID ?? "developer"
+            )
+            aboutRow(
+                icon: "clock",
+                label: "Audit retention",
+                value: "\(settings?.retentionDays ?? 90) days"
+            )
 
-            VStack(spacing: 1) {
-                settingsRow(
-                    icon: "person.2",
-                    label: "Active Profile",
-                    value: settings?.activeProfileID ?? "developer"
+            if let lastScan = settings?.lastScanDate {
+                aboutRow(
+                    icon: "calendar",
+                    label: "Last scan",
+                    value: lastScan.formatted(date: .abbreviated, time: .shortened)
                 )
-
-                settingsRow(
-                    icon: "clock",
-                    label: "Audit Retention",
-                    value: "\(settings?.retentionDays ?? 90) days"
-                )
-
-                settingsRow(
-                    icon: "arrow.triangle.2.circlepath",
-                    label: "Scheduled Scans",
-                    value: (settings?.autoScanEnabled ?? false) ? scheduledInterval.label : "Disabled"
-                )
-
-                if let lastScan = settings?.lastScanDate {
-                    settingsRow(
-                        icon: "calendar",
-                        label: "Last Scan",
-                        value: lastScan.formatted(date: .abbreviated, time: .shortened)
-                    )
-                }
             }
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
+    }
+
+    private var appVersionString: String {
+        let bundle = Bundle.main
+        let short = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = bundle.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "\(short) (\(build))"
+    }
+
+    private func aboutRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: icon, size: 14)
+
+            Text(label)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Spacer()
+
+            Text(value)
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink2)
         }
     }
 
     // MARK: - Helpers
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(GargantuaFonts.label)
-            .foregroundStyle(GargantuaColors.ink2)
-    }
-
     private var enginePreferenceRow: some View {
         HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-            Image(systemName: useLocalAI ? "sparkles" : "doc.text")
-                .font(.system(size: 16))
-                .foregroundStyle(GargantuaColors.accent)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(
+                systemName: useLocalAI ? "sparkles" : "doc.text",
+                color: GargantuaColors.accent,
+                size: 16
+            )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Use local AI")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(useLocalAI
+            SettingsRowText(
+                title: "Use local AI",
+                detail: useLocalAI
                     ? "On — Generated locally; first run takes longer while shaders compile."
-                    : "Off — Instant rule-based explanations from the YAML library.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                    : "Off — Instant rule-based explanations from the YAML library."
+            )
 
             Spacer(minLength: GargantuaSpacing.space3)
 
             Toggle("Use local AI", isOn: useLocalAIBinding)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .help(useLocalAI ? "Switch to template engine" : "Switch to MLX local engine")
         }
     }
 
@@ -639,44 +625,26 @@ extension SettingsView {
         )
     }
 
-    private func settingsRow(icon: String, label: String, value: String) -> some View {
+    private func updateToggleRow(
+        icon: String,
+        label: String,
+        detail: String? = nil,
+        detailColor: Color = GargantuaColors.ink3,
+        isOn: Binding<Bool>,
+        isDisabled: Bool = false
+    ) -> some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: icon, size: 16)
 
-            Text(label)
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Spacer()
-
-            Text(value)
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.ink2)
-        }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space3)
-        .background(GargantuaColors.surface2)
-    }
-
-    private func updateToggleRow(icon: String, label: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 24, alignment: .center)
-
-            Text(label)
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink)
+            SettingsRowText(title: label, detail: detail, detailColor: detailColor)
 
             Spacer()
 
             Toggle(label, isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .disabled(isDisabled)
+                .help(isOn.wrappedValue ? "Disable \(label.lowercased())" : "Enable \(label.lowercased())")
         }
         .padding(.vertical, GargantuaSpacing.space1)
     }
@@ -688,43 +656,14 @@ extension SettingsView {
         @ViewBuilder control: () -> Control
     ) -> some View {
         HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(systemName: icon, size: 16)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(detail)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .lineLimit(2)
-            }
+            SettingsRowText(title: title, detail: detail)
 
             Spacer(minLength: GargantuaSpacing.space3)
 
             control()
         }
-    }
-
-    private func actionButton(label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                Text(label)
-                    .font(GargantuaFonts.label)
-            }
-            .foregroundStyle(color)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(color.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
     }
 
     private var modelStatusText: String {

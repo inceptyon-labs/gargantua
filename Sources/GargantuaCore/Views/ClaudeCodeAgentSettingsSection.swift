@@ -14,29 +14,23 @@ struct ClaudeCodeAgentSettingsSection: View {
     private let modelCatalog = AnthropicModelCatalog()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            Text("Claude Code Agent")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink2)
+        SettingsSectionContainer(
+            "Claude Code Agent",
+            subtitle: "Local Claude Code CLI for non-interactive maintenance runs. Tools are read-only by default."
+        ) {
+            statusHeader
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                statusHeader
+            Divider()
+                .overlay(GargantuaColors.border)
 
-                Divider()
-                    .overlay(GargantuaColors.border)
+            cliPathRow
+            Text(statusMessage)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(statusTone)
 
-                cliPathRow
-                Text(statusMessage)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(statusTone)
-
-                modelPickerRow
-                maxTurnsStepper
-                scheduledAuditToggle
-            }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            modelPickerRow
+            maxTurnsStepper
+            scheduledAuditToggle
         }
         .task {
             configuration = store.load()
@@ -69,18 +63,13 @@ struct ClaudeCodeAgentSettingsSection: View {
                 .labelsHidden()
                 .frame(maxWidth: 280)
 
-                Button(action: { Task { await loadModels(forceRefresh: true) } }) {
-                    Image(systemName: isRefreshingModels ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(GargantuaColors.accent)
-                        .padding(.horizontal, GargantuaSpacing.space2)
-                        .padding(.vertical, GargantuaSpacing.space1)
-                        .background(GargantuaColors.accent.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-                .disabled(isRefreshingModels)
-                .help("Refresh from Anthropic /v1/models")
+                GargantuaIconButton(
+                    icon: isRefreshingModels ? "arrow.triangle.2.circlepath" : "arrow.clockwise",
+                    help: "Refresh from Anthropic /v1/models",
+                    color: GargantuaColors.accent,
+                    isDisabled: isRefreshingModels,
+                    action: { Task { await loadModels(forceRefresh: true) } }
+                )
             }
 
             Text(modelStatusLine)
@@ -142,25 +131,20 @@ struct ClaudeCodeAgentSettingsSection: View {
 
     private var statusHeader: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Image(systemName: configuration.isEnabled ? "terminal.fill" : "terminal")
-                .font(.system(size: 18))
-                .foregroundStyle(configuration.isEnabled ? GargantuaColors.safe : GargantuaColors.ink4)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(
+                systemName: configuration.isEnabled ? "terminal.fill" : "terminal",
+                color: configuration.isEnabled ? GargantuaColors.safe : GargantuaColors.ink4,
+                size: 18
+            )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Tier 3 Claude Code")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text("Non-interactive runs go through Gargantua MCP with read-only tools by default.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            SettingsRowText(
+                title: "Claude Code runner",
+                detail: "Non-interactive runs flow through Gargantua MCP with read-only tools by default."
+            )
 
             Spacer()
 
-            Toggle("", isOn: Binding(
+            Toggle("Enable Claude Code agent", isOn: Binding(
                 get: { configuration.isEnabled },
                 set: {
                     configuration.isEnabled = $0
@@ -169,15 +153,13 @@ struct ClaudeCodeAgentSettingsSection: View {
             ))
             .labelsHidden()
             .toggleStyle(.switch)
+            .help(configuration.isEnabled ? "Disable Claude Code agent" : "Enable Claude Code agent")
         }
     }
 
     private var cliPathRow: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: "point.3.connected.trianglepath.dotted", size: 14)
 
             TextField("Auto-detect from PATH", text: $cliPathInput)
                 .textFieldStyle(.plain)
@@ -189,19 +171,21 @@ struct ClaudeCodeAgentSettingsSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .onSubmit(saveCLIPath)
 
-            agentSettingsButton(
-                label: "Detect",
+            GargantuaButton(
+                "Detect",
                 icon: "location.magnifyingglass",
-                color: GargantuaColors.accent,
+                tone: .ghost(GargantuaColors.accent),
                 action: detectCLI
             )
+            .help("Search PATH and standard install locations")
 
-            agentSettingsButton(
-                label: "Save",
+            GargantuaButton(
+                "Save",
                 icon: "checkmark.circle.fill",
-                color: GargantuaColors.safe,
+                tone: .ghost(GargantuaColors.safe),
                 action: saveCLIPath
             )
+            .help("Save CLI path")
         }
     }
 
@@ -218,7 +202,7 @@ struct ClaudeCodeAgentSettingsSection: View {
             step: 1
         ) {
             HStack {
-                Text("Max Turns")
+                Text("Max turns")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
 
@@ -229,6 +213,7 @@ struct ClaudeCodeAgentSettingsSection: View {
                     .foregroundStyle(GargantuaColors.ink2)
             }
         }
+        .help("Maximum agent reasoning turns per session")
     }
 
     // The previous "Allow MCP Clean Tool" toggle was removed. With the
@@ -247,39 +232,12 @@ struct ClaudeCodeAgentSettingsSection: View {
                 saveConfiguration()
             }
         )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Run Scheduled AI Audits")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text("Completed scheduled scans can start a read-only Claude Code maintenance report.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
+            SettingsRowText(
+                title: "Run scheduled audits",
+                detail: "Completed scheduled scans can start a read-only Claude Code maintenance report."
+            )
         }
         .toggleStyle(.switch)
-    }
-
-    private func agentSettingsButton(
-        label: String,
-        icon: String,
-        color: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                Text(label)
-                    .font(GargantuaFonts.label)
-            }
-            .foregroundStyle(color)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(color.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
     }
 
     private func saveCLIPath() {

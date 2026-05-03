@@ -107,72 +107,43 @@ struct PathExclusionSettingsSection: View {
 
     private let title: String
     private let subtitle: String
-    private let showsDivider: Bool
-    private let titleFont: Font
 
     @MainActor
     init(
         persistence: PersistenceController,
         title: String = "Exclusions",
-        subtitle: String = "Paths and glob patterns excluded from cleanup scans.",
-        showsDivider: Bool = false,
-        titleFont: Font = GargantuaFonts.label
+        subtitle: String = "Paths and glob patterns Gargantua should never propose for cleanup."
     ) {
         self._model = StateObject(wrappedValue: PathExclusionSettingsViewModel(persistence: persistence))
         self.title = title
         self.subtitle = subtitle
-        self.showsDivider = showsDivider
-        self.titleFont = titleFont
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            if showsDivider {
-                Rectangle()
-                    .fill(GargantuaColors.border)
-                    .frame(height: 1)
+        SettingsSectionContainer(title, subtitle: subtitle, count: model.entries.count) {
+            addRow
+
+            if let notice = model.notice {
+                SettingsNoticeRow(
+                    icon: noticeSystemImage(notice),
+                    message: notice.message,
+                    tone: noticeTone(notice)
+                )
             }
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    Text(title)
-                        .font(titleFont)
-                        .foregroundStyle(GargantuaColors.ink2)
-
-                    Text("\(model.entries.count)")
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink4)
-                }
-
-                Text(subtitle)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                addRow
-
-                if let notice = model.notice {
-                    noticeRow(notice)
-                }
-
-                if model.entries.isEmpty {
-                    emptyState
-                } else {
-                    VStack(spacing: 1) {
-                        ForEach(model.entries, id: \.pattern) { entry in
-                            PathExclusionEntryRow(
-                                entry: entry,
-                                onRemove: { model.removeEntry(pattern: entry.pattern) }
-                            )
-                        }
+            if model.entries.isEmpty {
+                emptyState
+            } else {
+                VStack(spacing: 1) {
+                    ForEach(model.entries, id: \.pattern) { entry in
+                        PathExclusionEntryRow(
+                            entry: entry,
+                            onRemove: { model.removeEntry(pattern: entry.pattern) }
+                        )
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
                 }
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
         }
         .task {
             model.load()
@@ -181,10 +152,7 @@ struct PathExclusionSettingsSection: View {
 
     private var addRow: some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            Image(systemName: "shield.slash")
-                .font(.system(size: 16))
-                .foregroundStyle(GargantuaColors.accent)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(systemName: "shield.slash", color: GargantuaColors.accent, size: 16)
 
             TextField("Path or pattern, e.g. ~/Library/Caches/MyApp", text: $model.newPattern)
                 .textFieldStyle(.plain)
@@ -195,62 +163,32 @@ struct PathExclusionSettingsSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .onSubmit { model.addDraftPattern() }
 
-            Button(action: model.addDraftPattern) {
-                Label("Add", systemImage: "plus.circle.fill")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(model.canAdd ? GargantuaColors.accent : GargantuaColors.ink4)
-                    .padding(.horizontal, GargantuaSpacing.space3)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background((model.canAdd ? GargantuaColors.accent : GargantuaColors.ink4).opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.canAdd)
+            GargantuaButton(
+                "Add",
+                icon: "plus.circle.fill",
+                tone: .ghost(GargantuaColors.accent),
+                isDisabled: !model.canAdd,
+                action: model.addDraftPattern
+            )
             .help("Add exclusion entry")
         }
     }
 
-    private func noticeRow(_ notice: PathExclusionNotice) -> some View {
-        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
-            Image(systemName: noticeSystemImage(notice))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(noticeColor(notice))
-                .frame(width: 16, alignment: .center)
-
-            Text(notice.message)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(noticeColor(notice))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(GargantuaSpacing.space3)
-        .background(noticeColor(notice).opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-    }
-
     private var emptyState: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Image(systemName: "shield")
-                .font(.system(size: 16))
-                .foregroundStyle(GargantuaColors.ink4)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(systemName: "shield", color: GargantuaColors.ink4, size: 16)
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                Text("No exclusion entries")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink2)
-
-                Text("Add exact paths or glob patterns for files Gargantua should leave untouched.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            SettingsRowText(
+                title: "No exclusions yet",
+                detail: "Add paths or glob patterns Gargantua should always leave untouched."
+            )
         }
         .padding(GargantuaSpacing.space3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(GargantuaColors.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
         .overlay(
-            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
                 .stroke(GargantuaColors.borderSoft, lineWidth: 1)
         )
     }
@@ -263,11 +201,11 @@ struct PathExclusionSettingsSection: View {
         }
     }
 
-    private func noticeColor(_ notice: PathExclusionNotice) -> Color {
+    private func noticeTone(_ notice: PathExclusionNotice) -> SettingsNoticeRow.Tone {
         switch notice.tone {
-        case .success: return GargantuaColors.safe
-        case .review: return GargantuaColors.review
-        case .protected: return GargantuaColors.protected_
+        case .success: return .safe
+        case .review: return .review
+        case .protected: return .protected
         }
     }
 }

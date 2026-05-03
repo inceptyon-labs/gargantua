@@ -36,8 +36,7 @@ func abbreviatedScanRootPath(_ path: String) -> String {
 
 extension View {
     func scanRootRowStyle() -> some View {
-        padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
-            .background(GargantuaColors.surface2)
+        padding(.horizontal, GargantuaSpacing.space2)
+            .padding(.vertical, GargantuaSpacing.space2)
     }
 }

@@ -10,38 +10,39 @@ struct ScanRootsSettingsSection: View {
     @State private var scanRootError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            Text("Dev Purge")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink2)
+        SettingsSectionContainer(
+            "Scan Roots",
+            subtitle: "Where dev-purge looks for build artifacts. Empty list uses sensible defaults.",
+            count: storedScanRoots.isEmpty ? nil : storedScanRoots.count
+        ) {
+            ScanRootsSummaryRow(
+                count: storedScanRoots.count,
+                isAutomatic: storedScanRoots.isEmpty,
+                onReset: { persistScanRoots([]) }
+            )
 
-            VStack(spacing: 0) {
-                ScanRootsSummaryRow(
-                    count: storedScanRoots.count,
-                    isAutomatic: storedScanRoots.isEmpty,
-                    onReset: { persistScanRoots([]) }
-                )
+            divider
 
-                divider
+            ScanRootsList(
+                roots: storedScanRoots,
+                onMove: moveScanRoot,
+                onRemove: removeScanRoot
+            )
 
-                ScanRootsList(
-                    roots: storedScanRoots,
-                    onMove: moveScanRoot,
-                    onRemove: removeScanRoot
-                )
+            divider
 
-                divider
-
-                ScanRootEntryRow(
-                    newScanRoot: $newScanRoot,
-                    onAdd: addTypedScanRoot,
-                    onChoose: chooseScanRoots
-                )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            ScanRootEntryRow(
+                newScanRoot: $newScanRoot,
+                onAdd: addTypedScanRoot,
+                onChoose: chooseScanRoots
+            )
 
             if let scanRootError {
-                ScanRootErrorRow(message: scanRootError)
+                SettingsNoticeRow(
+                    icon: "exclamationmark.triangle.fill",
+                    message: scanRootError,
+                    tone: .review
+                )
             }
         }
     }
@@ -130,12 +131,9 @@ private struct ScanRootsSummaryRow: View {
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "folder")
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: "folder", size: 14)
 
-            Text("Scan Roots")
+            Text(isAutomatic ? "Automatic" : "Custom")
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink)
 
@@ -146,9 +144,9 @@ private struct ScanRootsSummaryRow: View {
                 .foregroundStyle(GargantuaColors.ink2)
 
             if !isAutomatic {
-                ScanRootIconButton(
+                GargantuaIconButton(
                     icon: "arrow.counterclockwise",
-                    help: "Use default scan roots",
+                    help: "Reset to default scan roots",
                     color: GargantuaColors.accent,
                     action: onReset
                 )
@@ -217,10 +215,7 @@ private struct ScanRootStateRow: View {
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: icon, size: 14)
 
             Text(title)
                 .font(GargantuaFonts.monoPath)
@@ -250,7 +245,7 @@ private struct ScanRootRow: View {
             Image(systemName: "folder.fill")
                 .font(.system(size: 14))
                 .foregroundStyle(GargantuaColors.accent)
-                .frame(width: 20, alignment: .center)
+                .frame(width: 24, alignment: .center)
 
             Text(abbreviatedScanRootPath(root))
                 .font(GargantuaFonts.monoPath)
@@ -279,7 +274,7 @@ private struct ScanRootRowControls: View {
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space1) {
-            ScanRootIconButton(
+            GargantuaIconButton(
                 icon: "chevron.up",
                 help: "Move scan root up",
                 color: GargantuaColors.ink2,
@@ -288,7 +283,7 @@ private struct ScanRootRowControls: View {
                 onMove(index, -1)
             }
 
-            ScanRootIconButton(
+            GargantuaIconButton(
                 icon: "chevron.down",
                 help: "Move scan root down",
                 color: GargantuaColors.ink2,
@@ -297,7 +292,7 @@ private struct ScanRootRowControls: View {
                 onMove(index, 1)
             }
 
-            ScanRootIconButton(
+            GargantuaIconButton(
                 icon: "xmark",
                 help: "Remove scan root",
                 color: GargantuaColors.protected_
@@ -325,7 +320,7 @@ private struct ScanRootEntryRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .onSubmit(onAdd)
 
-            ScanRootIconButton(
+            GargantuaIconButton(
                 icon: "plus",
                 help: "Add scan root",
                 color: GargantuaColors.accent,
@@ -333,35 +328,13 @@ private struct ScanRootEntryRow: View {
                 action: onAdd
             )
 
-            ScanRootIconButton(
+            GargantuaIconButton(
                 icon: "folder.badge.plus",
-                help: "Choose scan root",
+                help: "Choose scan root from disk",
                 color: GargantuaColors.accent,
                 action: onChoose
             )
         }
         .scanRootRowStyle()
-    }
-}
-
-private struct ScanRootIconButton: View {
-    let icon: String
-    let help: String
-    let color: Color
-    var isDisabled = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isDisabled ? GargantuaColors.ink4 : color)
-                .frame(width: 26, height: 24)
-                .background((isDisabled ? GargantuaColors.ink4 : color).opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .help(help)
     }
 }

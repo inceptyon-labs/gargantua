@@ -113,50 +113,37 @@ struct ProtectedRootsSettingsSection: View {
     @StateObject private var model = ProtectedRootsSettingsViewModel()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    Text("Protected Roots")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink2)
+        SettingsSectionContainer(
+            "Protected Roots",
+            subtitle: "Global cleanup-deny policy. These paths can never be removed as whole cleanup units.",
+            count: model.bundledEntries.count + model.userEntries.count
+        ) {
+            addRow
 
-                    Text("\(model.bundledEntries.count + model.userEntries.count)")
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink4)
-                }
-
-                Text("Global cleanup-deny policy. These paths can never be removed as whole cleanup units.")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let notice = model.notice {
+                SettingsNoticeRow(
+                    icon: noticeSystemImage(notice),
+                    message: notice.message,
+                    tone: noticeTone(notice)
+                )
             }
 
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                addRow
-
-                if let notice = model.notice {
-                    noticeRow(notice)
-                }
-
-                if !model.userEntries.isEmpty {
-                    entryGroup(title: "User Added", entries: model.userEntries, isBundled: false)
-                }
-
-                entryGroup(title: "Bundled Policy", entries: model.bundledEntries, isBundled: true)
+            if !model.userEntries.isEmpty {
+                entryGroup(title: "User Added", entries: model.userEntries, isBundled: false)
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+
+            entryGroup(title: "Bundled Policy", entries: model.bundledEntries, isBundled: true)
         }
         .task { model.load() }
     }
 
     private var addRow: some View {
         HStack(spacing: GargantuaSpacing.space2) {
-            Image(systemName: "lock.shield.fill")
-                .font(.system(size: 16))
-                .foregroundStyle(GargantuaColors.protected_)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(
+                systemName: "lock.shield.fill",
+                color: GargantuaColors.protected_,
+                size: 16
+            )
 
             TextField("Protect root, e.g. ~/Important or /Volumes/Archive", text: $model.newPath)
                 .textFieldStyle(.plain)
@@ -167,17 +154,13 @@ struct ProtectedRootsSettingsSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .onSubmit { model.addDraftPath() }
 
-            Button(action: model.addDraftPath) {
-                Label("Add", systemImage: "plus.circle.fill")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(model.canAdd ? GargantuaColors.accent : GargantuaColors.ink4)
-                    .padding(.horizontal, GargantuaSpacing.space3)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background((model.canAdd ? GargantuaColors.accent : GargantuaColors.ink4).opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.canAdd)
+            GargantuaButton(
+                "Add",
+                icon: "plus.circle.fill",
+                tone: .ghost(GargantuaColors.accent),
+                isDisabled: !model.canAdd,
+                action: model.addDraftPath
+            )
             .help("Add user protected root")
         }
     }
@@ -206,25 +189,8 @@ struct ProtectedRootsSettingsSection: View {
                     )
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
         }
-    }
-
-    private func noticeRow(_ notice: ProtectedRootNotice) -> some View {
-        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
-            Image(systemName: noticeSystemImage(notice))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(noticeColor(notice))
-                .frame(width: 16, alignment: .center)
-
-            Text(notice.message)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(noticeColor(notice))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(GargantuaSpacing.space3)
-        .background(noticeColor(notice).opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
     private func noticeSystemImage(_ notice: ProtectedRootNotice) -> String {
@@ -235,11 +201,11 @@ struct ProtectedRootsSettingsSection: View {
         }
     }
 
-    private func noticeColor(_ notice: ProtectedRootNotice) -> Color {
+    private func noticeTone(_ notice: ProtectedRootNotice) -> SettingsNoticeRow.Tone {
         switch notice.tone {
-        case .success: return GargantuaColors.safe
-        case .review: return GargantuaColors.review
-        case .protected: return GargantuaColors.protected_
+        case .success: return .safe
+        case .review: return .review
+        case .protected: return .protected
         }
     }
 }

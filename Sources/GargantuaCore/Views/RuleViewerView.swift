@@ -277,9 +277,7 @@ public struct RuleViewerView: View {
         PathExclusionSettingsSection(
             persistence: persistence,
             title: "Exclusions",
-            subtitle: "Excluded paths are left untouched by cleanup scans.",
-            showsDivider: true,
-            titleFont: GargantuaFonts.heading
+            subtitle: "Excluded paths are left untouched by cleanup scans."
         )
     }
 

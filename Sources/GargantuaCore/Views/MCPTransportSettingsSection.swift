@@ -5,88 +5,122 @@ struct MCPTransportSettingsSection: View {
     @State private var tokenStatus = "Token not generated"
     @State private var generatedToken: String?
     @State private var hasBearerToken = false
+    @State private var pendingDestructive: DestructiveAction?
     @StateObject private var serverModel = MCPServerStatusViewModel()
 
     private let configurationStore = MCPSSEConfigurationStore()
     private let tokenManager = MCPBearerTokenManager()
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-            Text("MCP Transport")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink2)
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                statusHeader
-
-                Divider()
-                    .overlay(GargantuaColors.border)
-
-                runtimeRow
-
-                Divider()
-                    .overlay(GargantuaColors.border)
-
-                bindRow
-                portRow
-
-                Divider()
-                    .overlay(GargantuaColors.border)
-
-                tokenRow
-
-                if let generatedToken {
-                    tokenDisplay(generatedToken)
-                }
-
-                Text(tokenStatus)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(statusColor)
+    private enum DestructiveAction: Identifiable {
+        case rotate, revoke
+        var id: String {
+            switch self {
+            case .rotate: "rotate"
+            case .revoke: "revoke"
             }
-            .padding(GargantuaSpacing.space4)
-            .background(GargantuaColors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        }
+
+        var sheetTitle: String {
+            switch self {
+            case .rotate: "Rotate bearer token?"
+            case .revoke: "Revoke bearer token?"
+            }
+        }
+
+        var sheetMessage: String {
+            switch self {
+            case .rotate:
+                "The current token stops working immediately and a new one replaces it in Keychain. Any MCP client using the old token will lose access."
+            case .revoke:
+                "The token is deleted from Keychain. MCP clients will be locked out until a new token is generated. This cannot be undone."
+            }
+        }
+
+        var confirmLabel: String {
+            switch self {
+            case .rotate: "Rotate token"
+            case .revoke: "Revoke token"
+            }
+        }
+    }
+
+    var body: some View {
+        SettingsSectionContainer(
+            "MCP Transport",
+            subtitle: "Local Server-Sent Events endpoint exposing read-only Gargantua tools to MCP clients."
+        ) {
+            statusHeader
+
+            Divider()
+                .overlay(GargantuaColors.border)
+
+            runtimeRow
+
+            Divider()
+                .overlay(GargantuaColors.border)
+
+            bindRow
+            portRow
+
+            Divider()
+                .overlay(GargantuaColors.border)
+
+            tokenRow
+
+            if let generatedToken {
+                tokenDisplay(generatedToken)
+            }
+
+            Text(tokenStatus)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(statusColor)
         }
         .task {
             configuration = configurationStore.load()
             refreshTokenStatus()
             serverModel.refresh()
         }
+        .sheet(item: $pendingDestructive) { action in
+            DestructiveConfirmSheet(
+                title: action.sheetTitle,
+                message: action.sheetMessage,
+                confirmLabel: action.confirmLabel,
+                onCancel: { pendingDestructive = nil },
+                onConfirm: {
+                    pendingDestructive = nil
+                    switch action {
+                    case .rotate: rotateToken()
+                    case .revoke: revokeToken()
+                    }
+                }
+            )
+        }
     }
 
     private var runtimeRow: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "play.circle")
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: "play.circle", size: 14)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Server")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(runtimeStatusLine)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
+            SettingsRowText(title: "Server", detail: runtimeStatusLine)
 
             Spacer()
 
             if serverModel.snapshot.isRunning {
-                transportActionButton(
-                    label: "Stop",
+                GargantuaButton(
+                    "Stop",
                     icon: "stop.fill",
-                    color: GargantuaColors.protected_,
+                    tone: .ghost(GargantuaColors.protected_),
                     action: { serverModel.stop() }
                 )
+                .help("Stop the MCP server")
             } else {
-                transportActionButton(
-                    label: "Start",
+                GargantuaButton(
+                    "Start",
                     icon: "play.fill",
-                    color: GargantuaColors.accent,
+                    tone: .ghost(GargantuaColors.accent),
                     action: { serverModel.start() }
                 )
+                .help("Start the MCP server")
             }
         }
     }
@@ -103,24 +137,20 @@ struct MCPTransportSettingsSection: View {
 
     private var statusHeader: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Image(systemName: configuration.isEnabled ? "dot.radiowaves.left.and.right" : "terminal")
-                .font(.system(size: 18))
-                .foregroundStyle(statusColor)
-                .frame(width: 24, alignment: .center)
+            SettingsRowIcon(
+                systemName: configuration.isEnabled ? "dot.radiowaves.left.and.right" : "terminal",
+                color: statusColor,
+                size: 18
+            )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Server-Sent Events")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text("\(configuration.bindHost):\(configuration.port)")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
+            SettingsRowText(
+                title: "Server-Sent Events",
+                detail: "\(configuration.bindHost):\(configuration.port)"
+            )
 
             Spacer()
 
-            Toggle("", isOn: Binding(
+            Toggle("Enable MCP transport", isOn: Binding(
                 get: { configuration.isEnabled },
                 set: {
                     configuration.isEnabled = $0
@@ -129,25 +159,15 @@ struct MCPTransportSettingsSection: View {
             ))
             .labelsHidden()
             .toggleStyle(.switch)
+            .help(configuration.isEnabled ? "Disable MCP transport" : "Enable MCP transport")
         }
     }
 
     private var bindRow: some View {
         HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-            Image(systemName: "network")
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: "network", size: 14)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Bind")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(configuration.bindScope.detail)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-            }
+            SettingsRowText(title: "Bind", detail: configuration.bindScope.detail)
 
             Spacer(minLength: GargantuaSpacing.space3)
 
@@ -165,10 +185,7 @@ struct MCPTransportSettingsSection: View {
     private var portRow: some View {
         Stepper(value: portBinding, in: MCPSSEServerConfiguration.validPortRange, step: 1) {
             HStack(spacing: GargantuaSpacing.space3) {
-                Image(systemName: "number")
-                    .font(.system(size: 14))
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .frame(width: 20, alignment: .center)
+                SettingsRowIcon(systemName: "number", size: 14)
 
                 Text("Port")
                     .font(GargantuaFonts.label)
@@ -181,41 +198,44 @@ struct MCPTransportSettingsSection: View {
                     .foregroundStyle(GargantuaColors.ink2)
             }
         }
+        .help("Local port the MCP server binds to")
     }
 
     private var tokenRow: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "key")
-                .font(.system(size: 14))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 20, alignment: .center)
+            SettingsRowIcon(systemName: "key", size: 14)
 
-            Text("Bearer Token")
+            Text("Bearer token")
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink)
 
             Spacer()
 
-            transportActionButton(
-                label: "Generate",
+            GargantuaButton(
+                "Generate",
                 icon: "plus.circle.fill",
-                color: GargantuaColors.safe,
+                tone: .ghost(GargantuaColors.safe),
                 action: generateToken
             )
+            .help("Create a token and store it in Keychain")
 
-            transportActionButton(
-                label: "Rotate",
+            GargantuaButton(
+                "Rotate",
                 icon: "arrow.triangle.2.circlepath",
-                color: GargantuaColors.accent,
-                action: rotateToken
+                tone: .ghost(GargantuaColors.accent),
+                isDisabled: !hasBearerToken,
+                action: { pendingDestructive = .rotate }
             )
+            .help("Replace the current token with a new one")
 
-            transportActionButton(
-                label: "Revoke",
+            GargantuaButton(
+                "Revoke",
                 icon: "trash",
-                color: GargantuaColors.protected_,
-                action: revokeToken
+                tone: .ghost(GargantuaColors.protected_),
+                isDisabled: !hasBearerToken,
+                action: { pendingDestructive = .revoke }
             )
+            .help("Delete the stored bearer token")
         }
     }
 
@@ -229,28 +249,6 @@ struct MCPTransportSettingsSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(GargantuaColors.surface3)
             .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-    }
-
-    private func transportActionButton(
-        label: String,
-        icon: String,
-        color: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                Text(label)
-                    .font(GargantuaFonts.label)
-            }
-            .foregroundStyle(color)
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(color.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
     }
 
     private var bindScopeBinding: Binding<MCPServerBindScope> {
