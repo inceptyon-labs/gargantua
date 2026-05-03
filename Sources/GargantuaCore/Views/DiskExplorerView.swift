@@ -79,8 +79,9 @@ public struct DiskExplorerView: View {
 
     /// Single source of truth for the in-flight scan copy. Used by both the
     /// `ScanResultsHeader` subtitle and the full-screen `scanningView` so the
-    /// two cannot drift out of sync.
-    private var loadingMessage: String {
+    /// two cannot drift out of sync. Internal (not private) so the extension
+    /// in `DiskExplorerView+Layout` that owns `scanningView` can reach it.
+    var loadingMessage: String {
         let total = countableItems
         let pending = state.items.filter { $0.isSizing }.count
         if total == 0 { return "Probing gravitational pull…" }
@@ -89,7 +90,7 @@ public struct DiskExplorerView: View {
         return "Sizing \(done) of \(total) folders…"
     }
 
-    private var countableItems: Int {
+    var countableItems: Int {
         state.items.filter { !$0.isPermissionDenied && !$0.isFilesAggregate }.count
     }
 
@@ -161,8 +162,11 @@ public struct DiskExplorerView: View {
                 dominantChildView(dominant: dominant)
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
             case .focusUnavailable:
-                focusUnavailableView
-                    .transition(.opacity)
+                DiskExplorerFocusUnavailableView(
+                    onPickTreemap: { state.setDisplayMode(.treemap) },
+                    onPickList: { state.setDisplayMode(.list) }
+                )
+                .transition(.opacity)
             case .treemap:
                 treemapView
                     .transition(.opacity)
@@ -274,91 +278,6 @@ public struct DiskExplorerView: View {
             maxSize: state.maxSize,
             onDrillDown: { drillDown(into: $0) }
         )
-    }
-
-    private var scanningView: some View {
-        let primary = loadingMessage
-        let folderName = state.pathStack.last?.name ?? "Home"
-        return VStack(spacing: GargantuaSpacing.space4) {
-            AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
-
-            VStack(spacing: GargantuaSpacing.space2) {
-                Text("Mapping \(folderName)")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(primary)
-                    .font(GargantuaFonts.body)
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .monospacedDigit()
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, GargantuaSpacing.space6)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scanning \(folderName), \(primary)")
-    }
-
-    private var focusUnavailableView: some View {
-        VStack(spacing: GargantuaSpacing.space3) {
-            Image(systemName: "scope")
-                .font(.system(size: 22))
-                .foregroundStyle(GargantuaColors.ink3)
-
-            Text("No dominant folder")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink2)
-
-            Text("Sizes are spread across multiple folders here. Focus mode highlights one outlier when one exists.")
-                .font(GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink3)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-
-            HStack(spacing: GargantuaSpacing.space2) {
-                Button { state.setDisplayMode(.treemap) } label: {
-                    Text("View as Treemap")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-
-                Button { state.setDisplayMode(.list) } label: {
-                    Text("View as List")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.surface3)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, GargantuaSpacing.space2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, GargantuaSpacing.space6)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: GargantuaSpacing.space2) {
-            AccretionDiskView(activityRate: 0, size: 28, color: GargantuaColors.ink3)
-                .opacity(0.4)
-
-            Text("Empty orbit")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink2)
-
-            Text("No bodies detected at this radius.")
-                .font(GargantuaFonts.body.italic())
-                .foregroundStyle(GargantuaColors.ink3)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, GargantuaSpacing.space6)
     }
 
     // MARK: - Actions
