@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import GargantuaAppKitShims
 import GargantuaCore
 import SwiftUI
 
@@ -11,6 +12,7 @@ struct GargantuaApp: App {
     @StateObject private var menuBarStatusModel: MenuBarStatusModel
 
     init() {
+        Self.configureNativeToolTipDelay()
         MetallibStager.stageIfNeeded()
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
@@ -60,6 +62,22 @@ struct GargantuaApp: App {
             MenuBarStatusLabel(snapshot: menuBarStatusModel.snapshot)
         }
         .menuBarExtraStyle(.window)
+    }
+
+    private static func configureNativeToolTipDelay() {
+        // Macs default to a ~2s delay before the FIRST tooltip in a session
+        // fires. After that, hovers feel snappy. We compress the initial delay
+        // so the first hover matches the rest. Two paths in case Apple changes
+        // the private selector on us:
+        //   1) `NSInitialToolTipDelay` user-default (milliseconds, app domain).
+        //   2) `NSToolTipManager.setInitialToolTipDelay:` via the Obj-C shim,
+        //      which @try/@catches so a missing selector can't crash launch.
+        let initialDelayMilliseconds = 250
+        UserDefaults.standard.register(defaults: [
+            "NSInitialToolTipDelay": initialDelayMilliseconds
+        ])
+        UserDefaults.standard.set(initialDelayMilliseconds, forKey: "NSInitialToolTipDelay")
+        _ = GargantuaSetNativeToolTipDelay(Double(initialDelayMilliseconds) / 1000.0)
     }
 
     private static func runBinarySelfCheck() -> Never {

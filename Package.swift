@@ -31,12 +31,18 @@ let package = Package(
             name: "Gargantua",
             dependencies: [
                 "GargantuaCore",
+                "GargantuaAppKitShims",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/Gargantua",
             plugins: [
                 "BuildMetallibPlugin"
             ]
+        ),
+        .target(
+            name: "GargantuaAppKitShims",
+            path: "Sources/GargantuaAppKitShims",
+            publicHeadersPath: "include"
         ),
         .plugin(
             name: "BuildMetallibPlugin",
