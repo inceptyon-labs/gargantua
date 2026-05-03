@@ -10,6 +10,11 @@ struct DirectoryRowView: View {
 
     @State private var isHovered = false
     @State private var isLoadingChildren = false
+    @Environment(\.openURL) private var openURL
+
+    private static let fullDiskAccessURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+    )!
 
     private var sizeBarFraction: CGFloat {
         guard maxSize > 0, item.size > 0 else { return 0 }
@@ -22,7 +27,9 @@ struct DirectoryRowView: View {
 
     var body: some View {
         Button {
-            if !item.isPermissionDenied && !isFilesAggregate {
+            if item.isPermissionDenied {
+                openURL(Self.fullDiskAccessURL)
+            } else if !isFilesAggregate {
                 onDrillDown()
             }
         } label: {
@@ -57,19 +64,18 @@ struct DirectoryRowView: View {
 
                 Spacer()
 
-                // Size bar + size label
+                // Size bar + size label, OR a Grant Access affordance when
+                // the row's underlying directory needs Full Disk Access.
                 HStack(spacing: GargantuaSpacing.space3) {
-                    if !item.isPermissionDenied && !item.isSizing {
-                        sizeBar
+                    if item.isPermissionDenied {
+                        grantAccessAffordance
                     } else if item.isSizing {
                         Color.clear.frame(width: 100, height: 6)
-                    }
-
-                    if item.isSizing {
                         ProgressView()
                             .controlSize(.mini)
                             .frame(width: 70, alignment: .trailing)
                     } else {
+                        sizeBar
                         sizeLabelView
                     }
                 }
@@ -108,6 +114,20 @@ struct DirectoryRowView: View {
             .frame(width: 16, height: 16)
         }
         .buttonStyle(.plain)
+    }
+
+    private var grantAccessAffordance: some View {
+        // Pure label — the surrounding row Button already routes
+        // permission-denied taps to the Full Disk Access settings pane.
+        // Rendering this as another Button would nest tap targets and
+        // produce different hit regions for the same action.
+        HStack(spacing: GargantuaSpacing.space1) {
+            Text("Grant Access")
+                .font(GargantuaFonts.caption)
+            Image(systemName: "arrow.up.forward.square")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(GargantuaColors.review)
     }
 
     private var sizeBar: some View {

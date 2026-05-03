@@ -53,9 +53,19 @@ public struct DiskExplorerView: View {
 
             controlsBar
             breadcrumbView
+            permissionBanner
             contentView
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var permissionBanner: some View {
+        if state.items.contains(where: { $0.isPermissionDenied }) {
+            PermissionBannerView.fullDiskAccess
+                .padding(.horizontal, GargantuaSpacing.space6)
+                .padding(.bottom, GargantuaSpacing.space3)
+        }
     }
 
     private var scanSubtitle: String? {
@@ -90,7 +100,14 @@ public struct DiskExplorerView: View {
                     .accessibilityHidden(true)
             }
             Spacer()
-            DisplayModeToggle(selection: $state.displayMode)
+            // Bridged binding: writes go through `setDisplayMode` so the
+            // explicit-pick flag flips, suppressing future auto-promotions
+            // for this directory. Auto-promote (state-driven) writes
+            // `displayMode` directly without the flag.
+            DisplayModeToggle(selection: Binding(
+                get: { state.displayMode },
+                set: { state.setDisplayMode($0) }
+            ))
         }
         .padding(.horizontal, GargantuaSpacing.space6)
         .padding(.top, GargantuaSpacing.space3)
@@ -143,6 +160,9 @@ public struct DiskExplorerView: View {
             case .dominant(let dominant):
                 dominantChildView(dominant: dominant)
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            case .focusUnavailable:
+                focusUnavailableView
+                    .transition(.opacity)
             case .treemap:
                 treemapView
                     .transition(.opacity)
@@ -155,9 +175,7 @@ public struct DiskExplorerView: View {
     }
 
     /// Coalesces the various render branches into one Equatable value so
-    /// `.animation(_:value:)` can drive cross-fades between them. Without
-    /// this, swapping treemap → dominant card on `isLoading` flipping false
-    /// is an abrupt view-tree replacement with no transition window.
+    /// `.animation(_:value:)` can drive cross-fades between them.
     ///
     /// While `isLoading` is true we deliberately do NOT render a partial
     /// treemap. Watching tiles bounce around as sizes resolve and the
@@ -165,46 +183,28 @@ public struct DiskExplorerView: View {
     /// for the dominant-child fallback the user sees the full ant-farm
     /// before the card resolves. Show a clean scanning view instead and
     /// cross-fade into the result once it's stable.
+    ///
+    /// `.treemap` no longer auto-substitutes the dominant card — that
+    /// substitution now happens at the state level via `applyAutoPromoteIfNeeded`,
+    /// which flips `displayMode` to `.focus` so the toggle reflects what's
+    /// actually on screen. Picking `.treemap` explicitly always renders the
+    /// squarified treemap, even on degenerate distributions.
     private var contentMode: DiskExplorerContentMode {
         if state.isLoading { return .scanning }
         if state.items.isEmpty { return .empty }
-        if state.displayMode == .treemap, let dominant = dominantChild {
-            return .dominant(dominant)
+        switch state.displayMode {
+        case .focus:
+            if let dominant = state.dominantChild { return .dominant(dominant) }
+            return .focusUnavailable
+        case .list:
+            return .list
+        case .treemap:
+            return .treemap
         }
-        return state.displayMode == .list ? .list : .treemap
     }
 
     private var displayItems: [DirectoryItem] {
         DiskExplorerView.collapseSmall(state.items)
-    }
-
-    /// If the largest child dwarfs everything else, the treemap degenerates
-    /// into one giant tile next to a thin strip of unreadable slivers. Detect
-    /// that case so we can render a more useful layout.
-    ///
-    /// Only computed once the scan completes — otherwise the answer flickers
-    /// as sizes resolve in arbitrary order: the first small folder to finish
-    /// sizing would briefly be "dominant" against zero, get swept aside as
-    /// the real heavyweight resolves, and then potentially flip again as
-    /// medium peers join the picture.
-    ///
-    /// The heuristic looks at the ratio between the largest and second-largest
-    /// child rather than the largest's share of the total — that's what
-    /// actually determines whether the treemap will produce visible non-largest
-    /// tiles or just slivers crammed against the edge.
-    private var dominantChild: DirectoryItem? {
-        guard !state.isLoading else { return nil }
-        let sized = state.items
-            .filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
-            .sorted { $0.size > $1.size }
-        guard let largest = sized.first else { return nil }
-        guard sized.count > 1 else { return largest }
-        let second = sized[1]
-        // Second-largest below ~15% of largest means it'd render as a sliver.
-        if Double(second.size) / Double(largest.size) < 0.15 {
-            return largest
-        }
-        return nil
     }
 
     private var treemapView: some View {
@@ -297,6 +297,51 @@ public struct DiskExplorerView: View {
         .padding(.bottom, GargantuaSpacing.space6)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Scanning \(folderName), \(primary)")
+    }
+
+    private var focusUnavailableView: some View {
+        VStack(spacing: GargantuaSpacing.space3) {
+            Image(systemName: "scope")
+                .font(.system(size: 22))
+                .foregroundStyle(GargantuaColors.ink3)
+
+            Text("No dominant folder")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Text("Sizes are spread across multiple folders here. Focus mode highlights one outlier when one exists.")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+
+            HStack(spacing: GargantuaSpacing.space2) {
+                Button { state.setDisplayMode(.treemap) } label: {
+                    Text("View as Treemap")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(GargantuaColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
+
+                Button { state.setDisplayMode(.list) } label: {
+                    Text("View as List")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(GargantuaColors.surface3)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, GargantuaSpacing.space2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, GargantuaSpacing.space6)
     }
 
     private var emptyState: some View {

@@ -8,9 +8,16 @@ public enum DiskExplorerPhase: Sendable {
 }
 
 /// User-selectable rendering of a directory's children.
+///
+/// `.focus` is the dominant-folder hero-card view that used to silently
+/// substitute for `.treemap` when one folder dwarfed the rest. Promoting it
+/// to a first-class toggle state means the segmented control no longer lies
+/// about what's on screen, and users can override the auto-substitution by
+/// clicking Treemap explicitly.
 public enum DiskExplorerDisplayMode: Sendable {
     case treemap
     case list
+    case focus
 }
 
 /// One step in the Disk Explorer breadcrumb stack.
@@ -47,6 +54,11 @@ public final class DiskExplorerState {
     public var isLoading: Bool = false
     public var maxSize: Int64 = 1
     public var displayMode: DiskExplorerDisplayMode = .treemap
+    /// True once the user has explicitly tapped the display-mode toggle for
+    /// this directory. Gates the auto-promotion to `.focus` on dominance
+    /// detection — once the user has made an explicit choice, the auto flip
+    /// stops fighting them. Reset by every navigation entry point.
+    public var displayModeIsExplicit: Bool = false
     public var phase: DiskExplorerPhase = .idle
     public var scanGeneration: Int = 0
     /// Per-path snapshot of the last successful scan. Lets the breadcrumb
@@ -75,6 +87,7 @@ public final class DiskExplorerState {
         items = []
         expandedItems = [:]
         maxSize = 1
+        displayModeIsExplicit = false
         isLoading = true
         scanGeneration &+= 1
         phase = .results
@@ -85,6 +98,7 @@ public final class DiskExplorerState {
         items = []
         expandedItems = [:]
         maxSize = 1
+        displayModeIsExplicit = false
         isLoading = true
         scanGeneration &+= 1
     }
@@ -95,6 +109,7 @@ public final class DiskExplorerState {
         items = []
         expandedItems = [:]
         maxSize = 1
+        displayModeIsExplicit = false
         isLoading = true
         scanGeneration &+= 1
     }
@@ -104,9 +119,18 @@ public final class DiskExplorerState {
         items = []
         expandedItems = [:]
         maxSize = 1
+        displayModeIsExplicit = false
         pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
         isLoading = false
         phase = .idle
+    }
+
+    /// Set by the toggle's user-tap path so the auto-promote-to-focus heuristic
+    /// stops fighting the user once they've made a deliberate pick for this
+    /// directory.
+    public func setDisplayMode(_ mode: DiskExplorerDisplayMode) {
+        displayMode = mode
+        displayModeIsExplicit = true
     }
 
     /// Synchronously hydrate `items` from `pathCache` if possible. Called from
@@ -114,10 +138,16 @@ public final class DiskExplorerState {
     /// when stepping back to a directory we've already mapped.
     public func applyCachedItemsIfPresent() {
         expandedItems = [:]
+        // Each new directory gets its own auto-promote chance; users who
+        // overrode the mode for the previous folder shouldn't have that pick
+        // bleed into a sibling that would benefit from focus mode (or vice
+        // versa).
+        displayModeIsExplicit = false
         if let cached = pathCache[currentPath] {
             items = cached
             maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
             isLoading = false
+            applyAutoPromoteIfNeeded()
         } else {
             items = []
             maxSize = 1
@@ -163,5 +193,35 @@ public final class DiskExplorerState {
     public func completeLoad(for path: String) {
         pathCache[path] = items
         isLoading = false
+        applyAutoPromoteIfNeeded()
+    }
+
+    /// The largest sized child if it dwarfs the second-largest enough to make
+    /// the treemap degenerate (second < 15% of largest). Drives auto-promote
+    /// to `.focus` and the rendering of the dominant-child hero card.
+    ///
+    /// Computed lazily — sizes are only stable once `isLoading` is false, so
+    /// callers should gate on that.
+    public var dominantChild: DirectoryItem? {
+        guard !isLoading else { return nil }
+        let sized = items
+            .filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
+            .sorted { $0.size > $1.size }
+        guard let largest = sized.first else { return nil }
+        guard sized.count > 1 else { return largest }
+        let second = sized[1]
+        if Double(second.size) / Double(largest.size) < 0.15 {
+            return largest
+        }
+        return nil
+    }
+
+    /// Promote `.treemap` → `.focus` when one child dwarfs the rest, but only
+    /// if the user hasn't already picked a mode for this directory.
+    private func applyAutoPromoteIfNeeded() {
+        guard !displayModeIsExplicit, displayMode == .treemap else { return }
+        if dominantChild != nil {
+            displayMode = .focus
+        }
     }
 }

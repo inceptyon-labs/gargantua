@@ -8,6 +8,11 @@ struct DirectoryTreemapCellView: View {
     @State private var isHovered = false
     @State private var sizingPulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
+
+    private static let fullDiskAccessURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+    )!
 
     private var canDrillDown: Bool {
         !item.isPermissionDenied
@@ -25,6 +30,14 @@ struct DirectoryTreemapCellView: View {
                     cellBody
                 }
                 .buttonStyle(.plain)
+            } else if item.isPermissionDenied {
+                Button {
+                    openURL(Self.fullDiskAccessURL)
+                } label: {
+                    cellBody
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Full Disk Access in System Settings")
             } else {
                 cellBody
             }
@@ -181,11 +194,20 @@ struct DirectoryTreemapCellView: View {
             ProgressView()
                 .controlSize(.regular)
         } else if item.isPermissionDenied {
-            Text("Requires Full Disk Access")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.protected_)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.7)
+            VStack(spacing: GargantuaSpacing.space1) {
+                Text("Requires Full Disk Access")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.protected_)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.7)
+                HStack(spacing: GargantuaSpacing.space1) {
+                    Text("Grant Access")
+                        .font(GargantuaFonts.caption)
+                    Image(systemName: "arrow.up.forward.square")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(GargantuaColors.review)
+            }
         } else {
             Text(sizeLabel)
                 .font(.system(size: fontSize, weight: .semibold, design: .monospaced))

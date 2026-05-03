@@ -19,6 +19,11 @@ struct DisplayModeToggle: View {
                 label: "List",
                 systemImage: "list.bullet"
             )
+            segment(
+                mode: .focus,
+                label: "Focus",
+                systemImage: "scope"
+            )
         }
         .background(GargantuaColors.surface2)
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
