@@ -7,7 +7,6 @@ private enum PickerColumn {
     static let checkboxLane: CGFloat = 32
     static let size: CGFloat = 80
     static let lastUsed: CGFloat = 110
-    static let trashLane: CGFloat = 28
 }
 
 /// App picker step of the Smart Uninstaller flow.
@@ -145,11 +144,6 @@ struct UninstallAppPickerView: View {
                 onTap: { viewModel.applySort(.lastUsed) }
             )
             .frame(width: PickerColumn.lastUsed, alignment: .trailing)
-
-            // Reserve the trash lane so the right edge of "Last used" lines
-            // up with the row's last-used column.
-            Color.clear
-                .frame(width: PickerColumn.trashLane, height: 1)
         }
         .padding(.horizontal, GargantuaSpacing.space5)
         .padding(.vertical, GargantuaSpacing.space2)
@@ -434,7 +428,6 @@ private struct AppRow: View {
     let onOpen: () -> Void
 
     @State private var isHovered = false
-    @State private var isTrashHovered = false
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
@@ -442,23 +435,47 @@ private struct AppRow: View {
 
             // Row body wrapped in a Button so keyboard / VoiceOver users can
             // reach the open-review path — the safest action on the screen
-            // is the only one that should always be focusable. Sibling
-            // Buttons (checkbox, trash) live in the same HStack and route
-            // taps independently because they're peers, not children of a
-            // parent Button.
+            // is the only one that should always be focusable. The checkbox
+            // is a peer Button that routes taps independently. Quick
+            // uninstall lives in the row's context menu (right-click /
+            // control-click) so the destructive action requires explicit
+            // intent and doesn't undermine the trust flow that's the whole
+            // reason to use Gargantua over a manual drag-to-Trash. The
+            // accessibilityAction below keeps the destructive path reachable
+            // for VoiceOver users without forcing them through the menu.
             Button(action: onOpen) {
                 rowContent
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open uninstall review for \(app.displayName ?? app.name)")
-
-            quickUninstallButton
+            .accessibilityAction(named: Text("Quick uninstall, skips review")) {
+                onQuickUninstall()
+            }
         }
         .padding(.vertical, GargantuaSpacing.space2)
         .padding(.horizontal, GargantuaSpacing.space5)
         .background(rowBackground)
         .onHover { isHovered = $0 }
+        // contentShape pins the contextMenu's hit region to the entire
+        // padded row rectangle so right-click on whitespace at the row's
+        // edges still raises the menu. Without it, padding regions and the
+        // gap between sibling Buttons may not register the gesture.
+        .contentShape(Rectangle())
+        // No ellipsis on the menu label: macOS convention is that an
+        // ellipsis means "this opens a confirmation," and the quick-uninstall
+        // path skips the plan-review modal entirely. The destructive role
+        // styles the item red so the trade-off reads at a glance. The
+        // "Quick" prefix differentiates this from the row's tap action,
+        // which opens the plan-review modal.
+        .contextMenu {
+            Button(role: .destructive, action: onQuickUninstall) {
+                Label(
+                    "Quick Uninstall \(app.displayName ?? app.name)",
+                    systemImage: "trash"
+                )
+            }
+        }
     }
 
     private var rowBackground: Color {
@@ -601,26 +618,6 @@ private struct AppRow: View {
             return "Code signature valid"
         }
         return "Code signature missing or invalid"
-    }
-
-    private var quickUninstallButton: some View {
-        // Always visible at low contrast so keyboard / VoiceOver users can
-        // discover the destructive shortcut, and so a hovering mouse user
-        // sees what they're about to click *before* the click lands. Hover
-        // escalates to the protected red, but the surface stays neutral —
-        // protected_-tinted backgrounds elsewhere mean "Gargantua won't
-        // delete this," which is the opposite of what this control does.
-        Button(action: onQuickUninstall) {
-            Image(systemName: "trash")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(isTrashHovered ? GargantuaColors.protected_ : GargantuaColors.ink3)
-                .frame(width: 28, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isTrashHovered = $0 }
-        .accessibilityLabel("Quick uninstall \(app.displayName ?? app.name), skips review")
-        .help("Uninstall \(app.displayName ?? app.name) without reviewing the plan first")
     }
 
     private func relativeDate(_ date: Date) -> String {
