@@ -307,6 +307,25 @@ public final class SmartUninstallerViewModel {
         multiSelected = []
     }
 
+    /// Bundle IDs the user has checked but that aren't in the currently
+    /// visible filter slice. Surfaced so the picker can warn the user that
+    /// hitting "Uninstall N apps" would trash apps they can't see.
+    public var hiddenSelectedBundleIDs: Set<String> {
+        let visible = Set(visibleApps.map(\.bundleID))
+        return multiSelected.subtracting(visible)
+    }
+
+    public var hiddenSelectedCount: Int {
+        hiddenSelectedBundleIDs.count
+    }
+
+    /// Drop every checked bundle ID that isn't currently visible. The user's
+    /// escape hatch when they realize the batch bar is counting selections
+    /// that the active filter, search, or system-apps toggle is hiding.
+    public func clearHiddenSelections() {
+        multiSelected.subtract(hiddenSelectedBundleIDs)
+    }
+
     /// Kick off background planning for every loaded app so the picker can
     /// show "X categories" without users having to drill in. Throttled to
     /// 4 concurrent plans so a couple hundred installed apps don't peg the

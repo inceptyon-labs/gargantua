@@ -69,15 +69,21 @@ struct UninstallAppPickerView: View {
             SearchField(text: $viewModel.query)
                 .frame(maxWidth: 320)
 
-            SortPicker(
-                sort: viewModel.sort,
-                ascending: viewModel.sortAscending,
+            GargantuaSegmentedPicker(
+                selection: viewModel.sort,
+                options: UninstallAppSort.allCases.map { ($0, $0.label) },
+                trailingGlyph: { field in
+                    field == viewModel.sort
+                        ? Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                        : nil
+                },
+                accessibilityLabel: "Sort apps",
                 onSelect: { viewModel.applySort($0) }
             )
             .frame(width: 260)
 
             Toggle(isOn: $viewModel.showSystemApps) {
-                Text("System apps")
+                Text("Show system apps")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
             }
@@ -90,7 +96,6 @@ struct UninstallAppPickerView: View {
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
 
-            refreshButton
             rescanButton
         }
         .padding(.horizontal, GargantuaSpacing.space5)
@@ -104,6 +109,13 @@ struct UninstallAppPickerView: View {
                 : "\(viewModel.multiSelected.count) apps selected")
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink)
+
+            // Surface selections the current filter is hiding so the user
+            // can't accidentally trash apps that fell off-screen when they
+            // typed in search or flipped the system-apps toggle.
+            if viewModel.hiddenSelectedCount > 0 {
+                hiddenSelectionPill
+            }
 
             Spacer()
 
@@ -137,7 +149,7 @@ struct UninstallAppPickerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             }
             .buttonStyle(.plain)
-            .keyboardShortcut(.return, modifiers: [])
+            .keyboardShortcut(.return, modifiers: [.command])
         }
         .padding(.horizontal, GargantuaSpacing.space5)
         .padding(.vertical, GargantuaSpacing.space3)
@@ -149,22 +161,25 @@ struct UninstallAppPickerView: View {
         }
     }
 
-    private var refreshButton: some View {
+    private var hiddenSelectionPill: some View {
         Button {
-            viewModel.pruneMissingApps()
+            viewModel.clearHiddenSelections()
         } label: {
-            HStack(spacing: GargantuaSpacing.space1) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("Refresh")
-                    .font(GargantuaFonts.label)
+            HStack(spacing: 4) {
+                Text("+\(viewModel.hiddenSelectedCount) hidden")
+                    .font(GargantuaFonts.caption)
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
             }
-            .foregroundStyle(GargantuaColors.accent)
+            .foregroundStyle(GargantuaColors.review)
+            .padding(.vertical, 3)
+            .padding(.horizontal, 8)
+            .background(GargantuaColors.reviewDim)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
         }
         .buttonStyle(.plain)
-        .keyboardShortcut("r", modifiers: .command)
-        .accessibilityLabel("Refresh installed apps")
-        .help("Drop apps that were just uninstalled (⌘R)")
+        .help("Selections hidden by the current filter. Click to drop them so you only uninstall what you can see.")
+        .accessibilityLabel("Drop \(viewModel.hiddenSelectedCount) hidden selections")
     }
 
     private var rescanButton: some View {
@@ -177,29 +192,92 @@ struct UninstallAppPickerView: View {
                 Text("Rescan")
                     .font(GargantuaFonts.label)
             }
-            .foregroundStyle(GargantuaColors.accent)
+            .foregroundStyle(GargantuaColors.ink2)
         }
         .buttonStyle(.plain)
-        .keyboardShortcut("r", modifiers: [.command, .shift])
+        .keyboardShortcut("r", modifiers: .command)
         .accessibilityLabel("Rescan installed apps")
-        .help("Re-enumerate every installed app from scratch (⇧⌘R)")
+        .help("Re-enumerate every installed app from scratch (⌘R)")
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: GargantuaSpacing.space2) {
-            Image(systemName: "app.badge")
+        if viewModel.apps.isEmpty {
+            emptyStateNoApps
+        } else if !viewModel.query.isEmpty {
+            emptyStateNoMatches
+        } else {
+            emptyStateAllFiltered
+        }
+    }
+
+    private var emptyStateNoApps: some View {
+        VStack(spacing: GargantuaSpacing.space3) {
+            Image(systemName: "questionmark.app.dashed")
                 .font(.system(size: 28))
                 .foregroundStyle(GargantuaColors.ink4)
 
-            Text(viewModel.query.isEmpty ? "No apps found" : "No matches")
+            Text("Couldn't find any installed apps")
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink2)
 
-            if !viewModel.query.isEmpty {
-                Text("Clear the search or try a different name.")
-                    .font(GargantuaFonts.body)
-                    .foregroundStyle(GargantuaColors.ink3)
+            Text("Gargantua may not have permission to read your Applications folder. Try a rescan.")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+
+            Button {
+                viewModel.runTracked { await viewModel.rescanApps() }
+            } label: {
+                Text("Rescan")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(.white)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .padding(.horizontal, GargantuaSpacing.space4)
+                    .background(GargantuaColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             }
+            .buttonStyle(.plain)
+            .padding(.top, GargantuaSpacing.space1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateNoMatches: some View {
+        VStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28))
+                .foregroundStyle(GargantuaColors.ink4)
+
+            Text("No matches")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Text("Search covers app name and bundle identifier. Try a shorter or different term.")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateAllFiltered: some View {
+        VStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 28))
+                .foregroundStyle(GargantuaColors.ink4)
+
+            Text("Nothing to show")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Text("Every installed app is filtered out. Turn on \"Show system apps\" if you're looking for one of those.")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -211,6 +289,9 @@ struct UninstallAppPickerView: View {
         }
         if app.isRunning { parts.append("running") }
         if app.isSystemApp { parts.append("system app") }
+        if let valid = app.signatureValid {
+            parts.append(valid ? "signed" : "unsigned")
+        }
         return parts.joined(separator: ", ")
     }
 }
@@ -265,6 +346,7 @@ private struct AppRow: View {
     let onOpen: () -> Void
 
     @State private var isHovered = false
+    @State private var isTrashHovered = false
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
@@ -280,16 +362,6 @@ private struct AppRow: View {
                 .onTapGesture { onOpen() }
 
             quickUninstallButton
-
-            Button(action: onOpen) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(GargantuaColors.ink4)
-                    .frame(width: 20, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Show details for \(app.displayName ?? app.name)")
         }
         .padding(.vertical, GargantuaSpacing.space2)
         .padding(.horizontal, GargantuaSpacing.space5)
@@ -354,6 +426,9 @@ private struct AppRow: View {
                     if app.isSystemApp {
                         StatusPill(label: "System", color: GargantuaColors.ink3)
                     }
+                    if let valid = app.signatureValid {
+                        signaturePill(valid: valid)
+                    }
                 }
 
                 Text(app.bundleID)
@@ -368,15 +443,10 @@ private struct AppRow: View {
                 if let size = app.sizeOnDisk {
                     Text(AlertItem.formatBytes(size))
                         .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink2)
+                        .foregroundStyle(GargantuaColors.ink)
                 }
-                if let date = app.lastUsedDate {
-                    Text(relativeDate(date))
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink4)
-                }
-                if let count = categoryCount, count > 0 {
-                    Text(count == 1 ? "1 category" : "\(count) categories")
+                if let caption = trailingCaption {
+                    Text(caption)
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                 }
@@ -384,20 +454,56 @@ private struct AppRow: View {
         }
     }
 
-    @ViewBuilder
+    /// Joins last-used and category-count into a single quiet caption row.
+    /// Returns nil when neither piece is available so we don't render an
+    /// empty line under the size.
+    private var trailingCaption: String? {
+        var parts: [String] = []
+        if let date = app.lastUsedDate {
+            parts.append(relativeDate(date))
+        }
+        if let count = categoryCount, count > 0 {
+            parts.append(count == 1 ? "1 category" : "\(count) categories")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func signaturePill(valid: Bool) -> some View {
+        StatusPill(
+            label: valid ? "Signed" : "Unsigned",
+            color: valid ? GargantuaColors.safe : GargantuaColors.review
+        )
+        .help(signatureHelpText(valid: valid))
+    }
+
+    private func signatureHelpText(valid: Bool) -> String {
+        if valid {
+            if let team = app.teamIdentifier {
+                return "Code signature valid · Team ID: \(team)"
+            }
+            return "Code signature valid"
+        }
+        return "Code signature missing or invalid"
+    }
+
     private var quickUninstallButton: some View {
+        // Always visible at low contrast so keyboard / VoiceOver users can
+        // discover the destructive shortcut, and so a hovering mouse user
+        // sees what they're about to click *before* the click lands. Hover
+        // escalates to the protected red, but the surface stays neutral —
+        // protected_-tinted backgrounds elsewhere mean "Gargantua won't
+        // delete this," which is the opposite of what this control does.
         Button(action: onQuickUninstall) {
             Image(systemName: "trash")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(GargantuaColors.protected_)
+                .foregroundStyle(isTrashHovered ? GargantuaColors.protected_ : GargantuaColors.ink4)
                 .frame(width: 28, height: 24)
-                .background(GargantuaColors.protected_.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(isHovered ? 1 : 0)
-        .accessibilityLabel("Quick uninstall \(app.displayName ?? app.name)")
-        .help("Uninstall \(app.displayName ?? app.name) (skip review)")
+        .onHover { isTrashHovered = $0 }
+        .accessibilityLabel("Quick uninstall \(app.displayName ?? app.name), skips review")
+        .help("Uninstall \(app.displayName ?? app.name) without reviewing the plan first")
     }
 
     private func relativeDate(_ date: Date) -> String {
@@ -419,69 +525,5 @@ private struct StatusPill: View {
             .padding(.horizontal, 6)
             .background(color.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 3))
-    }
-}
-
-// MARK: - Sort Picker
-//
-// Like `GargantuaSegmentedPicker` but the active segment shows a chevron
-// indicating direction, and tapping it again flips ascending/descending.
-// Tapping a different segment selects that field at its natural default
-// direction (handled by the view model).
-private struct SortPicker: View {
-    let sort: UninstallAppSort
-    let ascending: Bool
-    let onSelect: (UninstallAppSort) -> Void
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(UninstallAppSort.allCases, id: \.self) { field in
-                segment(for: field)
-            }
-        }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: GargantuaRadius.small + 2)
-                .fill(GargantuaColors.surface1)
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Sort apps")
-    }
-
-    @ViewBuilder
-    private func segment(for field: UninstallAppSort) -> some View {
-        let isSelected = sort == field
-        Button {
-            onSelect(field)
-        } label: {
-            HStack(spacing: 4) {
-                Text(field.label)
-                    .font(GargantuaFonts.caption.weight(.medium))
-                if isSelected {
-                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                }
-            }
-            .foregroundStyle(isSelected ? Color.white : GargantuaColors.ink2)
-            .padding(.vertical, 4)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                    .fill(isSelected ? GargantuaColors.accent : GargantuaColors.surface2)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel(for: field, isSelected: isSelected))
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        .help(isSelected
-              ? "\(field.label) — \(ascending ? "ascending" : "descending"). Click to flip."
-              : "Sort by \(field.label.lowercased())")
-    }
-
-    private func accessibilityLabel(for field: UninstallAppSort, isSelected: Bool) -> String {
-        guard isSelected else { return field.label }
-        return "\(field.label), \(ascending ? "ascending" : "descending")"
     }
 }
