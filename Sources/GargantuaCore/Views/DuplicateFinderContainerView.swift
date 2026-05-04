@@ -27,6 +27,7 @@ public struct DuplicateFinderContainerView: View {
     public let engineFactory: (_ scanRoots: [URL]) throws -> any ScanAdapter
     public let onSendToTrash: (([ScanResult]) -> Void)?
     public let onExplain: ((ScanResult) -> Void)?
+    public let persistence: PersistenceController?
 
     public init(
         state: DuplicateFinderContainerState,
@@ -34,13 +35,15 @@ public struct DuplicateFinderContainerView: View {
         selectedIDs: Binding<Set<String>>,
         engine: (any ScanAdapter)? = nil,
         onSendToTrash: (([ScanResult]) -> Void)? = nil,
-        onExplain: ((ScanResult) -> Void)? = nil
+        onExplain: ((ScanResult) -> Void)? = nil,
+        persistence: PersistenceController? = nil
     ) {
         self.state = state
         self.scanRoots = scanRoots
         self._selectedIDs = selectedIDs
         self.onSendToTrash = onSendToTrash
         self.onExplain = onExplain
+        self.persistence = persistence
         if let engine {
             self.engineFactory = { _ in engine }
         } else {
@@ -67,7 +70,8 @@ public struct DuplicateFinderContainerView: View {
                         onExplain: onExplain,
                         onBack: { state.returnToIdle() },
                         onRefresh: refreshResults,
-                        onRescan: startScan
+                        onRescan: startScan,
+                        persistence: persistence
                     )
                 case .error(let message):
                     errorView(message)

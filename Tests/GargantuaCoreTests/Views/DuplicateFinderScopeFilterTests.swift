@@ -314,3 +314,90 @@ struct DuplicateFinderScopeFilterHiddenSummaryTests {
         #expect(summary.reclaimableBytes == 0)
     }
 }
+
+@Suite("DuplicateFinderScopeFilter.normalize")
+struct DuplicateFinderScopeFilterNormalizeTests {
+
+    @Test("Tilde-rooted paths are accepted and trimmed")
+    func acceptsTildePaths() {
+        #expect(DuplicateFinderScopeFilter.normalize("~/Documents", homeDirectory: testHome) == "~/Documents")
+        #expect(DuplicateFinderScopeFilter.normalize("  ~/Documents  ", homeDirectory: testHome) == "~/Documents")
+        #expect(DuplicateFinderScopeFilter.normalize("~/Pictures/Cameras", homeDirectory: testHome) == "~/Pictures/Cameras")
+    }
+
+    @Test("Absolute paths are accepted")
+    func acceptsAbsolutePaths() {
+        #expect(DuplicateFinderScopeFilter.normalize("/Volumes/Photos", homeDirectory: testHome) == "/Volumes/Photos")
+        #expect(DuplicateFinderScopeFilter.normalize("/Users/jane/Workspace", homeDirectory: testHome) == "/Users/jane/Workspace")
+    }
+
+    @Test("Empty, whitespace-only, and bare ~ are rejected")
+    func rejectsEmptyAndBareTilde() {
+        #expect(DuplicateFinderScopeFilter.normalize("", homeDirectory: testHome) == nil)
+        #expect(DuplicateFinderScopeFilter.normalize("   ", homeDirectory: testHome) == nil)
+        #expect(DuplicateFinderScopeFilter.normalize("~", homeDirectory: testHome) == nil)
+        #expect(DuplicateFinderScopeFilter.normalize("~/", homeDirectory: testHome) == nil)
+    }
+
+    @Test("Filesystem root and the user's home are rejected — they would void the filter")
+    func rejectsRootAndHome() {
+        #expect(DuplicateFinderScopeFilter.normalize("/", homeDirectory: testHome) == nil)
+        #expect(DuplicateFinderScopeFilter.normalize("/Users/jane", homeDirectory: testHome) == nil)
+        // ~/. and ~/.. resolve to home or above — also rejected via standardization.
+        #expect(DuplicateFinderScopeFilter.normalize("/Users/jane/", homeDirectory: testHome) == nil)
+    }
+
+    @Test("Relative paths and bare names are rejected")
+    func rejectsRelativeAndBareNames() {
+        #expect(DuplicateFinderScopeFilter.normalize("Documents", homeDirectory: testHome) == nil)
+        #expect(DuplicateFinderScopeFilter.normalize("./relative", homeDirectory: testHome) == nil)
+        #expect(DuplicateFinderScopeFilter.normalize("../escape", homeDirectory: testHome) == nil)
+    }
+
+    @Test("isValidRoot mirrors normalize")
+    func isValidMirrors() {
+        #expect(DuplicateFinderScopeFilter.isValidRoot("~/Documents"))
+        #expect(!DuplicateFinderScopeFilter.isValidRoot("/"))
+        #expect(!DuplicateFinderScopeFilter.isValidRoot(""))
+    }
+}
+
+@Suite("DuplicateFinderScopeFilter.expand")
+struct DuplicateFinderScopeFilterExpandTests {
+
+    @Test("Tilde paths expand against the supplied home directory")
+    func expandsTildePaths() {
+        let urls = DuplicateFinderScopeFilter.expand(
+            patterns: ["~/Documents", "~/Pictures/Cameras"],
+            homeDirectory: testHome
+        )
+        #expect(urls.map(\.path) == ["/Users/jane/Documents", "/Users/jane/Pictures/Cameras"])
+    }
+
+    @Test("Absolute paths pass through")
+    func absolutePassthrough() {
+        let urls = DuplicateFinderScopeFilter.expand(
+            patterns: ["/Volumes/Photos"],
+            homeDirectory: testHome
+        )
+        #expect(urls.map(\.path) == ["/Volumes/Photos"])
+    }
+
+    @Test("Invalid patterns are silently dropped — defence in depth behind Settings validation")
+    func invalidDropped() {
+        let urls = DuplicateFinderScopeFilter.expand(
+            patterns: ["", "  ", "~", "~/", "/", "/Users/jane", "Documents", "../escape"],
+            homeDirectory: testHome
+        )
+        #expect(urls.isEmpty)
+    }
+
+    @Test("Mixes are filtered: only valid entries survive, in input order")
+    func mixedFiltering() {
+        let urls = DuplicateFinderScopeFilter.expand(
+            patterns: ["", "~/Documents", "/", "/Volumes/Photos", "Documents"],
+            homeDirectory: testHome
+        )
+        #expect(urls.map(\.path) == ["/Users/jane/Documents", "/Volumes/Photos"])
+    }
+}

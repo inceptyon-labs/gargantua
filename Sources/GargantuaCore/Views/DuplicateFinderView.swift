@@ -22,9 +22,11 @@ public struct DuplicateFinderView: View {
     public let onBack: (() -> Void)?
     public let onRefresh: (() -> Void)?
     public let onRescan: (() -> Void)?
+    public let persistence: PersistenceController?
 
     @State private var expandedGroupIDs: Set<String>
     @State private var derivation: DuplicateFinderDerivation
+    @State private var personalRoots: [URL]
     /// When `true`, drop both the personal-scope whitelist and the
     /// managed-tree blacklist — show every byte-identical group fclones
     /// surfaced. Default off: most matches outside the personal scope are
@@ -38,7 +40,8 @@ public struct DuplicateFinderView: View {
         onExplain: ((ScanResult) -> Void)? = nil,
         onBack: (() -> Void)? = nil,
         onRefresh: (() -> Void)? = nil,
-        onRescan: (() -> Void)? = nil
+        onRescan: (() -> Void)? = nil,
+        persistence: PersistenceController? = nil
     ) {
         self.results = results
         self._selectedIDs = selectedIDs
@@ -47,14 +50,23 @@ public struct DuplicateFinderView: View {
         self.onBack = onBack
         self.onRefresh = onRefresh
         self.onRescan = onRescan
+        self.persistence = persistence
+
+        let initialRoots = Self.loadPersonalRoots(from: persistence)
+        self._personalRoots = State(initialValue: initialRoots)
+
         // Compute derivation once at init using whatever toggle value is
-        // already persisted; .onChange refreshes it on (results, toggle)
-        // change. Property accesses then read State (free) instead of
-        // re-running filter+group every render — the previous shape did
-        // O(N) work per access × ~6 accesses per render, which beachballed
-        // during scroll on large duplicate sets.
+        // already persisted; .onChange refreshes it on (results, toggle,
+        // roots) change. Property accesses then read State (free) instead
+        // of re-running filter+group every render — the previous shape
+        // did O(N) work per access × ~6 accesses per render, which
+        // beachballed during scroll on large duplicate sets.
         let initialShowEverything = UserDefaults.standard.bool(forKey: "duplicateFinder.showEverything")
-        let initial = DuplicateFinderDerivation.compute(results: results, showEverything: initialShowEverything)
+        let initial = DuplicateFinderDerivation.compute(
+            results: results,
+            showEverything: initialShowEverything,
+            personalRoots: initialRoots.isEmpty ? nil : initialRoots
+        )
         self._derivation = State(initialValue: initial)
         // Expand the biggest few groups by default; large duplicate sets can
         // have hundreds of groups, and keeping them all open hurts scroll
@@ -65,9 +77,27 @@ public struct DuplicateFinderView: View {
     /// Cheap key for change detection. ScanResult isn't Equatable, so we
     /// fingerprint the array via count + endpoint ids — sufficient because
     /// fclones output is regenerated wholesale per scan, never partially
-    /// mutated in place.
+    /// mutated in place. Personal-scope roots are folded in so a settings
+    /// change re-derives without a rescan.
     private var derivationKey: String {
-        "\(results.count)|\(results.first?.id ?? "")|\(results.last?.id ?? "")|\(showEverything)"
+        let rootsFingerprint = personalRoots.map(\.path).joined(separator: ":")
+        return "\(results.count)|\(results.first?.id ?? "")|\(results.last?.id ?? "")|\(showEverything)|\(rootsFingerprint)"
+    }
+
+    /// Read user-configured personal-scope roots from persistence, expanding
+    /// `~/x` patterns to absolute URLs. Returns `[]` when persistence is
+    /// unavailable or the table is empty so the caller can fall back to
+    /// `defaultPersonalRoots()`. Seeding the defaults is the Settings VM's
+    /// job — Duplicate Finder shouldn't write to the store.
+    @MainActor
+    private static func loadPersonalRoots(from persistence: PersistenceController?) -> [URL] {
+        guard let persistence else { return [] }
+        do {
+            let patterns = try persistence.fetchPersonalScopeRoots().map(\.pattern)
+            return DuplicateFinderScopeFilter.expand(patterns: patterns)
+        } catch {
+            return []
+        }
     }
 
     private var visibleResults: [ScanResult] { derivation.visibleResults }
@@ -131,8 +161,12 @@ public struct DuplicateFinderView: View {
         .onChange(of: derivationKey) { _, _ in
             derivation = DuplicateFinderDerivation.compute(
                 results: results,
-                showEverything: showEverything
+                showEverything: showEverything,
+                personalRoots: personalRoots.isEmpty ? nil : personalRoots
             )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .gargantuaPersonalScopeRootsChanged)) { _ in
+            personalRoots = Self.loadPersonalRoots(from: persistence)
         }
     }
 
@@ -580,8 +614,19 @@ struct DuplicateFinderDerivation {
         selectableByID: [:]
     )
 
-    static func compute(results: [ScanResult], showEverything: Bool) -> DuplicateFinderDerivation {
-        let personalRoots: [URL]? = showEverything ? nil : DuplicateFinderScopeFilter.defaultPersonalRoots()
+    static func compute(
+        results: [ScanResult],
+        showEverything: Bool,
+        personalRoots configuredRoots: [URL]? = nil
+    ) -> DuplicateFinderDerivation {
+        let personalRoots: [URL]?
+        if showEverything {
+            personalRoots = nil
+        } else if let configured = configuredRoots, !configured.isEmpty {
+            personalRoots = configured
+        } else {
+            personalRoots = DuplicateFinderScopeFilter.defaultPersonalRoots()
+        }
         let visible = DuplicateFinderScopeFilter.apply(
             to: results,
             personalRoots: personalRoots,

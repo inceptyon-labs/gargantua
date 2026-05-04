@@ -191,8 +191,8 @@ public enum DuplicateFinderRefresh {
 public enum DuplicateFinderScopeFilter {
 
     /// Default personal-scope roots: the standard user-document folders
-    /// where deliberate duplicates plausibly land. Phase 2 (separate bean)
-    /// will let the user customize this list via Settings.
+    /// where deliberate duplicates plausibly land. Used as a fallback when
+    /// no user-configured roots are supplied.
     public static func defaultPersonalRoots(
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> [URL] {
@@ -204,6 +204,56 @@ public enum DuplicateFinderScopeFilter {
             "Movies",
             "Music",
         ].map { homeDirectory.appendingPathComponent($0, isDirectory: true) }
+    }
+
+    /// Validate and normalize a user-typed personal-scope folder path.
+    /// Returns the trimmed path preserving the user's `~/` style on success,
+    /// `nil` for any string that would weaken the filter — empty, relative,
+    /// bare `~`/`~/`, exactly `/` (filesystem root), or exactly `$HOME`.
+    /// The latter two are rejected because they make every duplicate
+    /// "personal", defeating the whole point of the scope.
+    public static func normalize(
+        _ raw: String,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard trimmed.hasPrefix("~/") || trimmed.hasPrefix("/") else { return nil }
+        guard trimmed != "~/" else { return nil }
+
+        let expanded = (trimmed as NSString).expandingTildeInPath
+        let standardized = URL(fileURLWithPath: expanded, isDirectory: true)
+            .standardizedFileURL.path
+        let home = homeDirectory.standardizedFileURL.path
+
+        guard standardized != "/", standardized != home else { return nil }
+
+        return trimmed
+    }
+
+    /// `true` when `raw` is acceptable as a personal-scope root entry.
+    public static func isValidRoot(_ raw: String) -> Bool {
+        normalize(raw) != nil
+    }
+
+    /// Expand user-facing path strings (e.g. `~/Documents`, `/Volumes/Photos`)
+    /// to absolute URLs suitable for `apply(personalRoots:)`. Patterns that
+    /// fail `normalize` are silently dropped — the Settings layer is
+    /// responsible for rejecting bad input upfront; this is defence in depth.
+    public static func expand(
+        patterns: [String],
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [URL] {
+        patterns.compactMap { raw in
+            guard let normalized = normalize(raw, homeDirectory: homeDirectory) else { return nil }
+
+            if normalized.hasPrefix("~/") {
+                let suffix = String(normalized.dropFirst(2))
+                return homeDirectory.appendingPathComponent(suffix, isDirectory: true)
+            }
+
+            return URL(fileURLWithPath: normalized, isDirectory: true)
+        }
     }
 
     /// Filter `results` according to the supplied scope rules. See the
@@ -342,4 +392,15 @@ public enum DuplicateFinderSelection {
                 .map(\.id)
         )
     }
+}
+
+// MARK: - Cross-view change notifications
+
+extension Notification.Name {
+    /// Posted by `PersonalScopeSettingsViewModel` after a successful add or
+    /// remove. `DuplicateFinderView` listens to refresh its persisted roots
+    /// and recompute the visible derivation without a rescan.
+    public static let gargantuaPersonalScopeRootsChanged = Notification.Name(
+        "GargantuaPersonalScopeRootsChanged"
+    )
 }

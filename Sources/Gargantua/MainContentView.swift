@@ -104,7 +104,8 @@ struct MainContentView: View {
                                     state: duplicateFinderState,
                                     scanRoots: resolvedScanRoots,
                                     selectedIDs: $duplicateFinderSelection,
-                                    onExplain: explainHandler
+                                    onExplain: explainHandler,
+                                    persistence: persistence
                                 )
                             case "fileHealth":
                                 FileHealthContainerView(

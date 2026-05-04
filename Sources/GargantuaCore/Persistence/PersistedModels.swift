@@ -262,3 +262,25 @@ public final class PersistedWhitelistEntry {
         self.createdAt = createdAt
     }
 }
+
+// MARK: - Persisted Personal Scope Root
+
+/// SwiftData model for persisting Duplicate Finder's personal-scope roots —
+/// the folders whose contents the user considers personal enough to act on
+/// duplicate-by-duplicate.
+///
+/// Patterns are stored as user-facing strings (e.g. `~/Documents`) and are
+/// expanded to absolute URLs at apply time. Duplicate Finder hides any group
+/// not entirely contained inside one of these roots.
+@Model
+public final class PersistedPersonalScopeRoot {
+    /// Unique tilde-style or absolute path identifying a personal-scope root.
+    @Attribute(.unique) public var pattern: String
+    /// Date when the entry was created.
+    public var createdAt: Date
+
+    public init(pattern: String, createdAt: Date = Date()) {
+        self.pattern = pattern
+        self.createdAt = createdAt
+    }
+}

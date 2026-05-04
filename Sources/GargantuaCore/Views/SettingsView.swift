@@ -150,6 +150,7 @@ public struct SettingsView: View {
                 persistence: persistence,
                 onSettingsChanged: { settings = $0 }
             )
+            PersonalScopeSettingsSection(persistence: persistence)
             PathExclusionSettingsSection(persistence: persistence)
             ProtectedRootsSettingsSection()
         case .about:
