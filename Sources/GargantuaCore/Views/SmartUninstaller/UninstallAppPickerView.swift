@@ -30,7 +30,10 @@ struct UninstallAppPickerView: View {
                                 onQuickUninstall: { viewModel.runTracked { await viewModel.quickUninstall(app) } },
                                 onOpen: { viewModel.runTracked { await viewModel.selectApp(app) } }
                             )
-                            .accessibilityLabel(Text(accessibilityLabel(for: app)))
+                            .accessibilityLabel(Text(accessibilityLabel(
+                                for: app,
+                                categoryCount: viewModel.categoryCounts[app.bundleID]
+                            )))
 
                             if app.id != viewModel.visibleApps.last?.id {
                                 Rectangle()
@@ -77,6 +80,7 @@ struct UninstallAppPickerView: View {
                         ? Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
                         : nil
                 },
+                activeTooltip: "Tap again to flip direction",
                 accessibilityLabel: "Sort apps",
                 onSelect: { viewModel.applySort($0) }
             )
@@ -165,21 +169,17 @@ struct UninstallAppPickerView: View {
         Button {
             viewModel.clearHiddenSelections()
         } label: {
-            HStack(spacing: 4) {
-                Text("+\(viewModel.hiddenSelectedCount) hidden")
-                    .font(GargantuaFonts.caption)
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .foregroundStyle(GargantuaColors.review)
-            .padding(.vertical, 3)
-            .padding(.horizontal, 8)
-            .background(GargantuaColors.reviewDim)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            Text("Drop \(viewModel.hiddenSelectedCount) not shown")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.review)
+                .padding(.vertical, 1)
+                .padding(.horizontal, 6)
+                .background(GargantuaColors.reviewDim)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
         }
         .buttonStyle(.plain)
-        .help("Selections hidden by the current filter. Click to drop them so you only uninstall what you can see.")
-        .accessibilityLabel("Drop \(viewModel.hiddenSelectedCount) hidden selections")
+        .help("These apps are selected but hidden by the active filter. Click to drop them.")
+        .accessibilityLabel("Drop \(viewModel.hiddenSelectedCount) selections that aren't shown")
     }
 
     private var rescanButton: some View {
@@ -221,24 +221,41 @@ struct UninstallAppPickerView: View {
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink2)
 
-            Text("Gargantua may not have permission to read your Applications folder. Try a rescan.")
+            Text("This usually means Gargantua doesn't have permission to read your Applications folder. Grant access in System Settings, then rescan.")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink3)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 380)
 
-            Button {
-                viewModel.runTracked { await viewModel.rescanApps() }
-            } label: {
-                Text("Rescan")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(.white)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .background(GargantuaColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            HStack(spacing: GargantuaSpacing.space2) {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
+                    Link(destination: url) {
+                        Text("Open System Settings")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                            .padding(.vertical, GargantuaSpacing.space2)
+                            .padding(.horizontal, GargantuaSpacing.space4)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                    .stroke(GargantuaColors.borderEm, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    viewModel.runTracked { await viewModel.rescanApps() }
+                } label: {
+                    Text("Rescan")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(.white)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .background(GargantuaColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .padding(.top, GargantuaSpacing.space1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -259,6 +276,20 @@ struct UninstallAppPickerView: View {
                 .foregroundStyle(GargantuaColors.ink3)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 360)
+
+            if viewModel.hiddenSystemMatchCount > 0 {
+                Button {
+                    viewModel.showSystemApps = true
+                } label: {
+                    Text(viewModel.hiddenSystemMatchCount == 1
+                        ? "1 system app matches. Show system apps?"
+                        : "\(viewModel.hiddenSystemMatchCount) system apps match. Show system apps?")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.accent)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, GargantuaSpacing.space2)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -282,7 +313,7 @@ struct UninstallAppPickerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func accessibilityLabel(for app: AppInfo) -> String {
+    private func accessibilityLabel(for app: AppInfo, categoryCount: Int?) -> String {
         var parts: [String] = [app.displayName ?? app.name]
         if let size = app.sizeOnDisk {
             parts.append(AlertItem.formatBytes(size))
@@ -291,6 +322,9 @@ struct UninstallAppPickerView: View {
         if app.isSystemApp { parts.append("system app") }
         if let valid = app.signatureValid {
             parts.append(valid ? "signed" : "unsigned")
+        }
+        if let count = categoryCount, count > 0 {
+            parts.append(count == 1 ? "1 leftover category" : "\(count) leftover categories")
         }
         return parts.joined(separator: ", ")
     }
@@ -352,14 +386,18 @@ private struct AppRow: View {
         HStack(spacing: GargantuaSpacing.space3) {
             checkbox
 
-            // Open-row tap target: use a tap gesture instead of a Button so
-            // it nests cleanly inside the same HStack as the checkbox /
-            // quick-uninstall Buttons. macOS SwiftUI routes Button taps to
-            // the innermost Button, but a parent Button with sibling Buttons
-            // makes hit-testing on the parent unreliable.
-            rowContent
-                .contentShape(Rectangle())
-                .onTapGesture { onOpen() }
+            // Row body wrapped in a Button so keyboard / VoiceOver users can
+            // reach the open-review path — the safest action on the screen
+            // is the only one that should always be focusable. Sibling
+            // Buttons (checkbox, trash) live in the same HStack and route
+            // taps independently because they're peers, not children of a
+            // parent Button.
+            Button(action: onOpen) {
+                rowContent
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open uninstall review for \(app.displayName ?? app.name)")
 
             quickUninstallButton
         }
@@ -445,11 +483,14 @@ private struct AppRow: View {
                         .font(GargantuaFonts.monoData)
                         .foregroundStyle(GargantuaColors.ink)
                 }
-                if let caption = trailingCaption {
-                    Text(caption)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                }
+                // Always render the caption slot so async category-count
+                // arrival doesn't shift the row height under the user's
+                // cursor. When there's nothing to show, the placeholder is
+                // an em-dash rendered at zero opacity.
+                Text(trailingCaption ?? "—")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .opacity(trailingCaption == nil ? 0 : 1)
             }
         }
     }
@@ -496,7 +537,7 @@ private struct AppRow: View {
         Button(action: onQuickUninstall) {
             Image(systemName: "trash")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(isTrashHovered ? GargantuaColors.protected_ : GargantuaColors.ink4)
+                .foregroundStyle(isTrashHovered ? GargantuaColors.protected_ : GargantuaColors.ink3)
                 .frame(width: 28, height: 24)
                 .contentShape(Rectangle())
         }

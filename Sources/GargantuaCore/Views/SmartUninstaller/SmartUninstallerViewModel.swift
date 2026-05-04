@@ -275,6 +275,12 @@ public final class SmartUninstallerViewModel {
         // routed the phase — don't pivot to .pickingApp on top of it.
         guard !Task.isCancelled else { return }
         apps = loaded
+        // Drop any checked bundle IDs that didn't survive the rescan so the
+        // batch bar can't quietly omit them later — `startBatchUninstall`
+        // filters by `apps.contains`, so without this prune a stale ID would
+        // count toward the bar but never actually run.
+        let validBundleIDs = Set(loaded.map(\.bundleID))
+        multiSelected = multiSelected.intersection(validBundleIDs)
         phase = .pickingApp
         startBackgroundCategoryCountScan()
     }
@@ -324,6 +330,23 @@ public final class SmartUninstallerViewModel {
     /// that the active filter, search, or system-apps toggle is hiding.
     public func clearHiddenSelections() {
         multiSelected.subtract(hiddenSelectedBundleIDs)
+    }
+
+    /// How many system apps match the active query but are filtered out by
+    /// `showSystemApps == false`. The picker's no-matches empty state uses
+    /// this to invite the user to flip the toggle when their search would
+    /// have hit something.
+    public var hiddenSystemMatchCount: Int {
+        guard !showSystemApps, !query.isEmpty else { return 0 }
+        let needle = query.lowercased()
+        return apps.reduce(into: 0) { count, app in
+            guard app.isSystemApp else { return }
+            if app.name.lowercased().contains(needle)
+                || app.displayName?.lowercased().contains(needle) == true
+                || app.bundleID.lowercased().contains(needle) {
+                count += 1
+            }
+        }
     }
 
     /// Kick off background planning for every loaded app so the picker can

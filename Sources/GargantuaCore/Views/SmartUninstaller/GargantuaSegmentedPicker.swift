@@ -18,6 +18,7 @@ import SwiftUI
 public struct GargantuaSegmentedPicker<Value: Hashable>: View {
     private let options: [(value: Value, label: String)]
     private let trailingGlyph: ((Value) -> Image?)?
+    private let activeTooltip: String?
     private let accessibilityLabel: String?
 
     private let binding: Binding<Value>?
@@ -34,6 +35,7 @@ public struct GargantuaSegmentedPicker<Value: Hashable>: View {
         self.externalSelection = nil
         self.onSelect = nil
         self.trailingGlyph = nil
+        self.activeTooltip = nil
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -41,6 +43,7 @@ public struct GargantuaSegmentedPicker<Value: Hashable>: View {
         selection: Value,
         options: [(value: Value, label: String)],
         trailingGlyph: ((Value) -> Image?)? = nil,
+        activeTooltip: String? = nil,
         accessibilityLabel: String? = nil,
         onSelect: @escaping (Value) -> Void
     ) {
@@ -49,6 +52,7 @@ public struct GargantuaSegmentedPicker<Value: Hashable>: View {
         self.externalSelection = selection
         self.onSelect = onSelect
         self.trailingGlyph = trailingGlyph
+        self.activeTooltip = activeTooltip
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -109,5 +113,6 @@ public struct GargantuaSegmentedPicker<Value: Hashable>: View {
         .buttonStyle(.plain)
         .accessibilityLabel(option.label)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .help(isSelected ? (activeTooltip ?? "") : "")
     }
 }
