@@ -1,9 +1,20 @@
 import SwiftUI
 
+/// Shared column widths for the picker header and rows. Keeping them in one
+/// place is the only reason headers and row data line up; if a number changes
+/// here the visual alignment updates everywhere it matters.
+private enum PickerColumn {
+    static let checkboxLane: CGFloat = 32
+    static let size: CGFloat = 80
+    static let lastUsed: CGFloat = 110
+    static let trashLane: CGFloat = 28
+}
+
 /// App picker step of the Smart Uninstaller flow.
 ///
-/// Shows the filtered + sorted installed-app list with search, sort selector,
-/// and a "Show system apps" toggle. Tapping a row begins planning.
+/// Shows the filtered + sorted installed-app list with a search field, a
+/// "Show system apps" toggle, and a clickable column-header row that doubles
+/// as the sort control. Tapping a row begins planning.
 struct UninstallAppPickerView: View {
     @Bindable var viewModel: SmartUninstallerViewModel
 
@@ -14,6 +25,12 @@ struct UninstallAppPickerView: View {
 
             Rectangle()
                 .fill(GargantuaColors.border)
+                .frame(height: 1)
+
+            columnHeaders
+
+            Rectangle()
+                .fill(GargantuaColors.borderSoft)
                 .frame(height: 1)
 
             if viewModel.visibleApps.isEmpty {
@@ -72,20 +89,6 @@ struct UninstallAppPickerView: View {
             SearchField(text: $viewModel.query)
                 .frame(maxWidth: 320)
 
-            GargantuaSegmentedPicker(
-                selection: viewModel.sort,
-                options: UninstallAppSort.allCases.map { ($0, $0.label) },
-                trailingGlyph: { field in
-                    field == viewModel.sort
-                        ? Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
-                        : nil
-                },
-                activeTooltip: "Tap again to flip direction",
-                accessibilityLabel: "Sort apps",
-                onSelect: { viewModel.applySort($0) }
-            )
-            .frame(width: 260)
-
             Toggle(isOn: $viewModel.showSystemApps) {
                 Text("Show system apps")
                     .font(GargantuaFonts.caption)
@@ -104,6 +107,57 @@ struct UninstallAppPickerView: View {
         }
         .padding(.horizontal, GargantuaSpacing.space5)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    private var columnHeaders: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            // Reserve the checkbox lane so "Name" lines up with row text,
+            // not the checkbox.
+            Color.clear
+                .frame(width: PickerColumn.checkboxLane, height: 1)
+
+            SortableColumnHeader(
+                label: "Name",
+                field: .name,
+                currentField: viewModel.sort,
+                ascending: viewModel.sortAscending,
+                alignment: .leading,
+                onTap: { viewModel.applySort(.name) }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            SortableColumnHeader(
+                label: "Size",
+                field: .size,
+                currentField: viewModel.sort,
+                ascending: viewModel.sortAscending,
+                alignment: .trailing,
+                onTap: { viewModel.applySort(.size) }
+            )
+            .frame(width: PickerColumn.size, alignment: .trailing)
+
+            SortableColumnHeader(
+                label: "Last used",
+                field: .lastUsed,
+                currentField: viewModel.sort,
+                ascending: viewModel.sortAscending,
+                alignment: .trailing,
+                onTap: { viewModel.applySort(.lastUsed) }
+            )
+            .frame(width: PickerColumn.lastUsed, alignment: .trailing)
+
+            // Reserve the trash lane so the right edge of "Last used" lines
+            // up with the row's last-used column.
+            Color.clear
+                .frame(width: PickerColumn.trashLane, height: 1)
+        }
+        .padding(.horizontal, GargantuaSpacing.space5)
+        .padding(.vertical, GargantuaSpacing.space2)
+        // Group the three sortable headers under one VoiceOver container so
+        // the cluster reads as the picker's sort affordance, not three
+        // isolated buttons. Mirrors what GargantuaSegmentedPicker conveyed.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Sort apps")
     }
 
     private var batchActionBar: some View {
@@ -474,39 +528,61 @@ private struct AppRow: View {
                     .foregroundStyle(GargantuaColors.ink3)
                     .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
+            sizeColumn
+                .frame(width: PickerColumn.size, alignment: .trailing)
 
-            VStack(alignment: .trailing, spacing: 2) {
-                if let size = app.sizeOnDisk {
-                    Text(AlertItem.formatBytes(size))
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink)
-                }
-                // Always render the caption slot so async category-count
-                // arrival doesn't shift the row height under the user's
-                // cursor. When there's nothing to show, the placeholder is
-                // an em-dash rendered at zero opacity.
-                Text(trailingCaption ?? "—")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .opacity(trailingCaption == nil ? 0 : 1)
-            }
+            lastUsedColumn
+                .frame(width: PickerColumn.lastUsed, alignment: .trailing)
         }
     }
 
-    /// Joins last-used and category-count into a single quiet caption row.
-    /// Returns nil when neither piece is available so we don't render an
-    /// empty line under the size.
-    private var trailingCaption: String? {
-        var parts: [String] = []
-        if let date = app.lastUsedDate {
-            parts.append(relativeDate(date))
+    /// Right-aligned size cell. Always renders both rows (value + spacer
+    /// caption) so row heights stay stable as async data arrives. The
+    /// placeholder em-dash is rendered at zero opacity for the height contribution.
+    private var sizeColumn: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(app.sizeOnDisk.map(AlertItem.formatBytes) ?? "—")
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink)
+                .opacity(app.sizeOnDisk == nil ? 0 : 1)
+                .lineLimit(1)
+                .accessibilityHidden(app.sizeOnDisk == nil)
+
+            // Invisible placeholder reserves the caption-line height so the
+            // size column's height matches the last-used column.
+            Text("—")
+                .font(GargantuaFonts.caption)
+                .opacity(0)
+                .accessibilityHidden(true)
         }
-        if let count = categoryCount, count > 0 {
-            parts.append(count == 1 ? "1 category" : "\(count) categories")
+    }
+
+    /// Right-aligned last-used cell. The relative date sits on top; the
+    /// remnant-category caption sits underneath so async category-count
+    /// arrival doesn't shift the row height.
+    private var lastUsedColumn: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(app.lastUsedDate.map(relativeDate) ?? "—")
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink)
+                .opacity(app.lastUsedDate == nil ? 0 : 1)
+                .lineLimit(1)
+                .accessibilityHidden(app.lastUsedDate == nil)
+
+            Text(categoryCaption ?? "—")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .opacity(categoryCaption == nil ? 0 : 1)
+                .lineLimit(1)
+                .accessibilityHidden(categoryCaption == nil)
         }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var categoryCaption: String? {
+        guard let count = categoryCount, count > 0 else { return nil }
+        return count == 1 ? "1 category" : "\(count) categories"
     }
 
     private func signaturePill(valid: Bool) -> some View {
@@ -566,5 +642,72 @@ private struct StatusPill: View {
             .padding(.horizontal, 6)
             .background(color.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
+// MARK: - Sortable Column Header
+
+/// Clickable column header for the picker list. Tapping switches the active
+/// sort field; tapping the active field again flips its direction. The active
+/// header carries an up/down chevron and primary ink so the user always knows
+/// which column is driving the order.
+private struct SortableColumnHeader: View {
+    let label: String
+    let field: UninstallAppSort
+    let currentField: UninstallAppSort
+    let ascending: Bool
+    let alignment: HorizontalAlignment
+    let onTap: () -> Void
+
+    @State private var isHovered = false
+
+    private var isActive: Bool { field == currentField }
+
+    private var frameAlignment: Alignment {
+        alignment == .leading ? .leading : .trailing
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 4) {
+                if alignment == .trailing {
+                    Spacer(minLength: 0)
+                }
+
+                Text(label)
+                    .font(GargantuaFonts.sectionLabel)
+                    .foregroundStyle(isActive ? GargantuaColors.ink : GargantuaColors.ink2)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+
+                // Reserve space for the chevron in every header so the label
+                // doesn't shift horizontally when sort field switches.
+                Image(systemName: ascending ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .opacity(isActive ? 1 : 0)
+
+                if alignment == .leading {
+                    Spacer(minLength: 0)
+                }
+            }
+            // Expand to fill the parent's column width so the entire lane
+            // is a click target, and so the label/chevron sit flush against
+            // the column edge — that flush alignment is what makes the
+            // headers line up pixel-precisely with the row data underneath.
+            .frame(maxWidth: .infinity, alignment: frameAlignment)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(isHovered ? GargantuaColors.surface1 : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(isActive ? "Tap again to flip direction" : "Sort by \(label.lowercased())")
+        .accessibilityLabel("Sort by \(label.lowercased())")
+        .accessibilityValue(isActive ? (ascending ? "ascending" : "descending") : "inactive")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
