@@ -8,19 +8,17 @@ struct ScanRootErrorRow: View {
         HStack(spacing: GargantuaSpacing.space2) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 12))
-                .foregroundStyle(GargantuaColors.review)
+                .foregroundStyle(GargantuaColors.protected_)
 
             Text(message)
                 .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.review)
+                .foregroundStyle(GargantuaColors.protected_)
         }
     }
 }
 
 var scanRootDivider: some View {
-    Rectangle()
-        .fill(GargantuaColors.borderSoft)
-        .frame(height: 1)
+    SettingsHairlineDivider()
 }
 
 func abbreviatedScanRootPath(_ path: String) -> String {

@@ -76,7 +76,7 @@ struct GargantuaButton: View {
     }
 
     private var backgroundColor: Color {
-        if isDisabled { return GargantuaColors.surface3.opacity(0.5) }
+        if isDisabled { return GargantuaColors.surface2 }
         switch tone {
         case .primary:
             return GargantuaColors.accent

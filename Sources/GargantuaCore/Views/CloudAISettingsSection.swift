@@ -17,18 +17,29 @@ struct CloudAISettingsSection: View {
         ) {
             statusHeader
 
-            Divider()
-                .overlay(GargantuaColors.border)
+            if configuration.isEnabled {
+                Divider()
+                    .overlay(GargantuaColors.border)
 
-            apiKeyRow
+                apiKeyRow
 
-            Text(apiKeyStatus)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(statusColor)
+                if !apiKeyStatus.isEmpty {
+                    SettingsNoticeRow(
+                        icon: apiKeyStatusIcon,
+                        message: apiKeyStatus,
+                        tone: apiKeyStatusTone
+                    )
+                }
 
-            consentToggle
-            monthlyCapStepper
-            usageRows
+                privacyDisclosure
+                consentToggle
+                monthlyCapStepper
+                usageRows
+            } else {
+                Text("Enable to set the API key, monthly cap, and usage caps.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
         }
         .task {
             configuration = configurationStore.load()
@@ -102,6 +113,36 @@ struct CloudAISettingsSection: View {
         }
     }
 
+    private var privacyDisclosure: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            SettingsSubsectionHeader("Where your data goes")
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                disclosureLine("Stored in macOS Keychain. Never written to disk in plaintext.")
+                disclosureLine("Endpoint: api.anthropic.com over TLS. Nothing else.")
+                disclosureLine("Always sent: file paths, sizes, classifications, confidence scores.")
+                disclosureLine("Sent only with the toggle below: short snippets of file contents (4 KB max, redacted for tokens and keys).")
+            }
+        }
+        .padding(GargantuaSpacing.space3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GargantuaColors.surface3)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    }
+
+    private func disclosureLine(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+            Text("·")
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink3)
+
+            Text(text)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var consentToggle: some View {
         Toggle(isOn: Binding(
             get: { configuration.allowsFileContents },
@@ -145,38 +186,38 @@ struct CloudAISettingsSection: View {
 
     private var usageRows: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            cloudSettingsRow(
+            SettingsValueRow(
                 icon: "creditcard",
                 label: "Cost to date",
-                value: formatCents(status?.spentCents ?? 0)
+                value: formatCents(status?.spentCents ?? 0),
+                background: GargantuaColors.surface3
             )
 
-            cloudSettingsRow(
+            SettingsValueRow(
                 icon: "calendar",
                 label: "Last run",
-                value: lastRunText
+                value: lastRunText,
+                monoValue: false,
+                background: GargantuaColors.surface3
             )
         }
     }
 
-    private func cloudSettingsRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            SettingsRowIcon(systemName: icon, size: 14)
-
-            Text(label)
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Spacer()
-
-            Text(value)
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.ink2)
+    private var apiKeyStatusIcon: String {
+        switch apiKeyStatusTone {
+        case .safe: return "checkmark.circle.fill"
+        case .protected: return "xmark.octagon.fill"
+        case .review: return "exclamationmark.triangle.fill"
+        case .info: return "info.circle"
         }
-        .padding(.horizontal, GargantuaSpacing.space3)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .background(GargantuaColors.surface3)
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    }
+
+    private var apiKeyStatusTone: SettingsNoticeRow.Tone {
+        if status?.hasAPIKey == true { return .safe }
+        if apiKeyStatus == "Not configured" { return .info }
+        if apiKeyStatus.contains("revoked") { return .info }
+        if apiKeyStatus.contains("Keychain") || apiKeyStatus.contains("stored") { return .safe }
+        return .protected
     }
 
     private func saveAPIKey() {
@@ -237,6 +278,7 @@ struct CloudAISettingsSection: View {
 
     private var statusColor: Color {
         if status?.isReady == true { return GargantuaColors.safe }
+        if configuration.isEnabled && status?.hasAPIKey != true { return GargantuaColors.review }
         if configuration.isEnabled { return GargantuaColors.review }
         return GargantuaColors.ink4
     }

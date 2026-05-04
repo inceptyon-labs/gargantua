@@ -25,7 +25,8 @@ struct DuplicateGroupHeader: View {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(GargantuaColors.ink3)
-                    .frame(width: 12, height: 16)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 

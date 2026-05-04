@@ -81,6 +81,101 @@ struct SettingsNoticeRow: View {
     }
 }
 
+/// Sub-grouping header used inside a `SettingsSectionContainer` card. Reuses
+/// the Section-Label tier (10/600 uppercase, 0.8px tracking) so a single card
+/// can split into "User Added" / "Bundled" sub-groups without rolling its own
+/// header layout.
+struct SettingsSubsectionHeader: View {
+    let title: String
+    let count: Int?
+
+    init(_ title: String, count: Int? = nil) {
+        self.title = title
+        self.count = count
+    }
+
+    var body: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            Text(title.uppercased())
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink3)
+
+            Spacer()
+
+            if let count {
+                Text("\(count)")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink4)
+            }
+        }
+    }
+}
+
+/// 1-px Border-Soft divider used between dense rows inside a section card.
+struct SettingsHairlineDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(GargantuaColors.borderSoft)
+            .frame(height: 1)
+    }
+}
+
+/// Compact circular-x remove glyph used by list-entry rows. Hover swaps to
+/// `protected_` so the destructive intent is visible only when the cursor is
+/// on the row, and the click target is the standard 18×18 slot.
+struct SettingsRemoveButton: View {
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(isHovered ? GargantuaColors.protected_ : GargantuaColors.ink4)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { isHovered = $0 }
+    }
+}
+
+/// Icon + label + mono-data value triplet used by About, Cloud usage, and any
+/// other key/value display row. `monoValue` is true when the value is a path,
+/// byte count, percentage, or other numeric data; false for license names,
+/// profile names, or other prose values.
+struct SettingsValueRow: View {
+    let icon: String
+    let label: String
+    let value: String
+    var monoValue: Bool = true
+    var background: Color? = nil
+
+    var body: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: icon, size: 14)
+
+            Text(label)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Spacer()
+
+            Text(value)
+                .font(monoValue ? GargantuaFonts.monoData : GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink2)
+        }
+        .padding(.horizontal, background == nil ? 0 : GargantuaSpacing.space3)
+        .padding(.vertical, background == nil ? 0 : GargantuaSpacing.space2)
+        .background(background ?? Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    }
+}
+
 /// Confirm sheet for destructive actions (Revoke key, Rotate token, Delete model).
 /// One sheet contract instead of inline taps wired straight to destructive code.
 struct DestructiveConfirmSheet: View {

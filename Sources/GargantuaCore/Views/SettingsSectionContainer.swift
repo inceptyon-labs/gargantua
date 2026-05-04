@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Standard settings-section wrapper. Section-Label tier title (10px 600 uppercase
-/// 0.8px tracking, ink-3) above a Surface-2 card with a 1px Border evidence stroke.
+/// Standard settings-section wrapper. Title-tier heading (15px 600, ink) above
+/// a Surface-2 card with a 1px Border evidence stroke. Sub-groupings inside the
+/// card use `SettingsSubsectionHeader` (Section-Label tier).
 ///
-/// Implements DESIGN.md §6 ("Don't make cards inside cards") and the Section-Label
-/// type tier so every settings section uses the same hierarchy break.
+/// Implements DESIGN.md §6 ("Don't make cards inside cards") and gives each
+/// section a heading bright enough to anchor a stack of 3-4 of them per tab.
 struct SettingsSectionContainer<Content: View>: View {
     let title: String
     let subtitle: String?
@@ -27,15 +28,14 @@ struct SettingsSectionContainer<Content: View>: View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
             VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
                 HStack(spacing: GargantuaSpacing.space2) {
-                    Text(title.uppercased())
-                        .font(GargantuaFonts.sectionLabel)
-                        .tracking(0.8)
-                        .foregroundStyle(GargantuaColors.ink3)
+                    Text(title)
+                        .font(GargantuaFonts.title)
+                        .foregroundStyle(GargantuaColors.ink)
 
                     if let trailingCount {
                         Text("\(trailingCount)")
                             .font(GargantuaFonts.monoData)
-                            .foregroundStyle(GargantuaColors.ink4)
+                            .foregroundStyle(GargantuaColors.ink3)
                     }
                 }
 

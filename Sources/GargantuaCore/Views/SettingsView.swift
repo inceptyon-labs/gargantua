@@ -135,6 +135,7 @@ public struct SettingsView: View {
     private var tabContent: some View {
         switch selectedTab {
         case .ai:
+            aiTabIntro
             modelSection
             CloudAISettingsSection()
             ClaudeCodeAgentSettingsSection()
@@ -161,6 +162,64 @@ public struct SettingsView: View {
 // MARK: - Sections, helpers, and bindings
 
 extension SettingsView {
+
+    // MARK: - AI Tab Intro
+
+    fileprivate var aiTabIntro: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("Active explanation engine")
+                    .font(GargantuaFonts.sectionLabel)
+                    .tracking(0.8)
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                Text(activeExplanationEngineLabel)
+                    .font(GargantuaFonts.title)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(activeExplanationEngineDetail)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+        }
+        .padding(GargantuaSpacing.space4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GargantuaColors.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
+                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+        )
+    }
+
+    private var activeExplanationEngineLabel: String {
+        switch (preferredAIEngine, downloadManager.state) {
+        case (.mlx, .downloaded): return "Local MLX"
+        case (.mlx, _): return "Local MLX (not downloaded)"
+        case (.template, _): return "Template (rule-based)"
+        }
+    }
+
+    private var activeExplanationEngineDetail: String {
+        switch (preferredAIEngine, downloadManager.state) {
+        case (.mlx, .downloaded):
+            if let size = downloadManager.formattedDownloadedSize {
+                return "Powers in-app explanations. Ready, \(size) on disk."
+            }
+            return "Powers in-app explanations. Ready."
+        case (.mlx, .downloading):
+            return "Local model still downloading. Template explanations run until it lands."
+        case (.mlx, .failed):
+            return "Local model download failed. Template explanations run until it succeeds."
+        case (.mlx, .notDownloaded):
+            return "Local model not on disk yet. Template explanations run until you download it below."
+        case (.template, _):
+            return "Powers in-app explanations. Instant, no model required."
+        }
+    }
 
     // MARK: - AI Model Section
 
@@ -193,7 +252,7 @@ extension SettingsView {
                     SettingsNoticeRow(
                         icon: "exclamationmark.triangle.fill",
                         message: message,
-                        tone: .review
+                        tone: .protected
                     )
                 }
 
@@ -204,7 +263,7 @@ extension SettingsView {
 
     private var modelInfoRow: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            SettingsRowIcon(systemName: "cpu", color: GargantuaColors.accent, size: 20)
+            SettingsRowIcon(systemName: "cpu", size: 20)
 
             SettingsRowText(
                 title: downloadManager.modelInfo.name,
@@ -222,10 +281,10 @@ extension SettingsView {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
                         .fill(GargantuaColors.surface3)
 
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
                         .fill(GargantuaColors.accent)
                         .frame(width: max(4, geo.size.width * progress))
                 }
@@ -304,11 +363,7 @@ extension SettingsView {
             subtitle: "Background scans run via launchd. Use the Light profile for low-impact runs."
         ) {
             HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-                SettingsRowIcon(
-                    systemName: "calendar.badge.clock",
-                    color: GargantuaColors.accent,
-                    size: 20
-                )
+                SettingsRowIcon(systemName: "calendar.badge.clock", size: 20)
 
                 SettingsRowText(
                     title: "Background scans",
@@ -371,7 +426,7 @@ extension SettingsView {
                 SettingsNoticeRow(
                     icon: "exclamationmark.triangle.fill",
                     message: scheduledScanError,
-                    tone: .review
+                    tone: .protected
                 )
             }
         }
@@ -385,8 +440,8 @@ extension SettingsView {
                 title: "Cron",
                 detail: customScheduleIsValid
                     ? "Five fields: minute hour day month weekday."
-                    : "Invalid cron expression — five fields: minute hour day month weekday.",
-                detailColor: customScheduleIsValid ? GargantuaColors.ink3 : GargantuaColors.review
+                    : "Invalid cron. Five fields required: minute hour day month weekday.",
+                detailColor: customScheduleIsValid ? GargantuaColors.ink3 : GargantuaColors.protected_
             )
 
             Spacer(minLength: GargantuaSpacing.space3)
@@ -399,7 +454,7 @@ extension SettingsView {
                 .background(GargantuaColors.surface3)
                 .overlay(
                     RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                        .stroke(customScheduleIsValid ? GargantuaColors.border : GargantuaColors.review, lineWidth: 1)
+                        .stroke(customScheduleIsValid ? GargantuaColors.border : GargantuaColors.protected_, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .frame(width: 170)
@@ -415,11 +470,7 @@ extension SettingsView {
             subtitle: "App updates are delivered through Sparkle."
         ) {
             HStack(spacing: GargantuaSpacing.space3) {
-                SettingsRowIcon(
-                    systemName: "arrow.triangle.2.circlepath.circle",
-                    color: GargantuaColors.accent,
-                    size: 20
-                )
+                SettingsRowIcon(systemName: "arrow.triangle.2.circlepath.circle", size: 20)
 
                 SettingsRowText(title: updateFeedDisplay, detail: updateLastCheckDisplay)
 
@@ -428,7 +479,7 @@ extension SettingsView {
                 GargantuaButton(
                     "Check now",
                     icon: "arrow.clockwise",
-                    tone: .ghost(updateSettingsViewModel.canCheckForUpdates ? GargantuaColors.accent : GargantuaColors.ink4),
+                    tone: .ghost(GargantuaColors.accent),
                     isDisabled: !updateSettingsViewModel.canCheckForUpdates,
                     action: { updateSettingsViewModel.userCheckForUpdates() }
                 )
@@ -439,11 +490,7 @@ extension SettingsView {
                 .overlay(GargantuaColors.border)
 
             HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-                SettingsRowIcon(
-                    systemName: "antenna.radiowaves.left.and.right",
-                    color: GargantuaColors.accent,
-                    size: 16
-                )
+                SettingsRowIcon(systemName: "antenna.radiowaves.left.and.right", size: 16)
 
                 SettingsRowText(title: "Channel", detail: updateSettingsViewModel.channel.detail)
 
@@ -490,11 +537,7 @@ extension SettingsView {
             subtitle: "Glanceable Gargantua state from the menu bar."
         ) {
             HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
-                SettingsRowIcon(
-                    systemName: "menubar.rectangle",
-                    color: GargantuaColors.accent,
-                    size: 20
-                )
+                SettingsRowIcon(systemName: "menubar.rectangle", size: 20)
 
                 SettingsRowText(
                     title: "Menu bar widget",
@@ -525,7 +568,7 @@ extension SettingsView {
                 SettingsNoticeRow(
                     icon: "exclamationmark.triangle.fill",
                     message: launchAtLoginError,
-                    tone: .review
+                    tone: .protected
                 )
             }
         }
@@ -538,24 +581,27 @@ extension SettingsView {
             "About",
             subtitle: "Version, status, and links."
         ) {
-            aboutRow(icon: "app.badge", label: "App", value: appVersionString)
-            aboutRow(icon: "doc.text", label: "License", value: "AGPL-3.0")
-            aboutRow(
+            SettingsValueRow(icon: "app.badge", label: "App", value: appVersionString, monoValue: true)
+            SettingsValueRow(icon: "doc.text", label: "License", value: "AGPL-3.0", monoValue: false)
+            SettingsValueRow(
                 icon: "person.2",
                 label: "Active profile",
-                value: settings?.activeProfileID ?? "developer"
+                value: settings?.activeProfileID ?? "developer",
+                monoValue: false
             )
-            aboutRow(
+            SettingsValueRow(
                 icon: "clock",
                 label: "Audit retention",
-                value: "\(settings?.retentionDays ?? 90) days"
+                value: "\(settings?.retentionDays ?? 90) days",
+                monoValue: true
             )
 
             if let lastScan = settings?.lastScanDate {
-                aboutRow(
+                SettingsValueRow(
                     icon: "calendar",
                     label: "Last scan",
-                    value: lastScan.formatted(date: .abbreviated, time: .shortened)
+                    value: lastScan.formatted(date: .abbreviated, time: .shortened),
+                    monoValue: true
                 )
             }
         }
@@ -563,25 +609,9 @@ extension SettingsView {
 
     private var appVersionString: String {
         let bundle = Bundle.main
-        let short = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = bundle.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        let short = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = bundle.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         return "\(short) (\(build))"
-    }
-
-    private func aboutRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            SettingsRowIcon(systemName: icon, size: 14)
-
-            Text(label)
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Spacer()
-
-            Text(value)
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.ink2)
-        }
     }
 
     // MARK: - Helpers
@@ -590,15 +620,14 @@ extension SettingsView {
         HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
             SettingsRowIcon(
                 systemName: useLocalAI ? "sparkles" : "doc.text",
-                color: GargantuaColors.accent,
                 size: 16
             )
 
             SettingsRowText(
                 title: "Use local AI",
                 detail: useLocalAI
-                    ? "On — Generated locally; first run takes longer while shaders compile."
-                    : "Off — Instant rule-based explanations from the YAML library."
+                    ? "On. Generated locally; first run takes longer while shaders compile."
+                    : "Off. Instant rule-based explanations from the YAML library."
             )
 
             Spacer(minLength: GargantuaSpacing.space3)
@@ -680,7 +709,7 @@ extension SettingsView {
         case .notDownloaded: GargantuaColors.ink4
         case .downloading: GargantuaColors.accent
         case .downloaded: GargantuaColors.safe
-        case .failed: GargantuaColors.review
+        case .failed: GargantuaColors.protected_
         }
     }
 
@@ -738,7 +767,7 @@ extension SettingsView {
         case .requiresApproval:
             return GargantuaColors.review
         case .notRegistered, .notFound, .unavailable, .unknown:
-            return GargantuaColors.review
+            return GargantuaColors.protected_
         }
     }
 
@@ -772,7 +801,7 @@ extension SettingsView {
         switch scheduledScanAgentStatus {
         case .enabled: return GargantuaColors.safe
         case .requiresApproval: return GargantuaColors.review
-        case .notRegistered, .notFound, .unavailable, .unknown: return GargantuaColors.review
+        case .notRegistered, .notFound, .unavailable, .unknown: return GargantuaColors.protected_
         }
     }
 

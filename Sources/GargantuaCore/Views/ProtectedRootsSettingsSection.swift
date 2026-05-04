@@ -111,6 +111,12 @@ private final class ProtectedRootsSettingsViewModel: ObservableObject {
 
 struct ProtectedRootsSettingsSection: View {
     @StateObject private var model = ProtectedRootsSettingsViewModel()
+    @State private var pendingRemoval: PendingProtectedRemoval?
+
+    private struct PendingProtectedRemoval: Identifiable {
+        let path: String
+        var id: String { path }
+    }
 
     var body: some View {
         SettingsSectionContainer(
@@ -135,6 +141,19 @@ struct ProtectedRootsSettingsSection: View {
             entryGroup(title: "Bundled Policy", entries: model.bundledEntries, isBundled: true)
         }
         .task { model.load() }
+        .sheet(item: $pendingRemoval) { pending in
+            DestructiveConfirmSheet(
+                title: "Unprotect this root?",
+                message: "Future scans may propose deleting cleanup units inside \(pending.path). You can re-protect it any time.",
+                confirmLabel: "Unprotect root",
+                onCancel: { pendingRemoval = nil },
+                onConfirm: {
+                    let path = pending.path
+                    pendingRemoval = nil
+                    model.removeUserEntry(path: path)
+                }
+            )
+        }
     }
 
     private var addRow: some View {
@@ -167,25 +186,14 @@ struct ProtectedRootsSettingsSection: View {
 
     private func entryGroup(title: String, entries: [ProtectedRootEntry], isBundled: Bool) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            HStack {
-                Text(title.uppercased())
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.ink3)
-
-                Spacer()
-
-                Text("\(entries.count)")
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.ink4)
-            }
+            SettingsSubsectionHeader(title, count: entries.count)
 
             VStack(spacing: 1) {
                 ForEach(entries) { entry in
                     ProtectedRootEntryRow(
                         entry: entry,
                         isBundled: isBundled,
-                        onRemove: { model.removeUserEntry(path: entry.path) }
+                        onRemove: { pendingRemoval = PendingProtectedRemoval(path: entry.path) }
                     )
                 }
             }
@@ -221,7 +229,7 @@ private struct ProtectedRootEntryRow: View {
         HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
             Image(systemName: isBundled ? "checkmark.shield.fill" : "person.badge.shield.checkmark.fill")
                 .font(.system(size: 12))
-                .foregroundStyle(isBundled ? GargantuaColors.ink3 : GargantuaColors.accent)
+                .foregroundStyle(isBundled ? GargantuaColors.ink3 : GargantuaColors.ink)
                 .frame(width: 16, alignment: .center)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -244,14 +252,7 @@ private struct ProtectedRootEntryRow: View {
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink4)
             } else {
-                Button(action: onRemove) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(isHovered ? GargantuaColors.protected_ : GargantuaColors.ink4)
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.plain)
-                .help("Remove protected root")
+                SettingsRemoveButton(help: "Unprotect this root", action: onRemove)
             }
         }
         .padding(.horizontal, GargantuaSpacing.space3)

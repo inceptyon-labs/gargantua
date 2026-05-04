@@ -104,9 +104,15 @@ final class PathExclusionSettingsViewModel: ObservableObject {
 
 struct PathExclusionSettingsSection: View {
     @StateObject private var model: PathExclusionSettingsViewModel
+    @State private var pendingRemoval: PendingExclusionRemoval?
 
     private let title: String
     private let subtitle: String
+
+    private struct PendingExclusionRemoval: Identifiable {
+        let pattern: String
+        var id: String { pattern }
+    }
 
     @MainActor
     init(
@@ -138,7 +144,7 @@ struct PathExclusionSettingsSection: View {
                     ForEach(model.entries, id: \.pattern) { entry in
                         PathExclusionEntryRow(
                             entry: entry,
-                            onRemove: { model.removeEntry(pattern: entry.pattern) }
+                            onRemove: { pendingRemoval = PendingExclusionRemoval(pattern: entry.pattern) }
                         )
                     }
                 }
@@ -147,6 +153,19 @@ struct PathExclusionSettingsSection: View {
         }
         .task {
             model.load()
+        }
+        .sheet(item: $pendingRemoval) { pending in
+            DestructiveConfirmSheet(
+                title: "Remove this exclusion?",
+                message: "Future scans may propose cleaning paths matching \(pending.pattern). You can re-add it any time.",
+                confirmLabel: "Remove exclusion",
+                onCancel: { pendingRemoval = nil },
+                onConfirm: {
+                    let pattern = pending.pattern
+                    pendingRemoval = nil
+                    model.removeEntry(pattern: pattern)
+                }
+            )
         }
     }
 
@@ -235,14 +254,7 @@ private struct PathExclusionEntryRow: View {
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink4)
 
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(isHovered ? GargantuaColors.protected_ : GargantuaColors.ink4)
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.plain)
-            .help("Remove exclusion entry")
+            SettingsRemoveButton(help: "Remove exclusion entry", action: onRemove)
         }
         .padding(.horizontal, GargantuaSpacing.space3)
         .padding(.vertical, GargantuaSpacing.space2)

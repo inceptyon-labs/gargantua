@@ -8,6 +8,13 @@ struct ScanRootsSettingsSection: View {
 
     @State private var newScanRoot = ""
     @State private var scanRootError: String?
+    @State private var pendingRemoval: PendingScanRootRemoval?
+
+    private struct PendingScanRootRemoval: Identifiable {
+        let index: Int
+        let path: String
+        var id: Int { index }
+    }
 
     var body: some View {
         SettingsSectionContainer(
@@ -26,7 +33,7 @@ struct ScanRootsSettingsSection: View {
             ScanRootsList(
                 roots: storedScanRoots,
                 onMove: moveScanRoot,
-                onRemove: removeScanRoot
+                onRemove: requestRemoveScanRoot
             )
 
             divider
@@ -41,9 +48,22 @@ struct ScanRootsSettingsSection: View {
                 SettingsNoticeRow(
                     icon: "exclamationmark.triangle.fill",
                     message: scanRootError,
-                    tone: .review
+                    tone: .protected
                 )
             }
+        }
+        .sheet(item: $pendingRemoval) { pending in
+            DestructiveConfirmSheet(
+                title: "Remove this scan root?",
+                message: "Future scans will not look inside \(abbreviatedScanRootPath(pending.path)). You can re-add it any time.",
+                confirmLabel: "Remove root",
+                onCancel: { pendingRemoval = nil },
+                onConfirm: {
+                    let index = pending.index
+                    pendingRemoval = nil
+                    removeScanRoot(at: index)
+                }
+            )
         }
     }
 
@@ -52,9 +72,13 @@ struct ScanRootsSettingsSection: View {
     }
 
     private var divider: some View {
-        Rectangle()
-            .fill(GargantuaColors.borderSoft)
-            .frame(height: 1)
+        SettingsHairlineDivider()
+    }
+
+    private func requestRemoveScanRoot(at index: Int) {
+        let roots = storedScanRoots
+        guard roots.indices.contains(index) else { return }
+        pendingRemoval = PendingScanRootRemoval(index: index, path: roots[index])
     }
 
     private func addTypedScanRoot() {

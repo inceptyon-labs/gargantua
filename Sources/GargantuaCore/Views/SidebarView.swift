@@ -315,13 +315,18 @@ private struct SidebarSectionView: View {
     }
 
     extension View {
-        fileprivate func nativeToolTip(_ text: String) -> some View {
-            overlay(ToolTipBridge(text: text))
+        @ViewBuilder
+        fileprivate func nativeToolTip(_ text: String, isEnabled: Bool = true) -> some View {
+            if isEnabled {
+                overlay(ToolTipBridge(text: text))
+            } else {
+                self
+            }
         }
     }
 #else
     extension View {
-        fileprivate func nativeToolTip(_ text: String) -> some View {
+        fileprivate func nativeToolTip(_ text: String, isEnabled: Bool = true) -> some View {
             self
         }
     }
@@ -381,7 +386,7 @@ private struct SidebarItemRow: View {
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
-        .nativeToolTip(item.label)
+        .nativeToolTip(item.label, isEnabled: isCollapsed)
         .onHover { hovering in
             isHovered = hovering
         }

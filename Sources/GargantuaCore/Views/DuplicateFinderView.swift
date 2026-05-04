@@ -24,6 +24,12 @@ public struct DuplicateFinderView: View {
     public let onRescan: (() -> Void)?
 
     @State private var expandedGroupIDs: Set<String>
+    @State private var derivation: DuplicateFinderDerivation
+    /// When `true`, drop both the personal-scope whitelist and the
+    /// managed-tree blacklist — show every byte-identical group fclones
+    /// surfaced. Default off: most matches outside the personal scope are
+    /// app-managed noise the user can't act on file-by-file.
+    @AppStorage("duplicateFinder.showEverything") private var showEverything: Bool = false
 
     public init(
         results: [ScanResult],
@@ -41,16 +47,34 @@ public struct DuplicateFinderView: View {
         self.onBack = onBack
         self.onRefresh = onRefresh
         self.onRescan = onRescan
+        // Compute derivation once at init using whatever toggle value is
+        // already persisted; .onChange refreshes it on (results, toggle)
+        // change. Property accesses then read State (free) instead of
+        // re-running filter+group every render — the previous shape did
+        // O(N) work per access × ~6 accesses per render, which beachballed
+        // during scroll on large duplicate sets.
+        let initialShowEverything = UserDefaults.standard.bool(forKey: "duplicateFinder.showEverything")
+        let initial = DuplicateFinderDerivation.compute(results: results, showEverything: initialShowEverything)
+        self._derivation = State(initialValue: initial)
         // Expand the biggest few groups by default; large duplicate sets can
         // have hundreds of groups, and keeping them all open hurts scroll
         // performance and visual parse.
-        let initialGroups = DuplicateGrouper.group(results)
-        self._expandedGroupIDs = State(initialValue: Set(initialGroups.prefix(5).map(\.id)))
+        self._expandedGroupIDs = State(initialValue: Set(initial.groups.prefix(5).map(\.id)))
     }
 
-    private var groups: [DuplicateGroup] {
-        DuplicateGrouper.group(results)
+    /// Cheap key for change detection. ScanResult isn't Equatable, so we
+    /// fingerprint the array via count + endpoint ids — sufficient because
+    /// fclones output is regenerated wholesale per scan, never partially
+    /// mutated in place.
+    private var derivationKey: String {
+        "\(results.count)|\(results.first?.id ?? "")|\(results.last?.id ?? "")|\(showEverything)"
     }
+
+    private var visibleResults: [ScanResult] { derivation.visibleResults }
+
+    private var hiddenSummary: DuplicateFinderHiddenSummary { derivation.hidden }
+
+    private var groups: [DuplicateGroup] { derivation.groups }
 
     private var totalReclaimableSelected: Int64 {
         DuplicateFinderSelection.totalReclaimableBytes(
@@ -59,26 +83,15 @@ public struct DuplicateFinderView: View {
         )
     }
 
-    private var totalReclaimableCeiling: Int64 {
-        groups.reduce(Int64(0)) { sum, group in
-            let (next, overflow) = sum.addingReportingOverflow(group.reclaimableCeilingBytes)
-            return overflow ? Int64.max : next
-        }
-    }
+    private var totalReclaimableCeiling: Int64 { derivation.totalReclaimableCeiling }
+
+    private var totalVisibleFileCount: Int { derivation.visibleResults.count }
 
     /// Selectable rows across every group, keyed by id for O(1) lookup.
     /// Protected rows never appear here, so anything pulled through this map
     /// is guaranteed to be a legitimate trash candidate regardless of what
     /// the external `selectedIDs` binding carries.
-    private var selectableByID: [String: ScanResult] {
-        var map: [String: ScanResult] = [:]
-        for group in groups {
-            for file in group.files where file.safety != .protected_ {
-                map[file.id] = file
-            }
-        }
-        return map
-    }
+    private var selectableByID: [String: ScanResult] { derivation.selectableByID }
 
     /// Sanitized handoff for `onSendToTrash` — drops any id that isn't a
     /// current, selectable, ungrouped-free row. Defends the Trust Layer
@@ -115,6 +128,12 @@ public struct DuplicateFinderView: View {
 
             actionBar
         }
+        .onChange(of: derivationKey) { _, _ in
+            derivation = DuplicateFinderDerivation.compute(
+                results: results,
+                showEverything: showEverything
+            )
+        }
     }
 
     // MARK: - Summary Bar
@@ -123,14 +142,37 @@ public struct DuplicateFinderView: View {
         HStack(spacing: GargantuaSpacing.space4) {
             summaryLabel("\(groups.count) groups")
             summaryDot
-            summaryLabel("\(results.count) files")
+            summaryLabel("\(totalVisibleFileCount) files")
             summaryDot
             summaryLabel(AlertItem.formatBytes(totalReclaimableCeiling) + " reclaimable")
+
+            if !showEverything {
+                let hidden = hiddenSummary
+                if hidden.groups > 0 {
+                    summaryDot
+                    summaryLabel("\(hidden.groups) outside personal scope hidden")
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+
             Spacer()
+
+            scopeToggle
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
         .background(GargantuaColors.surface2)
+    }
+
+    private var scopeToggle: some View {
+        Toggle(isOn: $showEverything) {
+            Text("Show all duplicates")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+        }
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+        .help("Off (default): show only duplicates inside ~/Documents, ~/Downloads, ~/Desktop, ~/Pictures, ~/Movies, ~/Music — and hide app-managed sub-trees like ~/Documents/Adobe. On: surface every byte-identical group fclones found, including dependency trees and system caches.")
     }
 
     private func summaryLabel(_ text: String) -> some View {
@@ -147,17 +189,47 @@ public struct DuplicateFinderView: View {
 
     // MARK: - Empty State
 
+    @ViewBuilder
     private var emptyState: some View {
+        let hidden = hiddenSummary
+        let filterIsHidingEverything = !showEverything && hidden.groups > 0
+
         VStack(spacing: GargantuaSpacing.space3) {
             Image(systemName: "doc.on.doc")
-                .font(.system(size: 32))
+                .font(GargantuaFonts.display)
                 .foregroundStyle(GargantuaColors.ink4)
-            Text("No duplicate groups to review")
+
+            Text(filterIsHidingEverything
+                ? "No duplicates in your personal folders"
+                : "No duplicate groups to review")
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink2)
-            Text("Run a duplicate scan from Deep Clean to populate this view.")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
+
+            if filterIsHidingEverything {
+                Text("\(hidden.groups) duplicate group\(hidden.groups == 1 ? "" : "s") (\(hidden.files) file\(hidden.files == 1 ? "" : "s"), \(AlertItem.formatBytes(hidden.reclaimableBytes))) live outside ~/Documents, ~/Downloads, ~/Desktop, ~/Pictures, ~/Movies, ~/Music — or inside app-managed sub-trees like ~/Documents/Adobe. Clear dependency trees and caches via Deep Clean.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 460)
+
+                Button(action: { showEverything = true }) {
+                    Text("Show all duplicates")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(
+                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                .fill(GargantuaColors.surface3)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, GargantuaSpacing.space1)
+            } else {
+                Text("Your scan roots are clean.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -286,11 +358,11 @@ public struct DuplicateFinderView: View {
 extension DuplicateFinderView {
     var actionBar: some View {
         HStack {
-            Text("\(selectedIDs.count) selected")
+            Text("\(selectedResults.count) selected")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
 
-            if !selectedIDs.isEmpty {
+            if !selectedResults.isEmpty {
                 Text("(\(AlertItem.formatBytes(totalReclaimableSelected)))")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
@@ -305,14 +377,14 @@ extension DuplicateFinderView {
                     .padding(.horizontal, GargantuaSpacing.space4)
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(
-                        selectedIDs.isEmpty
+                        selectedResults.isEmpty
                             ? GargantuaColors.review.opacity(0.4)
                             : GargantuaColors.review
                     )
                     .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             }
             .buttonStyle(.plain)
-            .disabled(selectedIDs.isEmpty || onSendToTrash == nil)
+            .disabled(selectedResults.isEmpty || onSendToTrash == nil)
             .help(
                 onSendToTrash == nil
                     ? "Destructive actions are disabled until Trust Layer wiring is complete."
@@ -485,4 +557,75 @@ private struct DuplicateFileRow: View {
         }
         return path
     }
+}
+
+// MARK: - Memoized derivation
+
+/// Snapshot of every value the body needs from `(results, includeManaged)`.
+/// Computed once per change of those inputs and cached in `@State` so scroll
+/// frames don't re-run filter + grouper. Replaces a previous shape where each
+/// view-property access ran the O(N) filter pipeline.
+struct DuplicateFinderDerivation {
+    let visibleResults: [ScanResult]
+    let groups: [DuplicateGroup]
+    let hidden: DuplicateFinderHiddenSummary
+    let totalReclaimableCeiling: Int64
+    let selectableByID: [String: ScanResult]
+
+    static let empty = DuplicateFinderDerivation(
+        visibleResults: [],
+        groups: [],
+        hidden: DuplicateFinderHiddenSummary(groups: 0, files: 0, reclaimableBytes: 0),
+        totalReclaimableCeiling: 0,
+        selectableByID: [:]
+    )
+
+    static func compute(results: [ScanResult], showEverything: Bool) -> DuplicateFinderDerivation {
+        let personalRoots: [URL]? = showEverything ? nil : DuplicateFinderScopeFilter.defaultPersonalRoots()
+        let visible = DuplicateFinderScopeFilter.apply(
+            to: results,
+            personalRoots: personalRoots,
+            excludeManaged: !showEverything
+        )
+        let groups = DuplicateGrouper.group(visible)
+
+        // Derive hidden via id-set difference instead of re-running the filter.
+        let visibleIDs = Set(visible.map(\.id))
+        let hiddenResults = results.filter { !visibleIDs.contains($0.id) }
+        let hiddenGroups = DuplicateGrouper.group(hiddenResults)
+        let hiddenBytes = hiddenGroups.reduce(Int64(0)) { sum, group in
+            let (next, overflow) = sum.addingReportingOverflow(group.reclaimableCeilingBytes)
+            return overflow ? Int64.max : next
+        }
+
+        let ceiling = groups.reduce(Int64(0)) { sum, group in
+            let (next, overflow) = sum.addingReportingOverflow(group.reclaimableCeilingBytes)
+            return overflow ? Int64.max : next
+        }
+
+        var selectable: [String: ScanResult] = [:]
+        for group in groups {
+            for file in group.files where file.safety != .protected_ {
+                selectable[file.id] = file
+            }
+        }
+
+        return DuplicateFinderDerivation(
+            visibleResults: visible,
+            groups: groups,
+            hidden: DuplicateFinderHiddenSummary(
+                groups: hiddenGroups.count,
+                files: hiddenResults.count,
+                reclaimableBytes: hiddenBytes
+            ),
+            totalReclaimableCeiling: ceiling,
+            selectableByID: selectable
+        )
+    }
+}
+
+struct DuplicateFinderHiddenSummary {
+    let groups: Int
+    let files: Int
+    let reclaimableBytes: Int64
 }

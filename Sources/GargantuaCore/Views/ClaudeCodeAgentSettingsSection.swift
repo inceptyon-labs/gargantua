@@ -20,17 +20,28 @@ struct ClaudeCodeAgentSettingsSection: View {
         ) {
             statusHeader
 
-            Divider()
-                .overlay(GargantuaColors.border)
+            if configuration.isEnabled {
+                Divider()
+                    .overlay(GargantuaColors.border)
 
-            cliPathRow
-            Text(statusMessage)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(statusTone)
+                cliPathRow
+                if !statusMessage.isEmpty {
+                    SettingsNoticeRow(
+                        icon: statusNoticeIcon,
+                        message: statusMessage,
+                        tone: statusNoticeTone
+                    )
+                }
 
-            modelPickerRow
-            maxTurnsStepper
-            scheduledAuditToggle
+                toolGrantNotice
+                modelPickerRow
+                maxTurnsStepper
+                scheduledAuditToggle
+            } else {
+                Text("Enable to set the CLI path, model, and run options.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
         }
         .task {
             configuration = store.load()
@@ -104,8 +115,32 @@ struct ClaudeCodeAgentSettingsSection: View {
         case .cacheStale(let writtenAt):
             "Live fetch failed; showing cached list from \(relativeTime(writtenAt)) ago."
         case .bakedIn:
-            "No API key configured — showing built-in fallback list."
+            "No API key configured. Showing built-in fallback list."
         }
+    }
+
+    private var toolGrantNotice: some View {
+        SettingsNoticeRow(
+            icon: "checkmark.shield",
+            message: "Read-only by default. The agent can preview cleanups via the dry-run propose flow; nothing is deleted unless you confirm in the same review modal Deep Scan uses.",
+            tone: .info
+        )
+    }
+
+    private var statusNoticeIcon: String {
+        switch statusNoticeTone {
+        case .safe: return "checkmark.circle.fill"
+        case .protected: return "xmark.octagon.fill"
+        case .review: return "exclamationmark.triangle.fill"
+        case .info: return "info.circle"
+        }
+    }
+
+    private var statusNoticeTone: SettingsNoticeRow.Tone {
+        if statusTone == GargantuaColors.safe { return .safe }
+        if statusTone == GargantuaColors.protected_ { return .protected }
+        if statusTone == GargantuaColors.review { return .review }
+        return .info
     }
 
     private func loadModels(forceRefresh: Bool) async {
@@ -262,7 +297,7 @@ struct ClaudeCodeAgentSettingsSection: View {
             statusTone = GargantuaColors.safe
         } catch {
             statusMessage = error.localizedDescription
-            statusTone = configuration.isEnabled ? GargantuaColors.review : GargantuaColors.ink4
+            statusTone = configuration.isEnabled ? GargantuaColors.protected_ : GargantuaColors.ink4
         }
     }
 }

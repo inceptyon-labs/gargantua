@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct MCPTransportSettingsSection: View {
@@ -71,9 +72,13 @@ struct MCPTransportSettingsSection: View {
                 tokenDisplay(generatedToken)
             }
 
-            Text(tokenStatus)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(statusColor)
+            if !tokenStatus.isEmpty {
+                SettingsNoticeRow(
+                    icon: tokenStatusIcon,
+                    message: tokenStatus,
+                    tone: tokenStatusTone
+                )
+            }
         }
         .task {
             configuration = configurationStore.load()
@@ -240,15 +245,53 @@ struct MCPTransportSettingsSection: View {
     }
 
     private func tokenDisplay(_ token: String) -> some View {
-        Text(token)
-            .font(GargantuaFonts.monoPath)
-            .foregroundStyle(GargantuaColors.ink)
-            .lineLimit(2)
-            .textSelection(.enabled)
-            .padding(GargantuaSpacing.space3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(GargantuaColors.surface3)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            Text(token)
+                .font(GargantuaFonts.monoPath)
+                .foregroundStyle(GargantuaColors.ink)
+                .lineLimit(2)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            GargantuaIconButton(
+                icon: "doc.on.doc",
+                help: "Copy token to clipboard",
+                color: GargantuaColors.accent,
+                action: { copyToClipboard(token) }
+            )
+        }
+        .padding(GargantuaSpacing.space3)
+        .background(GargantuaColors.surface3)
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    }
+
+    private func copyToClipboard(_ token: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(token, forType: .string)
+        tokenStatus = "Token copied to clipboard."
+    }
+
+    private var tokenStatusIcon: String {
+        switch tokenStatusTone {
+        case .safe: return "checkmark.circle.fill"
+        case .protected: return "xmark.octagon.fill"
+        case .review: return "exclamationmark.triangle.fill"
+        case .info: return "info.circle"
+        }
+    }
+
+    private var tokenStatusTone: SettingsNoticeRow.Tone {
+        if tokenStatus.contains("locked out") || tokenStatus.contains("error") || tokenStatus.contains("failed") {
+            return .protected
+        }
+        if tokenStatus.contains("LAN binding needs") {
+            return .review
+        }
+        if tokenStatus.contains("Keychain") || tokenStatus.contains("rotated") || tokenStatus.contains("clipboard") {
+            return .safe
+        }
+        return .info
     }
 
     private var bindScopeBinding: Binding<MCPServerBindScope> {
