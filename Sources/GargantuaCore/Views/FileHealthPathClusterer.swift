@@ -44,6 +44,58 @@ public enum FileHealthPathClusterer {
     /// useful as bulk-selection shortcuts.
     public static let minimumCount = 2
 
+    /// Default sample-paths cap when building cluster summaries for the AI
+    /// engine. Five paths is enough for the model to identify the
+    /// directory's purpose without bloating the prompt.
+    public static let defaultSampleSize = 5
+
+    /// For each cluster, gather up to `limit` finding paths that fall under
+    /// it. Used to build the AI prompt — the model sees a representative
+    /// slice rather than the full list.
+    public static func samplesByCluster(
+        _ clusters: [FileHealthPathCluster],
+        findings: [ScanResult],
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        limit: Int = defaultSampleSize
+    ) -> [String: [String]] {
+        guard !clusters.isEmpty, !findings.isEmpty, limit > 0 else { return [:] }
+
+        let expanded = expandedPrefixes(for: clusters, homeDirectory: homeDirectory)
+        var samples: [String: [String]] = [:]
+        for finding in findings {
+            for cluster in clusters {
+                guard let prefix = expanded[cluster.id],
+                      finding.path.hasPrefix(prefix)
+                else { continue }
+                if (samples[cluster.id]?.count ?? 0) < limit {
+                    samples[cluster.id, default: []].append(finding.path)
+                }
+                break
+            }
+        }
+        return samples
+    }
+
+    /// Expand each cluster id back to an absolute prefix that matches the
+    /// raw `ScanResult.path` strings (i.e., `~/X/` → `/Users/jason/X/`).
+    static func expandedPrefixes(
+        for clusters: [FileHealthPathCluster],
+        homeDirectory: URL
+    ) -> [String: String] {
+        let homePath = homeDirectory.path.hasSuffix("/")
+            ? homeDirectory.path
+            : homeDirectory.path + "/"
+        var out: [String: String] = [:]
+        for cluster in clusters {
+            if cluster.id.hasPrefix("~/") {
+                out[cluster.id] = homePath + cluster.id.dropFirst(2)
+            } else {
+                out[cluster.id] = cluster.id
+            }
+        }
+        return out
+    }
+
     public static func clusters(
         from findings: [ScanResult],
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,

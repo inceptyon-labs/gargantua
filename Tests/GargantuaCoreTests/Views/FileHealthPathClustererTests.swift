@@ -140,4 +140,38 @@ struct FileHealthPathClustererTests {
         let label = FileHealthPathClusterer.displayLabel(for: "/var/")
         #expect(label == "var")
     }
+
+    @Test("samplesByCluster returns up to N matching paths per cluster, scoped to that cluster")
+    func samplesByClusterReturnsMatchingPaths() {
+        let findings = [
+            makeFinding(path: "/Users/jason/Development/dreamheist/builds/a/foo.png"),
+            makeFinding(path: "/Users/jason/Development/dreamheist/builds/b/bar.png"),
+            makeFinding(path: "/Users/jason/Development/dreamheist/builds/c/baz.png"),
+            makeFinding(path: "/Users/jason/Development/dreamheist/builds/d/qux.png"),
+            makeFinding(path: "/Users/jason/Development/inceptyon/build/ios/foo.png"),
+            makeFinding(path: "/Users/jason/Development/inceptyon/build/android/bar.png"),
+        ]
+        let clusters = FileHealthPathClusterer.clusters(from: findings, homeDirectory: testHome)
+        let samples = FileHealthPathClusterer.samplesByCluster(
+            clusters,
+            findings: findings,
+            homeDirectory: testHome,
+            limit: 3
+        )
+
+        let dreamheist = samples["~/Development/dreamheist/builds/"] ?? []
+        let inceptyon = samples["~/Development/inceptyon/build/"] ?? []
+
+        #expect(dreamheist.count == 3, "limit should cap matches at 3")
+        #expect(dreamheist.allSatisfy { $0.contains("/dreamheist/builds/") })
+        #expect(inceptyon.count == 2)
+        #expect(inceptyon.allSatisfy { $0.contains("/inceptyon/build/") })
+    }
+
+    @Test("samplesByCluster returns empty map when no findings match any cluster")
+    func samplesByClusterEmptyMap() {
+        let clusters = FileHealthPathClusterer.clusters(from: [], homeDirectory: testHome)
+        let samples = FileHealthPathClusterer.samplesByCluster(clusters, findings: [], homeDirectory: testHome)
+        #expect(samples.isEmpty)
+    }
 }

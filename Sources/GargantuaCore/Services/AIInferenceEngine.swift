@@ -71,6 +71,18 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
     /// filter DSL. Returning `nil` means the query could not be understood
     /// well enough to produce a safe filter.
     func scanFilter(for query: String) async throws -> ScanFilterSet?
+
+    /// Label and classify File Health path-prefix clusters in batch. The
+    /// engine receives compact summaries (counts, sizes, sample paths) and
+    /// returns one suggestion per recognized cluster. Returning an empty
+    /// array means the engine declined to make a call (template engine,
+    /// model unavailable, or unparseable response).
+    ///
+    /// Suggestions are advisory: callers must surface them as hints, never
+    /// as authoritative safety classifications.
+    func suggestClusters(
+        _ summaries: [FileHealthClusterSummary]
+    ) async throws -> [FileHealthClusterSuggestion]
 }
 
 public extension AIInferenceEngine {
@@ -90,6 +102,15 @@ public extension AIInferenceEngine {
 
     func scanFilter(for query: String) async throws -> ScanFilterSet? {
         ScanFilterTemplate.filter(for: query)
+    }
+
+    /// Default: no suggestions. Engines without semantic capability (the
+    /// template engine, stubs) opt out by returning empty.
+    func suggestClusters(
+        _ summaries: [FileHealthClusterSummary]
+    ) async throws -> [FileHealthClusterSuggestion] {
+        _ = summaries
+        return []
     }
 }
 

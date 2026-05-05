@@ -12,11 +12,14 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "FileHeal
 /// survive sidebar navigation — switching away and back does not reset the
 /// phase or discard findings.
 public struct FileHealthContainerView: View {
+    public typealias ClusterSuggestionHandler = @MainActor ([FileHealthClusterSummary]) async -> [FileHealthClusterSuggestion]
+
     public let state: FileHealthContainerState
     public let scanRoots: [URL]?
     public let profile: CleanupProfile
     public let engineFactory: (_ scanRoots: [URL], _ profile: CleanupProfile) throws -> any ScanAdapter
     public let onExplain: ((ScanResult) -> Void)?
+    public let onSuggestClusters: ClusterSuggestionHandler?
 
     @State private var activeScanTask: Task<Void, Never>?
     @State private var scanGeneration: Int = 0
@@ -43,12 +46,14 @@ public struct FileHealthContainerView: View {
         scanRoots: [URL]? = nil,
         profile: CleanupProfile = .deep,
         engine: (any ScanAdapter)? = nil,
-        onExplain: ((ScanResult) -> Void)? = nil
+        onExplain: ((ScanResult) -> Void)? = nil,
+        onSuggestClusters: ClusterSuggestionHandler? = nil
     ) {
         self.state = state
         self.scanRoots = scanRoots
         self.profile = profile
         self.onExplain = onExplain
+        self.onSuggestClusters = onSuggestClusters
         if let engine {
             self.engineFactory = { _, _ in engine }
         } else {
@@ -79,7 +84,8 @@ public struct FileHealthContainerView: View {
                         onExplain: onExplain,
                         onBack: { state.clearResults() },
                         onRescan: startScan,
-                        onSendToTrash: { state.showConfirmation = true }
+                        onSendToTrash: { state.showConfirmation = true },
+                        onSuggestClusters: onSuggestClusters
                     )
                 case .error:
                     errorView(state.errorMessage ?? "Unknown scan error")

@@ -112,7 +112,8 @@ struct MainContentView: View {
                                     state: fileHealthState,
                                     scanRoots: resolvedScanRoots,
                                     profile: activeDeepCleanProfile,
-                                    onExplain: explainHandler
+                                    onExplain: explainHandler,
+                                    onSuggestClusters: clusterSuggestionHandler
                                 )
                             case "diskExplorer":
                                 DiskExplorerView(state: diskExplorerState)
@@ -229,6 +230,14 @@ struct MainContentView: View {
     /// engine without owning AI lifecycle state.
     private var scanFilterHandler: (String) async -> ScanFilterSet? {
         { query in try? await aiService.scanFilter(for: query) }
+    }
+
+    /// Closure handed to File Health so its "Suggest" button can label and
+    /// classify path-prefix clusters via the active local AI engine. Returns
+    /// an empty array when the engine is template-only or the model isn't
+    /// available — UI treats that as "no annotations" without erroring.
+    private var clusterSuggestionHandler: FileHealthContainerView.ClusterSuggestionHandler {
+        { summaries in await aiService.suggestClusters(summaries) }
     }
 
     /// Build the narrator closure injected via the `\.cleanupNarrator`

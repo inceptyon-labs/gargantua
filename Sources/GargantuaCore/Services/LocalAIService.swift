@@ -361,6 +361,52 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
     }
 
+    /// Label and classify File Health clusters via the active engine. Returns
+    /// an empty array when the engine is template-only, when the model isn't
+    /// available, or when the engine response can't be parsed. Mirrors the
+    /// lifecycle handling of `scanFilter(for:)` so a long inference can't be
+    /// idle-unloaded mid-flight.
+    public func suggestClusters(
+        _ summaries: [FileHealthClusterSummary]
+    ) async -> [FileHealthClusterSuggestion] {
+        guard !summaries.isEmpty else { return [] }
+
+        let engine = self.engine
+        let engineKind = engine.kind
+
+        if engineKind == .template || !isModelAvailable {
+            return (try? await engine.suggestClusters(summaries)) ?? []
+        }
+
+        if lifecycleState == .unloaded {
+            do {
+                try await loadModel()
+            } catch {
+                return []
+            }
+        }
+
+        guard lifecycleState == .ready else { return [] }
+
+        idleTask?.cancel()
+        idleTask = nil
+        activeInferenceCount += 1
+        defer {
+            activeInferenceCount -= 1
+            if activeInferenceCount == 0 && lifecycleState == .ready {
+                resetIdleTimer()
+            }
+        }
+
+        do {
+            let suggestions = try await engine.suggestClusters(summaries)
+            markFirstInferenceComplete(for: engineKind)
+            return suggestions
+        } catch {
+            return []
+        }
+    }
+
     public func unloadModel() {
         idleTask?.cancel()
         idleTask = nil

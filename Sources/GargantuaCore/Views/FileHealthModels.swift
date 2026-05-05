@@ -32,6 +32,52 @@ extension CzkawkaCategory {
     }
 }
 
+// MARK: - Cluster Suggestion Types
+
+/// Aggregated description of a path-prefix cluster sent to the AI engine for
+/// labeling. Carries enough context for the model to make a safety call —
+/// category, sample paths, count, total size — but never the full path list,
+/// so a 2660-item tab still produces a small prompt.
+public struct FileHealthClusterSummary: Sendable, Equatable {
+    public let id: String
+    public let category: String
+    public let count: Int
+    public let totalSize: Int64
+    public let samplePaths: [String]
+
+    public init(
+        id: String,
+        category: String,
+        count: Int,
+        totalSize: Int64,
+        samplePaths: [String]
+    ) {
+        self.id = id
+        self.category = category
+        self.count = count
+        self.totalSize = totalSize
+        self.samplePaths = samplePaths
+    }
+}
+
+/// AI engine response for one cluster: a short human label, a recommended
+/// safety classification, and a one-sentence rationale. The classification
+/// is advisory only — UI surfaces it as a hint and never mutates
+/// `ScanResult.safety`.
+public struct FileHealthClusterSuggestion: Sendable, Equatable {
+    public let clusterID: String
+    public let label: String
+    public let safety: SafetyLevel
+    public let rationale: String
+
+    public init(clusterID: String, label: String, safety: SafetyLevel, rationale: String) {
+        self.clusterID = clusterID
+        self.label = label
+        self.safety = safety
+        self.rationale = rationale
+    }
+}
+
 // MARK: - Group Context
 
 extension ScanResult {

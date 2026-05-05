@@ -151,6 +151,26 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         return try await session.respond(to: prompt)
     }
 
+    public func suggestClusters(
+        _ summaries: [FileHealthClusterSummary]
+    ) async throws -> [FileHealthClusterSuggestion] {
+        guard let modelContainer else {
+            throw MLXInferenceError.notLoaded
+        }
+        guard !summaries.isEmpty else { return [] }
+
+        let session = ChatSession(
+            modelContainer,
+            instructions: Self.clusterSuggestionInstructions,
+            generateParameters: GenerateParameters(
+                maxTokens: 480,
+                temperature: 0.2
+            )
+        )
+        let response = try await session.respond(to: Self.buildClusterSuggestionPrompt(for: summaries))
+        return Self.parseClusterSuggestions(response, allowed: summaries)
+    }
+
     public func scanFilter(for query: String) async throws -> ScanFilterSet? {
         guard let modelContainer else {
             throw MLXInferenceError.notLoaded
@@ -174,6 +194,18 @@ public final class MLXInferenceEngine: AIInferenceEngine {
     groupings. Plain English only — no bullet lists, no code fences, no \
     markdown headers. Do not invent items, paths, or numbers that are \
     not in the provided summary.
+    """
+
+    public nonisolated static let clusterSuggestionInstructions = """
+    You label and classify groups of files for a macOS cleanup tool. \
+    Every group is identified by a path prefix and described by a category, \
+    sample paths, count, and total size. For each group, return a short \
+    human label, a safety classification, and one short sentence of rationale. \
+    Output JSON only — an array under key "suggestions" — with keys: \
+    cluster_id (the exact prefix as given), label (3-6 words, no quotes), \
+    safety (one of "safe", "review", "protected"), rationale (one short sentence). \
+    safety must be conservative: only mark groups "safe" when the sample paths \
+    clearly point to regenerable build, cache, or temp output.
     """
 
     public nonisolated static let scanFilterInstructions = """
@@ -210,6 +242,116 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         lines.append("")
         lines.append("Explain what this item is and whether it is safe to delete.")
         return lines.joined(separator: "\n")
+    }
+
+    /// Build the prompt body for `suggestClusters`. One JSON-shaped block per
+    /// summary, capped sample paths at five each so the prompt stays under a
+    /// few thousand tokens even for tabs with hundreds of clusters. Sample
+    /// paths are sanitized (control chars stripped, length capped) so a
+    /// hostile filename can't smuggle a new instruction into the model.
+    static func buildClusterSuggestionPrompt(
+        for summaries: [FileHealthClusterSummary]
+    ) -> String {
+        var lines: [String] = []
+        lines.append("Groups to classify:")
+        lines.append("")
+        for summary in summaries {
+            lines.append("- cluster_id: \(sanitizeForPrompt(summary.id))")
+            lines.append("  category: \(sanitizeForPrompt(summary.category))")
+            lines.append("  count: \(summary.count)")
+            lines.append("  total_size: \(ByteCountFormatter.string(fromByteCount: summary.totalSize, countStyle: .file))")
+            if !summary.samplePaths.isEmpty {
+                lines.append("  sample_paths:")
+                for path in summary.samplePaths.prefix(5) {
+                    lines.append("    - \(sanitizeForPrompt(path))")
+                }
+            }
+        }
+        lines.append("")
+        lines.append("Return JSON only, with shape: {\"suggestions\":[{\"cluster_id\":\"…\",\"label\":\"…\",\"safety\":\"safe|review|protected\",\"rationale\":\"…\"}]}.")
+        return lines.joined(separator: "\n")
+    }
+
+    /// Parse a JSON response from `suggestClusters` into typed suggestions,
+    /// dropping anything that doesn't reference a known cluster id or carries
+    /// an unrecognized safety value. Tolerant of leading prose and trailing
+    /// markdown — extracts the first JSON object/array shape it finds.
+    static func parseClusterSuggestions(
+        _ response: String,
+        allowed: [FileHealthClusterSummary]
+    ) -> [FileHealthClusterSuggestion] {
+        guard let json = extractFirstJSONObject(from: response),
+              let data = json.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = parsed["suggestions"] as? [[String: Any]]
+        else {
+            return []
+        }
+
+        let allowedIDs = Set(allowed.map(\.id))
+        var seen: Set<String> = []
+        var out: [FileHealthClusterSuggestion] = []
+        for entry in raw {
+            guard let clusterID = entry["cluster_id"] as? String,
+                  allowedIDs.contains(clusterID),
+                  !seen.contains(clusterID),
+                  let label = entry["label"] as? String,
+                  let safetyString = entry["safety"] as? String,
+                  let safety = parseSafety(safetyString)
+            else { continue }
+            let rationale = (entry["rationale"] as? String) ?? ""
+            seen.insert(clusterID)
+            out.append(FileHealthClusterSuggestion(
+                clusterID: clusterID,
+                label: label.trimmingCharacters(in: .whitespacesAndNewlines),
+                safety: safety,
+                rationale: rationale.trimmingCharacters(in: .whitespacesAndNewlines)
+            ))
+        }
+        return out
+    }
+
+    private static func parseSafety(_ raw: String) -> SafetyLevel? {
+        switch raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "safe": return .safe
+        case "review": return .review
+        case "protected", "protected_": return .protected_
+        default: return nil
+        }
+    }
+
+    /// Find the first balanced `{...}` block in a string, ignoring leading
+    /// prose, trailing commentary, or markdown fences. Used by the cluster
+    /// suggestion parser; the model wraps JSON in code fences from time to
+    /// time even with strict instructions.
+    static func extractFirstJSONObject(from text: String) -> String? {
+        guard let start = text.firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var inString = false
+        var escaping = false
+        var i = start
+        while i < text.endIndex {
+            let c = text[i]
+            if escaping {
+                escaping = false
+            } else if inString {
+                if c == "\\" { escaping = true }
+                else if c == "\"" { inString = false }
+            } else {
+                switch c {
+                case "\"": inString = true
+                case "{": depth += 1
+                case "}":
+                    depth -= 1
+                    if depth == 0 {
+                        return String(text[start ... i])
+                    }
+                default: break
+                }
+            }
+            i = text.index(after: i)
+        }
+        return nil
     }
 
     static func buildScanFilterPrompt(for query: String) -> String {

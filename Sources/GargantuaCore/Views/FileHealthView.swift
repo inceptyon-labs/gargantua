@@ -13,6 +13,8 @@ import SwiftUI
 /// review tabs use the amber token (same palette used across the rest of the
 /// Trust Layer surface area).
 public struct FileHealthView: View {
+    public typealias ClusterSuggestionHandler = @MainActor ([FileHealthClusterSummary]) async -> [FileHealthClusterSuggestion]
+
     public let results: [ScanResult]
     public let warnings: [String]
     public let session: FileHealthSessionState
@@ -20,9 +22,12 @@ public struct FileHealthView: View {
     public let onBack: (() -> Void)?
     public let onRescan: (() -> Void)?
     public let onSendToTrash: (() -> Void)?
+    public let onSuggestClusters: ClusterSuggestionHandler?
 
     @State private var selectedTabID: String?
     @State private var filterText: String = ""
+    @State private var clusterSuggestions: [String: [String: FileHealthClusterSuggestion]] = [:]
+    @State private var suggestingTabIDs: Set<String> = []
 
     public init(
         results: [ScanResult],
@@ -31,7 +36,8 @@ public struct FileHealthView: View {
         onExplain: ((ScanResult) -> Void)? = nil,
         onBack: (() -> Void)? = nil,
         onRescan: (() -> Void)? = nil,
-        onSendToTrash: (() -> Void)? = nil
+        onSendToTrash: (() -> Void)? = nil,
+        onSuggestClusters: ClusterSuggestionHandler? = nil
     ) {
         self.results = results
         self.warnings = warnings
@@ -40,6 +46,7 @@ public struct FileHealthView: View {
         self.onBack = onBack
         self.onRescan = onRescan
         self.onSendToTrash = onSendToTrash
+        self.onSuggestClusters = onSuggestClusters
     }
 
     private var tabs: [FileHealthCategoryTab] {
@@ -419,6 +426,8 @@ public struct FileHealthView: View {
         let clusters = FileHealthPathClusterer.clusters(from: tab.findings)
         let trimmedFilter = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
         let filterIsActive = !trimmedFilter.isEmpty
+        let tabSuggestions = clusterSuggestions[tab.id] ?? [:]
+        let isSuggesting = suggestingTabIDs.contains(tab.id)
 
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             HStack(spacing: GargantuaSpacing.space2) {
@@ -463,14 +472,20 @@ public struct FileHealthView: View {
             )
 
             if !clusters.isEmpty {
-                FlowLayout(spacing: GargantuaSpacing.space1) {
-                    ForEach(clusters) { cluster in
-                        FileHealthPathClusterChip(
-                            cluster: cluster,
-                            isActive: trimmedFilter == cluster.id,
-                            safety: tab.safety,
-                            onSelect: { filterText = cluster.id }
-                        )
+                HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+                    FlowLayout(spacing: GargantuaSpacing.space1) {
+                        ForEach(clusters) { cluster in
+                            FileHealthPathClusterChip(
+                                cluster: cluster,
+                                suggestion: tabSuggestions[cluster.id],
+                                isActive: trimmedFilter == cluster.id,
+                                onSelect: { filterText = cluster.id }
+                            )
+                        }
+                    }
+
+                    if onSuggestClusters != nil {
+                        suggestButton(for: tab, clusters: clusters, isSuggesting: isSuggesting)
                     }
                 }
             }
@@ -479,23 +494,105 @@ public struct FileHealthView: View {
         .padding(.vertical, GargantuaSpacing.space2)
         .background(GargantuaColors.surface1)
     }
+
+    @ViewBuilder
+    private func suggestButton(
+        for tab: FileHealthCategoryTab,
+        clusters: [FileHealthPathCluster],
+        isSuggesting: Bool
+    ) -> some View {
+        let alreadyHaveSuggestions = !(clusterSuggestions[tab.id] ?? [:]).isEmpty
+        Button {
+            Task { await runClusterSuggestion(for: tab, clusters: clusters) }
+        } label: {
+            HStack(spacing: GargantuaSpacing.space1) {
+                if isSuggesting {
+                    AccretionDiskView(activityRate: 18, size: 11)
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                }
+                Text(isSuggesting ? "Thinking…" : (alreadyHaveSuggestions ? "Re-suggest" : "Suggest"))
+                    .font(GargantuaFonts.caption)
+            }
+            .foregroundStyle(isSuggesting ? GargantuaColors.ink3 : GargantuaColors.accent)
+            .padding(.horizontal, GargantuaSpacing.space2)
+            .padding(.vertical, 4)
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(isSuggesting ? GargantuaColors.borderSoft : GargantuaColors.accent.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isSuggesting)
+        .help("Ask the local AI engine to label these clusters and recommend safety per group.")
+    }
+
+    @MainActor
+    private func runClusterSuggestion(
+        for tab: FileHealthCategoryTab,
+        clusters: [FileHealthPathCluster]
+    ) async {
+        guard let onSuggestClusters,
+              !suggestingTabIDs.contains(tab.id),
+              !clusters.isEmpty
+        else { return }
+
+        let samples = FileHealthPathClusterer.samplesByCluster(
+            clusters,
+            findings: tab.findings
+        )
+        let summaries = clusters.map { cluster in
+            FileHealthClusterSummary(
+                id: cluster.id,
+                category: tab.label,
+                count: cluster.count,
+                totalSize: cluster.totalSize,
+                samplePaths: samples[cluster.id] ?? []
+            )
+        }
+
+        suggestingTabIDs.insert(tab.id)
+        defer { suggestingTabIDs.remove(tab.id) }
+
+        let suggestions = await onSuggestClusters(summaries)
+        let byID = Dictionary(uniqueKeysWithValues: suggestions.map { ($0.clusterID, $0) })
+        clusterSuggestions[tab.id] = byID
+    }
 }
 
 // MARK: - Path Cluster Chip
 
 private struct FileHealthPathClusterChip: View {
     let cluster: FileHealthPathCluster
+    let suggestion: FileHealthClusterSuggestion?
     let isActive: Bool
-    let safety: SafetyLevel
     let onSelect: () -> Void
 
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: GargantuaSpacing.space1) {
+                if let suggestion {
+                    Circle()
+                        .fill(suggestion.safety.tintColor)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+
                 Text(cluster.displayLabel)
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(isActive ? GargantuaColors.ink : GargantuaColors.ink2)
                     .fixedSize(horizontal: true, vertical: false)
+
+                if let suggestion {
+                    Text("·")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink4)
+                    Text(suggestion.label)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
 
                 Text("\(cluster.count)")
                     .font(GargantuaFonts.monoData)
@@ -514,8 +611,23 @@ private struct FileHealthPathClusterChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(cluster.count) items in \(cluster.id) (\(AlertItem.formatBytes(cluster.totalSize)))")
-        .accessibilityLabel("Filter by \(cluster.displayLabel), \(cluster.count) items")
+        .help(helpText)
+        .accessibilityLabel(accessibilityLabelText)
+    }
+
+    private var helpText: String {
+        let baseSize = "\(cluster.count) items in \(cluster.id) (\(AlertItem.formatBytes(cluster.totalSize)))"
+        if let suggestion, !suggestion.rationale.isEmpty {
+            return "\(suggestion.label) — \(suggestion.rationale)\n\(baseSize)"
+        }
+        return baseSize
+    }
+
+    private var accessibilityLabelText: String {
+        if let suggestion {
+            return "Filter by \(cluster.displayLabel), \(cluster.count) items, AI suggests: \(suggestion.label), \(suggestion.safety.rawValue) safety."
+        }
+        return "Filter by \(cluster.displayLabel), \(cluster.count) items"
     }
 }
 
