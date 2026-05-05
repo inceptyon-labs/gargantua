@@ -121,7 +121,8 @@ public struct AIModelsView: View {
         VStack(spacing: 0) {
             PageHeaderView(
                 title: "AI Models",
-                subtitle: "Inventory the local model graveyard."
+                subtitle: "Inventory the local model graveyard.",
+                subtitleStyle: .voice
             )
 
             Spacer()

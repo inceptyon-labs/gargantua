@@ -164,11 +164,11 @@ public struct DevArtifactScanView: View {
 
     private var categorySelectionView: some View {
         VStack(spacing: 0) {
-            categoryHeader
-
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+            PageHeaderView(
+                title: "Dev Artifact Purge",
+                subtitle: "Catalog the build debris. Choose what to consume.",
+                subtitleStyle: .voice
+            )
 
             ZStack {
                 switch detectionState {
@@ -218,21 +218,6 @@ public struct DevArtifactScanView: View {
         .task(id: profile.id) {
             await detectEcosystemsIfNeeded()
         }
-    }
-
-    private var categoryHeader: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            Text("Dev Artifact Purge")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text("Catalog the build debris. Choose what to consume.")
-                .font(GargantuaFonts.body.italic())
-                .foregroundStyle(GargantuaColors.ink2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space4)
     }
 
     private var detectingPlaceholder: some View {

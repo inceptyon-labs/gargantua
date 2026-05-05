@@ -117,7 +117,8 @@ public struct FileHealthContainerView: View {
         VStack(spacing: 0) {
             PageHeaderView(
                 title: "File Health",
-                subtitle: "Cluster the redundancies. Surface what's broken."
+                subtitle: "Cluster the redundancies. Surface what's broken.",
+                subtitleStyle: .voice
             )
 
             VStack(spacing: GargantuaSpacing.space4) {

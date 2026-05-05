@@ -137,7 +137,8 @@ public struct DeepCleanView: View {
         VStack(spacing: 0) {
             PageHeaderView(
                 title: "Deep Clean",
-                subtitle: "Reclaim what the system left behind."
+                subtitle: "Reclaim what the system left behind.",
+                subtitleStyle: .voice
             )
 
             // Description + action centered

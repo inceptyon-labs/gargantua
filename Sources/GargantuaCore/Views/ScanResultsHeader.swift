@@ -16,6 +16,7 @@ import SwiftUI
 public struct ScanResultsHeader: View {
     public let title: String
     public let subtitle: String?
+    public let subtitleStyle: HeaderSubtitleStyle
     public let onBack: (() -> Void)?
     public let onRefresh: (() -> Void)?
     public let onRescan: (() -> Void)?
@@ -24,6 +25,7 @@ public struct ScanResultsHeader: View {
     public init(
         title: String,
         subtitle: String? = nil,
+        subtitleStyle: HeaderSubtitleStyle = .status,
         onBack: (() -> Void)? = nil,
         onRefresh: (() -> Void)? = nil,
         onRescan: (() -> Void)? = nil,
@@ -31,6 +33,7 @@ public struct ScanResultsHeader: View {
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.subtitleStyle = subtitleStyle
         self.onBack = onBack
         self.onRefresh = onRefresh
         self.onRescan = onRescan
@@ -66,11 +69,24 @@ public struct ScanResultsHeader: View {
                 .foregroundStyle(GargantuaColors.ink)
                 .lineLimit(1)
             if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .lineLimit(1)
+                styledSubtitle(subtitle)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func styledSubtitle(_ text: String) -> some View {
+        switch subtitleStyle {
+        case .status:
+            Text(text)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .lineLimit(1)
+        case .voice:
+            Text(text)
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
+                .lineLimit(1)
         }
     }
 
