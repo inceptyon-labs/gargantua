@@ -22,6 +22,7 @@ public struct FileHealthView: View {
     public let onSendToTrash: (() -> Void)?
 
     @State private var selectedTabID: String?
+    @State private var filterText: String = ""
 
     public init(
         results: [ScanResult],
@@ -306,10 +307,24 @@ public struct FileHealthView: View {
 
     // MARK: - Findings List
 
+    private func filteredFindings(for tab: FileHealthCategoryTab) -> [ScanResult] {
+        let needle = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return tab.findings }
+        return tab.findings.filter { $0.path.localizedCaseInsensitiveContains(needle) }
+    }
+
     @ViewBuilder
     private func findingsList(for tab: FileHealthCategoryTab) -> some View {
+        let filtered = filteredFindings(for: tab)
+
         VStack(alignment: .leading, spacing: 0) {
-            tabHeader(tab)
+            tabHeader(tab, filteredFindings: filtered)
+
+            Rectangle()
+                .fill(GargantuaColors.borderSoft)
+                .frame(height: 1)
+
+            filterRow(for: tab, filtered: filtered)
 
             Rectangle()
                 .fill(GargantuaColors.borderSoft)
@@ -317,7 +332,7 @@ public struct FileHealthView: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(tab.findings) { finding in
+                    ForEach(filtered) { finding in
                         FileHealthFindingRow(
                             result: finding,
                             groupContext: tab.groupContext(for: finding),
@@ -333,17 +348,26 @@ public struct FileHealthView: View {
                 }
             }
         }
+        .onChange(of: tab.id) { _, _ in
+            // Each tab carries its own search context; scope leaks are
+            // worse than typing.
+            filterText = ""
+        }
     }
 
-    private func tabHeader(_ tab: FileHealthCategoryTab) -> some View {
+    private func tabHeader(
+        _ tab: FileHealthCategoryTab,
+        filteredFindings: [ScanResult]
+    ) -> some View {
         // Tab header carries category identity + per-tab bulk selection.
-        // Per-tab Select All / Deselect All replaces the auto-preselect that
-        // used to silently check thousands of safe-tier items across tabs the
-        // user hadn't opened — bulk picks are now deliberate, scoped to the
-        // tab in view.
-        let tabIDs = tab.findings.map(\.id)
-        let selectedInTab = tab.selectedCount(in: session.selectedResultIDs)
-        let allSelectedInTab = !tabIDs.isEmpty && selectedInTab == tab.count
+        // Select all / Deselect all operate on the *visible* (filtered) IDs
+        // so the user can never bulk-trash items they can't see — keeps the
+        // "what you see is what you trash" mental model intact even with a
+        // narrowing filter applied.
+        let visibleIDs = filteredFindings.map(\.id)
+        let visibleCount = visibleIDs.count
+        let selectedVisible = session.selectedResultIDs.intersection(visibleIDs).count
+        let allVisibleSelected = !visibleIDs.isEmpty && selectedVisible == visibleCount
 
         return HStack(spacing: GargantuaSpacing.space3) {
             Image(systemName: tab.iconName)
@@ -356,21 +380,21 @@ public struct FileHealthView: View {
                 .foregroundStyle(GargantuaColors.ink)
 
             HStack(spacing: GargantuaSpacing.space2) {
-                Button("Select all") { session.selectAll(tabIDs) }
+                Button("Select all") { session.selectAll(visibleIDs) }
                     .buttonStyle(.plain)
                     .font(GargantuaFonts.caption)
-                    .foregroundStyle(allSelectedInTab ? GargantuaColors.ink4 : GargantuaColors.accent)
-                    .disabled(allSelectedInTab)
+                    .foregroundStyle(allVisibleSelected ? GargantuaColors.ink4 : GargantuaColors.accent)
+                    .disabled(allVisibleSelected)
 
                 Text("·")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink4)
 
-                Button("Deselect all") { session.deselectAll(tabIDs) }
+                Button("Deselect all") { session.deselectAll(visibleIDs) }
                     .buttonStyle(.plain)
                     .font(GargantuaFonts.caption)
-                    .foregroundStyle(selectedInTab == 0 ? GargantuaColors.ink4 : GargantuaColors.accent)
-                    .disabled(selectedInTab == 0)
+                    .foregroundStyle(selectedVisible == 0 ? GargantuaColors.ink4 : GargantuaColors.accent)
+                    .disabled(selectedVisible == 0)
             }
             .padding(.leading, GargantuaSpacing.space2)
 
@@ -385,6 +409,113 @@ public struct FileHealthView: View {
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
         .background(GargantuaColors.surface2)
+    }
+
+    @ViewBuilder
+    private func filterRow(
+        for tab: FileHealthCategoryTab,
+        filtered: [ScanResult]
+    ) -> some View {
+        let clusters = FileHealthPathClusterer.clusters(from: tab.findings)
+        let trimmedFilter = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filterIsActive = !trimmedFilter.isEmpty
+
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            HStack(spacing: GargantuaSpacing.space2) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(GargantuaColors.ink3)
+
+                TextField(
+                    "Filter by path",
+                    text: $filterText
+                )
+                .textFieldStyle(.plain)
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink)
+
+                if filterIsActive {
+                    Button {
+                        filterText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear filter")
+                    .accessibilityLabel("Clear filter")
+                }
+
+                Spacer()
+
+                if filterIsActive {
+                    Text("\(filtered.count) of \(tab.count) visible")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .padding(.vertical, GargantuaSpacing.space2)
+            .background(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .fill(GargantuaColors.surface3)
+            )
+
+            if !clusters.isEmpty {
+                FlowLayout(spacing: GargantuaSpacing.space1) {
+                    ForEach(clusters) { cluster in
+                        FileHealthPathClusterChip(
+                            cluster: cluster,
+                            isActive: trimmedFilter == cluster.id,
+                            safety: tab.safety,
+                            onSelect: { filterText = cluster.id }
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface1)
+    }
+}
+
+// MARK: - Path Cluster Chip
+
+private struct FileHealthPathClusterChip: View {
+    let cluster: FileHealthPathCluster
+    let isActive: Bool
+    let safety: SafetyLevel
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Text(cluster.displayLabel)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(isActive ? GargantuaColors.ink : GargantuaColors.ink2)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Text("\(cluster.count)")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+            .padding(.horizontal, GargantuaSpacing.space2)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .fill(isActive ? GargantuaColors.surface3 : GargantuaColors.surface2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(isActive ? GargantuaColors.accent : GargantuaColors.borderSoft, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(cluster.count) items in \(cluster.id) (\(AlertItem.formatBytes(cluster.totalSize)))")
+        .accessibilityLabel("Filter by \(cluster.displayLabel), \(cluster.count) items")
     }
 }
 
