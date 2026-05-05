@@ -126,7 +126,8 @@ public struct CzkawkaOutputParser: Sendable {
             return parseBigFilesLine(line)
         }
 
-        let path = stripPathAnnotations(line)
+        let unquoted = unquoteLeadingPath(line)
+        let path = stripPathAnnotations(unquoted)
         guard path.hasPrefix("/") else { return nil }
         return CzkawkaFinding(
             path: path,
@@ -135,24 +136,54 @@ public struct CzkawkaOutputParser: Sendable {
         )
     }
 
-    /// Big-files lines look like `"123456 /path/to/file"` (bytes prefix). Some
-    /// czkawka versions emit `"123456 B /path"` — strip a leading byte count
-    /// and optional `B` unit, then parse the remainder as a path. Falls back
-    /// to whole-line path extraction if the leading tokens aren't a byte count.
+    /// Big-files lines come in two known shapes:
+    ///   * czkawka 11+: `"137.16 MiB (143819976) - \"/path/to/file\""` — bytes
+    ///     in parens, path is quoted and follows ` - `.
+    ///   * legacy:      `"123456 /path"` or `"123456 B /path"` — a bare byte
+    ///     count followed by the path (with optional `B` unit token).
+    /// Try the czkawka 11 form first, then the legacy form.
     private func parseBigFilesLine(_ line: String) -> CzkawkaFinding? {
+        if let parenStart = line.firstIndex(of: "("),
+           let parenEnd = line[parenStart...].firstIndex(of: ")")
+        {
+            let inside = line[line.index(after: parenStart)..<parenEnd]
+            if let bytes = Int64(inside),
+               let dashRange = line.range(of: " - ", range: parenEnd..<line.endIndex)
+            {
+                let after = String(line[dashRange.upperBound...])
+                let unquoted = unquoteLeadingPath(after)
+                let path = stripPathAnnotations(unquoted)
+                if path.hasPrefix("/") {
+                    return CzkawkaFinding(path: path, reportedSize: bytes, groupID: nil)
+                }
+            }
+        }
+
         let parts = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         if let first = parts.first, let bytes = Int64(first) {
             var rest = Array(parts.dropFirst())
             if rest.first == "B" { rest.removeFirst() }
             let remainder = rest.joined(separator: " ")
-            let path = stripPathAnnotations(remainder)
+            let unquoted = unquoteLeadingPath(remainder)
+            let path = stripPathAnnotations(unquoted)
             guard path.hasPrefix("/") else { return nil }
             return CzkawkaFinding(path: path, reportedSize: bytes, groupID: nil)
         }
 
-        let path = stripPathAnnotations(line)
+        let unquoted = unquoteLeadingPath(line)
+        let path = stripPathAnnotations(unquoted)
         guard path.hasPrefix("/") else { return nil }
         return CzkawkaFinding(path: path, reportedSize: 0, groupID: nil)
+    }
+
+    /// czkawka 11+ wraps every reported path in double quotes. If the line
+    /// starts with `"`, return the substring up to the next `"`; otherwise
+    /// return the line unchanged so legacy unquoted output keeps parsing.
+    private func unquoteLeadingPath(_ line: String) -> String {
+        guard line.hasPrefix("\"") else { return line }
+        let afterOpen = line.index(after: line.startIndex)
+        guard let closing = line[afterOpen...].firstIndex(of: "\"") else { return line }
+        return String(line[afterOpen..<closing])
     }
 
     /// Strip trailing annotations some czkawka commands append after the path
