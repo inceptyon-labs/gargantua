@@ -317,7 +317,18 @@ public struct FileHealthView: View {
     private func filteredFindings(for tab: FileHealthCategoryTab) -> [ScanResult] {
         let needle = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return tab.findings }
-        return tab.findings.filter { $0.path.localizedCaseInsensitiveContains(needle) }
+        let expanded = Self.expandHomePrefix(needle)
+        return tab.findings.filter { $0.path.localizedCaseInsensitiveContains(expanded) }
+    }
+
+    /// Expand a leading `~/` to the absolute home path so cluster ids — which
+    /// the chip fills the filter with — can substring-match against the
+    /// absolute paths czkawka returns. Pass-through for inputs without a
+    /// tilde, so users typing fragments like `node_modules` still work.
+    static func expandHomePrefix(_ raw: String) -> String {
+        guard raw.hasPrefix("~/") else { return raw }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return home + "/" + raw.dropFirst(2)
     }
 
     @ViewBuilder
@@ -472,13 +483,14 @@ public struct FileHealthView: View {
             )
 
             if !clusters.isEmpty {
+                let expandedFilter = Self.expandHomePrefix(trimmedFilter)
                 HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
                     FlowLayout(spacing: GargantuaSpacing.space1) {
                         ForEach(clusters) { cluster in
                             FileHealthPathClusterChip(
                                 cluster: cluster,
                                 suggestion: tabSuggestions[cluster.id],
-                                isActive: trimmedFilter == cluster.id,
+                                isActive: expandedFilter == Self.expandHomePrefix(cluster.id),
                                 onSelect: { filterText = cluster.id }
                             )
                         }

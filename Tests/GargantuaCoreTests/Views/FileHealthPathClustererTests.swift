@@ -174,4 +174,19 @@ struct FileHealthPathClustererTests {
         let samples = FileHealthPathClusterer.samplesByCluster(clusters, findings: [], homeDirectory: testHome)
         #expect(samples.isEmpty)
     }
+
+    @Test("FileHealthView.expandHomePrefix swaps a leading ~/ for the absolute home path")
+    @MainActor
+    func expandHomePrefixSwapsTilde() {
+        // Regression: chips fill the filter with their cluster id (~/X/Y/),
+        // but ScanResult.path is absolute (/Users/.../X/Y/). Without
+        // expansion the filter substring-match found 0 of N items.
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let expanded = FileHealthView.expandHomePrefix("~/Development/unwyned/build/")
+        #expect(expanded == home + "/Development/unwyned/build/")
+
+        // Pass-through for paths and fragments without a tilde.
+        #expect(FileHealthView.expandHomePrefix("/var/log/") == "/var/log/")
+        #expect(FileHealthView.expandHomePrefix("node_modules") == "node_modules")
+    }
 }
