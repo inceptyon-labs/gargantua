@@ -9,11 +9,13 @@ private func makeCzkawkaResult(
     counter: Int,
     safety: SafetyLevel? = nil,
     path: String? = nil,
-    size: Int64 = 1_024
+    size: Int64 = 1_024,
+    groupID: Int? = nil
 ) -> ScanResult {
     let entry = CzkawkaTrustDefaults.builtIn.entry(for: category)
     let resolvedSafety = safety ?? entry.safety
     let resolvedPath = path ?? "/tmp/fixture/\(category.rawValue)/\(counter)"
+    let tags = groupID.map { ["czkawka_group_\($0)"] } ?? []
     return ScanResult(
         id: "czkawka-\(category.rawValue)-\(counter)",
         name: (resolvedPath as NSString).lastPathComponent,
@@ -24,7 +26,7 @@ private func makeCzkawkaResult(
         explanation: entry.explanation,
         source: SourceAttribution(name: "Czkawka"),
         category: category.resultCategory,
-        tags: []
+        tags: tags
     )
 }
 
@@ -143,5 +145,78 @@ struct FileHealthGrouperTests {
             #expect(FileHealthGrouper.category(for: category.resultCategory) == category)
         }
         #expect(FileHealthGrouper.category(for: "nonsense") == nil)
+    }
+}
+
+// MARK: - Group Context
+
+@Suite("FileHealthCategoryTab group context")
+struct FileHealthGroupContextTests {
+
+    @Test("Findings without a czkawka_group_N tag yield no group context")
+    func noGroupForUntaggedFindings() {
+        let results = [
+            makeCzkawkaResult(category: .bigFiles, counter: 0),
+            makeCzkawkaResult(category: .bigFiles, counter: 1),
+        ]
+        let tab = FileHealthGrouper.group(results).first!
+        for finding in tab.findings {
+            #expect(tab.groupContext(for: finding) == nil)
+        }
+    }
+
+    @Test("ScanResult.czkawkaGroupID parses the group ID out of tags")
+    func parsesGroupIDFromTags() {
+        let result = makeCzkawkaResult(category: .similarImages, counter: 0, groupID: 42)
+        #expect(result.czkawkaGroupID == 42)
+
+        let untagged = makeCzkawkaResult(category: .similarImages, counter: 1)
+        #expect(untagged.czkawkaGroupID == nil)
+    }
+
+    @Test("Sparse czkawka group IDs are renumbered to compact 1-based display indices")
+    func renumbersSparseGroupIDs() {
+        // czkawka may emit groups 7, 19, 88 — the user should see Group 1, 2, 3
+        // in first-appearance order.
+        let results = [
+            makeCzkawkaResult(category: .similarImages, counter: 0, groupID: 7),
+            makeCzkawkaResult(category: .similarImages, counter: 1, groupID: 7),
+            makeCzkawkaResult(category: .similarImages, counter: 2, groupID: 19),
+            makeCzkawkaResult(category: .similarImages, counter: 3, groupID: 88),
+            makeCzkawkaResult(category: .similarImages, counter: 4, groupID: 88),
+            makeCzkawkaResult(category: .similarImages, counter: 5, groupID: 88),
+        ]
+        let tab = FileHealthGrouper.group(results).first!
+
+        let context0 = tab.groupContext(for: tab.findings[0])
+        let context1 = tab.groupContext(for: tab.findings[1])
+        let context2 = tab.groupContext(for: tab.findings[2])
+        let context3 = tab.groupContext(for: tab.findings[3])
+        let context5 = tab.groupContext(for: tab.findings[5])
+
+        #expect(context0?.index == 1)
+        #expect(context0?.count == 2)
+        #expect(context1?.index == 1)
+        #expect(context1?.count == 2)
+        #expect(context2?.index == 2)
+        #expect(context2?.count == 1)
+        #expect(context3?.index == 3)
+        #expect(context3?.count == 3)
+        #expect(context5?.index == 3)
+        #expect(context5?.count == 3)
+    }
+
+    @Test("Mixing grouped and ungrouped findings only surfaces context for grouped ones")
+    func mixedGroupedAndUngrouped() {
+        let results = [
+            makeCzkawkaResult(category: .similarImages, counter: 0, groupID: 1),
+            makeCzkawkaResult(category: .similarImages, counter: 1),  // no group
+            makeCzkawkaResult(category: .similarImages, counter: 2, groupID: 1),
+        ]
+        let tab = FileHealthGrouper.group(results).first!
+
+        #expect(tab.groupContext(for: tab.findings[0])?.count == 2)
+        #expect(tab.groupContext(for: tab.findings[1]) == nil)
+        #expect(tab.groupContext(for: tab.findings[2])?.count == 2)
     }
 }

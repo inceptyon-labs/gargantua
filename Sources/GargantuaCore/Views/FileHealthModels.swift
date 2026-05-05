@@ -32,6 +32,21 @@ extension CzkawkaCategory {
     }
 }
 
+// MARK: - Group Context
+
+extension ScanResult {
+    /// Czkawka group ID parsed out of the `czkawka_group_N` tag stamped by
+    /// `CzkawkaAdapter` for grouped categories (similar images/videos).
+    /// Returns nil for non-grouped findings.
+    public var czkawkaGroupID: Int? {
+        let prefix = "czkawka_group_"
+        for tag in tags where tag.hasPrefix(prefix) {
+            return Int(tag.dropFirst(prefix.count))
+        }
+        return nil
+    }
+}
+
 // MARK: - Tab Model
 
 /// A single File Health tab: a czkawka category that produced at least one
@@ -41,10 +56,28 @@ extension CzkawkaCategory {
 /// category string present in the results, with Trust Layer display metadata
 /// (label, icon, safety) attached.
 public struct FileHealthCategoryTab: Identifiable {
+    /// Display-time group context for a finding inside a grouped category.
+    ///
+    /// Sparse czkawka group IDs are renumbered to compact 1-based indices in
+    /// first-appearance order so the user sees "Group 1, 2, 3" instead of the
+    /// raw cluster identifiers czkawka emits.
+    public struct GroupContext: Equatable, Sendable {
+        /// 1-based display index for this group inside the tab.
+        public let index: Int
+        /// Total number of findings sharing this group.
+        public let count: Int
+
+        public init(index: Int, count: Int) {
+            self.index = index
+            self.count = count
+        }
+    }
+
     public let id: String
     public let category: CzkawkaCategory
     public let safety: SafetyLevel
     public let findings: [ScanResult]
+    private let groupMemberships: [String: GroupContext]
 
     public init(
         category: CzkawkaCategory,
@@ -55,11 +88,45 @@ public struct FileHealthCategoryTab: Identifiable {
         self.category = category
         self.safety = safety
         self.findings = findings
+        self.groupMemberships = Self.computeGroupMemberships(findings: findings)
     }
 
     public var label: String { category.displayName }
     public var iconName: String { category.iconName }
     public var count: Int { findings.count }
+
+    /// Group context for a finding that belongs to a similarity/duplicate
+    /// cluster, or nil for standalone findings.
+    public func groupContext(for result: ScanResult) -> GroupContext? {
+        groupMemberships[result.id]
+    }
+
+    private static func computeGroupMemberships(
+        findings: [ScanResult]
+    ) -> [String: GroupContext] {
+        var members: [Int: [String]] = [:]
+        // First-appearance order, so display indices stay stable as long as
+        // the underlying findings array does.
+        var orderedGroupIDs: [Int] = []
+        for finding in findings {
+            guard let gid = finding.czkawkaGroupID else { continue }
+            if members[gid] == nil {
+                orderedGroupIDs.append(gid)
+                members[gid] = []
+            }
+            members[gid]?.append(finding.id)
+        }
+
+        var out: [String: GroupContext] = [:]
+        for (offset, gid) in orderedGroupIDs.enumerated() {
+            guard let memberIDs = members[gid] else { continue }
+            let context = GroupContext(index: offset + 1, count: memberIDs.count)
+            for memberID in memberIDs {
+                out[memberID] = context
+            }
+        }
+        return out
+    }
 
     public var totalSize: Int64 {
         findings.reduce(Int64(0)) { sum, item in

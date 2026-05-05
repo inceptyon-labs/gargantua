@@ -9,11 +9,26 @@ import SwiftUI
 /// binding to the scan session state owned by ``FileHealthContainerView``.
 struct FileHealthFindingRow: View {
     let result: ScanResult
+    let groupContext: FileHealthCategoryTab.GroupContext?
     let isSelected: Bool
     let onToggleSelection: () -> Void
     let onExplain: ((ScanResult) -> Void)?
 
     @FocusState private var isFocused: Bool
+
+    init(
+        result: ScanResult,
+        groupContext: FileHealthCategoryTab.GroupContext? = nil,
+        isSelected: Bool,
+        onToggleSelection: @escaping () -> Void,
+        onExplain: ((ScanResult) -> Void)? = nil
+    ) {
+        self.result = result
+        self.groupContext = groupContext
+        self.isSelected = isSelected
+        self.onToggleSelection = onToggleSelection
+        self.onExplain = onExplain
+    }
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
@@ -54,6 +69,16 @@ struct FileHealthFindingRow: View {
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                         .lineLimit(1)
+                }
+
+                if let group = groupContext {
+                    // Surface similarity/duplicate cluster membership so a
+                    // user reviewing a duplicate doesn't read it as a
+                    // standalone finding.
+                    Text("Group \(group.index) · \(group.count) cop\(group.count == 1 ? "y" : "ies")")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .accessibilityLabel("Group \(group.index), \(group.count) total copies")
                 }
             }
 

@@ -322,6 +322,7 @@ public struct FileHealthView: View {
                     ForEach(tab.findings) { finding in
                         FileHealthFindingRow(
                             result: finding,
+                            groupContext: tab.groupContext(for: finding),
                             isSelected: session.isSelected(finding.id),
                             onToggleSelection: { session.toggleSelection(for: finding.id) },
                             onExplain: onExplain
