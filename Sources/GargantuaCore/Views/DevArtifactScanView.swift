@@ -3,6 +3,15 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "com.gargantua.core", category: "DevArtifactScanView")
 
+/// Three-state lifecycle for the cold-start ecosystem probe. The view
+/// shows a `detecting` placeholder until the detector returns; on
+/// `complete` it seeds `selectedBucketIDs` and renders the bucket list.
+public enum EcosystemDetectionState: Equatable {
+    case pending
+    case detecting
+    case complete
+}
+
 // MARK: - Dev Artifact Scan View
 
 /// Category-based view for scanning and cleaning developer artifacts.
@@ -16,7 +25,11 @@ public struct DevArtifactScanView: View {
     private let adapterOverride: (any ScanAdapter)?
     private let scanRoots: [URL]?
 
-    @State private var selectedBucketIDs: Set<String> = Set(DevArtifactBucket.catalog.map(\.id))
+    /// Smart-default lifecycle. Empty until ecosystem detection completes;
+    /// then seeded from `DevArtifactDetection.detectEcosystems` plus the
+    /// always-on cross-cutting set. The user is free to widen from there.
+    @State private var selectedBucketIDs: Set<String> = []
+    @State private var detectionState: EcosystemDetectionState = .pending
     /// Per-bucket size totals from the most recent scan. Keyed by bucket id.
     @State private var bucketEstimates: [String: Int64] = [:]
     @State private var scanProgress = ScanProgress()
@@ -146,32 +159,35 @@ public struct DevArtifactScanView: View {
 
     private var categorySelectionView: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Dev Artifact Purge")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-                Spacer()
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space4)
+            categoryHeader
 
             Rectangle()
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            // Bucket list — two tiers (ecosystem, then cross-cutting)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    bucketSection(
-                        title: "ECOSYSTEMS",
-                        buckets: bucketsInTier(.ecosystem)
-                    )
+            switch detectionState {
+            case .pending, .detecting:
+                detectingPlaceholder
+            case .complete:
+                bucketToolbar
 
-                    bucketSection(
-                        title: "CROSS-CUTTING",
-                        buckets: bucketsInTier(.crossCutting)
-                    )
+                Rectangle()
+                    .fill(GargantuaColors.borderSoft)
+                    .frame(height: 1)
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                        bucketSection(
+                            title: "ECOSYSTEMS",
+                            buckets: bucketsInTier(.ecosystem)
+                        )
+
+                        bucketSection(
+                            title: "CROSS-CUTTING",
+                            buckets: bucketsInTier(.crossCutting)
+                        )
+                    }
+                    .padding(.bottom, GargantuaSpacing.space2)
                 }
             }
 
@@ -187,6 +203,73 @@ public struct DevArtifactScanView: View {
             // Scan button / progress
             scanFooter
         }
+        .task(id: profile.id) {
+            await detectEcosystemsIfNeeded()
+        }
+    }
+
+    private var categoryHeader: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            Text("Dev Artifact Purge")
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text("Catalog the build debris. Choose what to consume.")
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space4)
+    }
+
+    private var detectingPlaceholder: some View {
+        VStack(spacing: GargantuaSpacing.space3) {
+            Spacer()
+            AccretionDiskView(activityRate: 12, size: 28, color: GargantuaColors.accretion)
+            Text("Detecting ecosystems…")
+                .font(GargantuaFonts.body)
+                .foregroundStyle(GargantuaColors.ink2)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var bucketToolbar: some View {
+        let totalBuckets = DevArtifactBucket.catalog.count
+        let selectedCount = selectedBucketIDs.count
+
+        return HStack(spacing: GargantuaSpacing.space3) {
+            toolbarButton("All", action: selectAllBuckets)
+            toolbarDot
+            toolbarButton("None", action: deselectAllBuckets)
+            toolbarDot
+            toolbarButton("Invert", action: invertBucketSelection)
+
+            Spacer()
+
+            Text("\(selectedCount) / \(totalBuckets) selected")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+    }
+
+    private func toolbarButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var toolbarDot: some View {
+        Text("·")
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(GargantuaColors.ink4)
     }
 
     private func bucketsInTier(_ tier: DevArtifactBucket.Tier) -> [DevArtifactBucket] {
@@ -205,12 +288,14 @@ public struct DevArtifactScanView: View {
                 .padding(.top, GargantuaSpacing.space3)
                 .padding(.bottom, GargantuaSpacing.space2)
 
-            ForEach(buckets) { bucket in
+            ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
                 bucketRow(bucket)
 
-                Rectangle()
-                    .fill(GargantuaColors.borderSoft)
-                    .frame(height: 1)
+                if index < buckets.count - 1 {
+                    Rectangle()
+                        .fill(GargantuaColors.borderSoft)
+                        .frame(height: 1)
+                }
             }
         }
     }
@@ -222,33 +307,16 @@ public struct DevArtifactScanView: View {
             toggleBucket(bucket.id)
         } label: {
             HStack(spacing: GargantuaSpacing.space3) {
-                // Checkbox
-                ZStack {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(
-                            isSelected ? GargantuaColors.accent : GargantuaColors.borderEm,
-                            lineWidth: 1.5
-                        )
-                        .frame(width: 16, height: 16)
-                        .background(
-                            isSelected ? GargantuaColors.accent : Color.clear
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 14))
+                    .foregroundStyle(isSelected ? GargantuaColors.accent : GargantuaColors.borderEm)
+                    .frame(width: 16, height: 16)
 
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-
-                // Icon
                 Image(systemName: bucket.icon)
                     .font(.system(size: 14))
                     .foregroundStyle(GargantuaColors.ink2)
                     .frame(width: 20, alignment: .center)
 
-                // Label
                 Text(bucket.label)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
@@ -267,6 +335,9 @@ public struct DevArtifactScanView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(bucket.label)
+        .accessibilityValue(isSelected ? "selected" : "not selected")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var scanWarningsBanner: some View {
@@ -294,7 +365,7 @@ public struct DevArtifactScanView: View {
             HStack(spacing: GargantuaSpacing.space1) {
                 Image(systemName: "info.circle")
                     .font(.system(size: 12))
-                    .foregroundStyle(GargantuaColors.accent)
+                    .foregroundStyle(GargantuaColors.ink2)
 
                 Text("Profile: \(profile.name)")
                     .font(GargantuaFonts.label)
@@ -320,13 +391,11 @@ public struct DevArtifactScanView: View {
     }
 
     private var scanFooter: some View {
-        HStack {
+        HStack(spacing: GargantuaSpacing.space2) {
             if scanProgress.isScanning || isScanRequested {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(.trailing, GargantuaSpacing.space2)
+                AccretionDiskView(activityRate: 18, size: 14, color: GargantuaColors.accretion)
 
-                Text(scanProgress.currentCategory ?? "Scanning...")
+                Text(scanProgress.currentCategory ?? "Scanning…")
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink2)
 
@@ -341,6 +410,8 @@ public struct DevArtifactScanView: View {
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.review)
                         .lineLimit(1)
+                } else {
+                    footerEvidence
                 }
 
                 Spacer()
@@ -355,12 +426,51 @@ public struct DevArtifactScanView: View {
                         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)
-                .disabled(selectedBucketIDs.isEmpty)
-                .opacity(selectedBucketIDs.isEmpty ? 0.5 : 1)
+                .disabled(selectedBucketIDs.isEmpty || detectionState != .complete)
+                .opacity(selectedBucketIDs.isEmpty || detectionState != .complete ? 0.5 : 1)
             }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    /// Aggregate evidence shown when the scan button is the next action.
+    /// Pre-scan: "First scan — sizes will appear after." Post-scan, with a
+    /// non-empty selection: "N selected · X GB estimated." Empty selection:
+    /// "Select at least one bucket to scan."
+    @ViewBuilder
+    private var footerEvidence: some View {
+        if selectedBucketIDs.isEmpty {
+            Text("Select at least one bucket to scan.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+        } else {
+            let estimatedTotal = selectedBucketIDs.reduce(into: Int64(0)) { sum, id in
+                sum += bucketEstimates[id, default: 0]
+            }
+            HStack(spacing: GargantuaSpacing.space2) {
+                Text("\(selectedBucketIDs.count) selected")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .monospacedDigit()
+
+                if estimatedTotal > 0 {
+                    Text("·")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink4)
+                    Text("\(AlertItem.formatBytes(estimatedTotal)) estimated")
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink2)
+                } else {
+                    Text("·")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink4)
+                    Text("first scan — sizes appear after")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+        }
     }
 
     // MARK: - Results
@@ -486,6 +596,41 @@ extension DevArtifactScanView {
         } else {
             selectedBucketIDs.insert(id)
         }
+    }
+
+    fileprivate func selectAllBuckets() {
+        selectedBucketIDs = Set(DevArtifactBucket.catalog.map(\.id))
+    }
+
+    fileprivate func deselectAllBuckets() {
+        selectedBucketIDs = []
+    }
+
+    fileprivate func invertBucketSelection() {
+        let all = Set(DevArtifactBucket.catalog.map(\.id))
+        selectedBucketIDs = all.subtracting(selectedBucketIDs)
+    }
+
+    /// Probe the filesystem once per profile-id to seed `selectedBucketIDs`
+    /// with ecosystems that actually appear on this machine. Cross-cutting
+    /// buckets are seeded unconditionally (they're additive). Detection is
+    /// idempotent — subsequent calls bail without reprobing.
+    fileprivate func detectEcosystemsIfNeeded() async {
+        guard detectionState == .pending else { return }
+        detectionState = .detecting
+
+        let roots = scanRoots ?? PathExpander.defaultScanRoots()
+        let detected = await DevArtifactDetection.detectEcosystems(in: roots)
+
+        // If detection found nothing usable on this machine (no scan roots,
+        // empty home), fall back to the high-frequency subset so the user
+        // isn't staring at zero checkboxes.
+        let ecosystems = detected.isEmpty
+            ? Set(["node", "python", "other"])
+            : detected.union(["other"])
+
+        selectedBucketIDs = ecosystems.union(DevArtifactDetection.alwaysSelectedCrossCutting)
+        detectionState = .complete
     }
 
     private func startScan() {
