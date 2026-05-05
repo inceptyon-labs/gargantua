@@ -271,21 +271,19 @@ public struct FileHealthView: View {
         // every chip visually unselected.
         let activeID = selectedTab?.id
         let selection = session.selectedResultIDs
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: GargantuaSpacing.space1) {
-                ForEach(tabs) { tab in
-                    FileHealthTabChip(
-                        tab: tab,
-                        isSelected: tab.id == activeID,
-                        selectedCount: tab.selectedCount(in: selection),
-                        selectedBytes: tab.selectedBytes(in: selection),
-                        onSelect: { selectedTabID = tab.id }
-                    )
-                }
+        return FlowLayout(spacing: GargantuaSpacing.space1) {
+            ForEach(tabs) { tab in
+                FileHealthTabChip(
+                    tab: tab,
+                    isSelected: tab.id == activeID,
+                    selectedCount: tab.selectedCount(in: selection),
+                    onSelect: { selectedTabID = tab.id }
+                )
             }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space2)
         }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(GargantuaColors.surface1)
     }
 
@@ -371,7 +369,6 @@ private struct FileHealthTabChip: View {
     let tab: FileHealthCategoryTab
     let isSelected: Bool
     let selectedCount: Int
-    let selectedBytes: Int64
     let onSelect: () -> Void
 
     var body: some View {
@@ -384,6 +381,7 @@ private struct FileHealthTabChip: View {
                 Text(tab.label)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
+                    .fixedSize(horizontal: true, vertical: false)
 
                 selectionBadge
             }
@@ -409,36 +407,20 @@ private struct FileHealthTabChip: View {
 
     @ViewBuilder
     private var selectionBadge: some View {
-        // Badge reads "selected / total" plus selected bytes, so switching
-        // tabs never hides a partial selection the user made elsewhere. Bytes
-        // render in neutral mono; safety classification is carried by the
-        // background tint, not by the data figure.
-        if selectedCount > 0 {
-            VStack(alignment: .trailing, spacing: 1) {
-                Text("\(selectedCount)/\(tab.count)")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink2)
-
-                Text(AlertItem.formatBytes(selectedBytes))
-                    .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .lineLimit(1)
-            }
+        // Single-line "selected/total" when partially selected, otherwise the
+        // total count. Per-tab selected bytes intentionally omitted: bytes
+        // already live in the tab header ("X flagged") and the bottom action
+        // bar (global selection). Putting them here too made chips tall and
+        // forced an unwrappable horizontal scroll.
+        Text(selectedCount > 0 ? "\(selectedCount)/\(tab.count)" : "\(tab.count)")
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(selectedCount > 0 ? GargantuaColors.ink2 : GargantuaColors.ink3)
             .padding(.horizontal, GargantuaSpacing.space1)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: GargantuaRadius.small)
                     .fill(tab.safety.tintBackground)
             )
-        } else {
-            Text("\(tab.count)")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .padding(.horizontal, GargantuaSpacing.space1)
-                .background(
-                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                        .fill(tab.safety.tintBackground)
-                )
-        }
     }
 }
+
