@@ -170,31 +170,38 @@ public struct DevArtifactScanView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
 
-            switch detectionState {
-            case .pending, .detecting:
-                detectingPlaceholder
-            case .complete:
-                bucketToolbar
+            ZStack {
+                switch detectionState {
+                case .pending, .detecting:
+                    detectingPlaceholder
+                        .transition(.opacity)
+                case .complete:
+                    VStack(spacing: 0) {
+                        bucketToolbar
 
-                Rectangle()
-                    .fill(GargantuaColors.borderSoft)
-                    .frame(height: 1)
+                        Rectangle()
+                            .fill(GargantuaColors.borderSoft)
+                            .frame(height: 1)
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                        bucketSection(
-                            title: "ECOSYSTEMS",
-                            buckets: bucketsInTier(.ecosystem)
-                        )
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+                                bucketSection(
+                                    title: "ECOSYSTEMS",
+                                    buckets: bucketsInTier(.ecosystem)
+                                )
 
-                        bucketSection(
-                            title: "CROSS-CUTTING",
-                            buckets: bucketsInTier(.crossCutting)
-                        )
+                                bucketSection(
+                                    title: "CROSS-CUTTING",
+                                    buckets: bucketsInTier(.crossCutting)
+                                )
+                            }
+                            .padding(.bottom, GargantuaSpacing.space2)
+                        }
                     }
-                    .padding(.bottom, GargantuaSpacing.space2)
+                    .transition(.opacity)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Profile override banner
             if !profile.safetyOverrides.isEmpty {
@@ -255,26 +262,46 @@ public struct DevArtifactScanView: View {
             Spacer()
 
             HStack(spacing: GargantuaSpacing.space2) {
-                if detectedCount > 0 {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Circle()
-                            .fill(GargantuaColors.safe)
-                            .frame(width: 5, height: 5)
-                        Text("\(detectedCount) on disk")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink2)
-                            .monospacedDigit()
-                    }
-                    toolbarDot
-                }
                 Text("\(selectedCount) / \(totalBuckets) selected")
                     .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
+                    .foregroundStyle(GargantuaColors.ink2)
                     .monospacedDigit()
+
+                toolbarDot
+
+                detectionChip(count: detectedCount)
             }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
+    }
+
+    /// Right-side toolbar chip reporting how many ecosystems the probe
+    /// found on disk. Always renders so the user knows detection happened
+    /// — including the zero-detection case, which falls back to the
+    /// ink3 "using defaults" state instead of silently disappearing.
+    @ViewBuilder
+    private func detectionChip(count: Int) -> some View {
+        if count > 0 {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Circle()
+                    .fill(GargantuaColors.safe)
+                    .frame(width: 5, height: 5)
+                Text("\(count) on disk")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .monospacedDigit()
+            }
+        } else {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Circle()
+                    .fill(GargantuaColors.ink4)
+                    .frame(width: 5, height: 5)
+                Text("0 on disk: using defaults")
+                    .font(GargantuaFonts.caption.italic())
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+        }
     }
 
     private func toolbarButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -335,7 +362,7 @@ public struct DevArtifactScanView: View {
 
                 Image(systemName: bucket.icon)
                     .font(.system(size: 14))
-                    .foregroundStyle(GargantuaColors.ink2)
+                    .foregroundStyle(bucket.tier == .crossCutting ? GargantuaColors.ink : GargantuaColors.ink2)
                     .frame(width: 20, alignment: .center)
 
                 Text(bucket.label)
@@ -343,14 +370,10 @@ public struct DevArtifactScanView: View {
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
 
                 if isDetected {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Circle()
-                            .fill(GargantuaColors.safe)
-                            .frame(width: 5, height: 5)
-                        Text("on disk")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink3)
-                    }
+                    Circle()
+                        .fill(GargantuaColors.safe)
+                        .frame(width: 5, height: 5)
+                        .help("Detected on disk")
                 }
 
                 Spacer()
@@ -497,7 +520,7 @@ public struct DevArtifactScanView: View {
                     Text("·")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink4)
-                    Text("first scan — sizes appear after")
+                    Text("first scan: sizes appear after")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                 }
@@ -659,18 +682,23 @@ extension DevArtifactScanView {
         let roots = scanRoots ?? PathExpander.defaultScanRoots()
         let detected = await DevArtifactDetection.detectEcosystems(in: roots)
 
-        detectedEcosystemIDs = detected
-
         // If detection found nothing usable on this machine (no scan roots,
         // empty home), fall back to the high-frequency subset so the user
         // isn't staring at zero checkboxes. The fallback is not reflected
-        // in `detectedEcosystemIDs` — it's a guess, not evidence.
+        // in `detectedEcosystemIDs`: it's a guess, not evidence.
         let ecosystems = detected.isEmpty
             ? Set(["node", "python", "other"])
             : detected.union(["other"])
 
-        selectedBucketIDs = ecosystems.union(DevArtifactDetection.alwaysSelectedCrossCutting)
-        detectionState = .complete
+        // Cross-fade detecting -> bucket list so the swap doesn't lurch.
+        // Reduce-motion users get the instant swap via the environment
+        // value already plumbed into `phaseTransition`.
+        let animation: Animation? = reduceMotion ? nil : .easeOut(duration: 0.4)
+        withAnimation(animation) {
+            detectedEcosystemIDs = detected
+            selectedBucketIDs = ecosystems.union(DevArtifactDetection.alwaysSelectedCrossCutting)
+            detectionState = .complete
+        }
     }
 
     private func startScan() {
