@@ -28,6 +28,13 @@ public struct FileHealthView: View {
     @State private var filterText: String = ""
     @State private var clusterSuggestions: [String: [String: FileHealthClusterSuggestion]] = [:]
     @State private var suggestingTabIDs: Set<String> = []
+    /// Tab ids whose Suggest call has run at least once. Lets the UI tell
+    /// "haven't asked yet" apart from "asked and got nothing" — the
+    /// difference between an unrun action and a real "the model declined"
+    /// signal.
+    @State private var attemptedSuggestionTabIDs: Set<String> = []
+
+    @Environment(\.activeAIEngineKind) private var activeAIEngineKind
 
     public init(
         results: [ScanResult],
@@ -496,7 +503,7 @@ public struct FileHealthView: View {
                         }
                     }
 
-                    if onSuggestClusters != nil {
+                    if onSuggestClusters != nil, activeAIEngineKind == .mlx {
                         suggestButton(for: tab, clusters: clusters, isSuggesting: isSuggesting)
                     }
                 }
@@ -513,31 +520,70 @@ public struct FileHealthView: View {
         clusters: [FileHealthPathCluster],
         isSuggesting: Bool
     ) -> some View {
-        let alreadyHaveSuggestions = !(clusterSuggestions[tab.id] ?? [:]).isEmpty
-        Button {
-            Task { await runClusterSuggestion(for: tab, clusters: clusters) }
-        } label: {
-            HStack(spacing: GargantuaSpacing.space1) {
-                if isSuggesting {
-                    AccretionDiskView(activityRate: 18, size: 11)
-                } else {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11))
-                }
-                Text(isSuggesting ? "Thinking…" : (alreadyHaveSuggestions ? "Re-suggest" : "Suggest"))
+        let attempted = attemptedSuggestionTabIDs.contains(tab.id)
+        let suggestionCount = (clusterSuggestions[tab.id] ?? [:]).count
+        let returnedNothing = attempted && suggestionCount == 0
+
+        VStack(alignment: .trailing, spacing: 2) {
+            Button {
+                Task { await runClusterSuggestion(for: tab, clusters: clusters) }
+            } label: {
+                HStack(spacing: GargantuaSpacing.space1) {
+                    if isSuggesting {
+                        AccretionDiskView(activityRate: 18, size: 11)
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11))
+                    }
+                    Text(suggestButtonLabel(
+                        isSuggesting: isSuggesting,
+                        attempted: attempted,
+                        hasSuggestions: suggestionCount > 0
+                    ))
                     .font(GargantuaFonts.caption)
+                }
+                .foregroundStyle(isSuggesting ? GargantuaColors.ink3 : GargantuaColors.accent)
+                .padding(.horizontal, GargantuaSpacing.space2)
+                .padding(.vertical, 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                        .stroke(isSuggesting ? GargantuaColors.borderSoft : GargantuaColors.accent.opacity(0.5), lineWidth: 1)
+                )
             }
-            .foregroundStyle(isSuggesting ? GargantuaColors.ink3 : GargantuaColors.accent)
-            .padding(.horizontal, GargantuaSpacing.space2)
-            .padding(.vertical, 4)
-            .overlay(
-                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                    .stroke(isSuggesting ? GargantuaColors.borderSoft : GargantuaColors.accent.opacity(0.5), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .disabled(isSuggesting)
+            .help(suggestButtonHelp(
+                attempted: attempted,
+                hasSuggestions: suggestionCount > 0
+            ))
+
+            if returnedNothing, !isSuggesting {
+                Text("AI returned no suggestions — model may not be downloaded.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(isSuggesting)
-        .help("Ask the local AI engine to label these clusters and recommend safety per group.")
+    }
+
+    private func suggestButtonLabel(
+        isSuggesting: Bool,
+        attempted: Bool,
+        hasSuggestions: Bool
+    ) -> String {
+        if isSuggesting { return "Thinking…" }
+        if hasSuggestions { return "Re-suggest" }
+        if attempted { return "Try again" }
+        return "Suggest"
+    }
+
+    private func suggestButtonHelp(attempted: Bool, hasSuggestions: Bool) -> String {
+        if hasSuggestions {
+            return "Ask the local AI engine to re-label these clusters."
+        }
+        if attempted {
+            return "The local AI engine returned no suggestions on the last attempt. The model may not be downloaded — check Settings."
+        }
+        return "Ask the local AI engine to label these clusters and recommend safety per group."
     }
 
     @MainActor
@@ -570,6 +616,7 @@ public struct FileHealthView: View {
         let suggestions = await onSuggestClusters(summaries)
         let byID = Dictionary(uniqueKeysWithValues: suggestions.map { ($0.clusterID, $0) })
         clusterSuggestions[tab.id] = byID
+        attemptedSuggestionTabIDs.insert(tab.id)
     }
 }
 
