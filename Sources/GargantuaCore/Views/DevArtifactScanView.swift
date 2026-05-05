@@ -30,6 +30,11 @@ public struct DevArtifactScanView: View {
     /// always-on cross-cutting set. The user is free to widen from there.
     @State private var selectedBucketIDs: Set<String> = []
     @State private var detectionState: EcosystemDetectionState = .pending
+    /// Ecosystem ids the probe positively identified on disk. Used as a
+    /// visual signal in the bucket list ("on disk" dot) and in the toolbar
+    /// tally so the user can see which buckets are pre-selected because
+    /// they were actually found, vs. which are available but absent.
+    @State private var detectedEcosystemIDs: Set<String> = []
     /// Per-bucket size totals from the most recent scan. Keyed by bucket id.
     @State private var bucketEstimates: [String: Int64] = [:]
     @State private var scanProgress = ScanProgress()
@@ -238,6 +243,7 @@ public struct DevArtifactScanView: View {
     private var bucketToolbar: some View {
         let totalBuckets = DevArtifactBucket.catalog.count
         let selectedCount = selectedBucketIDs.count
+        let detectedCount = detectedEcosystemIDs.count
 
         return HStack(spacing: GargantuaSpacing.space3) {
             toolbarButton("All", action: selectAllBuckets)
@@ -248,10 +254,24 @@ public struct DevArtifactScanView: View {
 
             Spacer()
 
-            Text("\(selectedCount) / \(totalBuckets) selected")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .monospacedDigit()
+            HStack(spacing: GargantuaSpacing.space2) {
+                if detectedCount > 0 {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Circle()
+                            .fill(GargantuaColors.safe)
+                            .frame(width: 5, height: 5)
+                        Text("\(detectedCount) on disk")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink2)
+                            .monospacedDigit()
+                    }
+                    toolbarDot
+                }
+                Text("\(selectedCount) / \(totalBuckets) selected")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .monospacedDigit()
+            }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
@@ -302,6 +322,7 @@ public struct DevArtifactScanView: View {
 
     private func bucketRow(_ bucket: DevArtifactBucket) -> some View {
         let isSelected = selectedBucketIDs.contains(bucket.id)
+        let isDetected = bucket.tier == .ecosystem && detectedEcosystemIDs.contains(bucket.id)
 
         return Button {
             toggleBucket(bucket.id)
@@ -321,6 +342,17 @@ public struct DevArtifactScanView: View {
                     .font(GargantuaFonts.label)
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink2)
 
+                if isDetected {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Circle()
+                            .fill(GargantuaColors.safe)
+                            .frame(width: 5, height: 5)
+                        Text("on disk")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                }
+
                 Spacer()
 
                 // Estimated size from last scan
@@ -336,7 +368,7 @@ public struct DevArtifactScanView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(bucket.label)
-        .accessibilityValue(isSelected ? "selected" : "not selected")
+        .accessibilityValue(isSelected ? "selected, on disk" : (isDetected ? "not selected, on disk" : "not selected"))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -615,6 +647,11 @@ extension DevArtifactScanView {
     /// with ecosystems that actually appear on this machine. Cross-cutting
     /// buckets are seeded unconditionally (they're additive). Detection is
     /// idempotent — subsequent calls bail without reprobing.
+    ///
+    /// `detectedEcosystemIDs` records what the probe positively identified
+    /// (excluding the catch-all "other" bucket and the fallback subset),
+    /// so the UI can mark those rows "on disk" vs. ecosystems that are
+    /// available to scan but not present.
     fileprivate func detectEcosystemsIfNeeded() async {
         guard detectionState == .pending else { return }
         detectionState = .detecting
@@ -622,9 +659,12 @@ extension DevArtifactScanView {
         let roots = scanRoots ?? PathExpander.defaultScanRoots()
         let detected = await DevArtifactDetection.detectEcosystems(in: roots)
 
+        detectedEcosystemIDs = detected
+
         // If detection found nothing usable on this machine (no scan roots,
         // empty home), fall back to the high-frequency subset so the user
-        // isn't staring at zero checkboxes.
+        // isn't staring at zero checkboxes. The fallback is not reflected
+        // in `detectedEcosystemIDs` — it's a guess, not evidence.
         let ecosystems = detected.isEmpty
             ? Set(["node", "python", "other"])
             : detected.union(["other"])
