@@ -2,6 +2,9 @@ import Foundation
 import MLX
 import MLXLLM
 import MLXLMCommon
+import OSLog
+
+private let mlxLogger = Logger(subsystem: "com.gargantua.core", category: "MLXInferenceEngine")
 
 /// Errors specific to `MLXInferenceEngine`. `LocalAIService` wraps load-time
 /// errors in `AIServiceError.loadFailed`; generate-time errors are caught and
@@ -163,12 +166,21 @@ public final class MLXInferenceEngine: AIInferenceEngine {
             modelContainer,
             instructions: Self.clusterSuggestionInstructions,
             generateParameters: GenerateParameters(
-                maxTokens: 480,
+                maxTokens: 768,
                 temperature: 0.2
             )
         )
         let response = try await session.respond(to: Self.buildClusterSuggestionPrompt(for: summaries))
-        return Self.parseClusterSuggestions(response, allowed: summaries)
+        let suggestions = Self.parseClusterSuggestions(response, allowed: summaries)
+        if suggestions.isEmpty {
+            // Log a truncated response so the next operator can see what the
+            // model actually emitted when the parser declined to use it.
+            // Captured at .info so it doesn't pollute typical logs but stays
+            // available via `log show --predicate ...`.
+            let preview = response.prefix(800)
+            mlxLogger.info("suggestClusters parsed 0 entries from response (first 800 chars): \(preview, privacy: .public)")
+        }
+        return suggestions
     }
 
     public func scanFilter(for query: String) async throws -> ScanFilterSet? {
@@ -272,43 +284,118 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         return lines.joined(separator: "\n")
     }
 
-    /// Parse a JSON response from `suggestClusters` into typed suggestions,
-    /// dropping anything that doesn't reference a known cluster id or carries
-    /// an unrecognized safety value. Tolerant of leading prose and trailing
-    /// markdown — extracts the first JSON object/array shape it finds.
+    /// Parse a JSON response from `suggestClusters` into typed suggestions.
+    /// Lenient by design — small local models drift on shape and formatting,
+    /// so the parser:
+    ///   * accepts both `{"suggestions": [...]}` and a bare top-level `[...]`
+    ///   * normalizes cluster ids on both sides (lowercase, strip ~/, strip
+    ///     expanded home prefix, drop leading/trailing slashes) so the model
+    ///     can echo `/Users/Jason/X/Y` when we asked for `~/X/Y/` and still
+    ///     match the canonical id.
+    ///   * silently drops entries with unrecognized safety values or that
+    ///     reference a cluster id we never sent.
     static func parseClusterSuggestions(
         _ response: String,
         allowed: [FileHealthClusterSummary]
     ) -> [FileHealthClusterSuggestion] {
-        guard let json = extractFirstJSONObject(from: response),
-              let data = json.data(using: .utf8),
-              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let raw = parsed["suggestions"] as? [[String: Any]]
-        else {
+        guard let raw = extractSuggestionEntries(from: response) else {
             return []
         }
 
-        let allowedIDs = Set(allowed.map(\.id))
+        // Build normalized -> canonical lookup so the model can deviate on
+        // formatting and we still find the right cluster.
+        let lookup: [String: String] = Dictionary(
+            allowed.map { (normalizeClusterID($0.id), $0.id) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         var seen: Set<String> = []
         var out: [FileHealthClusterSuggestion] = []
         for entry in raw {
-            guard let clusterID = entry["cluster_id"] as? String,
-                  allowedIDs.contains(clusterID),
-                  !seen.contains(clusterID),
+            guard let modelClusterID = entry["cluster_id"] as? String,
+                  let canonical = lookup[normalizeClusterID(modelClusterID)],
+                  !seen.contains(canonical),
                   let label = entry["label"] as? String,
                   let safetyString = entry["safety"] as? String,
                   let safety = parseSafety(safetyString)
             else { continue }
             let rationale = (entry["rationale"] as? String) ?? ""
-            seen.insert(clusterID)
+            seen.insert(canonical)
             out.append(FileHealthClusterSuggestion(
-                clusterID: clusterID,
+                clusterID: canonical,
                 label: label.trimmingCharacters(in: .whitespacesAndNewlines),
                 safety: safety,
                 rationale: rationale.trimmingCharacters(in: .whitespacesAndNewlines)
             ))
         }
         return out
+    }
+
+    /// Normalize a cluster id for tolerant matching. Lowercases, strips
+    /// surrounding whitespace, removes a leading `~/` or expanded home path,
+    /// and drops surrounding slashes. The result is purely a comparison
+    /// token — never used as a real path.
+    static func normalizeClusterID(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if s.hasPrefix("~/") { s = String(s.dropFirst(2)) }
+        let expandedHome = NSString(string: "~").expandingTildeInPath.lowercased() + "/"
+        if s.hasPrefix(expandedHome) { s = String(s.dropFirst(expandedHome.count)) }
+        while s.hasPrefix("/") { s = String(s.dropFirst()) }
+        while s.hasSuffix("/") { s = String(s.dropLast()) }
+        return s
+    }
+
+    /// Pull the suggestion entries out of the model response, accepting
+    /// either `{"suggestions": [...]}` or a bare top-level `[...]`.
+    private static func extractSuggestionEntries(from response: String) -> [[String: Any]]? {
+        // Try object shape first.
+        if let json = extractFirstJSONObject(from: response),
+           let data = json.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let raw = parsed["suggestions"] as? [[String: Any]]
+        {
+            return raw
+        }
+        // Fall back to bare-array shape.
+        if let array = extractFirstJSONArray(from: response),
+           let data = array.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        {
+            return parsed
+        }
+        return nil
+    }
+
+    /// Same balanced-scan as `extractFirstJSONObject`, but for `[...]`. Used
+    /// when the model emits the suggestions array without the object wrapper.
+    static func extractFirstJSONArray(from text: String) -> String? {
+        guard let start = text.firstIndex(of: "[") else { return nil }
+        var depth = 0
+        var inString = false
+        var escaping = false
+        var i = start
+        while i < text.endIndex {
+            let c = text[i]
+            if escaping {
+                escaping = false
+            } else if inString {
+                if c == "\\" { escaping = true }
+                else if c == "\"" { inString = false }
+            } else {
+                switch c {
+                case "\"": inString = true
+                case "[": depth += 1
+                case "]":
+                    depth -= 1
+                    if depth == 0 {
+                        return String(text[start ... i])
+                    }
+                default: break
+                }
+            }
+            i = text.index(after: i)
+        }
+        return nil
     }
 
     private static func parseSafety(_ raw: String) -> SafetyLevel? {

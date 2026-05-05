@@ -468,6 +468,58 @@ struct MLXInferenceEngineTests {
         #expect(MLXInferenceEngine.parseClusterSuggestions(nonsense, allowed: [summary]).isEmpty)
     }
 
+    @Test("Cluster JSON parser tolerates missing trailing slash on cluster id")
+    func clusterParserTolerantOfTrailingSlash() {
+        let summary = makeClusterSummary()
+        let response = """
+        {"suggestions":[{"cluster_id":"~/Development/dreamheist/builds","label":"Build detritus","safety":"safe","rationale":""}]}
+        """
+        let suggestions = MLXInferenceEngine.parseClusterSuggestions(response, allowed: [summary])
+
+        #expect(suggestions.count == 1)
+        // The canonical id (with trailing slash) should be returned even if
+        // the model omitted it.
+        #expect(suggestions[0].clusterID == summary.id)
+    }
+
+    @Test("Cluster JSON parser tolerates expanded home path instead of ~/")
+    func clusterParserTolerantOfExpandedHome() {
+        let summary = makeClusterSummary()
+        let home = NSString(string: "~").expandingTildeInPath
+        let response = """
+        {"suggestions":[{"cluster_id":"\(home)/Development/dreamheist/builds/","label":"Build","safety":"safe","rationale":""}]}
+        """
+        let suggestions = MLXInferenceEngine.parseClusterSuggestions(response, allowed: [summary])
+
+        #expect(suggestions.count == 1)
+        // Canonical ~/-form is returned; UI uses that key downstream.
+        #expect(suggestions[0].clusterID == summary.id)
+    }
+
+    @Test("Cluster JSON parser tolerates case differences in cluster id")
+    func clusterParserTolerantOfCase() {
+        let summary = makeClusterSummary()
+        let response = """
+        {"suggestions":[{"cluster_id":"~/development/DREAMHEIST/builds/","label":"X","safety":"safe","rationale":""}]}
+        """
+        let suggestions = MLXInferenceEngine.parseClusterSuggestions(response, allowed: [summary])
+
+        #expect(suggestions.count == 1)
+        #expect(suggestions[0].clusterID == summary.id)
+    }
+
+    @Test("Cluster JSON parser accepts a bare top-level array shape")
+    func clusterParserBareArray() {
+        let summary = makeClusterSummary()
+        let response = """
+        [{"cluster_id":"~/Development/dreamheist/builds/","label":"X","safety":"review","rationale":"y"}]
+        """
+        let suggestions = MLXInferenceEngine.parseClusterSuggestions(response, allowed: [summary])
+
+        #expect(suggestions.count == 1)
+        #expect(suggestions[0].safety == .review)
+    }
+
     @Test("Cluster JSON parser deduplicates by cluster id")
     func clusterParserDeduplicates() {
         let summary = makeClusterSummary()
