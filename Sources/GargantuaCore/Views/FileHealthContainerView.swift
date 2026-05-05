@@ -115,7 +115,10 @@ public struct FileHealthContainerView: View {
 
     private var idleView: some View {
         VStack(spacing: 0) {
-            PageHeaderView(title: "File Health")
+            PageHeaderView(
+                title: "File Health",
+                subtitle: "Cluster the redundancies. Surface what's broken."
+            )
 
             VStack(spacing: GargantuaSpacing.space4) {
                 Spacer()

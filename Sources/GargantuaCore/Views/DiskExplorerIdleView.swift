@@ -8,7 +8,10 @@ struct DiskExplorerIdleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScanResultsHeader(title: "Disk Explorer")
+            ScanResultsHeader(
+                title: "Disk Explorer",
+                subtitle: "Trace where bytes accrete in your filesystem."
+            )
 
             Spacer()
 

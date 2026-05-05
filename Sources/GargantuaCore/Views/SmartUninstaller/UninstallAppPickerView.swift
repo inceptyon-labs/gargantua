@@ -73,7 +73,7 @@ struct UninstallAppPickerView: View {
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
 
-            Text("Choose an app to uninstall — Gargantua will find its leftover files.")
+            Text("Choose an app to uninstall. Gargantua will find its leftover files.")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
         }

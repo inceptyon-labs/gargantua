@@ -135,19 +135,10 @@ public struct DeepCleanView: View {
 
     private var startView: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Deep Clean")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-                Spacer()
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space4)
-
-            Rectangle()
-                .fill(GargantuaColors.border)
-                .frame(height: 1)
+            PageHeaderView(
+                title: "Deep Clean",
+                subtitle: "Reclaim what the system left behind."
+            )
 
             // Description + action centered
             Spacer()

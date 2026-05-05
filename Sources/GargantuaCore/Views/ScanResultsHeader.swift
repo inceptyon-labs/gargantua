@@ -2,10 +2,12 @@ import SwiftUI
 
 /// Shared chrome for the top of every scan-results screen.
 ///
-/// Layout: `[Back]  ·  centered title (+optional subtitle)  ·  [Refresh] [Rescan]`,
+/// Layout: `[Back]  leading-aligned title (+optional subtitle)            [Refresh] [Rescan]`,
 /// followed by a 1-pt divider. Each trailing action is opt-in — pass `nil` to
 /// hide it. Designed so Deep Clean, File Health, Dev Purge, Duplicate Finder,
 /// and the Smart Uninstaller plan review all share one navigation pattern.
+/// Title alignment matches the leading-aligned `PageHeaderView` used on
+/// feature-root entry screens.
 ///
 /// Semantics:
 ///   - **Back** — leave the results phase, return to the start/idle screen.
@@ -37,18 +39,16 @@ public struct ScanResultsHeader: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                leadingSlot
-                    .frame(minWidth: 110, alignment: .leading)
-
-                Spacer()
+            HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+                if onBack != nil {
+                    leadingSlot
+                }
 
                 titleStack
 
                 Spacer()
 
                 trailingSlot
-                    .frame(minWidth: 110, alignment: .trailing)
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space3)
@@ -60,7 +60,7 @@ public struct ScanResultsHeader: View {
     }
 
     private var titleStack: some View {
-        VStack(spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
@@ -87,15 +87,12 @@ public struct ScanResultsHeader: View {
                 .foregroundStyle(GargantuaColors.accent)
             }
             .buttonStyle(.plain)
-        } else {
-            Color.clear.frame(width: 1, height: 1)
         }
     }
 
     @ViewBuilder
     private var trailingSlot: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Spacer(minLength: 0)
             if let onRefresh {
                 actionButton(label: "Refresh", systemImage: "arrow.clockwise", action: onRefresh)
                     .accessibilityLabel("Refresh list")
