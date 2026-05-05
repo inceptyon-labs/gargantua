@@ -106,7 +106,11 @@ public struct SmartUninstallerView: View {
 
     private var idleView: some View {
         VStack(spacing: 0) {
-            PageHeaderView(title: "Smart Uninstaller")
+            PageHeaderView(
+                title: "Smart Uninstaller",
+                subtitle: "Pull an app apart, root and remnants.",
+                subtitleStyle: .voice
+            )
 
             VStack(spacing: GargantuaSpacing.space4) {
                 Spacer()

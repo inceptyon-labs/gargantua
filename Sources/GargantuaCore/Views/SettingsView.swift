@@ -116,8 +116,8 @@ public struct SettingsView: View {
                 .foregroundStyle(GargantuaColors.ink)
 
             Text(headerSubtitle)
-                .font(GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink3)
+                .font(GargantuaFonts.body.italic())
+                .foregroundStyle(GargantuaColors.ink2)
         }
     }
 

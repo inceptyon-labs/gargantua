@@ -85,7 +85,11 @@ public struct DuplicateFinderContainerView: View {
 
     private var idleView: some View {
         VStack(spacing: 0) {
-            PageHeaderView(title: "Duplicate Finder")
+            PageHeaderView(
+                title: "Duplicate Finder",
+                subtitle: "Group duplicate bytes across your filesystem.",
+                subtitleStyle: .voice
+            )
 
             VStack(spacing: GargantuaSpacing.space4) {
                 Spacer()

@@ -97,7 +97,8 @@ public struct ClaudeCodeAgentView: View {
     private var header: some View {
         PageHeaderView(
             title: "Agent Run",
-            subtitle: "Run Claude Code against Gargantua MCP with a live transcript and explicit destructive-step gates."
+            subtitle: "Hand control to Claude Code. Confirm each destructive turn.",
+            subtitleStyle: .voice
         ) {
             HStack(spacing: GargantuaSpacing.space3) {
                 Button {

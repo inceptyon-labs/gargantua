@@ -64,18 +64,11 @@ public struct DashboardView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            Text("Dashboard")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text("A triage roadmap for the deeper cleanup tools.")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space4)
+        PageHeaderView(
+            title: "Dashboard",
+            subtitle: "Glance the system. Pick where to dig in next.",
+            subtitleStyle: .voice
+        )
     }
 
     // MARK: - Triage Overview

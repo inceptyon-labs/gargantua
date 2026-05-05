@@ -170,9 +170,8 @@ public struct DeveloperToolsView: View {
     private var header: some View {
         PageHeaderView(
             title: "Developer Tools",
-            subtitle: phase == .idle
-                ? nil
-                : "Preview cleanup actions for Homebrew and Docker."
+            subtitle: "Preview Homebrew and Docker cleanup before pulling the trigger.",
+            subtitleStyle: .voice
         ) {
             HStack(spacing: GargantuaSpacing.space3) {
                 if phase != .idle {
