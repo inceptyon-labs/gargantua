@@ -336,10 +336,16 @@ public struct FileHealthView: View {
     }
 
     private func tabHeader(_ tab: FileHealthCategoryTab) -> some View {
-        // Tab header carries category identity only. Selection state lives in
-        // the chip badge (per-tab) and bottom action bar (global) — three
-        // sources of truth on one screen made bytes hard to read.
-        HStack(spacing: GargantuaSpacing.space2) {
+        // Tab header carries category identity + per-tab bulk selection.
+        // Per-tab Select All / Deselect All replaces the auto-preselect that
+        // used to silently check thousands of safe-tier items across tabs the
+        // user hadn't opened — bulk picks are now deliberate, scoped to the
+        // tab in view.
+        let tabIDs = tab.findings.map(\.id)
+        let selectedInTab = tab.selectedCount(in: session.selectedResultIDs)
+        let allSelectedInTab = !tabIDs.isEmpty && selectedInTab == tab.count
+
+        return HStack(spacing: GargantuaSpacing.space3) {
             Image(systemName: tab.iconName)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(tab.safety.tintColor)
@@ -348,6 +354,25 @@ public struct FileHealthView: View {
             Text(tab.label)
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
+
+            HStack(spacing: GargantuaSpacing.space2) {
+                Button("Select all") { session.selectAll(tabIDs) }
+                    .buttonStyle(.plain)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(allSelectedInTab ? GargantuaColors.ink4 : GargantuaColors.accent)
+                    .disabled(allSelectedInTab)
+
+                Text("·")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink4)
+
+                Button("Deselect all") { session.deselectAll(tabIDs) }
+                    .buttonStyle(.plain)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(selectedInTab == 0 ? GargantuaColors.ink4 : GargantuaColors.accent)
+                    .disabled(selectedInTab == 0)
+            }
+            .padding(.leading, GargantuaSpacing.space2)
 
             Spacer()
 

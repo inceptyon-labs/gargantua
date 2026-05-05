@@ -32,40 +32,24 @@ private func makeCzkawkaResult(
 @Suite("FileHealthSessionState")
 struct FileHealthSessionStateTests {
 
-    @Test("finishScan preselects only safe-tier findings")
+    @Test("finishScan starts with an empty selection (no silent auto-preselect)")
     @MainActor
-    func finishScanPreselectsSafeOnly() {
+    func finishScanStartsEmpty() {
+        // Regression: auto-preselecting every .safe item across all tabs
+        // produced "Send 3024 items" surprises once the czkawka 11 parser
+        // started returning real findings for empty-files / temp / symlinks.
+        // Selection stays empty; bulk picks live behind explicit per-tab UI.
         let session = FileHealthSessionState()
         let results = [
-            makeCzkawkaResult(category: .emptyFiles, counter: 0), // safe
-            makeCzkawkaResult(category: .brokenSymlinks, counter: 1), // safe
-            makeCzkawkaResult(category: .bigFiles, counter: 2), // review
-            makeCzkawkaResult(category: .similarImages, counter: 3), // review
+            makeCzkawkaResult(category: .emptyFiles, counter: 0), // would have been auto-selected
+            makeCzkawkaResult(category: .brokenSymlinks, counter: 1), // would have been auto-selected
+            makeCzkawkaResult(category: .bigFiles, counter: 2),
+            makeCzkawkaResult(category: .similarImages, counter: 3),
         ]
 
         session.finishScan(results: results)
 
-        #expect(session.selectedResultIDs == Set([
-            "czkawka-emptyFiles-0",
-            "czkawka-brokenSymlinks-1",
-        ]))
-    }
-
-    @Test("SafetyClassifier downgrade to .review excludes the finding from defaults")
-    @MainActor
-    func defaultsFollowActualSafetyLevel() {
-        // If an emptyFiles result is overridden to .review via profile policy,
-        // default selection should respect the runtime safety — not the
-        // CzkawkaTrustDefaults category default.
-        let session = FileHealthSessionState()
-        let results = [
-            makeCzkawkaResult(category: .emptyFiles, counter: 0, safety: .review),
-            makeCzkawkaResult(category: .emptyFiles, counter: 1, safety: .safe),
-        ]
-
-        session.finishScan(results: results)
-
-        #expect(session.selectedResultIDs == Set(["czkawka-emptyFiles-1"]))
+        #expect(session.selectedResultIDs.isEmpty)
     }
 
     @Test("toggleSelection flips membership idempotently")
@@ -75,7 +59,7 @@ struct FileHealthSessionStateTests {
         let results = [makeCzkawkaResult(category: .bigFiles, counter: 0)]
         let id = results[0].id
 
-        session.finishScan(results: results) // review -> nothing preselected
+        session.finishScan(results: results)
         #expect(session.isSelected(id) == false)
 
         session.toggleSelection(for: id)
@@ -90,17 +74,16 @@ struct FileHealthSessionStateTests {
     func selectionsPersistAcrossTabSwitches() {
         let session = FileHealthSessionState()
         let results = [
-            makeCzkawkaResult(category: .emptyFiles, counter: 0), // safe
-            makeCzkawkaResult(category: .bigFiles, counter: 1), // review, manually opt-in
-            makeCzkawkaResult(category: .similarImages, counter: 2), // review
+            makeCzkawkaResult(category: .emptyFiles, counter: 0),
+            makeCzkawkaResult(category: .bigFiles, counter: 1),
+            makeCzkawkaResult(category: .similarImages, counter: 2),
         ]
         session.finishScan(results: results)
 
-        // User opts a review-tier big file into selection in its tab.
+        // User explicitly opts items into selection in different tabs.
+        session.toggleSelection(for: "czkawka-emptyFiles-0")
         session.toggleSelection(for: "czkawka-bigFiles-1")
 
-        // Simulate switching tabs by regrouping — tabs are derived from
-        // results, but the session (source of truth) doesn't change.
         let regrouped = FileHealthGrouper.group(results)
         #expect(regrouped.count == 3)
         #expect(session.isSelected("czkawka-emptyFiles-0"))
@@ -108,14 +91,30 @@ struct FileHealthSessionStateTests {
         #expect(!session.isSelected("czkawka-similarImages-2"))
     }
 
+    @Test("selectAll unions ids; deselectAll subtracts them; both leave other tabs alone")
+    @MainActor
+    func tabScopedBulkHelpers() {
+        let session = FileHealthSessionState()
+        let bigFilesIDs = ["czkawka-bigFiles-0", "czkawka-bigFiles-1", "czkawka-bigFiles-2"]
+        let emptyFilesIDs = ["czkawka-emptyFiles-0"]
+
+        // Pre-existing selection in another tab.
+        session.toggleSelection(for: emptyFilesIDs[0])
+
+        session.selectAll(bigFilesIDs)
+        #expect(session.selectedResultIDs == Set(bigFilesIDs + emptyFilesIDs))
+
+        session.deselectAll(bigFilesIDs)
+        // Big Files cleared, Empty Files selection in the other tab survives.
+        #expect(session.selectedResultIDs == Set(emptyFilesIDs))
+    }
+
     @Test("clear wipes selection (used when a new scan starts)")
     @MainActor
     func clearWipesSelection() {
         let session = FileHealthSessionState()
-        session.finishScan(results: [
-            makeCzkawkaResult(category: .emptyFiles, counter: 0),
-            makeCzkawkaResult(category: .brokenSymlinks, counter: 1),
-        ])
+        session.toggleSelection(for: "czkawka-emptyFiles-0")
+        session.toggleSelection(for: "czkawka-brokenSymlinks-1")
         #expect(!session.selectedResultIDs.isEmpty)
 
         session.clear()

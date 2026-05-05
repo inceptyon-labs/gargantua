@@ -23,11 +23,27 @@ public final class FileHealthSessionState {
         selectedResultIDs = []
     }
 
-    /// Seed selection from a finished scan. Pre-selects Trust Layer `.safe`
-    /// items only — review and protected tiers stay unchecked so the user
-    /// consciously opts into riskier deletions (matches Deep Clean default).
+    /// Seed selection from a finished scan. Always starts empty: at scan
+    /// scale the Trust Layer commitment is "review-by-default", which means
+    /// the user picks every item that ships to Trash. Auto-preselection
+    /// silently accumulated thousands of safe-tier hits across tabs the user
+    /// hadn't seen, leading to "send 3024 items" surprises. Bulk selection
+    /// stays one click away via per-tab Select All in the UI.
     public func finishScan(results: [ScanResult]) {
-        selectedResultIDs = Set(results.filter { $0.safety == .safe }.map(\.id))
+        _ = results
+        selectedResultIDs = []
+    }
+
+    /// Select every id in `ids`. Used by per-tab "Select all" so the user
+    /// can opt into a bulk deletion deliberately, scoped to the tab they're
+    /// looking at.
+    public func selectAll(_ ids: [String]) {
+        selectedResultIDs.formUnion(ids)
+    }
+
+    /// Remove every id in `ids` from the selection. Per-tab "Deselect all".
+    public func deselectAll(_ ids: [String]) {
+        selectedResultIDs.subtract(ids)
     }
 
     /// Flip a single row's selection. Called from the checkbox tap handler.
