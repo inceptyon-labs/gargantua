@@ -13,30 +13,28 @@ struct FileHealthFindingRow: View {
     let onToggleSelection: () -> Void
     let onExplain: ((ScanResult) -> Void)?
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
             // Checkbox mirrors DenseScanItemRow — 16×16 rounded rect, safety-
-            // tinted fill when selected. Standalone Button so tapping the box
-            // doesn't also trigger row-wide click handlers added later.
-            Button(action: onToggleSelection) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(
-                            isSelected ? result.safety.tintColor : GargantuaColors.borderEm,
-                            lineWidth: 1.5
-                        )
-                        .frame(width: 16, height: 16)
-                        .background(isSelected ? result.safety.tintColor : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+            // tinted fill when selected.
+            ZStack {
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(
+                        isSelected ? result.safety.tintColor : GargantuaColors.borderEm,
+                        lineWidth: 1.5
+                    )
+                    .frame(width: 16, height: 16)
+                    .background(isSelected ? result.safety.tintColor : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
 
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
                 }
             }
-            .buttonStyle(.plain)
             .accessibilityLabel(isSelected ? "Deselect \(result.name)" : "Select \(result.name)")
 
             VStack(alignment: .leading, spacing: 2) {
@@ -61,6 +59,13 @@ struct FileHealthFindingRow: View {
 
             Spacer()
 
+            if result.confidence > 0 {
+                Text("\(result.confidence)%")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .accessibilityLabel("\(result.confidence) percent confidence")
+            }
+
             if result.size > 0 {
                 Text(AlertItem.formatBytes(result.size))
                     .font(GargantuaFonts.monoData)
@@ -70,7 +75,24 @@ struct FileHealthFindingRow: View {
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
         .background(isSelected ? result.safety.tintBackground : Color.clear)
+        .overlay(
+            // Focus ring uses borderFocus per design system. Visible only
+            // while the row is keyboard-focused; the safety-tint background
+            // already conveys selection.
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(isFocused ? GargantuaColors.borderFocus : Color.clear, lineWidth: 2)
+                .padding(.horizontal, 2)
+        )
         .contentShape(Rectangle())
+        .focusable()
+        .focused($isFocused)
+        .onTapGesture(perform: onToggleSelection)
+        .onKeyPress(.space) {
+            onToggleSelection()
+            return .handled
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: isSelected ? "Deselect" : "Select", onToggleSelection)
         .contextMenu {
             Button {
                 NSWorkspace.shared.selectFile(result.path, inFileViewerRootedAtPath: "")

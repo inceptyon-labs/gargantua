@@ -127,7 +127,7 @@ public struct FileHealthContainerView: View {
 
                     Text(
                         "Runs czkawka across your scan roots to surface empty, broken, temporary, oversized, "
-                            + "and visually similar files. Review-by-default — nothing is selected automatically."
+                            + "and visually similar files. Review-by-default: nothing is selected automatically."
                     )
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
@@ -178,7 +178,7 @@ public struct FileHealthContainerView: View {
                 Text("SCAN ROOTS: \(resolvedScanRoots().count)")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
-                Text("CATEGORIES: 8")
+                Text("CATEGORIES: \(CzkawkaCategory.allCases.count)")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
                 Spacer()

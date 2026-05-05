@@ -209,15 +209,24 @@ public struct FileHealthView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.escape, modifiers: [])
                 }
 
                 if let onSendToTrash {
                     Button(action: onSendToTrash) {
-                        HStack(spacing: GargantuaSpacing.space1) {
+                        HStack(spacing: GargantuaSpacing.space2) {
                             Image(systemName: "trash")
                                 .font(.system(size: 11, weight: .semibold))
-                            Text("Send to Trash")
-                                .font(GargantuaFonts.label)
+                            // Byte count lives inside the button so the action
+                            // and its consequence read together at the moment
+                            // of click — no triangulating across the screen.
+                            if selectedResults.isEmpty {
+                                Text("Send to Trash")
+                                    .font(GargantuaFonts.label)
+                            } else {
+                                Text("Send \(selectedResults.count) item\(selectedResults.count == 1 ? "" : "s") · \(AlertItem.formatBytes(selectedBytes)) to Trash")
+                                    .font(GargantuaFonts.label)
+                            }
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, GargantuaSpacing.space4)
@@ -231,6 +240,7 @@ public struct FileHealthView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(selectedResults.isEmpty)
+                    .keyboardShortcut(.delete, modifiers: .command)
                     .accessibilityLabel("Send selected File Health items to Trash")
                 }
             }
@@ -327,9 +337,10 @@ public struct FileHealthView: View {
     }
 
     private func tabHeader(_ tab: FileHealthCategoryTab) -> some View {
-        let selectedCount = tab.selectedCount(in: session.selectedResultIDs)
-        let selectedBytes = tab.selectedBytes(in: session.selectedResultIDs)
-        return HStack(spacing: GargantuaSpacing.space2) {
+        // Tab header carries category identity only. Selection state lives in
+        // the chip badge (per-tab) and bottom action bar (global) — three
+        // sources of truth on one screen made bytes hard to read.
+        HStack(spacing: GargantuaSpacing.space2) {
             Image(systemName: tab.iconName)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(tab.safety.tintColor)
@@ -339,17 +350,9 @@ public struct FileHealthView: View {
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
 
-            Text("\(selectedCount) of \(tab.count) selected")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-
             Spacer()
 
-            if selectedBytes > 0 {
-                Text(AlertItem.formatBytes(selectedBytes) + " reclaimable")
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(tab.safety.tintColor)
-            } else if tab.totalSize > 0 {
+            if tab.totalSize > 0 {
                 Text(AlertItem.formatBytes(tab.totalSize) + " flagged")
                     .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink3)
@@ -390,8 +393,11 @@ private struct FileHealthTabChip: View {
                     .fill(isSelected ? GargantuaColors.surface3 : Color.clear)
             )
             .overlay(alignment: .bottom) {
+                // Underline carries selection state, not safety. Hawking Blue
+                // is the interactive vocabulary; safety tint stays on the icon
+                // and badge background.
                 Rectangle()
-                    .fill(isSelected ? tab.safety.tintColor : .clear)
+                    .fill(isSelected ? GargantuaColors.accent : .clear)
                     .frame(height: 2)
                     .padding(.horizontal, GargantuaSpacing.space2)
             }
@@ -403,7 +409,9 @@ private struct FileHealthTabChip: View {
     @ViewBuilder
     private var selectionBadge: some View {
         // Badge reads "selected / total" plus selected bytes, so switching
-        // tabs never hides a partial selection the user made elsewhere.
+        // tabs never hides a partial selection the user made elsewhere. Bytes
+        // render in neutral mono; safety classification is carried by the
+        // background tint, not by the data figure.
         if selectedCount > 0 {
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(selectedCount)/\(tab.count)")
@@ -412,7 +420,7 @@ private struct FileHealthTabChip: View {
 
                 Text(AlertItem.formatBytes(selectedBytes))
                     .font(GargantuaFonts.monoPath)
-                    .foregroundStyle(tab.safety.tintColor)
+                    .foregroundStyle(GargantuaColors.ink2)
                     .lineLimit(1)
             }
             .padding(.horizontal, GargantuaSpacing.space1)

@@ -94,7 +94,7 @@ public struct HealthGaugeView: View {
 
             VStack(spacing: 2) {
                 Text("\(Int((diskUsage * 100).rounded()))%")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(GargantuaFonts.display)
                     .foregroundStyle(GargantuaColors.ink)
                     .contentTransition(.numericText())
                     .animation(.linear(duration: 0.3), value: diskUsage)
