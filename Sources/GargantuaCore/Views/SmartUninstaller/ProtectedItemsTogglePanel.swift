@@ -20,7 +20,7 @@ struct ProtectedItemsTogglePanel: View {
                         .font(GargantuaFonts.label)
                         .foregroundStyle(GargantuaColors.ink)
 
-                    Text("System-level files (launch daemons, helpers). Unlock to select them — you'll acknowledge each one before uninstall.")
+                    Text("System-level files (launch daemons, helpers). Unlock to select them; you'll acknowledge each one before uninstall.")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -44,12 +44,8 @@ struct ProtectedItemsTogglePanel: View {
                 )
             }
             .padding(GargantuaSpacing.space3)
-            .background(GargantuaColors.protected_.opacity(0.06))
+            .background(GargantuaColors.protectedDim)
             .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-            .overlay(
-                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                    .stroke(GargantuaColors.protected_.opacity(0.3), lineWidth: 1)
-            )
         }
     }
 }

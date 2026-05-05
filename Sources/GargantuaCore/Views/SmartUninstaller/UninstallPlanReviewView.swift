@@ -21,19 +21,13 @@ struct UninstallPlanReviewView: View {
             VStack(spacing: 0) {
                 ScanResultsHeader(
                     title: plan.app.displayName ?? plan.app.name,
-                    subtitle: plan.app.bundleID,
+                    subtitle: headerSubtitle(plan: plan),
                     onBack: onBack
                 )
-
-                planStatsBar(plan: plan)
 
                 if plan.app.isRunning, isAppBundleSelected(plan: plan) {
                     runningBanner(app: plan.app)
                 }
-
-                Rectangle()
-                    .fill(GargantuaColors.border)
-                    .frame(height: 1)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
@@ -57,27 +51,20 @@ struct UninstallPlanReviewView: View {
         }
     }
 
-    // MARK: - Stats Bar
+    // MARK: - Header subtitle
 
-    private func planStatsBar(plan: UninstallPlan) -> some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            Text(AlertItem.formatBytes(plan.totalBytes))
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text("·")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-
-            Text("\(plan.allItems.count) item\(plan.allItems.count == 1 ? "" : "s")")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink2)
-
-            Spacer()
+    /// Bundle ID with the plan totals folded in. Replaces the standalone stats
+    /// bar — the subtitle slot already exists, and the totals are scaffolding,
+    /// not a primary metric.
+    private func headerSubtitle(plan: UninstallPlan) -> String {
+        let bytes = AlertItem.formatBytes(plan.totalBytes)
+        let count = plan.allItems.count
+        let items = "\(count) item\(count == 1 ? "" : "s")"
+        let bundleID = plan.app.bundleID
+        if !bundleID.isEmpty {
+            return "\(bundleID)  ·  \(bytes) across \(items)"
         }
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .background(GargantuaColors.surface2)
+        return "\(bytes) across \(items)"
     }
 
     // MARK: - Running banner
@@ -88,7 +75,7 @@ struct UninstallPlanReviewView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(GargantuaColors.review)
 
-            Text("\(app.displayName ?? app.name) is running — Gargantua will quit it before removing the bundle.")
+            Text("\(app.displayName ?? app.name) is running. Gargantua will quit it before removing the bundle.")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.review)
 
@@ -103,20 +90,22 @@ struct UninstallPlanReviewView: View {
 
     // MARK: - Bundle section
 
+    /// The application bundle row sits at the top of the scroll, before any
+    /// remnant categories. A trailing hairline divider separates it from the
+    /// first category section so the bundle reads as primary, not as a stray
+    /// row in some unnamed group.
     private func bundleSection(bundle: RemnantItem) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            Text("Application Bundle")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .textCase(.uppercase)
-                .tracking(0.8)
-
             RemnantRow(
                 item: bundle,
                 isSelected: viewModel.selectedIDs.contains(bundle.id),
                 isLocked: bundle.safety == .protected_ && !viewModel.includeProtected,
                 onToggle: { viewModel.toggleSelection(bundle) }
             )
+
+            Rectangle()
+                .fill(GargantuaColors.borderSoft)
+                .frame(height: 1)
         }
     }
 
@@ -204,14 +193,9 @@ struct UninstallPlanReviewView: View {
                 .frame(height: 1)
 
             HStack(spacing: GargantuaSpacing.space3) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(selectedCount) selected")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
-                    Text(AlertItem.formatBytes(viewModel.selectedTotalBytes))
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink2)
-                }
+                Text("\(AlertItem.formatBytes(viewModel.selectedTotalBytes)) selected")
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink2)
 
                 Spacer()
 
@@ -221,10 +205,8 @@ struct UninstallPlanReviewView: View {
                         .foregroundStyle(GargantuaColors.ink)
                         .padding(.vertical, GargantuaSpacing.space2)
                         .padding(.horizontal, GargantuaSpacing.space4)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                .stroke(GargantuaColors.borderEm, lineWidth: 1)
-                        )
+                        .background(GargantuaColors.surface3)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 }
                 .buttonStyle(.plain)
 
@@ -233,7 +215,7 @@ struct UninstallPlanReviewView: View {
                         ? "Uninstall 1 item"
                         : "Uninstall \(selectedCount) items")
                         .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(GargantuaColors.ink)
                         .padding(.vertical, GargantuaSpacing.space2)
                         .padding(.horizontal, GargantuaSpacing.space4)
                         .background(viewModel.canProceed ? GargantuaColors.accent : GargantuaColors.accent.opacity(0.4))

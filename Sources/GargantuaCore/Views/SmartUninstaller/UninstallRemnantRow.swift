@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// A single remnant row in the plan review list — safety-coloured left
-/// border, checkbox (locked when the item is protected), filename, full
-/// path, explanation, and size.
+/// A single remnant row in the plan review list — checkbox (locked when
+/// protected), filename, full path, explanation, size. The row background
+/// is tinted by safety classification per DESIGN.md §5 Scan Rows (12%
+/// safe / review / protected tint).
 struct RemnantRow: View {
     let item: RemnantItem
     let isSelected: Bool
@@ -11,10 +12,6 @@ struct RemnantRow: View {
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            Rectangle()
-                .fill(item.safety.accentColor)
-                .frame(width: 3)
-
             Button(action: onToggle) {
                 Image(systemName: isSelected ? "checkmark.square.fill" : "square")
                     .font(.system(size: 14))
@@ -39,7 +36,7 @@ struct RemnantRow: View {
                 Text(item.explanation)
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
 
             Spacer()
@@ -49,8 +46,8 @@ struct RemnantRow: View {
                 .foregroundStyle(GargantuaColors.ink2)
         }
         .padding(.vertical, GargantuaSpacing.space2)
-        .padding(.trailing, GargantuaSpacing.space3)
-        .background(GargantuaColors.surface1)
+        .padding(.horizontal, GargantuaSpacing.space3)
+        .background(item.safety.tintBackground)
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 
@@ -71,16 +68,6 @@ struct RemnantRow: View {
 }
 
 // MARK: - Display helpers
-
-extension SafetyLevel {
-    var accentColor: Color {
-        switch self {
-        case .safe: GargantuaColors.safe
-        case .review: GargantuaColors.review
-        case .protected_: GargantuaColors.protected_
-        }
-    }
-}
 
 extension RemnantCategory {
     /// Human-readable label used in the plan review UI.

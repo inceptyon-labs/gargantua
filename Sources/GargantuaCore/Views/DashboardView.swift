@@ -10,22 +10,37 @@ import SwiftUI
 public struct DashboardView: View {
     @Binding var sidebarSelection: String?
 
+    @Bindable private var session: DashboardSessionState
     private let persistence: PersistenceController?
 
     @State private var diskUsedGB: Int = 0
     @State private var diskTotalGB: Int = 0
     @State private var diskUsage: Double = 0
-    @State private var alerts: [AlertItem] = []
-    @State private var scanProgress = ScanProgress()
     @State private var isLoading = true
-    @State private var hasRunTriageScan = false
     @State private var scheduledScanSummary: ScheduledScanSummary?
+
+    private var alerts: [AlertItem] {
+        session.alerts
+    }
+
+    private var scanProgress: ScanProgress {
+        session.scanProgress
+    }
+
+    private var hasRunTriageScan: Bool {
+        session.hasRunTriageScan
+    }
 
     private let collector = SystemMetricCollector()
 
     @MainActor
-    public init(sidebarSelection: Binding<String?>, persistence: PersistenceController? = nil) {
+    public init(
+        sidebarSelection: Binding<String?>,
+        session: DashboardSessionState,
+        persistence: PersistenceController? = nil
+    ) {
         self._sidebarSelection = sidebarSelection
+        self.session = session
         self.persistence = persistence
     }
 
@@ -218,16 +233,18 @@ public struct DashboardView: View {
     }
 
     private func startTriageScan() {
-        hasRunTriageScan = true
-        scanProgress = ScanProgress()
+        session.hasRunTriageScan = true
+        session.scanProgress = ScanProgress()
+        let progress = session.scanProgress
         Task {
             do {
                 let adapter = try NativeScanAdapter.loadDefaults(profile: .light)
-                let results = try await adapter.scan(progress: scanProgress)
-                alerts = AlertItem.aggregate(from: results)
+                let results = try await adapter.scan(progress: progress)
+                session.alerts = AlertItem.aggregate(from: results)
+                session.lastTriageAt = Date()
             } catch {
-                scanProgress.recordError(error.localizedDescription)
-                scanProgress.finish(itemsFound: 0)
+                progress.recordError(error.localizedDescription)
+                progress.finish(itemsFound: 0)
             }
         }
     }
@@ -276,6 +293,9 @@ private extension DashboardView {
     var roadmapHeadline: String {
         if scanProgress.isScanning { return "Building the cleanup roadmap" }
         if !hasRunTriageScan { return "Run triage, then follow the tool roadmap" }
+        if session.triageIsStale {
+            return "Triage is \(session.triageAgeLabel) — refresh before acting"
+        }
         if alerts.isEmpty { return "No obvious bulk cleanup found by triage" }
         return "Start with \(roadmapSteps.first?.title ?? "the top cleanup step")"
     }
@@ -286,6 +306,9 @@ private extension DashboardView {
         }
         if !hasRunTriageScan {
             return "Triage checks caches, logs, trash, installers, and developer artifacts. It does not uninstall apps or run duplicate matching. Its job is to rank which deeper tool you should open first."
+        }
+        if session.triageIsStale {
+            return "The last triage finished \(session.triageAgeLabel). Disk state may have shifted — re-run before you act on the roadmap below."
         }
         if alerts.isEmpty {
             return "The lightweight pass did not find safe or review-tier cleanup groups. Use the manual tools below when disk pressure still feels wrong."
@@ -319,6 +342,7 @@ private extension DashboardView {
     var triageStatusPill: String {
         if scanProgress.isScanning { return "triage running" }
         if !hasRunTriageScan { return "triage not run" }
+        if session.triageIsStale { return "triage \(session.triageAgeLabel) · refresh" }
         if alerts.isEmpty { return "triage clear" }
         return "\(alerts.count) triage groups"
     }
@@ -337,11 +361,42 @@ private extension DashboardView {
             return preTriageRoadmap
         }
 
-        if alerts.isEmpty {
-            return noFindingsRoadmap
-        }
+        let base = alerts.isEmpty ? noFindingsRoadmap : alertDrivenRoadmap
 
-        return alertDrivenRoadmap
+        if session.triageIsStale {
+            return [staleTriageStep] + bumpedRanks(base)
+        }
+        return base
+    }
+
+    var staleTriageStep: DashboardRoadmapStep {
+        DashboardRoadmapStep(
+            id: "triage-refresh",
+            rank: 1,
+            title: "Refresh Triage",
+            status: "Stale",
+            detail: "Last triage finished \(session.triageAgeLabel). Re-run the lightweight pass so the roadmap reflects what's on disk now.",
+            evidence: ["local only", "safe + review items", "no deletion"],
+            actionLabel: "Refresh Triage",
+            systemImage: "arrow.clockwise",
+            action: .scan
+        )
+    }
+
+    func bumpedRanks(_ steps: [DashboardRoadmapStep]) -> [DashboardRoadmapStep] {
+        steps.enumerated().map { index, step in
+            DashboardRoadmapStep(
+                id: step.id,
+                rank: index + 2,
+                title: step.title,
+                status: step.status == "Start here" ? "Top reclaim" : step.status,
+                detail: step.detail,
+                evidence: step.evidence,
+                actionLabel: step.actionLabel,
+                systemImage: step.systemImage,
+                action: step.action
+            )
+        }
     }
 
     var scanningRoadmap: [DashboardRoadmapStep] {

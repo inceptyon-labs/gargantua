@@ -15,6 +15,7 @@ struct MainContentView: View {
     @AppStorage(AIEnginePreference.userDefaultsKey) private var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
     @State private var sidebarSelection: String? = "dashboard"
     @State private var persistence: PersistenceController?
+    @State private var dashboardSession = DashboardSessionState()
     @State private var deepCleanSession = DeepCleanSessionState()
     @State private var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
     @State private var fileHealthState = FileHealthContainerState()
@@ -77,6 +78,7 @@ struct MainContentView: View {
                             case "dashboard":
                                 DashboardView(
                                     sidebarSelection: $sidebarSelection,
+                                    session: dashboardSession,
                                     persistence: persistence
                                 )
                             case "profiles":
