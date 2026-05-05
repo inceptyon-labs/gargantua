@@ -165,24 +165,26 @@ public struct DenseScanItemRow: View {
                 .foregroundStyle(GargantuaColors.ink)
                 .lineLimit(1)
 
-            // Explain button (revealed on hover). Glyph mirrors the active
-            // engine: sparkles when MLX is on (real generated output), the
-            // plain question mark when the rule-based template is in play.
-            if isHovered, onExplain != nil {
+            // Explain affordance. Visible at rest in ink3 so the user knows
+            // it exists; on row hover, the icon goes accent and a "Why?"
+            // label appears next to it so the action names itself in
+            // context. Glyph reflects the active engine — sparkles for MLX
+            // generated output, question mark for rule-based templates.
+            if onExplain != nil {
                 Button(action: onExplain ?? {}) {
-                    Image(systemName: explainGlyph)
-                        .font(.system(size: 14))
-                        .foregroundStyle(GargantuaColors.accent)
+                    HStack(spacing: 4) {
+                        Image(systemName: explainGlyph)
+                            .font(.system(size: 14))
+                        if isHovered {
+                            Text("Why?")
+                                .font(GargantuaFonts.caption)
+                        }
+                    }
+                    .foregroundStyle(isHovered ? GargantuaColors.accent : GargantuaColors.ink3)
                 }
                 .buttonStyle(.plain)
-                .help(explainHelpText)
-                .accessibilityLabel(explainHelpText)
-            } else if onExplain != nil {
-                // Placeholder space to prevent layout shift; hidden from a11y.
-                Image(systemName: explainGlyph)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.clear)
-                    .accessibilityHidden(true)
+                .help("Why was this flagged?")
+                .accessibilityLabel("Why was this flagged?")
             }
         }
         .padding(.vertical, GargantuaSpacing.space2)
@@ -213,13 +215,6 @@ public struct DenseScanItemRow: View {
         switch activeAIEngineKind {
         case .mlx: return "sparkles"
         case .template: return "questionmark.circle.fill"
-        }
-    }
-
-    private var explainHelpText: String {
-        switch activeAIEngineKind {
-        case .mlx: return "Show AI explanation"
-        case .template: return "Show rule-based explanation"
         }
     }
 

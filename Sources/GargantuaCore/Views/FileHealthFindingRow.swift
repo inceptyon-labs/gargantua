@@ -15,6 +15,8 @@ struct FileHealthFindingRow: View {
     let onExplain: ((ScanResult) -> Void)?
 
     @FocusState private var isFocused: Bool
+    @State private var isHovered: Bool = false
+    @Environment(\.activeAIEngineKind) private var activeAIEngineKind
 
     init(
         result: ScanResult,
@@ -96,10 +98,33 @@ struct FileHealthFindingRow: View {
                     .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink2)
             }
+
+            // Mirror DenseScanItemRow's Explain affordance: visible at rest
+            // in ink3, brightens to accent on row hover with an inline
+            // "Why?" label so the action names itself.
+            if let onExplain {
+                Button {
+                    onExplain(result)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: explainGlyph)
+                            .font(.system(size: 14))
+                        if isHovered {
+                            Text("Why?")
+                                .font(GargantuaFonts.caption)
+                        }
+                    }
+                    .foregroundStyle(isHovered ? GargantuaColors.accent : GargantuaColors.ink3)
+                }
+                .buttonStyle(.plain)
+                .help("Why was this flagged?")
+                .accessibilityLabel("Why was this flagged?")
+            }
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
         .background(isSelected ? result.safety.tintBackground : Color.clear)
+        .onHover { isHovered = $0 }
         .overlay(
             // Focus ring uses borderFocus per design system. Visible only
             // while the row is keyboard-focused; the safety-tint background
@@ -137,9 +162,16 @@ struct FileHealthFindingRow: View {
                 Button {
                     onExplain(result)
                 } label: {
-                    Label("Explain", systemImage: "questionmark.circle")
+                    Label("Why was this flagged?", systemImage: explainGlyph)
                 }
             }
+        }
+    }
+
+    private var explainGlyph: String {
+        switch activeAIEngineKind {
+        case .mlx: return "sparkles"
+        case .template: return "questionmark.circle.fill"
         }
     }
 }
