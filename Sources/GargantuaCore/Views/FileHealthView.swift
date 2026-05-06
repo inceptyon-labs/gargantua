@@ -356,19 +356,11 @@ public struct FileHealthView: View {
                 .frame(height: 1)
 
             ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filtered) { finding in
-                        FileHealthFindingRow(
-                            result: finding,
-                            groupContext: tab.groupContext(for: finding),
-                            isSelected: session.isSelected(finding.id),
-                            onToggleSelection: { session.toggleSelection(for: finding.id) },
-                            onExplain: onExplain
-                        )
-
-                        Rectangle()
-                            .fill(GargantuaColors.borderSoft)
-                            .frame(height: 1)
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    if tab.category.isGrouped {
+                        groupedFindingsList(for: tab, filtered: filtered)
+                    } else {
+                        flatFindingsList(filtered)
                     }
                 }
             }
@@ -750,4 +742,3 @@ private struct FileHealthTabChip: View {
             )
     }
 }
-
