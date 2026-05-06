@@ -41,6 +41,26 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
     /// Always nil for in-app actions.
     public let clientID: String?
 
+    /// Discriminator for what shape of work this audit entry describes.
+    /// Decodes to `.path` when absent so legacy JSONL and persisted rows
+    /// written before command-action rules existed read back as path
+    /// cleanups.
+    public let kind: AuditEntryKind
+
+    /// Tool version string captured at execution time, e.g.
+    /// `"Xcode 16.2 (Build version 16C5032a)"`. Set only for `kind == .command`
+    /// entries, where the tool's reported version is part of the evidence
+    /// model — a future audit reader needs to know which `simctl` performed
+    /// the action.
+    public let commandToolVersion: String?
+
+    /// Process exit code for command-action entries. Nil for path entries.
+    public let commandExitCode: Int32?
+
+    /// Argument list passed to the tool for command-action entries. Captured
+    /// verbatim so audit consumers can replay the exact invocation.
+    public let commandArguments: [String]?
+
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -52,7 +72,11 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         cleanupMethod: CleanupMethod = .trash,
         bytesFreed: Int64,
         transport: String? = nil,
-        clientID: String? = nil
+        clientID: String? = nil,
+        kind: AuditEntryKind = .path,
+        commandToolVersion: String? = nil,
+        commandExitCode: Int32? = nil,
+        commandArguments: [String]? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -65,6 +89,10 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         self.bytesFreed = bytesFreed
         self.transport = transport
         self.clientID = clientID
+        self.kind = kind
+        self.commandToolVersion = commandToolVersion
+        self.commandExitCode = commandExitCode
+        self.commandArguments = commandArguments
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -79,7 +107,43 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         case bytesFreed
         case transport
         case clientID = "client_id"
+        case kind
+        case commandToolVersion = "command_tool_version"
+        case commandExitCode = "command_exit_code"
+        case commandArguments = "command_arguments"
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.timestamp = try container.decode(Date.self, forKey: .timestamp)
+        self.tool = try container.decode(String.self, forKey: .tool)
+        self.command = try container.decode(String.self, forKey: .command)
+        self.files = try container.decode([AuditFile].self, forKey: .files)
+        self.safetyLevel = try container.decode(SafetyLevel.self, forKey: .safetyLevel)
+        self.confirmationMethod = try container.decode(ConfirmationTier.self, forKey: .confirmationMethod)
+        self.cleanupMethod = try container.decode(CleanupMethod.self, forKey: .cleanupMethod)
+        self.bytesFreed = try container.decode(Int64.self, forKey: .bytesFreed)
+        self.transport = try container.decodeIfPresent(String.self, forKey: .transport)
+        self.clientID = try container.decodeIfPresent(String.self, forKey: .clientID)
+        // Default to .path so audit entries written before this discriminator
+        // existed decode cleanly.
+        self.kind = (try container.decodeIfPresent(AuditEntryKind.self, forKey: .kind)) ?? .path
+        self.commandToolVersion = try container.decodeIfPresent(String.self, forKey: .commandToolVersion)
+        self.commandExitCode = try container.decodeIfPresent(Int32.self, forKey: .commandExitCode)
+        self.commandArguments = try container.decodeIfPresent([String].self, forKey: .commandArguments)
+    }
+}
+
+/// Discriminator for what kind of cleanup work an `AuditEntry` describes.
+///
+/// `path` is the historical default — the cleanup pipeline removed one or
+/// more filesystem entries via Trash or direct delete. `command` covers the
+/// command-action rule shape, where Gargantua asked an external tool to
+/// clean its own data and recorded the invocation as evidence.
+public enum AuditEntryKind: String, Codable, Sendable, CaseIterable {
+    case path
+    case command
 }
 
 /// A file affected by an audit operation.

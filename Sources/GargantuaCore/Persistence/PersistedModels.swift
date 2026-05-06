@@ -82,6 +82,18 @@ public final class PersistedAuditEntry {
     public var transport: String?
     /// Optional client identifier for MCP or agent-originated actions.
     public var clientID: String?
+    // Command-action additions: all default to nil so rows written before
+    // command-action rules existed continue to read back as kind: path
+    // entries under SwiftData lightweight migration.
+    /// Discriminator for what shape of work this entry describes
+    /// (`"path"` or `"command"`). Optional so legacy rows decode cleanly.
+    public var kindRaw: String?
+    /// Tool version captured at execution time. Set only for command entries.
+    public var commandToolVersion: String?
+    /// Process exit code. Set only for command entries.
+    public var commandExitCode: Int32?
+    /// JSON-encoded argument list. Empty for non-command entries.
+    public var commandArgumentsData: Data?
 
     /// Creates a persisted audit entry from the domain model.
     public init(from entry: AuditEntry) {
@@ -96,6 +108,10 @@ public final class PersistedAuditEntry {
         self.bytesFreed = entry.bytesFreed
         self.transport = entry.transport
         self.clientID = entry.clientID
+        self.kindRaw = entry.kind.rawValue
+        self.commandToolVersion = entry.commandToolVersion
+        self.commandExitCode = entry.commandExitCode
+        self.commandArgumentsData = entry.commandArguments.flatMap { try? JSONEncoder().encode($0) }
     }
 
     /// Convert back to domain model.
@@ -105,6 +121,12 @@ public final class PersistedAuditEntry {
               let cleanup = CleanupMethod(rawValue: cleanupMethod),
               let files = try? JSONDecoder().decode([AuditFile].self, from: filesData) else {
             return nil
+        }
+        // Default to .path so legacy rows lacking the discriminator decode
+        // cleanly. Unknown raw values also fall back to .path defensively.
+        let kind = kindRaw.flatMap(AuditEntryKind.init(rawValue:)) ?? .path
+        let commandArguments: [String]? = commandArgumentsData.flatMap {
+            try? JSONDecoder().decode([String].self, from: $0)
         }
         return AuditEntry(
             id: entryID,
@@ -117,7 +139,11 @@ public final class PersistedAuditEntry {
             cleanupMethod: cleanup,
             bytesFreed: bytesFreed,
             transport: transport,
-            clientID: clientID
+            clientID: clientID,
+            kind: kind,
+            commandToolVersion: commandToolVersion,
+            commandExitCode: commandExitCode,
+            commandArguments: commandArguments
         )
     }
 }
