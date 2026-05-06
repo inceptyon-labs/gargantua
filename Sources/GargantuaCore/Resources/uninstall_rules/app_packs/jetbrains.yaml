@@ -1,0 +1,230 @@
+# JetBrains Toolbox + IDEs — app-specific uninstall pack
+#
+# Bundle: com.jetbrains.toolbox (Toolbox app) plus per-IDE bundle IDs:
+#   com.jetbrains.intellij(.ce)
+#   com.jetbrains.pycharm(.ce)
+#   com.jetbrains.WebStorm
+#   com.jetbrains.PhpStorm
+#   com.jetbrains.goland
+#   com.jetbrains.datagrip
+#   com.jetbrains.rubymine
+#   com.jetbrains.CLion
+#   com.jetbrains.AppCode
+#   com.jetbrains.rider
+#
+# Trust Layer classification (per app_pack contract):
+#   - safe       : per-IDE caches and logs
+#   - review     : per-IDE settings (~/Library/Application Support/JetBrains/<IDE><year>),
+#                  Toolbox-managed IDE installations, Toolbox-managed JBR runtimes
+#   - protected  : per-user license activation state
+#                  (~/Library/Application Support/JetBrains/<IDE>/eval,
+#                   ~/Library/Application Support/JetBrains/<IDE>/options/security.xml,
+#                   ~/.config/JetBrains state mirrored on macOS for some
+#                   plug-ins)
+#
+# Do-not-touch carve-outs:
+#   - License keys and activation state under JetBrains/<IDE>/options are
+#     protected — removing them forces re-licensing.
+#   - Toolbox-managed IDE versions live under
+#     ~/Library/Application Support/JetBrains/Toolbox/apps; pruning whole
+#     versions is a deferred concern (see version-retention thread in the
+#     parent epic) and is review-gated here.
+#
+# Notes for downstream version-retention work (deferred bean):
+#   - Toolbox stores multiple versions of each IDE side by side. A future
+#     CommandActionRule may invoke Toolbox's CLI to retain the latest N
+#     versions; until then this pack reviews-rather-than-deletes the apps
+#     directory.
+#
+# Evidence (captured 2026-05-06 on a real install):
+#   ~/Library/Application Support/JetBrains/{Goland, GoLand2021.1, IdeaIC2020.3}
+remnant_rules:
+
+  - id: jetbrains_ide_caches
+    name: JetBrains IDE caches
+    category: caches
+    path_templates:
+      - "~/Library/Caches/JetBrains/*"
+    confidence: 95
+    explanation: Per-IDE indexes, log files, and plug-in caches; regenerated on next launch.
+    source:
+      name: JetBrains IDEs
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+        - com.jetbrains.intellij
+        - com.jetbrains.intellij.ce
+        - com.jetbrains.pycharm
+        - com.jetbrains.pycharm.ce
+        - com.jetbrains.WebStorm
+        - com.jetbrains.PhpStorm
+        - com.jetbrains.goland
+        - com.jetbrains.datagrip
+        - com.jetbrains.rubymine
+        - com.jetbrains.CLion
+        - com.jetbrains.AppCode
+        - com.jetbrains.rider
+    regenerates: true
+    tags: [app_pack, jetbrains, cache]
+
+  - id: jetbrains_ide_logs
+    name: JetBrains IDE logs
+    category: logs
+    path_templates:
+      - "~/Library/Logs/JetBrains/*"
+    confidence: 95
+    explanation: Per-IDE idea.log, exception traces, and freeze reports.
+    source:
+      name: JetBrains IDEs
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+        - com.jetbrains.intellij
+        - com.jetbrains.intellij.ce
+        - com.jetbrains.pycharm
+        - com.jetbrains.pycharm.ce
+        - com.jetbrains.WebStorm
+        - com.jetbrains.PhpStorm
+        - com.jetbrains.goland
+        - com.jetbrains.datagrip
+        - com.jetbrains.rubymine
+        - com.jetbrains.CLion
+        - com.jetbrains.AppCode
+        - com.jetbrains.rider
+    regenerates: true
+    tags: [app_pack, jetbrains, logs]
+
+  - id: jetbrains_ide_settings
+    name: JetBrains per-IDE settings
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/JetBrains/IntelliJIdea*"
+      - "~/Library/Application Support/JetBrains/IdeaIC*"
+      - "~/Library/Application Support/JetBrains/PyCharm*"
+      - "~/Library/Application Support/JetBrains/PyCharmCE*"
+      - "~/Library/Application Support/JetBrains/WebStorm*"
+      - "~/Library/Application Support/JetBrains/PhpStorm*"
+      - "~/Library/Application Support/JetBrains/GoLand*"
+      - "~/Library/Application Support/JetBrains/Goland*"
+      - "~/Library/Application Support/JetBrains/DataGrip*"
+      - "~/Library/Application Support/JetBrains/RubyMine*"
+      - "~/Library/Application Support/JetBrains/CLion*"
+      - "~/Library/Application Support/JetBrains/AppCode*"
+      - "~/Library/Application Support/JetBrains/Rider*"
+    exclude:
+      - "*/options/security.xml"
+      - "*/options/other.xml"
+      - "*/eval"
+      - "*/eval/**"
+      - "*/jba_config"
+    safety: review
+    confidence: 78
+    explanation: Per-IDE settings, code styles, run configurations, and plug-in lists. Excludes license-activation files.
+    source:
+      name: JetBrains IDEs
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+        - com.jetbrains.intellij
+        - com.jetbrains.intellij.ce
+        - com.jetbrains.pycharm
+        - com.jetbrains.pycharm.ce
+        - com.jetbrains.WebStorm
+        - com.jetbrains.PhpStorm
+        - com.jetbrains.goland
+        - com.jetbrains.datagrip
+        - com.jetbrains.rubymine
+        - com.jetbrains.CLion
+        - com.jetbrains.AppCode
+        - com.jetbrains.rider
+    regenerates: false
+    tags: [app_pack, jetbrains, settings]
+
+  - id: jetbrains_toolbox_apps
+    name: JetBrains Toolbox-managed IDEs
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/JetBrains/Toolbox/apps"
+      - "~/Library/Application Support/JetBrains/Toolbox/bin"
+      - "~/Library/Application Support/JetBrains/Toolbox/scripts"
+    safety: review
+    confidence: 70
+    explanation: Toolbox-installed IDE versions and the shell-script launchers; review because Toolbox itself is the better surface for pruning specific versions.
+    source:
+      name: JetBrains Toolbox
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+    regenerates: false
+    tags: [app_pack, jetbrains, toolbox]
+
+  - id: jetbrains_toolbox_state
+    name: JetBrains Toolbox state and caches
+    category: caches
+    path_templates:
+      - "~/Library/Application Support/JetBrains/Toolbox/cache"
+      - "~/Library/Application Support/JetBrains/Toolbox/logs"
+      - "~/Library/Application Support/JetBrains/Toolbox/state.json"
+    safety: safe
+    confidence: 90
+    explanation: Toolbox cache, logs, and recoverable state.
+    source:
+      name: JetBrains Toolbox
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+    regenerates: true
+    tags: [app_pack, jetbrains, toolbox, cache]
+
+  - id: jetbrains_jbr_runtimes
+    name: JetBrains shared JBR runtimes
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/JetBrains/Toolbox/jdks"
+    safety: review
+    confidence: 75
+    explanation: Toolbox-managed JetBrains Runtime installs; sized in hundreds of MB per major version.
+    source:
+      name: JetBrains Toolbox
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+    regenerates: false
+    tags: [app_pack, jetbrains, runtime]
+
+  - id: jetbrains_license_state_protected
+    name: JetBrains license activation state
+    category: other
+    path_templates:
+      - "~/Library/Application Support/JetBrains/*/options/security.xml"
+      - "~/Library/Application Support/JetBrains/*/eval"
+      - "~/Library/Application Support/JetBrains/*/jba_config"
+    safety: protected
+    confidence: 75
+    explanation: License activation, evaluation, and JetBrains Account state; protected because removal forces re-licensing or re-login across all IDEs.
+    source:
+      name: JetBrains IDEs
+      bundle_id: com.jetbrains.toolbox
+    applies_to:
+      bundle_ids:
+        - com.jetbrains.toolbox
+        - com.jetbrains.intellij
+        - com.jetbrains.intellij.ce
+        - com.jetbrains.pycharm
+        - com.jetbrains.pycharm.ce
+        - com.jetbrains.WebStorm
+        - com.jetbrains.PhpStorm
+        - com.jetbrains.goland
+        - com.jetbrains.datagrip
+        - com.jetbrains.rubymine
+        - com.jetbrains.CLion
+        - com.jetbrains.AppCode
+        - com.jetbrains.rider
+    regenerates: false
+    tags: [app_pack, jetbrains, licensing, protected]

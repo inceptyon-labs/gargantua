@@ -1,0 +1,213 @@
+# Android Studio + SDK — app-specific uninstall pack
+#
+# Bundle: com.google.android.studio (and com.google.android.studio.preview /
+# .canary for early-access channels).
+#
+# Trust Layer classification (per app_pack contract):
+#   - safe       : Gradle daemon caches, build caches, SDK system-image caches
+#   - review     : ~/.gradle config, ~/.android/avd/<device>.avd images,
+#                  Android Studio settings/IDE config
+#   - protected  : ~/.android/debug.keystore (signing identity for debug
+#                  builds — irrecoverable), ~/.android/adbkey* (RSA keys for
+#                  authorising USB-attached devices)
+#
+# Do-not-touch carve-outs:
+#   - ~/.android/debug.keystore: removing it changes the debug-signing identity
+#     of all installed debug builds, forcing reinstall on every device.
+#   - ~/.android/adbkey, ~/.android/adbkey.pub: protected to avoid losing the
+#     "trust this computer" authorisation on every previously-paired device.
+#   - SDK installation root (~/Library/Android/sdk) is review-only; users may
+#     have project-pinned tool versions installed there.
+#
+# Evidence (captured 2026-05-06 on a real install):
+#   ~/.android, ~/.gradle
+#   ~/Library/Application Support/Google/AndroidStudio2025.2.1
+remnant_rules:
+
+  - id: android_studio_settings
+    name: Android Studio settings
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/Google/AndroidStudio*"
+      - "~/Library/Application Support/Google/AndroidStudioPreview*"
+      - "~/Library/Application Support/Google/AndroidStudioBeta*"
+    safety: review
+    confidence: 80
+    explanation: Per-version Android Studio IDE settings, plug-ins, recent projects, and run configurations.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: false
+    tags: [app_pack, android_studio, settings, jetbrains_platform]
+
+  - id: android_studio_caches
+    name: Android Studio caches
+    category: caches
+    path_templates:
+      - "~/Library/Caches/Google/AndroidStudio*"
+      - "~/Library/Caches/Google/AndroidStudioPreview*"
+      - "~/Library/Caches/Google/AndroidStudioBeta*"
+    confidence: 95
+    explanation: IDE caches (indexes, log files, plug-in caches); regenerated on next launch.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: true
+    tags: [app_pack, android_studio, cache]
+
+  - id: android_studio_logs
+    name: Android Studio logs
+    category: logs
+    path_templates:
+      - "~/Library/Logs/Google/AndroidStudio*"
+      - "~/Library/Logs/Google/AndroidStudioPreview*"
+    confidence: 95
+    explanation: Android Studio idea.log and crash logs.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: true
+    tags: [app_pack, android_studio, logs]
+
+  - id: android_studio_user_config_dir
+    name: Android user config (~/.android, excluding keystore + adb keys)
+    category: other
+    path_templates:
+      - "~/.android"
+    exclude:
+      - "debug.keystore"
+      - "adbkey"
+      - "adbkey.pub"
+    safety: review
+    confidence: 70
+    explanation: AVD definitions, emulator state, and analytics opt-ins. Excludes debug keystore and adb authorisation keys.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: false
+    tags: [app_pack, android_studio, config]
+
+  - id: android_studio_avd_images
+    name: AVD emulator images
+    category: containers
+    path_templates:
+      - "~/.android/avd"
+    safety: review
+    confidence: 75
+    explanation: Android Virtual Device disk images and snapshots; can be many GB. Review because installed apps and snapshots inside represent real test state.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: false
+    tags: [app_pack, android_studio, emulator, avd]
+
+  - id: android_gradle_caches
+    name: Gradle caches
+    category: caches
+    path_templates:
+      - "~/.gradle/caches"
+      - "~/.gradle/daemon"
+      - "~/.gradle/native"
+    confidence: 90
+    explanation: Gradle dependency caches and daemon state; rebuilt or re-fetched on next build.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: true
+    tags: [app_pack, android_studio, gradle, cache]
+
+  - id: android_gradle_user_root
+    name: Gradle user root
+    category: other
+    path_templates:
+      - "~/.gradle"
+    exclude:
+      - "caches"
+      - "daemon"
+      - "native"
+      - "init.d"
+      - "gradle.properties"
+    safety: review
+    confidence: 70
+    explanation: User-level Gradle root excluding caches, init scripts, and gradle.properties (which often holds signing config and tokens).
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: false
+    tags: [app_pack, android_studio, gradle]
+
+  - id: android_sdk_root
+    name: Android SDK installation
+    category: support_files
+    path_templates:
+      - "~/Library/Android/sdk"
+      - "~/Library/Android/sdk-preview"
+    safety: review
+    confidence: 70
+    explanation: Android SDK platform tools, build-tools, system images. Review because projects may still pin specific versions.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: false
+    tags: [app_pack, android_studio, sdk]
+
+  - id: android_signing_keys_protected
+    name: Android debug keystore and adb keys
+    category: other
+    path_templates:
+      - "~/.android/debug.keystore"
+      - "~/.android/adbkey"
+      - "~/.android/adbkey.pub"
+    safety: protected
+    confidence: 80
+    explanation: Debug-signing keystore and adb USB-authorisation keys; removal forces reinstall of every debug build and re-authorisation of every previously-paired device.
+    source:
+      name: Android Studio
+      bundle_id: com.google.android.studio
+    applies_to:
+      bundle_ids:
+        - com.google.android.studio
+        - com.google.android.studio.preview
+        - com.google.android.studio.canary
+    regenerates: false
+    tags: [app_pack, android_studio, signing, protected]

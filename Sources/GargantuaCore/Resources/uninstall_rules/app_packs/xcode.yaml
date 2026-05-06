@@ -1,0 +1,180 @@
+# Xcode + helpers — app-specific uninstall pack
+#
+# Bundle: com.apple.dt.Xcode
+#
+# Trust Layer classification (per app_pack contract):
+#   - safe       : DerivedData, ModuleCache, IndexDataStore, DocumentationCache
+#   - review     : Archives, iOS DeviceSupport, watchOS/tvOS DeviceSupport,
+#                  user-customized templates and snippets
+#   - protected  : Provisioning Profiles (code-signing identities)
+#
+# Do-not-touch carve-outs:
+#   - ~/Library/MobileDevice/Provisioning Profiles is protected — these are
+#     active code-signing artifacts that may be in use by other tools.
+#   - ~/Library/Developer/CoreSimulator/Devices is review-only by default.
+#     Removing wipes installed simulators; users may want them gone, but the
+#     companion CommandActionRule (`xcrun simctl delete unavailable`) is the
+#     preferred surface for cleaning *unavailable* runtimes only.
+#   - ~/Library/Developer/Xcode/UserData (snippets, themes, breakpoints) is
+#     review-only — it carries hand-authored content.
+#
+# Evidence (captured 2026-05-06 on a real install):
+#   ~/Library/Caches/com.apple.dt.Xcode
+#   ~/Library/Developer/Xcode
+#   ~/Library/Developer/CoreSimulator
+remnant_rules:
+
+  - id: xcode_derived_data
+    name: Xcode DerivedData
+    category: caches
+    path_templates:
+      - "~/Library/Developer/Xcode/DerivedData"
+    confidence: 98
+    explanation: Xcode build products, indexes, and module caches; rebuilt on next build.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: true
+    tags: [app_pack, xcode, cache, derived]
+
+  - id: xcode_archives
+    name: Xcode Archives
+    category: support_files
+    path_templates:
+      - "~/Library/Developer/Xcode/Archives"
+    safety: review
+    confidence: 70
+    explanation: Shipped or distributed app archives; users may keep these for symbolication and resubmission.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: false
+    tags: [app_pack, xcode, archives]
+
+  - id: xcode_documentation_cache
+    name: Xcode DocumentationCache
+    category: caches
+    path_templates:
+      - "~/Library/Developer/Xcode/DocumentationCache"
+      - "~/Library/Developer/Shared/Documentation/DocSets"
+    confidence: 95
+    explanation: Downloaded developer documentation; redownloaded on demand.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: true
+    tags: [app_pack, xcode, cache, docs]
+
+  - id: xcode_ios_device_support
+    name: iOS / watchOS / tvOS DeviceSupport
+    category: support_files
+    path_templates:
+      - "~/Library/Developer/Xcode/iOS DeviceSupport"
+      - "~/Library/Developer/Xcode/watchOS DeviceSupport"
+      - "~/Library/Developer/Xcode/tvOS DeviceSupport"
+      - "~/Library/Developer/Xcode/visionOS DeviceSupport"
+    safety: review
+    confidence: 80
+    explanation: Symbol caches per attached device; regenerated when a device is reconnected, but doing so requires the device on hand.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: true
+    tags: [app_pack, xcode, device_support]
+
+  - id: xcode_caches
+    name: Xcode caches
+    category: caches
+    path_templates:
+      - "~/Library/Caches/com.apple.dt.Xcode"
+      - "~/Library/Caches/com.apple.dt.XCode"
+    confidence: 95
+    explanation: Xcode IDE caches (assets, simulator caches, helper caches).
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: true
+    tags: [app_pack, xcode, cache]
+
+  - id: xcode_simulator_caches
+    name: CoreSimulator caches
+    category: caches
+    path_templates:
+      - "~/Library/Developer/CoreSimulator/Caches"
+    confidence: 95
+    explanation: CoreSimulator runtime caches; rebuilt as simulators boot.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: true
+    tags: [app_pack, xcode, simulator, cache]
+
+  - id: xcode_simulator_devices
+    name: CoreSimulator installed devices
+    category: containers
+    path_templates:
+      - "~/Library/Developer/CoreSimulator/Devices"
+    safety: review
+    confidence: 65
+    explanation: Installed simulator device data including app installs and saved state. Use the simctl command rule to prune unavailable devices instead when possible.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: false
+    tags: [app_pack, xcode, simulator]
+
+  - id: xcode_user_data
+    name: Xcode UserData (snippets, themes, breakpoints)
+    category: support_files
+    path_templates:
+      - "~/Library/Developer/Xcode/UserData"
+    safety: review
+    confidence: 70
+    explanation: User-authored snippets, themes, key bindings, and breakpoint definitions; review before removing.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: false
+    tags: [app_pack, xcode, user_data]
+
+  - id: xcode_provisioning_profiles_protected
+    name: Provisioning Profiles
+    category: other
+    path_templates:
+      - "~/Library/MobileDevice/Provisioning Profiles"
+      - "~/Library/Developer/Xcode/UserData/Provisioning Profiles"
+    safety: protected
+    confidence: 70
+    explanation: Active code-signing provisioning profiles; protected because removal can break signing for other tools and managed devices.
+    source:
+      name: Xcode
+      bundle_id: com.apple.dt.Xcode
+    applies_to:
+      bundle_ids:
+        - com.apple.dt.Xcode
+    regenerates: false
+    tags: [app_pack, xcode, signing, protected]
