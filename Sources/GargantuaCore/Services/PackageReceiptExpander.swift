@@ -71,6 +71,7 @@ public final class PackageReceiptExpander: @unchecked Sendable {
     private let matcher: PackageMatcher
     private let pkgutilURL: URL
     private let timeout: TimeInterval
+    private let fileInfoTimeout: TimeInterval
 
     private let cacheLock = NSLock()
     private var cachedPackageList: [String]?
@@ -82,13 +83,19 @@ public final class PackageReceiptExpander: @unchecked Sendable {
         parser: PkgUtilOutputParser = PkgUtilOutputParser(),
         matcher: PackageMatcher = PackageMatcher(),
         pkgutilURL: URL = URL(fileURLWithPath: pkgutilPath),
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        fileInfoTimeout: TimeInterval = 5
     ) {
         self.runner = runner
         self.parser = parser
         self.matcher = matcher
         self.pkgutilURL = pkgutilURL
         self.timeout = timeout
+        // Path-oriented `--file-info` is a single inode lookup, not a full BOM
+        // walk. The MCP explain provider runs synchronously on the transport
+        // thread, so a hung pkgutil would block every other MCP request for
+        // up to `timeout` seconds. Default to a tighter 5s budget here.
+        self.fileInfoTimeout = fileInfoTimeout
     }
 
     /// Look up the package receipts that claim ownership of `path`.
@@ -114,7 +121,7 @@ public final class PackageReceiptExpander: @unchecked Sendable {
             output = try runner.run(
                 executable: pkgutilURL,
                 arguments: ["--file-info", path],
-                timeout: timeout
+                timeout: fileInfoTimeout
             )
         } catch {
             logger.warning(

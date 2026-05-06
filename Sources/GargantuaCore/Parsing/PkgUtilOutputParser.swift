@@ -96,7 +96,7 @@ public struct PkgUtilOutputParser: Sendable {
     ///
     /// pkgid: com.docker.docker
     /// pkg-version: 4.30.0
-    /// install-time: 1735689600
+    /// install-time: 1701734400
     /// uid: 0
     /// gid: 0
     /// mode: 100755
@@ -107,14 +107,18 @@ public struct PkgUtilOutputParser: Sendable {
     /// Stanzas without a `pkgid` line (the leading volume/path block, or
     /// stray output) are dropped. A path that is not in any receipt produces
     /// only the leading block, so this function returns `[]`.
+    ///
+    /// Last-wins on duplicate keys within a stanza, matching the
+    /// `parsePackageInfo` precedent. CRLF line endings are normalised to LF
+    /// up front because Swift collapses `\r\n` into one grapheme cluster,
+    /// so `split(separator: "\n")` would otherwise see a single line.
     public func parseFileInfo(_ stdout: String) -> [PackageReceipt] {
-        let lines = stdout.split(
-            separator: "\n",
-            omittingEmptySubsequences: false
-        )
+        let lines = stdout
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
 
-        var stanzas: [[Substring: String]] = []
-        var current: [Substring: String] = [:]
+        var stanzas: [[String: String]] = []
+        var current: [String: String] = [:]
 
         func flush() {
             if !current.isEmpty {
@@ -124,18 +128,18 @@ public struct PkgUtilOutputParser: Sendable {
         }
 
         for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
                 flush()
                 continue
             }
             guard let separator = trimmed.firstIndex(of: ":") else { continue }
             let key = trimmed[..<separator]
-                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased()
             let value = trimmed[trimmed.index(after: separator)...]
-                .trimmingCharacters(in: .whitespaces)
-            current[Substring(key)] = value
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            current[key] = value
         }
         flush()
 

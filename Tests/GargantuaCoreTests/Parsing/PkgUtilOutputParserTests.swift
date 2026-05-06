@@ -184,6 +184,32 @@ struct PkgUtilOutputParserTests {
         #expect(parser.parseFileInfo("").isEmpty)
     }
 
+    @Test("parseFileInfo tolerates CRLF line endings")
+    func parseFileInfoCRLF() {
+        let raw = "volume: /\r\npath: /Applications/Foo.app\r\n\r\npkgid: com.example.foo\r\npkg-version: 1.0\r\n"
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.example.foo")
+        #expect(receipts[0].version == "1.0")
+    }
+
+    @Test("parseFileInfo skips lines without a colon mid-stanza")
+    func parseFileInfoSkipsMalformedLines() {
+        let raw = """
+        pkgid: com.example.foo
+        garbage line with no colon
+        pkg-version: 1.0
+        """
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.example.foo")
+        #expect(receipts[0].version == "1.0")
+    }
+
     @Test("parseFileInfo skips stanzas without a pkgid line")
     func parseFileInfoSkipsBlocksWithoutPkgID() {
         // First stanza is the volume/path header (no pkgid), the second is

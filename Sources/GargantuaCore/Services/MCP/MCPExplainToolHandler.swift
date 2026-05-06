@@ -193,6 +193,9 @@ public extension MCPExplainToolHandler {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(identifier: "UTC")
+        // Pin POSIX so non-Gregorian system locales (Buddhist, Japanese era,
+        // Hebrew, Persian) do not render `yyyy` in their own calendar — TN1480.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
 }
