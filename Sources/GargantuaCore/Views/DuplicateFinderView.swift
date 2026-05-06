@@ -311,17 +311,11 @@ public struct DuplicateFinderView: View {
 
         if isExpanded {
             ForEach(group.files) { file in
-                // 16px leading indent so file rows visually nest under the
-                // header — the chevron's disclosure now reads as a tree, not
-                // decoration. Padding sits outside the row's tinted
-                // background so a void-colored gutter forms a natural rail.
                 itemRow(file, differentiator: differentiators[file.path] ?? file.name)
-                    .padding(.leading, 16)
 
                 Rectangle()
                     .fill(GargantuaColors.borderSoft)
                     .frame(height: 1)
-                    .padding(.leading, 16)
             }
         }
     }
