@@ -58,7 +58,14 @@ Gargantua's trust layer uses three safety levels:
 | `review` | Files that may be removable, but could contain preferences, sync state, offline data, or context the user should inspect. | Shown, explained, not silently selected. |
 | `protected` | Files with system impact, privilege implications, or high risk of data loss. | Visible for transparency; destructive flows hard-reject them. |
 
-Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/` and `Sources/GargantuaCore/Resources/uninstall_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The current reviewed snapshot includes **51 cleanup files / 287 cleanup rules** and **2 uninstall files / 28 remnant rules**. It is intentionally not a full Mole parity claim — see [CHANGELOG.md](CHANGELOG.md) and [CONTRIBUTING.md](CONTRIBUTING.md) for what was deferred.
+Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships four evidence shapes:
+
+- **Path-based cleanup rules** — 51 files / 287 rules across apps, browsers, developer tools, and system locations.
+- **Path-based remnant rules** — 2 generic files / 28 rules plus 5 app-pack files / 41 app-specific rules for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
+- **Command-action rules** — 3 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) recorded with tool version, exit code, and arguments per run.
+- **Dynamic `pkgutil` receipt evidence** — Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.
+
+Trust Layer parity is *evidence-shape* parity, not Mole-shell line parity — every shape is explainable, bounded, reversible, and audited. Deferred Mole behaviors (`nix-collect-garbage`, `npm cache clean`, `go clean -modcache`, version-retention loops, receipt-driven deletion) are tracked in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_policy/protected_roots.yaml`) hard-blocks cleanup at filesystem roots regardless of rule classification. It covers `/`, `/Applications`, `/Library`, `/System`, `/Users`, `~`, `~/Library`, `/private`, `/var`, `/var/folders/*/*/{C,T,X}`, and equivalents under `/System/Volumes/Data`. Users can add their own protected roots in Settings → Storage; bundled entries cannot be removed.
 

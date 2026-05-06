@@ -1,24 +1,31 @@
 # Mole Rule Parity Audit
 
-Audit date: 2026-04-24 UTC
-Bean: `gargantua-81zc`
+Audit date: 2026-04-24 UTC (refreshed 2026-05-06)
+Bean: `gargantua-81zc` (refresh: `gargantua-ds8g` under epic `gargantua-wpl6`)
 Mole source: `tw93/Mole@fd209bf1c8e7f1c07a3d5cb3f2c5c38ab730ad8e`
 Mole commit date: 2026-04-24T08:02:08+08:00
 
 ## Summary
 
-Gargantua does not yet have full Mole rule parity. After the app/cloud/office rule port, the app ships this reviewed snapshot:
+Gargantua does not pursue Mole-shell line parity — Mole's cleanup is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count, and ~50% of Mole's `safe_*` call sites are not path-based and cannot be reached by static path rules at all. The Trust Layer boundary is *evidence-shape* parity: a finding stays in scope if it is explainable, bounded, reversible, and audited, regardless of whether the evidence comes from a path, a command, or a `pkgutil` receipt.
 
-| Area | Gargantua files | Gargantua rules |
+After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closing" epic (CommandActionRule + starter set, pkgutil receipt expansion, and app-specific uninstall packs), the bundled snapshot ships four evidence shapes:
+
+| Evidence shape | Files | Rules / commands |
 | --- | ---: | ---: |
-| App cleanup | 9 | 58 |
-| Browser cleanup | 15 | 54 |
-| Developer cleanup | 18 | 118 |
-| System cleanup | 8 | 44 |
-| Uninstall/remnant cleanup | 2 | 28 |
-| Total | 52 | 302 |
+| Path-based app cleanup | 9 | 58 |
+| Path-based browser cleanup | 15 | 54 |
+| Path-based developer cleanup | 19 | 118 |
+| Path-based system cleanup | 8 | 44 |
+| Path-based generic uninstall/remnant | 2 | 28 |
+| Path-based app-specific uninstall packs | 5 | 41 |
+| Command-action rules (developer) | 3 | 3 |
+| **Total static rules** | **61** | **346** |
+| Dynamic `pkgutil` receipt evidence | n/a — discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
 
-Mole's cleanup implementation is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count. As a conservative proxy, the current Mole source has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
+The pkgutil channel is intentionally not file-counted: receipts are inspected per uninstall (`PackageReceiptExpander` → `ReceiptRemnantBuilder`) and surface as `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, install date, and ownership provenance. Receipts are *evidence*, not permission — shared system paths (`/Library/LaunchDaemons`, `/Library/PrivilegedHelperTools`, `/Library/Frameworks`, etc.) upgrade to `.protected_`, and protected-root entries drop on the floor.
+
+For the legacy proxy: Mole at the audit commit has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
 | Mole source area | Cleanup-operation proxy count |
 | --- | ---: |
@@ -130,17 +137,19 @@ Classification posture used for the port:
 
 ### Uninstall And Remnant Rules
 
-Ported from Mole in `gargantua-jjue`:
+Ported from Mole in `gargantua-jjue`, with app-specific packs and receipt evidence added under `gargantua-wpl6`:
 
 - User-level static patterns: WebKit WebContent, HTTPStorages, cookies, Application Scripts, Services/Workflows, QuickLook generators, Internet Plug-Ins, Audio Plug-Ins, PreferencePanes, Input Methods, Screen Savers, Frameworks, Contextual Menu Items, Spotlight importers, ColorPickers, SyncedPreferences, Address Book plug-ins, Accessibility bundles, Mail bundles, XDG-style config/data directories, dotfiles, ByHost preferences, CrashReporter, diagnostic reports, shared file lists, and NSURLSession downloads.
 - Bundle-ID-derived remnants: app extension containers under Application Scripts, Containers, FileProvider, and Group Containers using bundle ID, team ID, and name variants where available.
 - System-level remnants: `/Library/Application Support`, `/Library/Caches`, `/Library/Logs`, `/Library/Preferences`, plug-ins/extensions, privileged helpers, LaunchAgent/Daemon variants, and protected package receipts.
+- App-specific uninstall packs (`gargantua-uv74`): Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed each get a curated remnant rule file under `uninstall_rules/app_packs/` covering CLI shims, helper bundles, sandbox containers, and well-known support paths the generic remnant rules can't infer from bundle ID alone. 5 files / 41 rules.
+- Receipt/BOM expansion (`gargantua-rloy`, surfaced via `gargantua-4bub` MCP and `gargantua-q05d` UI): `PackageReceiptExpander` runs `pkgutil --pkgs` / `--pkg-info` / `--files` and feeds candidates through `ReceiptRemnantBuilder`, which drops protected roots, upgrades shared system paths to `.protected_`, and emits `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, and install date. The Smart Uninstaller plan-review row renders a `RECEIPT` badge plus the package identifier; MCP's `explain` tool returns the same provenance in its structured response.
 - Scanner support: Mole-style app-name variants now include lowercase compound forms such as `maestro-studio`, and literal template hits resolve to the filesystem's actual child casing before dedupe.
 
 Remaining gaps or deliberately deferred behavior:
 
-- App-specific uninstall knowledge: Android Studio, Xcode, JetBrains, Unity/Unreal/Godot, VS Code, Docker, Maestro Studio, Raycast.
-- Receipt/BOM expansion: package receipt files are protected, but Gargantua still cannot declaratively expand BOM contents into owned installed files.
+- ~~App-specific uninstall knowledge: Android Studio, Xcode, JetBrains, Unity/Unreal/Godot, VS Code, Docker, Maestro Studio, Raycast.~~ **Mostly addressed.** Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed shipped under `gargantua-uv74`. Unity/Unreal/Godot, Maestro Studio, and Raycast remain candidates for the next pack batch — they were held back because their remnants either need active-session detection (Maestro), shared with user projects (game engines), or sit too close to clipboard/automation history that should not be touched (Raycast).
+- ~~Receipt/BOM expansion: package receipt files are protected, but Gargantua still cannot declaratively expand BOM contents into owned installed files.~~ **Addressed.** See the `PackageReceiptExpander` / `ReceiptRemnantBuilder` bullet above. What remains deferred: receipt-driven *deletion* without an explicit user override (receipts are evidence, not permission), and BOM expansion outside the Smart Uninstaller flow.
 - Login item removal, defaults-domain deletion, app-name variant command workflows, and sensitive-data preflight UX beyond current review/protected classification.
 
 Pre-port classification:
@@ -159,7 +168,7 @@ Remaining gaps for full Mole parity:
 1. ~~Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools.~~ **Partially addressed.** The `CommandActionRule` schema and a starter set (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) ship under `Sources/GargantuaCore/Resources/command_rules/`. Audit entries are written as `kind: command` with the captured tool version, exit code, and argument list. See the **Command-action hold list** below for what remains intentionally deferred.
 2. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints and UX before they can be more than review-gated path findings.
 3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup.
-4. Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.
+4. ~~Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.~~ **Addressed.** `PackageReceiptExpander` (`gargantua-rloy`) runs `pkgutil --pkgs` / `--pkg-info` / `--files`, matches candidates through `PackageMatcher`, and produces `PackageReceiptCandidate`s carrying pkg ID, version, and install date. `ReceiptRemnantBuilder` converts those candidates into `RemnantItem`s with the `pkgutil-bom` tag, dropping protected roots and upgrading shared system paths to `.protected_`. Provenance surfaces in the Smart Uninstaller plan-review row (`gargantua-q05d`) as a `RECEIPT` badge + package identifier line, and in MCP's `explain` tool (`gargantua-4bub`) as a structured `receiptProvenance` field. Receipts are *evidence*, not deletion permission.
 5. External-volume policy: Mole can target external-volume `.Trashes`, `.TemporaryItems`, `.Spotlight-V100`, `.fseventsd`, and AppleDouble files with protocol checks. Gargantua should define an explicit external-volume scan/cleanup UX before porting those broadly.
 
 ## Recommended Port Order
@@ -186,4 +195,15 @@ A future bean can promote any of these once the UX models the consequence honest
 
 ## Follow-Up Tasks
 
-The parent epic still has a child task for public rule sync/docs work. Browser, app/cloud/office, developer, rule-engine support, system/user, and generic remnant batches are now represented in the bundled rule snapshot. The `CommandActionRule` schema and the simctl/pnpm/go starter set landed in `gargantua-y84i`; MCP `scan`/`clean` integration and the in-app cleanup-flow surface for command rules remain open as follow-ups under the same epic.
+`gargantua-wpl6` is the closing epic for "Mole-parity gap closing — Trust Layer-aligned." Its three primary threads have all landed:
+
+- **Command-action rules** (`gargantua-y84i`): `CommandActionRule` schema + simctl/pnpm/go starter set in `command_rules/developer/`. MCP `scan`/`clean` integration and the in-app cleanup-flow surface for command rules remain open as next-tier follow-ups.
+- **Receipt/BOM uninstall evidence** (`gargantua-rloy`): `PackageReceiptExpander` + `ReceiptRemnantBuilder`. Surfaced in MCP `explain` (`gargantua-4bub`), Smart Uninstaller plan-review row (`gargantua-q05d`), and cross-app shared-receipt behavior + CONTRIBUTING docs (`gargantua-hkbg`).
+- **App-specific uninstall packs** (`gargantua-uv74`): vendored snapshot for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
+
+Open tail items, not blocking the epic:
+
+- Promotion of any **command-action hold-list** entry (see below) once its UX models the consequence honestly.
+- Next batch of **app packs** — Unity/Unreal/Godot, Maestro Studio, Raycast — held back on the criteria noted in the Uninstall And Remnant Rules section.
+- The signature **Confidence Orbit** finally rendering on the Smart Uninstaller picker (`gargantua-bcpw`) is part of this epic's brand surface even though it's not strictly a parity item.
+- Public rule sync to `inceptyon-labs/gargantua-rules` remains the long-running maintenance task that is not gated on parity work.
