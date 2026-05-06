@@ -98,6 +98,50 @@ swift run GargantuaMCP       # or scan via MCP for a structured dry-run
 
 Mole parity status and the inventory of deferred items live in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md). Use it as the reference for what's intentionally not yet ported.
 
+### Command-action rules
+
+A second rule kind covers cleanup that can't be expressed as filesystem paths — operations where Gargantua asks an external tool to clean its own data. These ship as YAML under `Sources/GargantuaCore/Resources/command_rules/` and are loaded by `CommandActionRuleLoader`. They're audited as `kind: command` entries (separate from path entries) and run through `CommandActionExecutor`.
+
+A complete command-action rule:
+
+```yaml
+- id: simctl_delete_unavailable                # unique within the file
+  name: Xcode Simulator (orphaned runtimes)
+  tool: xcrun                                  # resolver key, see candidate map below
+  arguments:
+    - simctl
+    - delete
+    - unavailable
+  dry_run_arguments:                           # optional; gates effective safety
+    - simctl
+    - list
+    - --json
+  safety: safe                                 # safe | review (protected is rejected at parse)
+  confidence: 95
+  category: developer_tool_command
+  regenerates: true
+  regenerate_command: "Xcode → Settings → Components"
+  affected_roots:                              # required; cross-checked vs protected_roots
+    - "~/Library/Developer/CoreSimulator/Devices"
+  preconditions:
+    timeout_seconds: 120                       # bounded wall-clock cap
+  source:
+    name: Xcode
+    bundle_id: com.apple.dt.Xcode
+  explanation: |
+    Removes simulator runtimes Xcode has marked as unavailable. Xcode owns
+    this data and re-downloads it on demand from Settings → Components.
+```
+
+Bundled tool keys: `xcrun`, `pnpm`, `go`, `brew`, `docker`. Adding a new tool means extending `CommandActionToolResolver.defaultCandidates` with its standard install paths. For ad-hoc resolution (tests, custom installs), set `GARGANTUA_TOOL_<UPPERCASE_NAME>` to an absolute executable path.
+
+Trust Layer rules specific to command-action rules:
+
+- **`protected` is rejected at parse time.** Command-action rules describe tool invocations, not filesystem deletions; the `protected` floor only applies to path rules. Rules whose impact is unsafe enough to need `protected` semantics belong as path rules with explicit affected paths.
+- **No dry-run means `review`.** When `dry_run_arguments` is omitted (or the dry-run runs but the bytes-reclaimable estimator returns nil), the *effective* safety used in the cleanup confirmation flow is downgraded to `review` regardless of the YAML's declared safety. The user is asked to confirm via the summary dialog, not the single-button path.
+- **`affected_roots` is required and conservative.** Declare every root the command may touch up front so the cleanup pipeline can reject rules whose roots intersect the bundled `protected_roots.yaml` policy.
+- **Audit evidence is verbose by design.** Every successful run writes an entry with the exact tool version (`<tool> --version`), the literal argument list, the exit code, and a `kind: command` discriminator so audit consumers can tell at a glance which evidence model produced the entry.
+
 ## Code Validation
 
 For code changes, run Swift tests with coverage and inspect the lowest-covered

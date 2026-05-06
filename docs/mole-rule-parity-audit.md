@@ -156,7 +156,7 @@ The current YAML schema is strong for static path rules: it supports paths, sing
 
 Remaining gaps for full Mole parity:
 
-1. Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools. Some belong in Developer Tools rather than YAML path cleanup.
+1. ~~Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools.~~ **Partially addressed.** The `CommandActionRule` schema and a starter set (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) ship under `Sources/GargantuaCore/Resources/command_rules/`. Audit entries are written as `kind: command` with the captured tool version, exit code, and argument list. See the **Command-action hold list** below for what remains intentionally deferred.
 2. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints and UX before they can be more than review-gated path findings.
 3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup.
 4. Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.
@@ -171,6 +171,19 @@ Remaining gaps for full Mole parity:
 5. Defer privileged cleanup escalation beyond review findings until helper UX and Trust Layer policy are explicit.
 6. Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.
 
+## Command-Action Hold List
+
+The following Mole-equivalent commands have an obvious adapter shape but are deliberately *not* in the bundled `command_rules/` snapshot. They sit on a "review-tier minimum, surprising semantics" hold list — they ship only after a more careful UX and dry-run story.
+
+| Command | Reason for hold |
+| --- | --- |
+| `nix-collect-garbage` | Generation rollback semantics. Users who relied on `nixos-rebuild --rollback` or per-shell generations to recover from a bad change will silently lose that rollback target. Needs explicit "this also drops your rollback history" UX. |
+| `npm cache clean` (`--force` required) | Offline install semantics. npm's cache doubles as the offline mirror that `npm ci` and `npm install --offline` rely on. Pruning it costs network on the next install and breaks airgapped/CI flows that don't expect re-fetch. |
+| `go clean -modcache` | Re-fetch costs network. The module cache is shared across projects and can be tens of gigabytes; clearing it forces every project to re-download on the next build. Distinct rule from `go clean -cache` (already shipped) which only touches the build cache. |
+| Tool-aware version-retention loops (e.g., "keep latest N JetBrains Toolbox apps", "keep current Xcode device support, drop older") | Active-use detection plus per-tool identity resolution required. "Old ≠ safe" without a per-tool concept of which version is in use; default classification is `review`-only until a generic version-retention guard exists. |
+
+A future bean can promote any of these once the UX models the consequence honestly. They live on the `gargantua-wpl6` epic as candidates, not commitments.
+
 ## Follow-Up Tasks
 
-The parent epic still has a child task for public rule sync/docs work. Browser, app/cloud/office, developer, rule-engine support, system/user, and generic remnant batches are now represented in the bundled rule snapshot.
+The parent epic still has a child task for public rule sync/docs work. Browser, app/cloud/office, developer, rule-engine support, system/user, and generic remnant batches are now represented in the bundled rule snapshot. The `CommandActionRule` schema and the simctl/pnpm/go starter set landed in `gargantua-y84i`; MCP `scan`/`clean` integration and the in-app cleanup-flow surface for command rules remain open as follow-ups under the same epic.
