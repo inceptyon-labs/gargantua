@@ -22,10 +22,16 @@ struct RemnantRow: View {
             .accessibilityLabel(accessibilityLabel)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(URL(fileURLWithPath: item.path).lastPathComponent)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(isLocked ? GargantuaColors.ink3 : GargantuaColors.ink)
-                    .lineLimit(1)
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Text(URL(fileURLWithPath: item.path).lastPathComponent)
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(isLocked ? GargantuaColors.ink3 : GargantuaColors.ink)
+                        .lineLimit(1)
+
+                    if item.isReceiptEvidence {
+                        receiptBadge
+                    }
+                }
 
                 Text(item.path)
                     .font(GargantuaFonts.monoPath)
@@ -33,10 +39,18 @@ struct RemnantRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
 
+                if let pkgID = item.receiptPkgID {
+                    Text(pkgID)
+                        .font(GargantuaFonts.monoPath)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
                 Text(item.explanation)
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
-                    .lineLimit(2)
+                    .lineLimit(item.isReceiptEvidence ? 3 : 2)
             }
 
             Spacer()
@@ -56,14 +70,33 @@ struct RemnantRow: View {
         return isSelected ? GargantuaColors.accent : GargantuaColors.ink3
     }
 
+    private var receiptBadge: some View {
+        HStack(spacing: GargantuaSpacing.space1) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 9, weight: .semibold))
+            Text("RECEIPT")
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.6)
+        }
+        .foregroundStyle(GargantuaColors.ink2)
+        .padding(.horizontal, GargantuaSpacing.space2)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(GargantuaColors.surface3))
+        .overlay(Capsule().stroke(GargantuaColors.borderSoft, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+
     private var accessibilityLabel: String {
         let name = URL(fileURLWithPath: item.path).lastPathComponent
         let safety = item.safety.rawValue
         let state = isSelected ? "selected" : "not selected"
+        let evidence = item.isReceiptEvidence
+            ? ", pkgutil receipt evidence\(item.receiptPkgID.map { " from \($0)" } ?? "")"
+            : ""
         if isLocked {
-            return "\(name), \(safety), locked"
+            return "\(name), \(safety)\(evidence), locked"
         }
-        return "\(name), \(safety), \(state), \(AlertItem.formatBytes(item.size))"
+        return "\(name), \(safety)\(evidence), \(state), \(AlertItem.formatBytes(item.size))"
     }
 }
 

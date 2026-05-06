@@ -54,4 +54,67 @@ struct RemnantItemTests {
         #expect(decoded.safety == .safe)
         #expect(decoded.ruleID == "generic_caches")
     }
+
+    // MARK: - Receipt evidence
+
+    private static func receiptItem(
+        ruleID: String,
+        tags: [String]
+    ) -> RemnantItem {
+        RemnantItem(
+            id: "pkgutil-bom-com.docker.docker-0",
+            appBundleID: "com.docker.docker",
+            category: .other,
+            path: "/Library/PrivilegedHelperTools/com.docker.vmnetd",
+            size: 4_096,
+            safety: .protected_,
+            confidence: 95,
+            explanation: "Owned by package com.docker.docker (v4.30.0) installed 2025-12-04. Shared system path — review carefully before removal.",
+            source: SourceAttribution(name: "Docker", bundleID: "com.docker.docker"),
+            ruleID: ruleID,
+            tags: tags
+        )
+    }
+
+    @Test("isReceiptEvidence true when tags contain pkgutil-bom")
+    func receiptEvidenceTrueOnTag() {
+        let item = Self.receiptItem(
+            ruleID: "pkgutil-bom:com.docker.docker",
+            tags: [ReceiptRemnantBuilder.receiptTag]
+        )
+        #expect(item.isReceiptEvidence == true)
+    }
+
+    @Test("isReceiptEvidence false on rule-derived rows")
+    func receiptEvidenceFalseWithoutTag() {
+        #expect(Self.sample.isReceiptEvidence == false)
+        #expect(Self.sample.receiptPkgID == nil)
+    }
+
+    @Test("receiptPkgID extracts pkgID from ruleID prefix")
+    func receiptPkgIDExtraction() {
+        let item = Self.receiptItem(
+            ruleID: "pkgutil-bom:com.docker.docker",
+            tags: [ReceiptRemnantBuilder.receiptTag]
+        )
+        #expect(item.receiptPkgID == "com.docker.docker")
+    }
+
+    @Test("receiptPkgID nil when ruleID lacks expected prefix")
+    func receiptPkgIDNilOnMalformedRule() {
+        let item = Self.receiptItem(
+            ruleID: "some-other-rule",
+            tags: [ReceiptRemnantBuilder.receiptTag]
+        )
+        #expect(item.receiptPkgID == nil)
+    }
+
+    @Test("receiptPkgID nil when prefix is present but pkgID is empty")
+    func receiptPkgIDNilOnEmptyID() {
+        let item = Self.receiptItem(
+            ruleID: "pkgutil-bom:",
+            tags: [ReceiptRemnantBuilder.receiptTag]
+        )
+        #expect(item.receiptPkgID == nil)
+    }
 }
