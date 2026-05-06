@@ -23,6 +23,7 @@ struct MainContentView: View {
     @State private var duplicateFinderSelection: Set<String> = []
     @State private var diskExplorerState = DiskExplorerState()
     @State private var aiModelsSession = AIModelsState()
+    @State private var devToolsSession = DeveloperToolsSessionState()
     @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
@@ -143,7 +144,7 @@ struct MainContentView: View {
                                     onResolveFilter: scanFilterHandler
                                 )
                             case "devTools":
-                                DeveloperToolsView()
+                                DeveloperToolsView(session: devToolsSession)
                             case "agentSessions":
                                 ClaudeCodeAgentView()
                             case "settings":

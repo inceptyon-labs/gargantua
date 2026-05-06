@@ -27,18 +27,9 @@ public struct DeveloperToolsView: View {
     let executionProvider: ExecutionProvider
     let dockerControl: DockerDaemonControl
 
-    @State var phase: Phase = .idle
-    @State var pendingExecution: ExecutionRequest?
-    @State var executingOperationID: DeveloperToolCleanupOperation.ID?
-    @State var executionNotices: [DeveloperToolCleanupOperation.ID: ExecutionNotice] = [:]
-    /// Tracks an in-flight Docker start/stop so the panel can show a busy
-    /// state instead of a stale daemon-stopped CTA while the daemon comes up
-    /// (or goes down).
-    @State var dockerLifecycleActivity: DockerLifecycleActivity?
-    /// Bumped on every kickoff or return-to-idle so background scan tasks
-    /// can detect that they've been superseded and bail rather than
-    /// stomping the current phase.
-    @State var loadGeneration: Int = 0
+    /// Session-scoped state hoisted out of the view so navigating away and
+    /// back doesn't discard scan results. Owned by `MainContentView`.
+    @Bindable var session: DeveloperToolsSessionState
 
     public enum Phase: Equatable {
         /// User hasn't kicked off a scan yet — we show the CTA. Mirrors the
@@ -65,19 +56,25 @@ public struct DeveloperToolsView: View {
         case stopping
     }
 
-    struct ExecutionRequest: Equatable, Identifiable {
-        let operation: DeveloperToolCleanupOperation
-        let preview: DeveloperToolPreview
+    public struct ExecutionRequest: Equatable, Identifiable, Sendable {
+        public let operation: DeveloperToolCleanupOperation
+        public let preview: DeveloperToolPreview
 
-        var id: String { operation.id }
+        public var id: String { operation.id }
+
+        public init(operation: DeveloperToolCleanupOperation, preview: DeveloperToolPreview) {
+            self.operation = operation
+            self.preview = preview
+        }
     }
 
-    enum ExecutionNotice: Equatable {
+    public enum ExecutionNotice: Equatable, Sendable {
         case success(String)
         case failure(String)
     }
 
     public init(
+        session: DeveloperToolsSessionState,
         availabilityProvider: @escaping AvailabilityProvider = { DeveloperToolPreviewAdapter().availability() },
         previewProvider: @escaping PreviewProvider = { try DeveloperToolPreviewAdapter().preview($0) },
         executionProvider: @escaping ExecutionProvider = {
@@ -85,6 +82,7 @@ public struct DeveloperToolsView: View {
         },
         dockerControl: DockerDaemonControl = DockerDaemonControl()
     ) {
+        self.session = session
         self.availabilityProvider = availabilityProvider
         self.previewProvider = previewProvider
         self.executionProvider = executionProvider
@@ -100,7 +98,7 @@ public struct DeveloperToolsView: View {
                     .frame(height: 1)
 
                 Group {
-                    switch phase {
+                    switch session.phase {
                     case .idle:
                         idleView
                     case .loading:
@@ -115,18 +113,18 @@ public struct DeveloperToolsView: View {
             }
             .background(GargantuaColors.void_)
 
-            if let pendingExecution {
+            if let pendingExecution = session.pendingExecution {
                 ConfirmationModalView(
                     items: [Self.confirmationItem(for: pendingExecution)],
                     allowsPermanentDelete: false,
                     initialCleanupMethod: .toolNative,
                     onConfirm: { _ in confirmExecution(pendingExecution) },
-                    onCancel: { self.pendingExecution = nil }
+                    onCancel: { session.pendingExecution = nil }
                 )
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: pendingExecution)
+        .animation(.easeOut(duration: 0.15), value: session.pendingExecution)
     }
 
     private var idleView: some View {
@@ -170,11 +168,11 @@ public struct DeveloperToolsView: View {
     private var header: some View {
         PageHeaderView(
             title: "Developer Tools",
-            subtitle: "Preview Homebrew and Docker cleanup before pulling the trigger.",
+            subtitle: "Run each tool's own cleanup commands. Homebrew, Docker — they know what's safe to release.",
             subtitleStyle: .voice
         ) {
             HStack(spacing: GargantuaSpacing.space3) {
-                if phase != .idle {
+                if session.phase != .idle {
                     backButton
                     refreshButton
                 }
@@ -275,17 +273,17 @@ public struct DeveloperToolsView: View {
                     DeveloperToolPanel(
                         availability: availability,
                         preview: previews[availability.tool] ?? .loading,
-                        executingOperationID: executingOperationID,
-                        executionNotices: executionNotices,
-                        dockerLifecycleActivity: availability.tool == .docker ? dockerLifecycleActivity : nil,
+                        executingOperationID: session.executingOperationID,
+                        executionNotices: session.executionNotices,
+                        dockerLifecycleActivity: availability.tool == .docker ? session.dockerLifecycleActivity : nil,
                         onRetry: {
                             Task { await reloadPreview(for: availability.tool) }
                         },
                         onRun: { operation, preview in
-                            pendingExecution = ExecutionRequest(operation: operation, preview: preview)
+                            session.pendingExecution = ExecutionRequest(operation: operation, preview: preview)
                         },
                         onRetryOperation: { operation, preview in
-                            pendingExecution = ExecutionRequest(operation: operation, preview: preview)
+                            session.pendingExecution = ExecutionRequest(operation: operation, preview: preview)
                         },
                         onStartDocker: { startDockerDaemon() },
                         onStopDocker: { stopDockerDaemon() }

@@ -81,17 +81,17 @@ extension DeveloperToolsView {
     /// Bumps the generation, flips to `.loading`, and spins up a fresh
     /// availability + preview pass.
     func startScan() {
-        loadGeneration &+= 1
-        let generation = loadGeneration
-        phase = .loading
+        session.loadGeneration &+= 1
+        let generation = session.loadGeneration
+        session.phase = .loading
         Task { await load(generation: generation) }
     }
 
     /// Click handler for the Back button. Bumps the generation so any
     /// in-flight load can detect it's been superseded.
     func returnToIdle() {
-        loadGeneration &+= 1
-        phase = .idle
+        session.loadGeneration &+= 1
+        session.phase = .idle
     }
 
     func load(generation: Int) async {
@@ -99,8 +99,8 @@ extension DeveloperToolsView {
         if Task.isCancelled { return }
         let initial = Self.deriveInitialPhase(availabilities: availabilities)
         let stillCurrent: Bool = await MainActor.run {
-            guard generation == loadGeneration else { return false }
-            phase = initial
+            guard generation == session.loadGeneration else { return false }
+            session.phase = initial
             return true
         }
         guard stillCurrent else { return }
@@ -109,7 +109,7 @@ extension DeveloperToolsView {
         let installed = availabilities.filter(\.isInstalled).map(\.tool)
         for tool in installed {
             if Task.isCancelled { return }
-            let isCurrent: Bool = await MainActor.run { generation == loadGeneration }
+            let isCurrent: Bool = await MainActor.run { generation == session.loadGeneration }
             if !isCurrent { return }
             await loadPreview(for: tool, generation: generation)
         }
@@ -127,16 +127,16 @@ extension DeveloperToolsView {
         await MainActor.run {
             // If a generation was passed (in-flight scan), skip the update
             // when the user has navigated away or kicked off a new scan.
-            if let generation, generation != loadGeneration { return }
-            phase = Self.applyPreviewResult(tool: tool, result: result, to: phase)
+            if let generation, generation != session.loadGeneration { return }
+            session.phase = Self.applyPreviewResult(tool: tool, result: result, to: session.phase)
         }
     }
 
     func reloadPreview(for tool: DeveloperTool) async {
         await MainActor.run {
-            if case .ready(let availabilities, var previews) = phase {
+            if case .ready(let availabilities, var previews) = session.phase {
                 previews[tool] = .loading
-                phase = .ready(availabilities: availabilities, previews: previews)
+                session.phase = .ready(availabilities: availabilities, previews: previews)
             }
         }
         await loadPreview(for: tool)
@@ -148,8 +148,8 @@ extension DeveloperToolsView {
     /// `dockerLifecycleActivity` so the panel can show a busy state instead
     /// of a stale daemon-stopped CTA.
     func startDockerDaemon() {
-        guard dockerLifecycleActivity == nil else { return }
-        dockerLifecycleActivity = .starting
+        guard session.dockerLifecycleActivity == nil else { return }
+        session.dockerLifecycleActivity = .starting
         let control = dockerControl
         Task {
             _ = control.start()
@@ -158,7 +158,7 @@ extension DeveloperToolsView {
                 await reloadPreview(for: .docker)
             }
             await MainActor.run {
-                dockerLifecycleActivity = nil
+                session.dockerLifecycleActivity = nil
             }
         }
     }
@@ -166,18 +166,18 @@ extension DeveloperToolsView {
     /// Quit Docker Desktop and poll until the daemon stops responding, then
     /// flip the panel back to `.daemonStopped`.
     func stopDockerDaemon() {
-        guard dockerLifecycleActivity == nil else { return }
-        dockerLifecycleActivity = .stopping
+        guard session.dockerLifecycleActivity == nil else { return }
+        session.dockerLifecycleActivity = .stopping
         let control = dockerControl
         Task {
             control.stop()
             _ = await control.pollUntilStopped()
             await MainActor.run {
-                if case .ready(let availabilities, var previews) = phase {
+                if case .ready(let availabilities, var previews) = session.phase {
                     previews[.docker] = .daemonStopped(.docker)
-                    phase = .ready(availabilities: availabilities, previews: previews)
+                    session.phase = .ready(availabilities: availabilities, previews: previews)
                 }
-                dockerLifecycleActivity = nil
+                session.dockerLifecycleActivity = nil
             }
         }
     }
@@ -185,16 +185,16 @@ extension DeveloperToolsView {
     /// Re-run availability + previews for every tool. Wired to the page-level
     /// Refresh button.
     func refreshAll() async {
-        loadGeneration &+= 1
-        let generation = loadGeneration
-        phase = .loading
+        session.loadGeneration &+= 1
+        let generation = session.loadGeneration
+        session.phase = .loading
         await load(generation: generation)
     }
 
     func confirmExecution(_ request: ExecutionRequest) {
-        pendingExecution = nil
-        executingOperationID = request.operation.id
-        executionNotices[request.operation.id] = nil
+        session.pendingExecution = nil
+        session.executingOperationID = request.operation.id
+        session.executionNotices[request.operation.id] = nil
 
         Task {
             await execute(request)
@@ -211,20 +211,20 @@ extension DeveloperToolsView {
             let refreshed = try previewProvider(operation.tool)
             let afterBytes = operation.estimatedReclaimableBytes(in: refreshed)
             await MainActor.run {
-                phase = Self.applyPreviewResult(tool: operation.tool, result: .success(refreshed), to: phase)
-                executionNotices[operation.id] = .success(Self.successMessage(
+                session.phase = Self.applyPreviewResult(tool: operation.tool, result: .success(refreshed), to: session.phase)
+                session.executionNotices[operation.id] = .success(Self.successMessage(
                     operation: operation,
                     beforeBytes: beforeBytes,
                     afterBytes: afterBytes
                 ))
-                executingOperationID = nil
+                session.executingOperationID = nil
             }
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             executionLogger.error("Execution for \(operation.id, privacy: .public) failed: \(message, privacy: .private)")
             await MainActor.run {
-                executionNotices[operation.id] = .failure(message)
-                executingOperationID = nil
+                session.executionNotices[operation.id] = .failure(message)
+                session.executingOperationID = nil
             }
         }
     }
