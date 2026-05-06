@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Findings-list rendering for ``FileHealthView``.
+/// Findings-list rendering for ``FileHealthClusterList``.
 ///
 /// Lives in an extension file so the per-group section header — with three
 /// bulk-selection buttons each carrying their own help text and disabled
-/// rules — can grow without pushing the main `FileHealthView.swift` past its
-/// SwiftLint type-body threshold.
-extension FileHealthView {
+/// rules — can grow without turning the primary list view into another
+/// oversized body.
+extension FileHealthClusterList {
     /// Flat, ungrouped row list for non-similarity categories (Empty Files,
     /// Big Files, etc.). Reused as the fall-through path for grouped
     /// categories whose findings happen to carry no group id.
