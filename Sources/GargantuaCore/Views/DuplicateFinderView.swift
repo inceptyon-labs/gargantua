@@ -286,6 +286,14 @@ public struct DuplicateFinderView: View {
         let classification = DuplicateGroupClassifier.classify(group)
         let differentiators = DuplicatePathDifferentiator.compute(paths: group.files.map(\.path))
 
+        // Thicker top rule on every group except the first — turns adjacent
+        // groups into visibly bounded units instead of a wall of warm rows.
+        if group.id != groups.first?.id {
+            Rectangle()
+                .fill(GargantuaColors.borderEm)
+                .frame(height: 2)
+        }
+
         DuplicateGroupHeader(
             group: group,
             classification: classification,
@@ -303,11 +311,17 @@ public struct DuplicateFinderView: View {
 
         if isExpanded {
             ForEach(group.files) { file in
+                // 16px leading indent so file rows visually nest under the
+                // header — the chevron's disclosure now reads as a tree, not
+                // decoration. Padding sits outside the row's tinted
+                // background so a void-colored gutter forms a natural rail.
                 itemRow(file, differentiator: differentiators[file.path] ?? file.name)
+                    .padding(.leading, 16)
 
                 Rectangle()
                     .fill(GargantuaColors.borderSoft)
                     .frame(height: 1)
+                    .padding(.leading, 16)
             }
         }
     }
@@ -576,10 +590,12 @@ private struct DuplicateFileRow: View {
     }
 
     private var safetyDimColor: Color {
+        // Halved from 0.12 so the header's `surface1` wins the contrast
+        // competition; the safety hint is still legible on the row.
         switch item.safety {
-        case .safe: GargantuaColors.safe.opacity(0.12)
-        case .review: GargantuaColors.review.opacity(0.12)
-        case .protected_: GargantuaColors.protected_.opacity(0.12)
+        case .safe: GargantuaColors.safe.opacity(0.06)
+        case .review: GargantuaColors.review.opacity(0.06)
+        case .protected_: GargantuaColors.protected_.opacity(0.06)
         }
     }
 
