@@ -11,20 +11,26 @@ public protocol UninstallPlanning: Sendable {
 
 /// Builds uninstall plans by expanding remnant rules against one app.
 public struct RemnantScanner: UninstallPlanning, Sendable {
-    private let rules: [RemnantRule]
-    private let scanRoots: [URL]
-    private let expander: PathExpander
-    private let observer: (any ScanProgressObserving)?
+    let rules: [RemnantRule]
+    let scanRoots: [URL]
+    let expander: PathExpander
+    let receiptExpander: PackageReceiptExpander?
+    let receiptBuilder: ReceiptRemnantBuilder?
+    let observer: (any ScanProgressObserving)?
 
     public init(
         rules: [RemnantRule],
         scanRoots: [URL] = PathExpander.defaultScanRoots(),
         expander: PathExpander = PathExpander(),
+        receiptExpander: PackageReceiptExpander? = nil,
+        receiptBuilder: ReceiptRemnantBuilder? = nil,
         observer: (any ScanProgressObserving)? = nil
     ) {
         self.rules = rules
         self.scanRoots = scanRoots
         self.expander = expander
+        self.receiptExpander = receiptExpander
+        self.receiptBuilder = receiptBuilder
         self.observer = observer
     }
 
@@ -57,6 +63,8 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
             rules: rules,
             scanRoots: scanRoots,
             expander: expander,
+            receiptExpander: receiptExpander,
+            receiptBuilder: receiptBuilder,
             observer: observer
         )
     }
@@ -81,6 +89,8 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
                 ))
             }
         }
+
+        appendReceiptEvidence(into: &remnants, seenPaths: &seenPaths, for: app)
 
         let bundle = includeAppBundle ? Self.makeAppBundleItem(for: app) : nil
         if let bundle {
