@@ -166,7 +166,7 @@ public struct DevArtifactScanView: View {
         VStack(spacing: 0) {
             PageHeaderView(
                 title: "Dev Artifact Purge",
-                subtitle: "Catalog the build debris. Choose what to consume.",
+                subtitle: "Find build artifacts the tools forgot. Caches, DerivedData, node_modules — pulled straight off the disk.",
                 subtitleStyle: .voice
             )
 
