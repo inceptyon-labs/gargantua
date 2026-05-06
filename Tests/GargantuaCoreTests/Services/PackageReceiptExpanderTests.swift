@@ -182,4 +182,78 @@ struct PackageReceiptExpanderTests {
 
         #expect(candidates.isEmpty)
     }
+
+    // MARK: - lookupReceipts(forPath:)
+
+    @Test("lookupReceipts parses pkgutil --file-info output into receipts")
+    func lookupReceiptsHappyPath() {
+        let path = "/usr/local/bin/docker"
+        let runner = StubRunner(outputs: [
+            ["--file-info", path]: ProcessOutput(
+                stdout: """
+                volume: /
+                path: \(path)
+
+                pkgid: com.docker.docker
+                pkg-version: 4.30.0
+                install-time: 1735689600
+                uid: 0
+                gid: 0
+                mode: 100755
+                """,
+                stderr: "",
+                exitCode: 0
+            ),
+        ])
+
+        let expander = PackageReceiptExpander(runner: runner)
+        let receipts = expander.lookupReceipts(forPath: path)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.docker.docker")
+        #expect(receipts[0].version == "4.30.0")
+        #expect(receipts[0].installDate == Date(timeIntervalSince1970: 1_735_689_600))
+        #expect(runner.calls == [["--file-info", path]])
+    }
+
+    @Test("lookupReceipts returns empty when pkgutil exits non-zero")
+    func lookupReceiptsHonorsExitCode() {
+        let path = "/etc/passwd"
+        let runner = StubRunner(outputs: [
+            ["--file-info", path]: ProcessOutput(
+                stdout: "",
+                stderr: "no such path",
+                exitCode: 1
+            ),
+        ])
+
+        let expander = PackageReceiptExpander(runner: runner)
+
+        #expect(expander.lookupReceipts(forPath: path).isEmpty)
+    }
+
+    @Test("lookupReceipts returns empty when the runner throws")
+    func lookupReceiptsHonorsRunnerFailure() {
+        struct ThrowingRunner: ProcessRunner {
+            func run(executable _: URL, arguments _: [String]) throws -> ProcessOutput {
+                throw NSError(domain: "test", code: 42)
+            }
+            func run(executable _: URL, arguments _: [String], timeout _: TimeInterval?) throws -> ProcessOutput {
+                throw NSError(domain: "test", code: 42)
+            }
+        }
+
+        let expander = PackageReceiptExpander(runner: ThrowingRunner())
+
+        #expect(expander.lookupReceipts(forPath: "/Applications/Foo.app").isEmpty)
+    }
+
+    @Test("lookupReceipts returns empty for an empty path without shelling out")
+    func lookupReceiptsRejectsEmptyPath() {
+        let runner = StubRunner(outputs: [:])
+        let expander = PackageReceiptExpander(runner: runner)
+
+        #expect(expander.lookupReceipts(forPath: "").isEmpty)
+        #expect(runner.calls.isEmpty)
+    }
 }

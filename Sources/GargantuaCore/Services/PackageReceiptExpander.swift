@@ -91,6 +91,48 @@ public final class PackageReceiptExpander: @unchecked Sendable {
         self.timeout = timeout
     }
 
+    /// Look up the package receipts that claim ownership of `path`.
+    ///
+    /// Wraps `pkgutil --file-info <path>`. The result is the list of
+    /// receipts that claim the path; an empty list means either `pkgutil`
+    /// has no receipts for the path or the call failed (the underlying
+    /// error is logged but never thrown so explain-style callers can degrade
+    /// gracefully when receipts are unavailable).
+    ///
+    /// Unlike `expand(for:)`, this lookup is **path-oriented** — it asks
+    /// "which packages claim this path?" rather than "which packages match
+    /// this app?". It is intended for explain-time provenance enrichment
+    /// where a single path is the input.
+    ///
+    /// Results are not cached; receipt-by-path queries are expected to be
+    /// one-shot per explain call, and `pkgutil --file-info` is fast.
+    public func lookupReceipts(forPath path: String) -> [PackageReceipt] {
+        guard !path.isEmpty else { return [] }
+
+        let output: ProcessOutput
+        do {
+            output = try runner.run(
+                executable: pkgutilURL,
+                arguments: ["--file-info", path],
+                timeout: timeout
+            )
+        } catch {
+            logger.warning(
+                "pkgutil --file-info failed for \(path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
+
+        guard output.exitCode == 0 else {
+            logger.debug(
+                "pkgutil --file-info \(path, privacy: .public) exited \(output.exitCode, privacy: .public)"
+            )
+            return []
+        }
+
+        return parser.parseFileInfo(output.stdout)
+    }
+
     /// Drop all cached `pkgutil` output. The next `expand(...)` will refetch.
     public func clearCache() {
         cacheLock.lock()

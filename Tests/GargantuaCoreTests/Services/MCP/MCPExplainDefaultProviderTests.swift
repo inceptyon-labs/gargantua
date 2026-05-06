@@ -114,6 +114,80 @@ struct MCPExplainDefaultProviderTests {
         #expect(!output.name.isEmpty)
     }
 
+    // MARK: Receipt provenance
+
+    @Test("receiptLookup yielding a receipt populates output.receipts and prepends provenance to explanation")
+    func receiptsSurfaceProvenance() throws {
+        let url = try Self.writeTempFile(bytes: 8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let receipt = PackageReceipt(
+            pkgID: "com.docker.docker",
+            version: "4.30.0",
+            installDate: Date(timeIntervalSince1970: 1_701_734_400) // 2023-12-05Z
+        )
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            receiptLookup: { _ in [receipt] }
+        )
+
+        let output = try provider(MCPExplainInput(path: url.path))
+
+        #expect(output.receipts?.count == 1)
+        #expect(output.receipts?.first?.pkgID == "com.docker.docker")
+        #expect(output.receipts?.first?.pkgVersion == "4.30.0")
+        #expect(output.receipts?.first?.installDate == receipt.installDate)
+        #expect(output.explanation.contains("Owned by package com.docker.docker"))
+        #expect(output.explanation.contains("v4.30.0"))
+        #expect(output.explanation.contains("2023-12-05"))
+    }
+
+    @Test("multiple receipts join with semicolons inside one provenance sentence")
+    func multipleReceiptsJoinReadably() throws {
+        let url = try Self.writeTempFile(bytes: 8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let receipts = [
+            PackageReceipt(pkgID: "com.example.alpha", version: "1.0"),
+            PackageReceipt(pkgID: "com.example.beta", version: "2.0"),
+        ]
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            receiptLookup: { _ in receipts }
+        )
+
+        let output = try provider(MCPExplainInput(path: url.path))
+
+        #expect(output.receipts?.count == 2)
+        #expect(output.explanation.contains("com.example.alpha"))
+        #expect(output.explanation.contains("com.example.beta"))
+        #expect(output.explanation.contains(";"))
+    }
+
+    @Test("empty receipt lookup leaves output.receipts nil and explanation untouched")
+    func emptyReceiptsAreOmitted() throws {
+        let url = try Self.writeTempFile(bytes: 8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            receiptLookup: { _ in [] }
+        )
+
+        let output = try provider(MCPExplainInput(path: url.path))
+
+        #expect(output.receipts == nil)
+        #expect(!output.explanation.contains("Owned by package"))
+    }
+
+    @Test("default receiptLookup (no argument) yields no receipts")
+    func defaultReceiptLookupYieldsNothing() throws {
+        let url = try Self.writeTempFile(bytes: 8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider()
+        let output = try provider(MCPExplainInput(path: url.path))
+
+        #expect(output.receipts == nil)
+    }
+
     // MARK: Wiring through the handler
 
     @Test("default provider wired through the handler produces a structured result")
