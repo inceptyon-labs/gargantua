@@ -607,10 +607,18 @@ private struct AppRow: View {
     /// brief; VoiceOver still reads the count via the row's accessibility
     /// label, so screen-reader users don't lose the signal.
     private var orbitColumn: some View {
-        ConfidenceOrbit(
+        // The shared ``ConfidenceOrbit`` floor-clamps to one lit bar even at
+        // 0%, which is fine for post-scan rows but would misread on the
+        // picker as "we already have signal" the moment the screen mounts.
+        // Match the size / last-used columns' pattern instead: reserve the
+        // height with a zero-opacity placeholder while `categoryCount` is
+        // nil, then fade the orbit in once real data arrives.
+        let hasSignal = (categoryCount ?? 0) > 0
+        return ConfidenceOrbit(
             confidence: UninstallPickerOrbit.confidencePercent(forCategoryCount: categoryCount),
             safety: UninstallPickerOrbit.safety(forApp: app)
         )
+        .opacity(hasSignal ? 1 : 0)
         .help(orbitHelpText)
         .accessibilityHidden(true)
     }
