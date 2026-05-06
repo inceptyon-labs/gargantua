@@ -409,7 +409,12 @@ struct UninstallAppPickerView: View {
         if let valid = app.signatureValid {
             parts.append(valid ? "signed" : "unsigned")
         }
-        if let count = categoryCount, count > 0 {
+        switch categoryCount {
+        case nil:
+            parts.append("scanning for leftovers")
+        case 0?:
+            parts.append("no leftover categories")
+        case let count?:
             parts.append(count == 1 ? "1 leftover category" : "\(count) leftover categories")
         }
         return parts.joined(separator: ", ")
@@ -607,25 +612,38 @@ private struct AppRow: View {
     /// brief; VoiceOver still reads the count via the row's accessibility
     /// label, so screen-reader users don't lose the signal.
     private var orbitColumn: some View {
-        // The shared ``ConfidenceOrbit`` floor-clamps to one lit bar even at
-        // 0%, which is fine for post-scan rows but would misread on the
-        // picker as "we already have signal" the moment the screen mounts.
-        // Match the size / last-used columns' pattern instead: reserve the
-        // height with a zero-opacity placeholder while `categoryCount` is
-        // nil, then fade the orbit in once real data arrives.
-        let hasSignal = (categoryCount ?? 0) > 0
-        return ConfidenceOrbit(
-            confidence: UninstallPickerOrbit.confidencePercent(forCategoryCount: categoryCount),
-            safety: UninstallPickerOrbit.safety(forApp: app)
-        )
-        .opacity(hasSignal ? 1 : 0)
+        // Three distinct states so a blank cell is never ambiguous:
+        //   nil → background scan hasn't reached this app → small accretion
+        //         disk (the brand spinner) signals "working".
+        //   0   → scan finished, no leftover categories → five fully-unlit
+        //         bars via `floorClamp: false`. Reads as "we looked, nothing
+        //         to clean" instead of falsely lighting the first bar.
+        //   >0  → real coverage orbit, same as before.
+        Group {
+            if categoryCount == nil {
+                AccretionDiskView(
+                    activityRate: 6,
+                    size: 12,
+                    color: GargantuaColors.ink4
+                )
+            } else {
+                ConfidenceOrbit(
+                    confidence: UninstallPickerOrbit.confidencePercent(forCategoryCount: categoryCount),
+                    safety: UninstallPickerOrbit.safety(forApp: app),
+                    floorClamp: false
+                )
+            }
+        }
         .help(orbitHelpText)
         .accessibilityHidden(true)
     }
 
     private var orbitHelpText: String {
-        guard let count = categoryCount, count > 0 else {
-            return "No leftover-category signal yet"
+        guard let count = categoryCount else {
+            return "Scanning for leftover categories…"
+        }
+        guard count > 0 else {
+            return "No leftover categories detected for this app"
         }
         let total = RemnantCategory.allCases.count
         let label = count == 1 ? "category" : "categories"

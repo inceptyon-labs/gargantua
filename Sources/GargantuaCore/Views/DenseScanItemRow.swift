@@ -9,6 +9,17 @@ import SwiftUI
 struct ConfidenceOrbit: View {
     let confidence: Int
     let safety: SafetyLevel
+    /// When `true`, 0% still lights the first bar — preserves the original
+    /// "we have *some* signal" read used by Dense Scan and Duplicate Finder.
+    /// Pass `false` for surfaces (like the picker) where 0 means "we looked
+    /// and found nothing" and that should render as five fully-unlit bars.
+    let floorClamp: Bool
+
+    init(confidence: Int, safety: SafetyLevel, floorClamp: Bool = true) {
+        self.confidence = confidence
+        self.safety = safety
+        self.floorClamp = floorClamp
+    }
 
     private let barCount = 5
     private let barWidth: CGFloat = 3
@@ -31,7 +42,8 @@ struct ConfidenceOrbit: View {
 
     private var litBarCount: Int {
         let clamped = max(0, min(100, confidence))
-        return min(barCount, max(1, clamped / 20 + 1))
+        let floor = floorClamp ? 1 : 0
+        return min(barCount, max(floor, clamped / 20 + (clamped > 0 ? 1 : 0)))
     }
 
     private func barHeight(at index: Int) -> CGFloat {
