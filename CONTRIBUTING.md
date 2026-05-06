@@ -19,41 +19,86 @@ brew install gitleaks   # macOS
 
 The hook blocks commits that contain secrets matched by `.gitleaks.toml`. If you hit a false positive, add an entry under `[allowlist]` in that file rather than bypassing with `--no-verify`.
 
-## Rule Contributions
+## Contributing Rules
 
-The easiest way to contribute today is by adding or refining YAML cleanup and uninstall rules. Rule-only collaboration belongs in the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; this app repository consumes reviewed snapshots from that repo.
+Adding or refining YAML cleanup and uninstall rules is the easiest way to contribute. The contribution model uses two repositories on purpose:
 
-- Public rule source: `https://github.com/inceptyon-labs/gargantua-rules`
-- App-bundled cleanup snapshot: `Sources/GargantuaCore/Resources/cleanup_rules/`
-- App-bundled uninstall snapshot: `Sources/GargantuaCore/Resources/uninstall_rules/`
-- Rule docs and templates: `https://github.com/inceptyon-labs/gargantua-rules/tree/main/docs`
+| Repo | Role |
+| --- | --- |
+| [`inceptyon-labs/gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) | **Source of truth.** Schema, templates, in-flight rules, rule-only PRs and discussion. |
+| `inceptyon-labs/gargantua` (this repo) | **Runtime authority.** Vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`. The shipping app loads only this snapshot — there is no live remote rule fetch. |
 
-The bundled snapshot remains the app's runtime authority for safety classification. If you update rules in this app repo directly, include a sync note explaining whether the change should also land in `gargantua-rules`.
-The current app snapshot is a reviewed Mole-expanded subset, not full Mole parity. When adding Mole-derived paths, call out what was intentionally deferred because it needs command execution, active-file checks, current-version retention, receipt expansion, or external-volume policy.
+### End-to-end flow
 
-Before opening a PR for rules:
+1. Open a rule-only PR against [`gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) using the [Cleanup](https://github.com/inceptyon-labs/gargantua-rules/blob/main/docs/templates/cleanup-rule.yaml) or [Remnant](https://github.com/inceptyon-labs/gargantua-rules/blob/main/docs/templates/remnant-rule.yaml) template.
+2. A maintainer reviews schema + safety classification.
+3. After merge in `gargantua-rules`, the rules are synced into this repo's snapshot under `Sources/GargantuaCore/Resources/cleanup_rules/` or `uninstall_rules/` as a reviewed, batched update.
+4. The next Gargantua release ships the updated snapshot. The app does not load mutable remote rules at runtime.
 
-1. Open rule-only PRs against `inceptyon-labs/gargantua-rules`.
-2. Pick the closest existing file and match its style.
-3. Keep `safety` conservative when a path may contain user data.
-4. Add enough explanation text that a reviewer can understand why the rule is safe, review, or protected.
-5. Validate the rules locally with `Scripts/validate-rules.sh`.
-6. If you add a new category, update the built-in profiles and category UI in the app snapshot.
+If you must change rules directly in this repo (e.g., a release-blocking fix), include a sync note in the PR explaining whether the change should backflow to `gargantua-rules`.
 
-## Validation
+### Schema crib
 
-Run the focused rule checks before opening a PR:
+Full schema and templates live at [gargantua-rules/docs](https://github.com/inceptyon-labs/gargantua-rules/tree/main/docs). The required fields for a cleanup rule:
 
-```bash
-Scripts/validate-rules.sh
+```yaml
+- id: spotify.cache                       # globally unique within the file
+  name: Spotify cache                     # human-readable label
+  category: app_cache                     # see categories list below
+  paths:
+    - "~/Library/Caches/com.spotify.client"
+  safety: safe                            # safe | review | protected
+  regenerates: true                       # does the app rebuild this on next launch?
+  regenerate_command: null                # optional shell hint for the user
+  explanation: |
+    Spotify regenerates this cache on next launch. Login state, downloads,
+    and playlists live elsewhere and are not touched.
 ```
 
-You can scope the checks:
+Active categories are: `browser_cache`, `browser_data`, `system_cache`, `system_logs`, `temp_files`, `trash`, `app_cache`, `app_data`, `dev_artifacts`, `docker`, `homebrew`, `installers`, `similar_images`, `empty_files`, `broken_symlinks`, `ai_models`. Adding a new category is allowed but requires a matching update to the built-in profiles in `Sources/GargantuaCore/Models/CleanupProfile.swift` and the category UI.
+
+### Safety classification
+
+- `safe` — files are clearly disposable or trivially regenerated.
+- `review` — files may contain user preferences, session state, offline data, or sync metadata.
+- `protected` — removing the file could affect system boot, launch services, daemons, or privileged components.
+
+When in doubt, prefer `review`. Destructive flows in the app and in MCP `clean` hard-reject `protected` regardless of any AI-generated explanation.
+
+### Evidence we like in rule PRs
+
+- App name and bundle ID
+- Realistic path samples captured on a test machine
+- Why the files regenerate, or why they should stay `review`-only
+- Notes about app-specific risk, such as offline media, login state, sync databases, or shared containers
+- For Mole-derived paths: what was deliberately deferred (command execution, active-file checks, current-version retention, receipt expansion, external-volume policy)
+
+### Validate locally
+
+Before opening the PR, validate against the bundled schema check and lint:
 
 ```bash
-Scripts/validate-rules.sh cleanup
-Scripts/validate-rules.sh uninstall
+Scripts/validate-rules.sh                 # all rules
+Scripts/validate-rules.sh cleanup         # cleanup rules only
+Scripts/validate-rules.sh uninstall       # remnant rules only
 ```
+
+To see how a rule behaves end-to-end, drop the file into the appropriate snapshot directory in your local clone, then run the app or scan from MCP:
+
+```bash
+# Cleanup rules
+cp my-app.yaml Sources/GargantuaCore/Resources/cleanup_rules/apps/
+
+# Remnant rules
+# extend Sources/GargantuaCore/Resources/uninstall_rules/remnant_locations.yaml
+
+swift run Gargantua          # exercise via the GUI
+swift run GargantuaMCP       # or scan via MCP for a structured dry-run
+```
+
+Mole parity status and the inventory of deferred items live in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md). Use it as the reference for what's intentionally not yet ported.
+
+## Code Validation
 
 For code changes, run Swift tests with coverage and inspect the lowest-covered
 service/model files before adding broad new surface area:
@@ -131,21 +176,6 @@ CI runs mutation testing only when:
 - a PR carries the `mutation-test` label.
 
 See `.github/workflows/mutation.yml`.
-
-## Safety Guidelines
-
-- Use `safe` only when the files are clearly disposable or trivially regenerated.
-- Use `review` when files may contain user preferences, session state, local data, or sync metadata.
-- Use `protected` when removing the file could affect system boot, launch services, daemons, or privileged components.
-
-When in doubt, prefer `review`.
-
-## Evidence We Like In Rule PRs
-
-- App name and bundle ID
-- Realistic path samples from a test machine
-- Why the files regenerate, or why they should stay review-only
-- Notes about app-specific risk, such as offline media, login state, or shared containers
 
 ## MCP Server Contributions
 
