@@ -1,0 +1,257 @@
+# VS Code / Cursor / Zed — app-specific uninstall pack
+#
+# Bundles:
+#   com.microsoft.VSCode                    (Visual Studio Code stable)
+#   com.microsoft.VSCodeInsiders            (Insiders channel)
+#   com.visualstudio.code.oss               (Code - OSS / open-source build)
+#   com.todesktop.230313mzl4w4u92           (Cursor — todesktop-distributed)
+#   dev.zed.Zed                             (Zed editor)
+#   dev.zed.Zed-Preview                     (Zed Preview / Nightly)
+#
+# Trust Layer classification (per app_pack contract):
+#   - safe       : extension-host caches, language-server caches, Copilot
+#                  cache, GPU shader caches, logs, crash dumps
+#   - review     : extension installations (~/.vscode/extensions etc.) — these
+#                  are user-installed plugins; keystroke-customizations and
+#                  Copilot signin would survive elsewhere
+#                  workspaceStorage and globalStorage — encode editor state
+#                  bound to specific projects (recently-opened files,
+#                  per-workspace settings, search history)
+#   - protected  : User/settings.json, User/keybindings.json, User/snippets/,
+#                  User/sync/ (Settings Sync state with user keys), and Cursor
+#                  / VS Code account-token storage
+#
+# Do-not-touch carve-outs:
+#   - User/settings.json, User/keybindings.json, User/snippets/ contain
+#     hand-authored configuration. Removing them is rarely the user's intent
+#     even on uninstall.
+#   - Settings Sync state (User/sync/) holds account-bound encrypted state
+#     and should never be auto-removed.
+#   - Cursor and Copilot store auth tokens in macOS keychain rather than on
+#     disk; we still mark token directories as protected so we don't surprise
+#     users who fall back to disk storage.
+remnant_rules:
+
+  - id: vscode_family_caches
+    name: VS Code / Cursor / Zed caches
+    category: caches
+    path_templates:
+      - "~/Library/Caches/com.microsoft.VSCode"
+      - "~/Library/Caches/com.microsoft.VSCodeInsiders"
+      - "~/Library/Caches/com.visualstudio.code.oss"
+      - "~/Library/Caches/com.todesktop.230313mzl4w4u92"
+      - "~/Library/Caches/dev.zed.Zed"
+      - "~/Library/Caches/dev.zed.Zed-Preview"
+    confidence: 95
+    explanation: Editor caches (asset cache, font cache, GPU shader cache); regenerated on next launch.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+        - dev.zed.Zed
+        - dev.zed.Zed-Preview
+    regenerates: true
+    tags: [app_pack, vscode, cursor, zed, cache]
+
+  - id: vscode_extension_host_caches
+    name: VS Code / Cursor extension-host caches
+    category: caches
+    path_templates:
+      - "~/Library/Application Support/Code/CachedExtensionVSIXs"
+      - "~/Library/Application Support/Code/CachedExtensions"
+      - "~/Library/Application Support/Code/CachedData"
+      - "~/Library/Application Support/Code/Code Cache"
+      - "~/Library/Application Support/Code/GPUCache"
+      - "~/Library/Application Support/Code/ShaderCache"
+      - "~/Library/Application Support/Code - Insiders/CachedExtensionVSIXs"
+      - "~/Library/Application Support/Code - Insiders/CachedExtensions"
+      - "~/Library/Application Support/Code - Insiders/Code Cache"
+      - "~/Library/Application Support/Code - Insiders/GPUCache"
+      - "~/Library/Application Support/Cursor/CachedExtensionVSIXs"
+      - "~/Library/Application Support/Cursor/CachedExtensions"
+      - "~/Library/Application Support/Cursor/Code Cache"
+      - "~/Library/Application Support/Cursor/GPUCache"
+      - "~/Library/Application Support/Cursor/ShaderCache"
+    confidence: 95
+    explanation: Electron-app caches and downloaded extension VSIX archives; regenerated on next launch.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+    regenerates: true
+    tags: [app_pack, vscode, cursor, cache, extension_host]
+
+  - id: vscode_logs
+    name: VS Code / Cursor / Zed logs
+    category: logs
+    path_templates:
+      - "~/Library/Application Support/Code/logs"
+      - "~/Library/Application Support/Code - Insiders/logs"
+      - "~/Library/Application Support/Cursor/logs"
+      - "~/Library/Logs/Zed"
+    confidence: 95
+    explanation: Editor logs, language-server traces, and extension-host crash reports.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+        - dev.zed.Zed
+        - dev.zed.Zed-Preview
+    regenerates: true
+    tags: [app_pack, vscode, cursor, zed, logs]
+
+  - id: vscode_workspace_storage
+    name: VS Code / Cursor workspace storage
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/Code/User/workspaceStorage"
+      - "~/Library/Application Support/Code/User/History"
+      - "~/Library/Application Support/Code - Insiders/User/workspaceStorage"
+      - "~/Library/Application Support/Code - Insiders/User/History"
+      - "~/Library/Application Support/Cursor/User/workspaceStorage"
+      - "~/Library/Application Support/Cursor/User/History"
+    safety: review
+    confidence: 75
+    explanation: Per-workspace UI state, recent searches, and timeline history; encodes work context the user may want to recover.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+    regenerates: false
+    tags: [app_pack, vscode, cursor, workspace]
+
+  - id: vscode_global_storage
+    name: VS Code / Cursor extension global storage
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/Code/User/globalStorage"
+      - "~/Library/Application Support/Code - Insiders/User/globalStorage"
+      - "~/Library/Application Support/Cursor/User/globalStorage"
+    exclude:
+      - "**/github.copilot*/**"
+      - "**/anysphere.cursor*/**"
+      - "**/storage.json"
+    safety: review
+    confidence: 75
+    explanation: Extension-scoped key/value state. Excludes Copilot and Cursor extension state which can carry auth tokens.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+    regenerates: false
+    tags: [app_pack, vscode, cursor, global_storage]
+
+  - id: vscode_extensions
+    name: VS Code / Cursor installed extensions
+    category: support_files
+    path_templates:
+      - "~/.vscode/extensions"
+      - "~/.vscode-insiders/extensions"
+      - "~/.vscode-oss/extensions"
+      - "~/.cursor/extensions"
+    safety: review
+    confidence: 78
+    explanation: User-installed extensions; review because some carry locally-customized state and license activations.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+    regenerates: false
+    tags: [app_pack, vscode, cursor, extensions]
+
+  - id: zed_settings_state
+    name: Zed editor state and conversations
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/Zed/db"
+      - "~/Library/Application Support/Zed/conversations"
+      - "~/Library/Application Support/Zed/extensions"
+      - "~/Library/Application Support/Zed/languages"
+      - "~/Library/Application Support/Zed/prompts"
+    safety: review
+    confidence: 75
+    explanation: Zed local SQLite state, AI conversation history, downloaded extensions and language servers, and user-authored prompts.
+    source:
+      name: Zed
+      bundle_id: dev.zed.Zed
+    applies_to:
+      bundle_ids:
+        - dev.zed.Zed
+        - dev.zed.Zed-Preview
+    regenerates: false
+    tags: [app_pack, zed, state]
+
+  - id: vscode_user_settings_protected
+    name: VS Code / Cursor user settings, keybindings, snippets
+    category: other
+    path_templates:
+      - "~/Library/Application Support/Code/User/settings.json"
+      - "~/Library/Application Support/Code/User/keybindings.json"
+      - "~/Library/Application Support/Code/User/snippets"
+      - "~/Library/Application Support/Code/User/sync"
+      - "~/Library/Application Support/Code - Insiders/User/settings.json"
+      - "~/Library/Application Support/Code - Insiders/User/keybindings.json"
+      - "~/Library/Application Support/Code - Insiders/User/snippets"
+      - "~/Library/Application Support/Code - Insiders/User/sync"
+      - "~/Library/Application Support/Cursor/User/settings.json"
+      - "~/Library/Application Support/Cursor/User/keybindings.json"
+      - "~/Library/Application Support/Cursor/User/snippets"
+      - "~/Library/Application Support/Cursor/User/sync"
+    safety: protected
+    confidence: 80
+    explanation: Hand-authored settings, keybindings, snippets, and Settings Sync state; protected because reproducing these is high effort and Settings Sync carries account-bound encrypted state.
+    source:
+      name: VS Code family
+    applies_to:
+      bundle_ids:
+        - com.microsoft.VSCode
+        - com.microsoft.VSCodeInsiders
+        - com.visualstudio.code.oss
+        - com.todesktop.230313mzl4w4u92
+    regenerates: false
+    tags: [app_pack, vscode, cursor, settings, protected]
+
+  - id: zed_settings_protected
+    name: Zed user settings and keymap
+    category: other
+    path_templates:
+      - "~/.config/zed/settings.json"
+      - "~/.config/zed/keymap.json"
+      - "~/.config/zed/themes"
+      - "~/.config/zed/icon_themes"
+    safety: protected
+    confidence: 80
+    explanation: Hand-authored Zed settings, keymap, and custom themes; protected because reproducing these is high effort.
+    source:
+      name: Zed
+      bundle_id: dev.zed.Zed
+    applies_to:
+      bundle_ids:
+        - dev.zed.Zed
+        - dev.zed.Zed-Preview
+    regenerates: false
+    tags: [app_pack, zed, settings, protected]

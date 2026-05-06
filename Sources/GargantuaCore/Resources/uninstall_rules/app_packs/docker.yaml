@@ -1,0 +1,146 @@
+# Docker Desktop — app-specific uninstall pack
+#
+# Bundle: com.docker.docker
+#
+# Trust Layer classification (per app_pack contract):
+#   - safe       : disposable caches and logs (regenerate on next run)
+#   - review     : VM disks (may hold images user wants), settings, Compose state
+#   - protected  : ~/.docker/config.json (credsStore + saved registry auths),
+#                  ~/.docker/contexts (connection profiles to remote daemons)
+#
+# Do-not-touch carve-outs:
+#   - ~/.docker/config.json is excluded from the .docker config rule below.
+#     Credentials and credsStore wiring are not auto-removable; users who want
+#     those gone should remove them by hand.
+#   - User-mounted bind volumes outside the Docker data directory are not
+#     covered by uninstall — Docker Desktop never owns those paths.
+#
+# Evidence (captured 2026-05-06 on a real install):
+#   ~/.docker, ~/.docker/buildx
+#   ~/Library/Application Support/Docker Desktop
+#   ~/Library/Containers/com.docker.docker
+remnant_rules:
+
+  - id: docker_desktop_vm_disks
+    name: Docker Desktop VM disks
+    category: containers
+    path_templates:
+      - "~/Library/Containers/com.docker.docker/Data/vms"
+    safety: review
+    confidence: 80
+    explanation: Docker Desktop VM disk images can hold images and volumes the user may still want to recover; review before removal.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: false
+    tags: [app_pack, docker, containers, vm]
+
+  - id: docker_desktop_data_state
+    name: Docker Desktop application data
+    category: containers
+    path_templates:
+      - "~/Library/Containers/com.docker.docker/Data"
+    exclude:
+      - "*/vms"
+      - "*/log"
+    safety: review
+    confidence: 75
+    explanation: Docker Desktop application data and Compose state; volumes and named caches may contain work in progress.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: false
+    tags: [app_pack, docker, containers, state]
+
+  - id: docker_desktop_logs
+    name: Docker Desktop logs
+    category: logs
+    path_templates:
+      - "~/Library/Containers/com.docker.docker/Data/log"
+    confidence: 95
+    explanation: Docker daemon and Desktop logs; safe to remove after uninstall.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: true
+    tags: [app_pack, docker, logs]
+
+  - id: docker_desktop_settings
+    name: Docker Desktop settings
+    category: support_files
+    path_templates:
+      - "~/Library/Application Support/Docker Desktop"
+    safety: review
+    confidence: 80
+    explanation: Docker Desktop user settings, factory-reset state, and dashboard config.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: false
+    tags: [app_pack, docker, settings]
+
+  - id: docker_desktop_user_config_dir
+    name: Docker user config directory
+    category: other
+    path_templates:
+      - "~/.docker"
+    exclude:
+      - "config.json"
+      - "contexts/**"
+    safety: review
+    confidence: 75
+    explanation: Docker CLI user config directory (cli plugins, scout cache, daemon.json overrides). Excludes config.json and contexts which carry credentials and remote-daemon profiles.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: false
+    tags: [app_pack, docker, config]
+
+  - id: docker_buildx_cache
+    name: Docker Buildx cache
+    category: caches
+    path_templates:
+      - "~/.docker/buildx/cache"
+    confidence: 95
+    explanation: Buildx local build cache; layers can be rebuilt or pulled again.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: true
+    tags: [app_pack, docker, cache, buildx]
+
+  - id: docker_desktop_credentials_protected
+    name: Docker credentials and remote contexts
+    category: other
+    path_templates:
+      - "~/.docker/config.json"
+      - "~/.docker/contexts"
+    safety: protected
+    confidence: 70
+    explanation: Saved registry credentials (credsStore wiring) and remote-daemon connection profiles. Protected — user must remove these by hand if intended.
+    source:
+      name: Docker Desktop
+      bundle_id: com.docker.docker
+    applies_to:
+      bundle_ids:
+        - com.docker.docker
+    regenerates: false
+    tags: [app_pack, docker, credentials, protected]

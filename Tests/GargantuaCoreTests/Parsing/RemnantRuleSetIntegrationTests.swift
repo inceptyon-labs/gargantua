@@ -23,13 +23,47 @@ struct RemnantRuleSetIntegrationTests {
     @Test("Expected number of remnant rule files loaded")
     func expectedFileCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        #expect(result.filesLoaded == 2)
+        #expect(result.filesLoaded == 7)
     }
 
     @Test("Expected number of remnant rules loaded")
     func expectedRuleCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        #expect(result.rules.count == 28)
+        #expect(result.rules.count == 69)
+    }
+
+    @Test("App packs scope every rule with applies_to.bundle_ids")
+    func appPacksAreScoped() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let appPackRules = result.rules.filter { $0.tags.contains("app_pack") }
+
+        #expect(!appPackRules.isEmpty, "Expected app_pack-tagged rules in vendored snapshot")
+
+        for rule in appPackRules {
+            #expect(
+                rule.appliesTo?.bundleIDs.isEmpty == false,
+                "App-pack rule \(rule.id) must scope itself with applies_to.bundle_ids"
+            )
+        }
+    }
+
+    @Test("App pack credentials and signing artifacts are protected")
+    func appPackProtectedCarveOuts() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let rulesByID = Dictionary(uniqueKeysWithValues: result.rules.map { ($0.id, $0) })
+
+        let protectedIDs = [
+            "docker_desktop_credentials_protected",
+            "xcode_provisioning_profiles_protected",
+            "android_signing_keys_protected",
+            "jetbrains_license_state_protected",
+            "vscode_user_settings_protected",
+            "zed_settings_protected",
+        ]
+
+        for id in protectedIDs {
+            #expect(rulesByID[id]?.safety == .protected_, "\(id) must be protected")
+        }
     }
 
     @Test("Generic remnant coverage includes locations and launch services")
