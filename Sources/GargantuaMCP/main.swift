@@ -157,13 +157,26 @@ dispatcher.register(tool: .status, handler: statusHandler.toolHandler)
 
 // MARK: - explain
 
-// Default explain provider: AI-free shell backed by filesystem metadata.
-// The provider lives in `GargantuaCore` (see
-// `MCPExplainToolHandler.defaultFilesystemProvider`) so its behavior has
-// direct test coverage and the boundary for swapping to an AI-backed
-// source (`AIInferenceEngine`) is a single factory call.
+// Default explain provider: AI-free shell backed by filesystem metadata,
+// enriched with pkgutil receipt provenance when available so MCP clients
+// can render audit-grade explanations like "Owned by package
+// com.docker.docker (v4.30.0) installed 2025-12-04". The provider lives
+// in `GargantuaCore` (see `MCPExplainToolHandler.defaultFilesystemProvider`)
+// so its behavior has direct test coverage and the boundary for swapping
+// to an AI-backed source (`AIInferenceEngine`) is a single factory call.
+//
+// One expander instance is shared across all explain calls so its
+// `pkgutil --pkgs` cache (populated by the receipt-based scanner) stays
+// warm across requests. Per-path lookups call `--file-info` directly and
+// are not cached.
+private let receiptExpander = PackageReceiptExpander()
+private let explainReceiptLookup: MCPExplainToolHandler.ReceiptLookup = { path in
+    receiptExpander.lookupReceipts(forPath: path)
+}
 let explainHandler = MCPExplainToolHandler(
-    explainProvider: MCPExplainToolHandler.defaultFilesystemProvider(),
+    explainProvider: MCPExplainToolHandler.defaultFilesystemProvider(
+        receiptLookup: explainReceiptLookup
+    ),
     log: stderrLog
 )
 dispatcher.register(tool: .explain, handler: explainHandler.toolHandler)
@@ -483,6 +496,7 @@ private final class ResultHolder<T: Sendable>: @unchecked Sendable {
 }
 
 // MARK: - Graceful shutdown
+
 //
 // Install DispatchSource signal handlers so SIGTERM (Docker stop, launchd
 // unload, systemd shutdown) and SIGINT (^C) cancel the SSE listener and

@@ -75,6 +75,14 @@ public struct MCPExplainToolHandler: Sendable {
 // MARK: - Default filesystem-backed provider
 
 public extension MCPExplainToolHandler {
+    /// Lookup function that returns the package receipts claiming a path.
+    ///
+    /// Production wires this to `PackageReceiptExpander.lookupReceipts(forPath:)`
+    /// (see `Sources/GargantuaMCP/main.swift`); tests inject a stub. Returning
+    /// an empty array signals "no receipt evidence for this path" — the
+    /// provider must not treat the empty-array case as an error.
+    typealias ReceiptLookup = @Sendable (String) -> [PackageReceipt]
+
     /// Default AI-free `ExplainProvider` backed by filesystem metadata.
     ///
     /// Behavior:
@@ -97,11 +105,19 @@ public extension MCPExplainToolHandler {
     /// - `lastAccessed` maps to `.modificationDate`: APFS often disables the
     ///   true content-access time, and modification time is the closest
     ///   always-available fallback.
+    /// - When `receiptLookup` returns one or more receipts, the provider
+    ///   surfaces them under `MCPExplainOutput.receipts` so MCP clients can
+    ///   render audit-grade provenance, and prepends a "Owned by package
+    ///   <id> (v<version>) installed <date>." sentence to the explanation.
+    ///   When the receipt lookup fails or returns empty, the provider falls
+    ///   back to the AI-pending shell response unchanged.
     ///
     /// Uses `FileManager.default` directly because `FileManager` is not
     /// `Sendable` and this closure is `@Sendable`. Tests exercise it with
     /// real temporary files.
-    static func defaultFilesystemProvider() -> ExplainProvider {
+    static func defaultFilesystemProvider(
+        receiptLookup: @escaping ReceiptLookup = { _ in [] }
+    ) -> ExplainProvider {
         return { input in
             if input.itemId != nil {
                 throw MCPToolError.invalidParams(
@@ -135,14 +151,61 @@ public extension MCPExplainToolHandler {
                 }
             }
 
+            let receipts = receiptLookup(path)
+            let provenance = receipts.map(MCPReceiptProvenance.init(_:))
+            let baseExplanation = "AI-backed analysis is not yet wired; this item is flagged 'review' by default. Inspect before cleanup."
+            let explanation: String
+            if let leadingProvenance = receiptProvenanceSentence(for: receipts) {
+                explanation = "\(leadingProvenance) \(baseExplanation)"
+            } else {
+                explanation = baseExplanation
+            }
+
             return MCPExplainOutput(
                 name: name,
                 safety: "review",
                 confidence: 50,
-                explanation: "AI-backed analysis is not yet wired; this item is flagged 'review' by default. Inspect before cleanup.",
+                explanation: explanation,
                 size: size,
-                lastAccessed: lastAccessed
+                lastAccessed: lastAccessed,
+                receipts: provenance.isEmpty ? nil : provenance
             )
         }
+    }
+
+    /// Build a one-line "Owned by package <id> (v<version>) installed <date>."
+    /// sentence from receipt evidence, or `nil` when the array is empty.
+    /// Multiple receipts join with "; " so a path claimed by several
+    /// packages still produces a single readable sentence.
+    private static func receiptProvenanceSentence(
+        for receipts: [PackageReceipt]
+    ) -> String? {
+        guard !receipts.isEmpty else { return nil }
+        let parts = receipts.map { receipt -> String in
+            let version = receipt.version.map { " (v\($0))" } ?? ""
+            let installed = receipt.installDate.map { " installed \(Self.dateFormatter.string(from: $0))" } ?? ""
+            return "\(receipt.pkgID)\(version)\(installed)"
+        }
+        return "Owned by package \(parts.joined(separator: "; "))."
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        // Pin POSIX so non-Gregorian system locales (Buddhist, Japanese era,
+        // Hebrew, Persian) do not render `yyyy` in their own calendar — TN1480.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+}
+
+private extension MCPReceiptProvenance {
+    init(_ receipt: PackageReceipt) {
+        self.init(
+            pkgID: receipt.pkgID,
+            pkgVersion: receipt.version,
+            installDate: receipt.installDate
+        )
     }
 }

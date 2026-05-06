@@ -117,4 +117,114 @@ struct PkgUtilOutputParserTests {
         #expect(receipt.absolutePath(for: "Example.app/Contents/Info.plist")
             == "/Applications/Example.app/Contents/Info.plist")
     }
+
+    // MARK: - parseFileInfo
+
+    @Test("parseFileInfo returns one receipt per pkgid stanza")
+    func parseFileInfoMultipleStanzas() {
+        // Real pkgutil --file-info output: leading volume/path block (no
+        // pkgid — gets skipped) followed by one stanza per owning package.
+        let raw = """
+        volume: /
+        path: /System/Library/Frameworks/Foundation.framework
+
+        pkgid: com.apple.files.data-template
+        pkg-version: 26.5
+        install-time: 1777666508
+        uid: 0
+        gid: 0
+        mode: 40755
+
+        pkgid: com.apple.pkg.CoreTypes.1900A28
+        pkg-version: 1.0.0.0.1.1762585687
+        install-time: 1772638705
+        uid: 0
+        gid: 0
+        mode: 40755
+        """
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 2)
+        #expect(receipts[0].pkgID == "com.apple.files.data-template")
+        #expect(receipts[0].version == "26.5")
+        #expect(receipts[0].installDate == Date(timeIntervalSince1970: 1_777_666_508))
+        #expect(receipts[1].pkgID == "com.apple.pkg.CoreTypes.1900A28")
+        #expect(receipts[1].version == "1.0.0.0.1.1762585687")
+    }
+
+    @Test("parseFileInfo returns empty when the path is not in any receipt")
+    func parseFileInfoUnowned() {
+        // pkgutil prints only the leading volume/path block when nothing
+        // claims the path.
+        let raw = """
+        volume: /
+        path: /usr/share/man/man1/pkgutil.1
+        """
+
+        #expect(parser.parseFileInfo(raw).isEmpty)
+    }
+
+    @Test("parseFileInfo accepts stanzas missing pkg-version or install-time")
+    func parseFileInfoPartialStanza() {
+        let raw = """
+        pkgid: com.example.minimal
+        """
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.example.minimal")
+        #expect(receipts[0].version == nil)
+        #expect(receipts[0].installDate == nil)
+    }
+
+    @Test("parseFileInfo on empty stdout returns empty")
+    func parseFileInfoEmpty() {
+        #expect(parser.parseFileInfo("").isEmpty)
+    }
+
+    @Test("parseFileInfo tolerates CRLF line endings")
+    func parseFileInfoCRLF() {
+        let raw = "volume: /\r\npath: /Applications/Foo.app\r\n\r\npkgid: com.example.foo\r\npkg-version: 1.0\r\n"
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.example.foo")
+        #expect(receipts[0].version == "1.0")
+    }
+
+    @Test("parseFileInfo skips lines without a colon mid-stanza")
+    func parseFileInfoSkipsMalformedLines() {
+        let raw = """
+        pkgid: com.example.foo
+        garbage line with no colon
+        pkg-version: 1.0
+        """
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.example.foo")
+        #expect(receipts[0].version == "1.0")
+    }
+
+    @Test("parseFileInfo skips stanzas without a pkgid line")
+    func parseFileInfoSkipsBlocksWithoutPkgID() {
+        // First stanza is the volume/path header (no pkgid), the second is
+        // a real receipt. Only the receipt should come back.
+        let raw = """
+        volume: /
+        path: /Applications/Example.app
+
+        pkgid: com.example.app
+        pkg-version: 1.0
+        """
+
+        let receipts = parser.parseFileInfo(raw)
+
+        #expect(receipts.count == 1)
+        #expect(receipts[0].pkgID == "com.example.app")
+    }
 }

@@ -85,6 +85,82 @@ public struct PkgUtilOutputParser: Sendable {
             .filter { !$0.isEmpty }
     }
 
+    /// Parse the output of `pkgutil --file-info <path>` into the receipts that
+    /// claim ownership of the path.
+    ///
+    /// `--file-info` prints a leading `volume:`/`path:` block describing the
+    /// queried path, then one stanza per owning package:
+    /// ```text
+    /// volume: /
+    /// path: /usr/local/bin/docker
+    ///
+    /// pkgid: com.docker.docker
+    /// pkg-version: 4.30.0
+    /// install-time: 1701734400
+    /// uid: 0
+    /// gid: 0
+    /// mode: 100755
+    ///
+    /// pkgid: com.docker.docker.helper
+    /// ...
+    /// ```
+    /// Stanzas without a `pkgid` line (the leading volume/path block, or
+    /// stray output) are dropped. A path that is not in any receipt produces
+    /// only the leading block, so this function returns `[]`.
+    ///
+    /// Last-wins on duplicate keys within a stanza, matching the
+    /// `parsePackageInfo` precedent. CRLF line endings are normalised to LF
+    /// up front because Swift collapses `\r\n` into one grapheme cluster,
+    /// so `split(separator: "\n")` would otherwise see a single line.
+    public func parseFileInfo(_ stdout: String) -> [PackageReceipt] {
+        let lines = stdout
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+
+        var stanzas: [[String: String]] = []
+        var current: [String: String] = [:]
+
+        func flush() {
+            if !current.isEmpty {
+                stanzas.append(current)
+                current.removeAll(keepingCapacity: true)
+            }
+        }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                flush()
+                continue
+            }
+            guard let separator = trimmed.firstIndex(of: ":") else { continue }
+            let key = trimmed[..<separator]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let value = trimmed[trimmed.index(after: separator)...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            current[key] = value
+        }
+        flush()
+
+        return stanzas.compactMap { stanza -> PackageReceipt? in
+            guard let pkgID = stanza["pkgid"], !pkgID.isEmpty else { return nil }
+            let version = stanza["pkg-version"].flatMap { $0.isEmpty ? nil : $0 }
+            let installDate = stanza["install-time"].flatMap(parseInstallTime)
+            let volume = stanza["volume"].flatMap { $0.isEmpty ? nil : $0 } ?? "/"
+            let location = stanza["install-location"]
+                ?? stanza["location"]
+                ?? "/"
+            return PackageReceipt(
+                pkgID: pkgID,
+                version: version,
+                installDate: installDate,
+                volume: volume,
+                installLocation: location.isEmpty ? "/" : location
+            )
+        }
+    }
+
     // MARK: - Internal
 
     private func parseInstallTime(_ raw: String) -> Date? {

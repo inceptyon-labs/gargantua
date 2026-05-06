@@ -71,6 +71,7 @@ public final class PackageReceiptExpander: @unchecked Sendable {
     private let matcher: PackageMatcher
     private let pkgutilURL: URL
     private let timeout: TimeInterval
+    private let fileInfoTimeout: TimeInterval
 
     private let cacheLock = NSLock()
     private var cachedPackageList: [String]?
@@ -82,13 +83,61 @@ public final class PackageReceiptExpander: @unchecked Sendable {
         parser: PkgUtilOutputParser = PkgUtilOutputParser(),
         matcher: PackageMatcher = PackageMatcher(),
         pkgutilURL: URL = URL(fileURLWithPath: pkgutilPath),
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        fileInfoTimeout: TimeInterval = 5
     ) {
         self.runner = runner
         self.parser = parser
         self.matcher = matcher
         self.pkgutilURL = pkgutilURL
         self.timeout = timeout
+        // Path-oriented `--file-info` is a single inode lookup, not a full BOM
+        // walk. The MCP explain provider runs synchronously on the transport
+        // thread, so a hung pkgutil would block every other MCP request for
+        // up to `timeout` seconds. Default to a tighter 5s budget here.
+        self.fileInfoTimeout = fileInfoTimeout
+    }
+
+    /// Look up the package receipts that claim ownership of `path`.
+    ///
+    /// Wraps `pkgutil --file-info <path>`. The result is the list of
+    /// receipts that claim the path; an empty list means either `pkgutil`
+    /// has no receipts for the path or the call failed (the underlying
+    /// error is logged but never thrown so explain-style callers can degrade
+    /// gracefully when receipts are unavailable).
+    ///
+    /// Unlike `expand(for:)`, this lookup is **path-oriented** — it asks
+    /// "which packages claim this path?" rather than "which packages match
+    /// this app?". It is intended for explain-time provenance enrichment
+    /// where a single path is the input.
+    ///
+    /// Results are not cached; receipt-by-path queries are expected to be
+    /// one-shot per explain call, and `pkgutil --file-info` is fast.
+    public func lookupReceipts(forPath path: String) -> [PackageReceipt] {
+        guard !path.isEmpty else { return [] }
+
+        let output: ProcessOutput
+        do {
+            output = try runner.run(
+                executable: pkgutilURL,
+                arguments: ["--file-info", path],
+                timeout: fileInfoTimeout
+            )
+        } catch {
+            logger.warning(
+                "pkgutil --file-info failed for \(path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
+
+        guard output.exitCode == 0 else {
+            logger.debug(
+                "pkgutil --file-info \(path, privacy: .public) exited \(output.exitCode, privacy: .public)"
+            )
+            return []
+        }
+
+        return parser.parseFileInfo(output.stdout)
     }
 
     /// Drop all cached `pkgutil` output. The next `expand(...)` will refetch.

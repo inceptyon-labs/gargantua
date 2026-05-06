@@ -280,6 +280,38 @@ public struct MCPExplainInput: Codable, Sendable, Equatable {
     }
 }
 
+/// Receipt provenance attached to an explained item.
+///
+/// Mirrors the relevant fields of `PackageReceipt` so an MCP client can
+/// render audit-grade explanations like "we found this because
+/// com.docker.docker (v4.30.0) installed it on 2025-12-04". Multiple
+/// packages can claim a single path, so explain output carries an array.
+public struct MCPReceiptProvenance: Codable, Sendable, Equatable {
+    /// Reverse-DNS package identifier (e.g., `com.docker.docker`).
+    public let pkgID: String
+    /// Package version when readable from the receipt.
+    public let pkgVersion: String?
+    /// Install timestamp when readable from the receipt.
+    public let installDate: Date?
+
+    /// Creates a receipt provenance entry.
+    public init(
+        pkgID: String,
+        pkgVersion: String? = nil,
+        installDate: Date? = nil
+    ) {
+        self.pkgID = pkgID
+        self.pkgVersion = pkgVersion
+        self.installDate = installDate
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pkgID = "pkg_id"
+        case pkgVersion = "pkg_version"
+        case installDate = "install_date"
+    }
+}
+
 /// Explanation details returned for one scan item or path.
 public struct MCPExplainOutput: Codable, Sendable, Equatable {
     /// Display name for the explained item.
@@ -294,6 +326,10 @@ public struct MCPExplainOutput: Codable, Sendable, Equatable {
     public let size: String?
     /// Optional last access timestamp.
     public let lastAccessed: Date?
+    /// Receipts that claim the explained path, when receipt evidence is
+    /// available. Omitted (encoded as `null`) when the path is not owned
+    /// by any package receipt.
+    public let receipts: [MCPReceiptProvenance]?
 
     /// Creates an explanation output payload.
     public init(
@@ -302,7 +338,8 @@ public struct MCPExplainOutput: Codable, Sendable, Equatable {
         confidence: Int,
         explanation: String,
         size: String? = nil,
-        lastAccessed: Date? = nil
+        lastAccessed: Date? = nil,
+        receipts: [MCPReceiptProvenance]? = nil
     ) {
         self.name = name
         self.safety = safety
@@ -310,10 +347,11 @@ public struct MCPExplainOutput: Codable, Sendable, Equatable {
         self.explanation = explanation
         self.size = size
         self.lastAccessed = lastAccessed
+        self.receipts = receipts
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, safety, confidence, explanation, size
+        case name, safety, confidence, explanation, size, receipts
         case lastAccessed = "last_accessed"
     }
 }
