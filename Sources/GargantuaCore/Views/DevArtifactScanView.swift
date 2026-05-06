@@ -696,7 +696,14 @@ extension DevArtifactScanView {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
-                    ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
+                    ?? CompositeScanAdapter(
+                        primary: NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots),
+                        bestEffort: [
+                            CommandActionScanAdapter.loadDefaults(
+                                categories: Set(profile.categories)
+                            )
+                        ]
+                    )
                 let results = try await adapter.scan(progress: scanProgress, observer: pathStream)
                 guard !Task.isCancelled else { return }
 

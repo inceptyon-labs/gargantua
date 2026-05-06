@@ -17,7 +17,12 @@ struct CleanupProfileTests {
     @Test("Dev Purge profile is scoped to dev artifact categories only")
     func devPurgeCategories() {
         let purge = CleanupProfile.devPurge
-        #expect(purge.categories == ["dev_artifacts", "docker", "homebrew"])
+        // developer_tool_command surfaces tool-mediated cleanup commands
+        // (simctl, pnpm store prune, go clean) under the same Dev Purge
+        // umbrella as the path-based dev artifact rules.
+        #expect(Set(purge.categories) == Set([
+            "dev_artifacts", "docker", "homebrew", "developer_tool_command"
+        ]))
         #expect(!purge.categories.contains("browser_cache"))
         #expect(!purge.categories.contains("system_cache"))
         #expect(!purge.categories.contains("temp_files"))

@@ -79,6 +79,7 @@ extension CleanupProfile {
         categories: [
             "browser_cache", "system_cache", "system_logs", "temp_files", "trash",
             "app_cache", "dev_artifacts", "docker", "homebrew", "installers",
+            "developer_tool_command",
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -110,6 +111,7 @@ extension CleanupProfile {
             "browser_cache", "browser_data", "system_cache", "system_logs",
             "temp_files", "trash", "app_cache", "app_data", "dev_artifacts", "docker", "homebrew",
             "installers", "similar_images", "empty_files", "broken_symlinks", "ai_models",
+            "developer_tool_command",
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -131,7 +133,7 @@ extension CleanupProfile {
         id: "devPurge",
         name: "Dev Purge",
         description: "Developer artifacts + Docker + Homebrew only",
-        categories: ["dev_artifacts", "docker", "homebrew"],
+        categories: ["dev_artifacts", "docker", "homebrew", "developer_tool_command"],
         safetyOverrides: [
             SafetyOverride(
                 condition: "age > 30d",

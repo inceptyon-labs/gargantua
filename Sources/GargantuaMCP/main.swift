@@ -99,9 +99,20 @@ private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requeste
 // a tool-domain `.failure(...)` result, not a JSON-RPC error. The call
 // itself was well-formed; execution failed. `ScanAdapterError` already
 // conforms to `LocalizedError` with a user-facing message.
+//
+// Command-action rules surface alongside path rules via a parallel adapter.
+// Failures in the command-action adapter never break the path scan; an empty
+// result list is the worst case.
 private let scanRunner: MCPScanToolHandler.Scanner = { profile in
-    let adapter = try NativeScanAdapter.loadDefaults(profile: profile)
-    return try runBlocking { try await adapter.scan() }
+    let pathAdapter = try NativeScanAdapter.loadDefaults(profile: profile)
+    let commandAdapter = CommandActionScanAdapter.loadDefaults(
+        categories: Set(profile.categories)
+    )
+    return try runBlocking {
+        let pathResults = try await pathAdapter.scan()
+        let commandResults = (try? await commandAdapter.scan(progress: nil)) ?? []
+        return pathResults + commandResults
+    }
 }
 
 let scanHandler = MCPScanToolHandler(

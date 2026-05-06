@@ -62,22 +62,26 @@ public final class CleanupEngine: Sendable {
     private let homeDirectory: URL
     private let trashMover: any TrashMoving
     private let protectedRootPolicy: ProtectedRootPolicy
+    private let commandActionRunner: CommandActionCleanupRouter
 
     public init() {
         self.homeDirectory = FileManager.default.homeDirectoryForCurrentUser
         self.trashMover = FinderFirstTrashMover()
         self.protectedRootPolicy = .loadDefault()
+        self.commandActionRunner = CommandActionCleanupRouter.production()
     }
 
     /// Test-only initializer. Use the default `init()` in app code.
     internal init(
         homeDirectoryForTesting: URL,
         trashMover: any TrashMoving = FinderFirstTrashMover(),
-        protectedRootPolicy: ProtectedRootPolicy = .loadDefault()
+        protectedRootPolicy: ProtectedRootPolicy = .loadDefault(),
+        commandActionRunner: CommandActionCleanupRouter = .disabled
     ) {
         self.homeDirectory = homeDirectoryForTesting
         self.trashMover = trashMover
         self.protectedRootPolicy = protectedRootPolicy
+        self.commandActionRunner = commandActionRunner
     }
 
     /// Remove the given scan results with the selected cleanup method.
@@ -130,6 +134,15 @@ public final class CleanupEngine: Sendable {
 
     @MainActor
     private func cleanSingle(url: URL, item: ScanResult, method: CleanupMethod) async -> CleanupItemResult {
+        // Command-action items are routed through the executor regardless of
+        // the requested `method` — `path` would try to trash a string like
+        // "xcrun simctl delete unavailable", which is not what the user
+        // confirmed. The executor writes its own kind: command audit entry
+        // with the captured tool version, exit code, and arguments.
+        if item.isCommandAction {
+            return commandActionRunner.run(item: item, confirmationMethod: confirmationTier(for: [item]))
+        }
+
         if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
             return CleanupItemResult(
                 item: item,

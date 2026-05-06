@@ -252,7 +252,14 @@ public struct DeepCleanView: View {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
-                    ?? NativeScanAdapter.loadDefaults(profile: profile)
+                    ?? CompositeScanAdapter(
+                        primary: NativeScanAdapter.loadDefaults(profile: profile),
+                        bestEffort: [
+                            CommandActionScanAdapter.loadDefaults(
+                                categories: Set(profile.categories)
+                            )
+                        ]
+                    )
                 let results = try await adapter.scan(
                     progress: session.scanProgress,
                     observer: session.pathStream
