@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// swiftlint:disable type_body_length
+// MLX engine test suite covers fixture loading, error paths, lifecycle,
+// and idle-unload across many scenarios. Splitting would scatter the
+// shared MLX-mock plumbing without making the suite easier to read.
+
 @Suite("MLXInferenceEngine")
 @MainActor
 struct MLXInferenceEngineTests {
@@ -544,3 +549,4 @@ struct MLXInferenceEngineTests {
         return dir
     }
 }
+// swiftlint:enable type_body_length

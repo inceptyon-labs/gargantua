@@ -206,7 +206,11 @@ public struct DuplicateFinderView: View {
         }
         .toggleStyle(.switch)
         .controlSize(.mini)
-        .help("Off (default): show only duplicates inside ~/Documents, ~/Downloads, ~/Desktop, ~/Pictures, ~/Movies, ~/Music — and hide app-managed sub-trees like ~/Documents/Adobe. On: surface every byte-identical group fclones found, including dependency trees and system caches.")
+        .help(
+            "Off (default): show only duplicates inside ~/Documents, ~/Downloads, ~/Desktop, ~/Pictures, "
+                + "~/Movies, ~/Music — and hide app-managed sub-trees like ~/Documents/Adobe. "
+                + "On: surface every byte-identical group fclones found, including dependency trees and system caches."
+        )
     }
 
     private func summaryLabel(_ text: String) -> some View {
@@ -240,7 +244,13 @@ public struct DuplicateFinderView: View {
                 .foregroundStyle(GargantuaColors.ink2)
 
             if filterIsHidingEverything {
-                Text("\(hidden.groups) duplicate group\(hidden.groups == 1 ? "" : "s") (\(hidden.files) file\(hidden.files == 1 ? "" : "s"), \(AlertItem.formatBytes(hidden.reclaimableBytes))) live outside ~/Documents, ~/Downloads, ~/Desktop, ~/Pictures, ~/Movies, ~/Music — or inside app-managed sub-trees like ~/Documents/Adobe. Clear dependency trees and caches via Deep Clean.")
+                Text(
+                    "\(hidden.groups) duplicate group\(hidden.groups == 1 ? "" : "s") "
+                        + "(\(hidden.files) file\(hidden.files == 1 ? "" : "s"), "
+                        + "\(AlertItem.formatBytes(hidden.reclaimableBytes))) live outside ~/Documents, "
+                        + "~/Downloads, ~/Desktop, ~/Pictures, ~/Movies, ~/Music — or inside "
+                        + "app-managed sub-trees like ~/Documents/Adobe. Clear dependency trees and caches via Deep Clean."
+                )
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
                     .multilineTextAlignment(.center)

@@ -12,6 +12,10 @@ public enum EcosystemDetectionState: Equatable {
     case complete
 }
 
+// swiftlint:disable type_body_length
+// Encapsulates the full Dev Purge flow (detection → category selection →
+// scan → results) in one screen. Tracked for split under the refactor bean.
+
 // MARK: - Dev Artifact Scan View
 
 /// Category-based view for scanning and cleaning developer artifacts.

@@ -2,6 +2,10 @@ import Foundation
 import OSLog
 import SwiftUI
 
+// swiftlint:disable type_body_length
+// Container coordinates scanning, clustering, AI cluster suggestions,
+// and the inner FileHealthView. Tracked for split under the refactor bean.
+
 private let logger = Logger(subsystem: "com.gargantua.core", category: "FileHealthContainerView")
 
 // MARK: - File Health Container View

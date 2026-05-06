@@ -3,6 +3,12 @@ import os
 import Testing
 @testable import GargantuaCore
 
+// swiftlint:disable line_length type_body_length
+// JSONL test fixtures — see ClaudeCodeStreamJSONParserTests.swift for rationale.
+// type_body_length is disabled because each test scenario is a self-contained
+// fixture; splitting the suite would scatter shared FakeClaudeCodeProcessExecutor
+// helpers without simplifying anything.
+
 @Suite("Claude Code Agent Tier 3")
 struct ClaudeCodeAgentTests {
     @Test("CLI resolver uses configured executable path")
@@ -494,3 +500,4 @@ private final class LockedArray<Element>: @unchecked Sendable {
         return values
     }
 }
+// swiftlint:enable line_length type_body_length

@@ -2,6 +2,13 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// swiftlint:disable line_length type_body_length
+// Test fixtures embed real Claude Code JSONL stream records inline as
+// raw strings. Each record is one logical JSON line by spec; breaking
+// them across source lines would corrupt the assertion data.
+// type_body_length is disabled because each scenario is a self-contained
+// session-controller test sharing helpers; splitting buys nothing.
+
 @Suite("ClaudeCodeAgentSessionController")
 @MainActor
 struct ClaudeCodeAgentSessionControllerTests {
@@ -633,3 +640,4 @@ private final class ControllerFakeProcessExecutor: ClaudeCodeAgentProcessExecuti
         lock.unlock()
     }
 }
+// swiftlint:enable line_length type_body_length

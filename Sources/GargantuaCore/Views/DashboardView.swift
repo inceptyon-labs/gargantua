@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+// swiftlint:disable file_length
+// File-length over the 1000-line ceiling because this is the cockpit screen
+// — many sub-sections (alerts, roadmap, metrics) live in one file by design.
+// Tracked for refactor in a separate bean.
+
 // MARK: - Dashboard View
 
 /// Landing screen that turns raw system metrics and local scan evidence into a cleanup roadmap.
@@ -305,7 +310,9 @@ private extension DashboardView {
             return "The triage scan is checking lightweight local rules and grouping findings by the tool that should handle them."
         }
         if !hasRunTriageScan {
-            return "Triage checks caches, logs, trash, installers, and developer artifacts. It does not uninstall apps or run duplicate matching. Its job is to rank which deeper tool you should open first."
+            return "Triage checks caches, logs, trash, installers, and developer artifacts. "
+                + "It does not uninstall apps or run duplicate matching. "
+                + "Its job is to rank which deeper tool you should open first."
         }
         if session.triageIsStale {
             return "The last triage finished \(session.triageAgeLabel). Disk state may have shifted — re-run before you act on the roadmap below."

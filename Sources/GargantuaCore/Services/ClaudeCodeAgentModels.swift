@@ -297,6 +297,9 @@ public enum ClaudeCodeAgentPromptBuilder {
     ) -> String {
         let trimmedContext = userContext.trimmingCharacters(in: .whitespacesAndNewlines)
         let context = trimmedContext.isEmpty ? template.placeholder : trimmedContext
+        // swiftlint:disable line_length
+        // Agent system prompt — line breaks would change the prompt's
+        // meaning, so the heredoc lines stay as written.
         return """
         You are running inside Gargantua's Tier 3 Claude Code agent mode.
 
@@ -327,6 +330,7 @@ public enum ClaudeCodeAgentPromptBuilder {
         - Use only `item_ids` returned by a prior `mcp__gargantua__scan` call. Do not invent IDs or pass app-bundle paths. If a recommendation isn't covered by a scan ID (e.g. an installed app), describe it briefly in prose and direct the user to Smart Uninstaller — do NOT include it in the clean tool call.
         - Keep prose minimal — one or two sentences naming the categories you're proposing. The modal is the report. Do not create files. Do not use shell output redirection (>, >>, tee, /dev/stdout to file) — Claude Code's sandbox blocks these and the redirected data is lost.
         """
+        // swiftlint:enable line_length
     }
 
     /// Builds a post-scheduled-scan audit prompt using the supplied scan summary.
@@ -334,6 +338,8 @@ public enum ClaudeCodeAgentPromptBuilder {
     /// `--disallowedTools` for these sessions and the prompt must stay
     /// prose-only.
     public static func scheduledAuditPrompt(summary: ScheduledScanSummary) -> String {
+        // swiftlint:disable line_length
+        // Agent system prompt — see comment in defaultPrompt(template:userContext:).
         let context = """
         Scheduled scan completed at \(summary.date.formatted(date: .abbreviated, time: .shortened)).
         Profile: \(summary.profileID)
@@ -363,6 +369,7 @@ public enum ClaudeCodeAgentPromptBuilder {
         - Do not use shell output redirection (>, >>, tee, /dev/stdout to file) — Claude Code's sandbox blocks these and the redirected data is lost. Hold scan results in memory and report findings inline as text.
         - Return a concise transcript-ready maintenance audit report with evidence, proposed actions, and any skipped risky items.
         """
+        // swiftlint:enable line_length
     }
 }
 

@@ -47,6 +47,10 @@ public enum MLXInferenceError: Error, LocalizedError {
 /// chat turn, runs it through `ChatSession`, and returns the full response.
 /// Generation parameters are tuned for short advisory text: low temperature,
 /// capped at a handful of sentences.
+// swiftlint:disable type_body_length
+// Class wraps lifecycle (load/unload), idle eviction timer, generation,
+// and warmup probes; cohesion outweighs file-split benefit. Tracked for
+// review under the refactor bean.
 @MainActor
 public final class MLXInferenceEngine: AIInferenceEngine {
     public let kind: AIEnginePreference = .mlx

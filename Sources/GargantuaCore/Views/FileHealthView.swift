@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+// swiftlint:disable type_body_length
+// Single-screen flow combining cluster results, similarity controls,
+// and bulk-action footer. Tracked for split under the refactor bean.
+
 // MARK: - File Health View
 
 /// File Health review UI fed by ``CzkawkaAdapter`` output.

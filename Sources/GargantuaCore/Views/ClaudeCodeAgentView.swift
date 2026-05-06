@@ -3,6 +3,11 @@ import SwiftUI
 import AppKit
 #endif
 
+// swiftlint:disable file_length type_body_length
+// Agent control surface — wraps configuration, transcript, prompt presets,
+// gate prompts, and run controls in one screen. Tracked for split into
+// per-section views under a separate refactor bean.
+
 public struct ClaudeCodeAgentView: View {
     @StateObject private var controller: ClaudeCodeAgentSessionController
     @State private var selectedTemplate: ClaudeCodeAgentPromptTemplate = .investigateSpace
@@ -470,7 +475,7 @@ public struct ClaudeCodeAgentView: View {
     /// who bump out of the cap need to raise the ceiling in Settings.
     private func rerunWithMoreTurns() {
         var configuration = configurationStore.load()
-        configuration.maxTurns = configuration.maxTurns + 5
+        configuration.maxTurns += 5
         configurationStore.save(configuration)
         controller.restart()
     }
