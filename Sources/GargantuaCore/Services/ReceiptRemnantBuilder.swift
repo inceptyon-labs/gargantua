@@ -40,7 +40,7 @@ public struct ReceiptRemnantBuilder: Sendable {
     ]
 
     private let protectedRoots: ProtectedRootPolicy
-    private let fileManager: FileManager
+    nonisolated(unsafe) private let fileManager: FileManager
 
     public init(
         protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy.loadDefault(),
