@@ -1,0 +1,29 @@
+rules:
+  - id: go_clean_cache
+    name: Go build cache
+    tool: go
+    arguments:
+      - clean
+      - -cache
+    safety: safe
+    confidence: 95
+    explanation: |
+      Removes the Go build cache (`go env GOCACHE`). Rebuild times go up on
+      the next compile while the cache rebuilds, but no source, no module
+      downloads, and no GOPATH state are touched. The module cache (`-modcache`)
+      is intentionally not included — re-downloading modules costs network
+      and is gated behind a future review-tier rule.
+    category: developer_tool_command
+    regenerates: true
+    regenerate_command: "go build (cache rebuilds on demand)"
+    affected_roots:
+      - "~/Library/Caches/go-build"
+      - "~/.cache/go-build"
+    preconditions:
+      timeout_seconds: 60
+    source:
+      name: Go
+      bundle_id: org.golang.go
+    tags:
+      - go
+      - build-cache

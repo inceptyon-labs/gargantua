@@ -1,0 +1,28 @@
+rules:
+  - id: pnpm_store_prune
+    name: pnpm content-addressable store (unreferenced)
+    tool: pnpm
+    arguments:
+      - store
+      - prune
+    safety: safe
+    confidence: 90
+    explanation: |
+      Removes unreferenced packages from pnpm's global content-addressable
+      store. Anything still linked from a project's node_modules is kept.
+      Re-fetched from the registry on the next install if needed.
+    category: developer_tool_command
+    regenerates: true
+    regenerate_command: "pnpm install"
+    affected_roots:
+      - "~/Library/pnpm/store"
+      - "~/.local/share/pnpm/store"
+      - "~/.pnpm-store"
+    preconditions:
+      timeout_seconds: 120
+    source:
+      name: pnpm
+      bundle_id: com.pnpm.pnpm
+    tags:
+      - node
+      - package-manager

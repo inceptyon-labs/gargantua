@@ -88,6 +88,7 @@ let package = Package(
             path: "Sources/GargantuaCore",
             resources: [
                 .copy("Resources/cleanup_rules"),
+                .copy("Resources/command_rules"),
                 .copy("Resources/uninstall_rules"),
                 .copy("Resources/safety_policy"),
                 .copy("Resources/Brand"),

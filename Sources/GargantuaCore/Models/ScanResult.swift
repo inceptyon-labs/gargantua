@@ -73,7 +73,7 @@ public struct ScanResult: Codable, Sendable, Identifiable {
 }
 
 /// Attribution for the app or process that created a scan item.
-public struct SourceAttribution: Codable, Sendable {
+public struct SourceAttribution: Codable, Sendable, Equatable {
     /// Display name (e.g., "Google Chrome").
     public let name: String
 
