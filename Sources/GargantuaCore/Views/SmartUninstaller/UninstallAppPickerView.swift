@@ -7,6 +7,38 @@ private enum PickerColumn {
     static let checkboxLane: CGFloat = 32
     static let size: CGFloat = 80
     static let lastUsed: CGFloat = 110
+    /// Trailing lane that holds the per-row Confidence Orbit. Width matches
+    /// the orbit's intrinsic 24pt frame plus a touch of breathing room so the
+    /// indicator doesn't kiss the row's right edge.
+    static let orbit: CGFloat = 28
+}
+
+/// Maps `viewModel.categoryCounts` and `AppInfo` flags onto the inputs of the
+/// shared ``ConfidenceOrbit`` component.
+///
+/// Pre-scan, the picker has no per-app safety classification — there is no
+/// plan yet — so the orbit is intentionally a *coverage* indicator: how much
+/// remnant signal density we already have for this app, color-anchored by
+/// whether the app itself sits in protected territory.
+enum UninstallPickerOrbit {
+    /// Map a category count onto the 0–100 confidence percent that
+    /// ``ConfidenceOrbit`` consumes. Buckets at every 20% so the rendered
+    /// bar count steps 1 → 5 monotonically with `count`.
+    static func confidencePercent(forCategoryCount count: Int?) -> Int {
+        guard let count, count > 0 else { return 0 }
+        let total = RemnantCategory.allCases.count
+        guard total > 0 else { return 0 }
+        let pct = Double(count) / Double(total) * 100.0
+        return min(100, max(0, Int(pct.rounded())))
+    }
+
+    /// Pick a safety color for the orbit. System-app rows always read
+    /// `protected_` because uninstalling them is the dangerous path; every
+    /// other row reads `review` (accretion-disc amber) — the neutral default
+    /// when no plan classification has been computed yet.
+    static func safety(forApp app: AppInfo) -> SafetyLevel {
+        app.isSystemApp ? .protected_ : .review
+    }
 }
 
 /// App picker step of the Smart Uninstaller flow.
@@ -144,6 +176,12 @@ struct UninstallAppPickerView: View {
                 onTap: { viewModel.applySort(.lastUsed) }
             )
             .frame(width: PickerColumn.lastUsed, alignment: .trailing)
+
+            // No header for the orbit lane — it's a glance indicator, not a
+            // sortable column. Reserve the width so row data lines up with
+            // the lane below.
+            Color.clear
+                .frame(width: PickerColumn.orbit, height: 1)
         }
         .padding(.horizontal, GargantuaSpacing.space5)
         .padding(.vertical, GargantuaSpacing.space2)
@@ -552,7 +590,38 @@ private struct AppRow: View {
 
             lastUsedColumn
                 .frame(width: PickerColumn.lastUsed, alignment: .trailing)
+
+            orbitColumn
+                .frame(width: PickerColumn.orbit, alignment: .center)
         }
+    }
+
+    /// Trailing per-row Confidence Orbit. The signature Gargantua signal
+    /// indicator finally lands on the picker — DESIGN.md calls it the brand's
+    /// orbit ring, and ``ConfidenceOrbit`` is the reusable component already
+    /// shared by Dense Scan and Duplicate Finder. Pre-scan, "confidence"
+    /// reads as remnant coverage density (categoryCount over total
+    /// `RemnantCategory.allCases`), and safety is `.protected_` for system
+    /// apps and `.review` for everything else (no plan to classify yet). The
+    /// numeric category count moves to a hover tooltip per the brand-element
+    /// brief; VoiceOver still reads the count via the row's accessibility
+    /// label, so screen-reader users don't lose the signal.
+    private var orbitColumn: some View {
+        ConfidenceOrbit(
+            confidence: UninstallPickerOrbit.confidencePercent(forCategoryCount: categoryCount),
+            safety: UninstallPickerOrbit.safety(forApp: app)
+        )
+        .help(orbitHelpText)
+        .accessibilityHidden(true)
+    }
+
+    private var orbitHelpText: String {
+        guard let count = categoryCount, count > 0 else {
+            return "No leftover-category signal yet"
+        }
+        let total = RemnantCategory.allCases.count
+        let label = count == 1 ? "category" : "categories"
+        return "\(count) of \(total) leftover \(label) for this app"
     }
 
     /// Right-aligned size cell. Always renders both rows (value + spacer
@@ -576,9 +645,12 @@ private struct AppRow: View {
         }
     }
 
-    /// Right-aligned last-used cell. The relative date sits on top; the
-    /// remnant-category caption sits underneath so async category-count
-    /// arrival doesn't shift the row height.
+    /// Right-aligned last-used cell. The relative date sits on top; an
+    /// invisible caption-line placeholder sits underneath so the column
+    /// height stays in lock-step with `sizeColumn`. The category-count
+    /// caption that previously lived here moved into the trailing
+    /// `orbitColumn`'s hover tooltip — the orbit *is* that signal now, and
+    /// duplicating the count next to it just adds visual noise.
     private var lastUsedColumn: some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(app.lastUsedDate.map(relativeDate) ?? "—")
@@ -588,18 +660,11 @@ private struct AppRow: View {
                 .lineLimit(1)
                 .accessibilityHidden(app.lastUsedDate == nil)
 
-            Text(categoryCaption ?? "—")
+            Text("—")
                 .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .opacity(categoryCaption == nil ? 0 : 1)
-                .lineLimit(1)
-                .accessibilityHidden(categoryCaption == nil)
+                .opacity(0)
+                .accessibilityHidden(true)
         }
-    }
-
-    private var categoryCaption: String? {
-        guard let count = categoryCount, count > 0 else { return nil }
-        return count == 1 ? "1 category" : "\(count) categories"
     }
 
     private func signaturePill(valid: Bool) -> some View {
