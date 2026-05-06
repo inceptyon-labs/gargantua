@@ -42,6 +42,14 @@ jobs:
       - name: Print Swift version
         run: swift --version
 
+      # mlx-swift's BuildMetallibPlugin shells out to `xcrun metal` to
+      # compile its shaders; the macos-15 runner doesn't ship the Metal
+      # Toolchain by default, so the prebuild step fails before any test
+      # gets to run. Download the component once per job — output is a
+      # silent install, exit-coded.
+      - name: Install Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
       - name: Test with coverage
         run: swift test --enable-code-coverage
 
