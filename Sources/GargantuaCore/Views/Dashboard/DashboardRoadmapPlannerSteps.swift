@@ -91,7 +91,7 @@ private extension DashboardRoadmapPlanner {
                 title: "Smart Uninstaller",
                 status: "Manual app pass",
                 detail: "Use when large apps or remnants are the real target. Triage does not decide which apps you want removed.",
-                evidence: ["apps", "remnants", "user intent"],
+                evidence: smartUninstallerEvidence(extra: ["user intent"]),
                 systemImage: "trash.slash",
                 selection: "smartUninstaller"
             ),
@@ -126,7 +126,7 @@ private extension DashboardRoadmapPlanner {
                 title: "Smart Uninstaller",
                 status: "Manual app pass",
                 detail: "Look for large apps and remnants that triage intentionally avoids because app removal needs user intent.",
-                evidence: ["apps", "remnants"],
+                evidence: smartUninstallerEvidence(extra: ["remnants"]),
                 systemImage: "trash.slash",
                 selection: "smartUninstaller"
             ),
@@ -166,20 +166,30 @@ private extension DashboardRoadmapPlanner {
             rank += 1
         }
 
-        let followUps = [
+        let followUpCandidates: [DashboardRoadmapStep] = [
+            navigationStep(
+                id: "devPurge",
+                rank: 0,
+                title: "Dev Artifact Purge",
+                status: "Developer cleanup",
+                detail: "Node, Docker, Homebrew, Xcode, and build outputs. Triage on the Light profile does not probe these — open this tool to scan them directly.",
+                evidence: ["node_modules", "Docker", "build caches"],
+                systemImage: "hammer",
+                selection: "devPurge"
+            ),
             navigationStep(
                 id: "smartUninstaller",
-                rank: rank,
+                rank: 0,
                 title: "Smart Uninstaller",
                 status: "Manual follow-up",
                 detail: "Use after reclaimable groups if installed apps or orphaned remnants are the likely source.",
-                evidence: ["apps + remnants", "not triage-owned"],
+                evidence: smartUninstallerEvidence(extra: ["not triage-owned"]),
                 systemImage: "trash.slash",
                 selection: "smartUninstaller"
             ),
             navigationStep(
                 id: "duplicateFinder",
-                rank: rank + 1,
+                rank: 0,
                 title: "Duplicate Finder",
                 status: "Deeper pass",
                 detail: "Run once the obvious cleanup is handled. Duplicate matching is slower and needs explicit review.",
@@ -189,7 +199,7 @@ private extension DashboardRoadmapPlanner {
             ),
             navigationStep(
                 id: "diskExplorer",
-                rank: rank + 2,
+                rank: 0,
                 title: "Disk Explorer",
                 status: "Verify space",
                 detail: "Use if free space is still tight after the recommended cleanup passes.",
@@ -197,10 +207,29 @@ private extension DashboardRoadmapPlanner {
                 systemImage: "internaldrive",
                 selection: "diskExplorer"
             ),
-        ].filter { followUp in
-            !nextSteps.contains { $0.id == followUp.id }
+        ].filter { candidate in
+            !nextSteps.contains { $0.id == candidate.id }
         }
-        nextSteps.append(contentsOf: followUps)
+
+        // Apply contiguous ranks after the triage-derived nextSteps so the
+        // numbering stays clean even when one of the candidates was already
+        // promoted (e.g. Dev Purge surfacing as a triage match).
+        for (offset, step) in followUpCandidates.enumerated() {
+            nextSteps.append(
+                DashboardRoadmapStep(
+                    id: step.id,
+                    rank: rank + offset,
+                    title: step.title,
+                    status: step.status,
+                    detail: step.detail,
+                    evidence: step.evidence,
+                    actionLabel: step.actionLabel,
+                    systemImage: step.systemImage,
+                    action: step.action,
+                    reclaimableBytes: step.reclaimableBytes
+                )
+            )
+        }
 
         return nextSteps
     }
@@ -216,7 +245,8 @@ private extension DashboardRoadmapPlanner {
                 evidence: step.evidence,
                 actionLabel: step.actionLabel,
                 systemImage: step.systemImage,
-                action: step.action
+                action: step.action,
+                reclaimableBytes: step.reclaimableBytes
             )
         }
     }
@@ -244,13 +274,13 @@ private extension DashboardRoadmapPlanner {
             status: rank == 1 ? "Start here" : "Then check",
             detail: roadmapDetail(for: destination),
             evidence: [
-                AlertItem.formatBytes(aggregate.size),
                 aggregate.itemCount == 1 ? "1 item" : "\(aggregate.itemCount) items",
                 aggregate.categories.prefix(2).joined(separator: ", "),
             ].filter { !$0.isEmpty },
             actionLabel: "Open",
             systemImage: systemImage(for: destination),
-            action: .navigate(destination.rawValue)
+            action: .navigate(destination.rawValue),
+            reclaimableBytes: aggregate.size
         )
     }
 
@@ -276,6 +306,19 @@ private extension DashboardRoadmapPlanner {
             systemImage: systemImage,
             action: .navigate(selection)
         )
+    }
+
+    /// Compose Smart Uninstaller evidence pills with a live app count when
+    /// it has loaded. Falls back to a generic "apps" label so the pill never
+    /// reads "0 apps" before the dashboard's first metric pass completes.
+    func smartUninstallerEvidence(extra: [String]) -> [String] {
+        let leading: String
+        if installedAppCount > 0 {
+            leading = installedAppCount == 1 ? "1 app" : "\(installedAppCount) apps"
+        } else {
+            leading = "apps"
+        }
+        return [leading] + extra
     }
 
     func roadmapDetail(for destination: AlertDestination) -> String {

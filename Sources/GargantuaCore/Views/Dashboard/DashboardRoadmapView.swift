@@ -5,6 +5,13 @@ struct DashboardRoadmapView: View {
     let isScanning: Bool
     let onAction: (DashboardRoadmapAction) -> Void
 
+    /// Largest reclaimable amount in the current roadmap. Each row's bar
+    /// width is computed against this so the top row always reads as full
+    /// and proportionally smaller rows shrink relative to it.
+    private var maxReclaimable: Int64 {
+        steps.compactMap(\.reclaimableBytes).max() ?? 0
+    }
+
     var body: some View {
         DashboardSection(title: "NEXT ACTIONS") {
             VStack(spacing: 0) {
@@ -12,6 +19,7 @@ struct DashboardRoadmapView: View {
                     DashboardRoadmapRow(
                         step: step,
                         isScanning: isScanning,
+                        maxReclaimable: maxReclaimable,
                         onAction: { onAction(step.action) }
                     )
 
@@ -37,6 +45,7 @@ struct DashboardRoadmapView: View {
 private struct DashboardRoadmapRow: View {
     let step: DashboardRoadmapStep
     let isScanning: Bool
+    let maxReclaimable: Int64
     let onAction: () -> Void
 
     private var actionIsDisabled: Bool {
@@ -44,6 +53,13 @@ private struct DashboardRoadmapRow: View {
     }
 
     private var isPrimary: Bool { step.rank == 1 }
+
+    private var reclaimFraction: Double {
+        guard let bytes = step.reclaimableBytes,
+              bytes > 0,
+              maxReclaimable > 0 else { return 0 }
+        return min(max(Double(bytes) / Double(maxReclaimable), 0), 1)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
@@ -77,6 +93,10 @@ private struct DashboardRoadmapRow: View {
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink2)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let bytes = step.reclaimableBytes, bytes > 0 {
+                    reclaimBar(bytes: bytes)
+                }
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: GargantuaSpacing.space2) {
@@ -116,6 +136,30 @@ private struct DashboardRoadmapRow: View {
         .padding(GargantuaSpacing.space4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    private func reclaimBar(bytes: Int64) -> some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(GargantuaColors.surface3)
+
+                    Capsule(style: .continuous)
+                        .fill(isPrimary ? GargantuaColors.accent : GargantuaColors.accretion)
+                        .frame(width: max(2, geo.size.width * reclaimFraction))
+                        .animation(.easeOut(duration: 0.4), value: reclaimFraction)
+                }
+            }
+            .frame(height: 5)
+
+            Text(AlertItem.formatBytes(bytes))
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink2)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.4), value: bytes)
+        }
+        .help("\(AlertItem.formatBytes(bytes)) reclaimable in \(step.title). Bar is scaled to the largest reclaim bucket.")
     }
 
     private var buttonBackground: Color {

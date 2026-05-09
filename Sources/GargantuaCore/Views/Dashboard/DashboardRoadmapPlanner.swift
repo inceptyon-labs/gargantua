@@ -9,6 +9,9 @@ struct DashboardRoadmapPlanner {
     let triageAgeLabel: String
     let diskUsage: Double
     let freeDiskGB: Int
+    /// User-installed app count for the Smart Uninstaller pill. `0` falls
+    /// back to a generic label so a not-yet-loaded count doesn't show "0 apps".
+    var installedAppCount: Int = 0
 
     var headline: String {
         if scanProgress.isScanning { return "Building the cleanup roadmap" }

@@ -18,6 +18,7 @@ public struct DashboardView: View {
     @State private var diskUsage: Double = 0
     @State private var isLoading = true
     @State private var scheduledScanSummary: ScheduledScanSummary?
+    @State private var installedAppCount: Int = 0
 
     private var alerts: [AlertItem] {
         session.alerts
@@ -184,9 +185,14 @@ public struct DashboardView: View {
         session.hasRunTriageScan = true
         session.scanProgress = ScanProgress()
         let progress = session.scanProgress
+        // Resolve the user's active profile up-front on MainActor so the
+        // background scan honours their setting instead of always running
+        // the Light profile (which excludes dev_artifacts/docker/homebrew
+        // and would silently hide Dev Purge from the roadmap).
+        let profile = resolveTriageProfile()
         Task {
             do {
-                let adapter = try NativeScanAdapter.loadDefaults(profile: .light)
+                let adapter = try NativeScanAdapter.loadDefaults(profile: profile)
                 let results = try await adapter.scan(progress: progress)
                 session.alerts = AlertItem.aggregate(from: results)
                 session.lastTriageAt = Date()
@@ -197,13 +203,39 @@ public struct DashboardView: View {
         }
     }
 
+    private func resolveTriageProfile() -> CleanupProfile {
+        guard let persistence else { return .deep }
+        do {
+            let settings = try persistence.fetchSettings()
+            let persisted = (try? persistence.fetchProfiles()) ?? []
+            return CleanupProfile.resolve(
+                activeProfileID: settings.activeProfileID,
+                persisted: persisted,
+                fallback: .deep
+            )
+        } catch {
+            return .deep
+        }
+    }
+
     private func loadMetrics() async {
         let metrics = await collector.collect()
         diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
         diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
         diskUsage = metrics.diskUsage
         scheduledScanSummary = try? persistence?.fetchPendingScheduledScanSummary()
+        installedAppCount = await Self.countInstalledApps()
         isLoading = false
+    }
+
+    /// Cheap user-installed-app count for the Smart Uninstaller roadmap pill.
+    /// Walks `/Applications`, `~/Applications`, `/System/Applications`, and
+    /// running-app bundles, then drops `/System/` paths. Single directory
+    /// enumeration with `skipsPackageDescendants` — fast enough for the
+    /// dashboard's first paint.
+    private static func countInstalledApps() async -> Int {
+        let urls = DefaultAppBundleEnumerator().enumerateBundles()
+        return urls.filter { !$0.path.hasPrefix("/System/") }.count
     }
 
     private func acknowledgeScheduledScanSummary() {
@@ -223,7 +255,8 @@ private extension DashboardView {
             triageIsStale: session.triageIsStale,
             triageAgeLabel: session.triageAgeLabel,
             diskUsage: diskUsage,
-            freeDiskGB: freeDiskGB
+            freeDiskGB: freeDiskGB,
+            installedAppCount: installedAppCount
         )
     }
 
