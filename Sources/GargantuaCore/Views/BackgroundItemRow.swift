@@ -1,11 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Single row in the Background Items review pane.
-///
-/// Mirrors the scan-result row pattern: 3pt safety bar on the leading edge,
-/// safety-tinted background, leading-aligned label + explanation + path.
-/// Trailing slot carries vendor + reason chips and the Reveal button.
+// Single row in the Background Items review pane.
+//
+// Mirrors the scan-result row pattern: 3pt safety bar on the leading edge,
+// safety-tinted background, leading-aligned label + explanation + path.
+// Trailing slot carries vendor + reason chips and the Reveal button. The
+// expanded section pulls in the full identity / signature detail; both
+// halves share state so SwiftUI keeps the toggle animation smooth.
+// swiftlint:disable:next type_body_length
 public struct BackgroundItemRow: View {
     public let item: BackgroundItem
     public let isExpanded: Bool

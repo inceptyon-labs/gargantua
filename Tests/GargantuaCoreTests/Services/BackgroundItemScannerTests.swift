@@ -69,7 +69,7 @@ struct BackgroundItemScannerTests {
                 plistPath: "/Users/me/Library/LaunchAgents/broken.plist",
                 plist: nil,
                 parseError: "could not deserialize"
-            )
+            ),
         ]
         let scanner = makeScanner(launchd: launchd, login: .empty)
         let scan = scanner.scan()
@@ -106,7 +106,7 @@ struct BackgroundItemScannerTests {
                     bundleName: "Login Thing",
                     vendor: .thirdPartyKnown,
                     vendorDisplayName: "Login Thing Inc"
-                )
+                ),
             ],
             existingFiles: [url.path]
         )
@@ -130,7 +130,7 @@ struct BackgroundItemScannerTests {
                     domain: .userAgent,
                     plistPath: "/Users/me/Library/LaunchAgents/orphan.plist",
                     plist: plist
-                )
+                ),
             ],
             login: .empty,
             existingFiles: [] // binary missing on disk
@@ -150,7 +150,7 @@ struct BackgroundItemScannerTests {
                 domain: .userAgent,
                 plistPath: "/Users/me/Library/LaunchAgents/stable.plist",
                 plist: plist
-            )
+            ),
         ]
         let scanner = makeScanner(launchd: launchd, login: .empty)
         let firstID = scanner.scan().items.first?.id

@@ -2,7 +2,11 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// Wide test surface — every safety branch (Apple system, sensitive vendor,
+// orphaned, known-with-bundle, unsigned, login items) plus the derived-reason
+// matrix lives here. Splitting would scatter tests that share helpers.
 @Suite("BackgroundItemSafetyClassifier")
+// swiftlint:disable:next type_body_length
 struct BackgroundItemSafetyClassifierTests {
 
     private let classifier = BackgroundItemSafetyClassifier()
