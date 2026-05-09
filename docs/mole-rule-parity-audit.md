@@ -9,7 +9,7 @@ Mole commit date: 2026-04-24T08:02:08+08:00
 
 Gargantua does not pursue Mole-shell line parity — Mole's cleanup is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count, and ~50% of Mole's `safe_*` call sites are not path-based and cannot be reached by static path rules at all. The Trust Layer boundary is *evidence-shape* parity: a finding stays in scope if it is explainable, bounded, reversible, and audited, regardless of whether the evidence comes from a path, a command, or a `pkgutil` receipt.
 
-After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closing" epic (CommandActionRule + starter set, pkgutil receipt expansion, and app-specific uninstall packs), the bundled snapshot ships four evidence shapes:
+After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closing" epic (CommandActionRule + starter set, pkgutil receipt expansion, and app-specific uninstall packs), the bundled snapshot ships five evidence shapes:
 
 | Evidence shape | Files | Rules / commands |
 | --- | ---: | ---: |
@@ -20,6 +20,7 @@ After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closi
 | Path-based generic uninstall/remnant | 2 | 28 |
 | Path-based app-specific uninstall packs | 5 | 41 |
 | Command-action rules (developer) | 3 | 3 |
+| Code-native stale-version discovery | n/a — discovered at scan time | Xcode DeviceSupport + JetBrains Toolbox version sets |
 | **Total static rules** | **61** | **346** |
 | Dynamic `pkgutil` receipt evidence | n/a — discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
 
@@ -109,7 +110,8 @@ Ported from Mole in `gargantua-kjv0`:
 Remaining gaps or deliberately deferred behavior:
 
 - Command-backed pruning remains out of YAML: pnpm store pruning behavior, `go clean`, `nix-collect-garbage`, unavailable simulator deletion, package-manager prune commands, and tool-aware old-version retention loops.
-- Version-pruning behaviors remain out of YAML where Mole keeps current/recent versions, such as JetBrains Toolbox apps, Xcode documentation indexes, simulator runtimes, device support versions, Claude Code versions, and Cursor Agent versions.
+- Version-pruning behavior is now partially addressed outside YAML by `StaleVersionScanAdapter`: Xcode DeviceSupport and JetBrains Toolbox app-version directories are grouped by product/family/version, keep latest retained versions, honor pinned paths and current-version hints, and surface old versions as `review`.
+- Remaining version-pruning gaps include Xcode documentation indexes, simulator/runtime availability beyond static DeviceSupport directories, Android SDK platforms/build-tools/NDK/cmake retention, Claude Code/Codex/Cursor agent runtime versions, and any cleanup that needs live active-use identity before the app can separate "old" from "unused."
 - Broad or risky project artifacts remain conservative: generic `bin`/`obj`, Terraform project caches, shell-history backups, Prometheus WAL, model caches, and upload staging are review-gated.
 
 Pre-port classification:
@@ -167,7 +169,7 @@ Remaining gaps for full Mole parity:
 
 1. ~~Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools.~~ **Partially addressed.** The `CommandActionRule` schema and a starter set (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) ship under `Sources/GargantuaCore/Resources/command_rules/`. Audit entries are written as `kind: command` with the captured tool version, exit code, and argument list. See the **Command-action hold list** below for what remains intentionally deferred.
 2. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints and UX before they can be more than review-gated path findings.
-3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup.
+3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup. Gargantua now has a first code-native retention guard for Xcode DeviceSupport and JetBrains Toolbox versions; remaining families stay deferred until their active-use identity is explicit.
 4. ~~Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.~~ **Addressed.** `PackageReceiptExpander` (`gargantua-rloy`) runs `pkgutil --pkgs` / `--pkg-info` / `--files`, matches candidates through `PackageMatcher`, and produces `PackageReceiptCandidate`s carrying pkg ID, version, and install date. `ReceiptRemnantBuilder` converts those candidates into `RemnantItem`s with the `pkgutil-bom` tag, dropping protected roots and upgrading shared system paths to `.protected_`. Provenance surfaces in the Smart Uninstaller plan-review row (`gargantua-q05d`) as a `RECEIPT` badge + package identifier line, and in MCP's `explain` tool (`gargantua-4bub`) as a structured `receiptProvenance` field. Receipts are *evidence*, not deletion permission.
 5. External-volume policy: Mole can target external-volume `.Trashes`, `.TemporaryItems`, `.Spotlight-V100`, `.fseventsd`, and AppleDouble files with protocol checks. Gargantua should define an explicit external-volume scan/cleanup UX before porting those broadly.
 
@@ -189,7 +191,7 @@ The following Mole-equivalent commands have an obvious adapter shape but are del
 | `nix-collect-garbage` | Generation rollback semantics. Users who relied on `nixos-rebuild --rollback` or per-shell generations to recover from a bad change will silently lose that rollback target. Needs explicit "this also drops your rollback history" UX. |
 | `npm cache clean` (`--force` required) | Offline install semantics. npm's cache doubles as the offline mirror that `npm ci` and `npm install --offline` rely on. Pruning it costs network on the next install and breaks airgapped/CI flows that don't expect re-fetch. |
 | `go clean -modcache` | Re-fetch costs network. The module cache is shared across projects and can be tens of gigabytes; clearing it forces every project to re-download on the next build. Distinct rule from `go clean -cache` (already shipped) which only touches the build cache. |
-| Tool-aware version-retention loops (e.g., "keep latest N JetBrains Toolbox apps", "keep current Xcode device support, drop older") | Active-use detection plus per-tool identity resolution required. "Old ≠ safe" without a per-tool concept of which version is in use; default classification is `review`-only until a generic version-retention guard exists. |
+| Tool-aware version-retention loops beyond the shipped Xcode DeviceSupport + JetBrains Toolbox slice | Active-use detection plus per-tool identity resolution required. "Old ≠ safe" without a per-tool concept of which version is in use; shipped stale-version rows remain `review` and future families need the same keep-latest/current/pin guardrails. |
 
 A future bean can promote any of these once the UX models the consequence honestly. They live on the `gargantua-wpl6` epic as candidates, not commitments.
 

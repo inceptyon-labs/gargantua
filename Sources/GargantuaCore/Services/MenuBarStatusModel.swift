@@ -9,7 +9,7 @@ public struct NativeMenuBarStatusScanner: MenuBarStatusScanning {
     public init() {}
 
     public func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
-        let adapter = try NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
+        let adapter = try ProfileScanAdapterFactory.make(profile: profile, scanRoots: scanRoots)
         return try await adapter.scan(progress: nil)
     }
 }

@@ -16,15 +16,15 @@ public enum DevArtifactDetection {
     /// has projects on this machine. Order doesn't matter — first match per
     /// ecosystem flips that ecosystem on and we move to the next directory.
     private static let ecosystemMarkers: [(ecosystem: String, names: Set<String>, suffixes: Set<String>)] = [
-        ("node",   ["package.json", "node_modules", "yarn.lock", "pnpm-lock.yaml"], []),
+        ("node", ["package.json", "node_modules", "yarn.lock", "pnpm-lock.yaml"], []),
         ("python", ["requirements.txt", "pyproject.toml", "Pipfile", "setup.py", ".venv", "venv"], []),
-        ("rust",   ["Cargo.toml", "target"], []),
-        ("go",     ["go.mod", "go.sum"], []),
-        ("jvm",    ["build.gradle", "build.gradle.kts", "settings.gradle", "pom.xml", ".gradle"], []),
+        ("rust", ["Cargo.toml", "target"], []),
+        ("go", ["go.mod", "go.sum"], []),
+        ("jvm", ["build.gradle", "build.gradle.kts", "settings.gradle", "pom.xml", ".gradle"], []),
         ("dotnet", ["packages.config", "global.json"], [".csproj", ".fsproj", ".vbproj", ".sln"]),
-        ("ruby",   ["Gemfile", "Gemfile.lock", ".bundle"], []),
-        ("php",    ["composer.json", "composer.lock", "vendor"], []),
-        ("xcode",  ["Package.swift", ".swiftpm", "DerivedData"], [".xcodeproj", ".xcworkspace"]),
+        ("ruby", ["Gemfile", "Gemfile.lock", ".bundle"], []),
+        ("php", ["composer.json", "composer.lock", "vendor"], []),
+        ("xcode", ["Package.swift", ".swiftpm", "DerivedData"], [".xcodeproj", ".xcworkspace"]),
     ]
 
     /// Cross-cutting buckets are additive across ecosystems and applicable
@@ -35,6 +35,7 @@ public enum DevArtifactDetection {
         "logs",
         "ai_models",
         "tests",
+        "stale_versions",
     ]
 
     /// Probe `scanRoots` for ecosystem markers. Returns the set of ecosystem

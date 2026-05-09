@@ -104,6 +104,14 @@ struct DevArtifactBucketTests {
         #expect(buckets.contains(where: { $0.id == "tests" }))
     }
 
+    @Test("stale_versions tag adds Stale versions cross-cutting bucket")
+    func staleVersionsTagAddsStaleVersions() {
+        let result = Self.makeResult(tags: ["developer", "xcode", "stale_versions"], sourceName: "Xcode")
+        let buckets = DevArtifactBucket.derive(from: result)
+        #expect(buckets.contains(where: { $0.id == "xcode" }))
+        #expect(buckets.contains(where: { $0.id == "stale_versions" }))
+    }
+
     // MARK: category fallback
 
     @Test("category=docker with no ecosystem tag falls back to Docker bucket")

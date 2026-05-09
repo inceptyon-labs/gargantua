@@ -17,11 +17,13 @@ public struct DeepCleanView: View {
     private let onAdvisory: (([ScanResult]) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
     private let onCleanupCompleted: ((CleanupResult) -> Void)?
+    private let staleVersionPinnedPaths: Set<String>
 
     public init(
         profile: CleanupProfile = .deep,
         adapter: (any ScanAdapter)? = nil,
         session: DeepCleanSessionState,
+        staleVersionPinnedPaths: Set<String> = [],
         onExplain: ((ScanResult) -> Void)? = nil,
         onAdvisory: (([ScanResult]) -> Void)? = nil,
         onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
@@ -30,6 +32,7 @@ public struct DeepCleanView: View {
         self.profile = profile
         self.adapterOverride = adapter
         self.session = session
+        self.staleVersionPinnedPaths = staleVersionPinnedPaths
         self.onExplain = onExplain
         self.onAdvisory = onAdvisory
         self.onResolveFilter = onResolveFilter
@@ -256,13 +259,9 @@ public struct DeepCleanView: View {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
-                    ?? CompositeScanAdapter(
-                        primary: NativeScanAdapter.loadDefaults(profile: profile),
-                        bestEffort: [
-                            CommandActionScanAdapter.loadDefaults(
-                                categories: Set(profile.categories)
-                            )
-                        ]
+                    ?? ProfileScanAdapterFactory.make(
+                        profile: profile,
+                        staleVersionPinnedPaths: staleVersionPinnedPaths
                     )
                 let results = try await adapter.scan(
                     progress: session.scanProgress,

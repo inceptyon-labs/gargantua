@@ -24,6 +24,7 @@ public struct DevArtifactScanView: View {
     private let profile: CleanupProfile
     private let adapterOverride: (any ScanAdapter)?
     private let scanRoots: [URL]?
+    private let staleVersionPinnedPaths: Set<String>
 
     /// Smart-default lifecycle. Empty until ecosystem detection completes;
     /// then seeded from `DevArtifactDetection.detectEcosystems` plus the
@@ -62,6 +63,7 @@ public struct DevArtifactScanView: View {
         profile: CleanupProfile = .developer,
         scanRoots: [URL]? = nil,
         adapter: (any ScanAdapter)? = nil,
+        staleVersionPinnedPaths: Set<String> = [],
         onExplain: ((ScanResult) -> Void)? = nil,
         onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
         onCleanupCompleted: ((CleanupResult) -> Void)? = nil
@@ -69,6 +71,7 @@ public struct DevArtifactScanView: View {
         self.profile = profile
         self.scanRoots = scanRoots
         self.adapterOverride = adapter
+        self.staleVersionPinnedPaths = staleVersionPinnedPaths
         self.onExplain = onExplain
         self.onResolveFilter = onResolveFilter
         self.onCleanupCompleted = onCleanupCompleted
@@ -327,13 +330,10 @@ extension DevArtifactScanView {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
-                    ?? CompositeScanAdapter(
-                        primary: NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots),
-                        bestEffort: [
-                            CommandActionScanAdapter.loadDefaults(
-                                categories: Set(profile.categories)
-                            ),
-                        ]
+                    ?? ProfileScanAdapterFactory.make(
+                        profile: profile,
+                        scanRoots: scanRoots,
+                        staleVersionPinnedPaths: staleVersionPinnedPaths
                     )
                 let results = try await adapter.scan(progress: scanProgress, observer: pathStream)
                 guard !Task.isCancelled else { return }

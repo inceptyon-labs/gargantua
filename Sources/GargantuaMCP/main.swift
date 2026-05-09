@@ -89,6 +89,15 @@ private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requeste
     try loadProfileCatalog().resolve(requested)
 }
 
+private func loadPathExclusionPatterns() -> Set<String> {
+    (try? runBlocking {
+        try await MainActor.run {
+            let persistence = try PersistenceController()
+            return Set(try persistence.fetchExclusionEntries().map(\.pattern))
+        }
+    }) ?? []
+}
+
 // Bridges `NativeScanAdapter.scan()` (async) into the synchronous `Scanner`
 // contract. The transport processes one request at a time, so blocking the
 // transport thread during a scan is acceptable; the semaphore wait parks
@@ -100,18 +109,16 @@ private let scanProfileResolver: MCPScanToolHandler.ProfileResolver = { requeste
 // itself was well-formed; execution failed. `ScanAdapterError` already
 // conforms to `LocalizedError` with a user-facing message.
 //
-// Command-action rules surface alongside path rules via a parallel adapter.
-// Failures in the command-action adapter never break the path scan; an empty
-// result list is the worst case.
+// Command-action and stale-version adapters surface alongside path rules via
+// the default profile pipeline. Optional adapter failures never break the path
+// scan; an empty optional result list is the worst case.
 private let scanRunner: MCPScanToolHandler.Scanner = { profile in
-    let pathAdapter = try NativeScanAdapter.loadDefaults(profile: profile)
-    let commandAdapter = CommandActionScanAdapter.loadDefaults(
-        categories: Set(profile.categories)
+    let adapter = try ProfileScanAdapterFactory.make(
+        profile: profile,
+        staleVersionPinnedPaths: loadPathExclusionPatterns()
     )
     return try runBlocking {
-        let pathResults = try await pathAdapter.scan()
-        let commandResults = (try? await commandAdapter.scan(progress: nil)) ?? []
-        return pathResults + commandResults
+        try await adapter.scan(progress: nil)
     }
 }
 

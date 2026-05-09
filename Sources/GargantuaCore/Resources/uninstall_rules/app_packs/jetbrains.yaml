@@ -26,15 +26,14 @@
 #   - License keys and activation state under JetBrains/<IDE>/options are
 #     protected — removing them forces re-licensing.
 #   - Toolbox-managed IDE versions live under
-#     ~/Library/Application Support/JetBrains/Toolbox/apps; pruning whole
-#     versions is a deferred concern (see version-retention thread in the
-#     parent epic) and is review-gated here.
+#     ~/Library/Application Support/JetBrains/Toolbox/apps. Smart Uninstaller
+#     still review-gates the whole apps directory; Dev Purge / Deep Clean now
+#     have code-native stale-version discovery for individual Toolbox versions.
 #
-# Notes for downstream version-retention work (deferred bean):
-#   - Toolbox stores multiple versions of each IDE side by side. A future
-#     CommandActionRule may invoke Toolbox's CLI to retain the latest N
-#     versions; until then this pack reviews-rather-than-deletes the apps
-#     directory.
+# Notes for stale-version discovery:
+#   - Toolbox stores multiple versions of each IDE side by side. The
+#     StaleVersionScanAdapter keeps the latest N versions and emits older
+#     version directories as review rows rather than broad app-pack deletions.
 #
 # Evidence (captured 2026-05-06 on a real install):
 #   ~/Library/Application Support/JetBrains/{Goland, GoLand2021.1, IdeaIC2020.3}

@@ -93,6 +93,7 @@ struct MainContentView: View {
                                 DeepCleanView(
                                     profile: activeDeepCleanProfile,
                                     session: deepCleanSession,
+                                    staleVersionPinnedPaths: pathExclusionPatterns,
                                     onExplain: explainHandler,
                                     onAdvisory: advisoryHandler,
                                     onResolveFilter: scanFilterHandler,
@@ -141,6 +142,7 @@ struct MainContentView: View {
                                 DevArtifactScanView(
                                     profile: .devPurge,
                                     scanRoots: resolvedScanRoots,
+                                    staleVersionPinnedPaths: pathExclusionPatterns,
                                     onExplain: explainHandler,
                                     onResolveFilter: scanFilterHandler,
                                     onCleanupCompleted: dashboardCleanupHandler
@@ -359,6 +361,20 @@ struct MainContentView: View {
 
         let urls = ScanRootSettings.resolvedURLs(from: stored)
         return urls.isEmpty ? nil : urls
+    }
+
+    private var pathExclusionPatterns: Set<String> {
+        guard let persistence else { return [] }
+        do {
+            return Set(try persistence.fetchExclusionEntries().map(\.pattern))
+        } catch {
+            PersistenceDiagnostics.logFallback(
+                "fetchExclusionEntries stale version pins",
+                fallback: "no stale-version pins",
+                error: error
+            )
+            return []
+        }
     }
 
     private var placeholderView: some View {

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File Health** scans (empty files, big files, similar images, broken symlinks) backed by a vendored `czkawka_cli`.
 - **Duplicate Finder** backed by a vendored `fclones`, scoped to user-defined personal-scope roots.
 - **Command-action rules** schema (`Resources/command_rules/`) with starter coverage for `xcrun simctl delete unavailable`, `pnpm store prune`, and `go clean -cache`; surfaced through scan + cleanup.
+- **Stale-version discovery** for review-gated Xcode DeviceSupport and JetBrains Toolbox version sets, using keep-latest retention, current-version hints, and pinned-path exclusions before surfacing old versions.
 - **App-pack remnant rules** for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
 - **`pkgutil` receipt evidence** in Smart Uninstaller and the MCP `explain` tool: shows pkg ID, version, and install date as ownership provenance, never as deletion permission.
 - **Protected-roots policy** (`safety_policy/protected_roots.yaml`) hard-blocking cleanup at filesystem roots regardless of rule classification, with user-extendable but bundled-immutable entries.

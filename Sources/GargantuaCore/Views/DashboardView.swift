@@ -192,7 +192,10 @@ public struct DashboardView: View {
         let profile = resolveTriageProfile()
         Task {
             do {
-                let adapter = try NativeScanAdapter.loadDefaults(profile: profile)
+                let adapter = try ProfileScanAdapterFactory.make(
+                    profile: profile,
+                    staleVersionPinnedPaths: staleVersionPinnedPaths()
+                )
                 let results = try await adapter.scan(progress: progress)
                 session.alerts = AlertItem.aggregate(from: results)
                 session.lastTriageAt = Date()
@@ -216,6 +219,11 @@ public struct DashboardView: View {
         } catch {
             return .deep
         }
+    }
+
+    private func staleVersionPinnedPaths() -> Set<String> {
+        guard let persistence else { return [] }
+        return Set(((try? persistence.fetchExclusionEntries()) ?? []).map(\.pattern))
     }
 
     private func loadMetrics() async {

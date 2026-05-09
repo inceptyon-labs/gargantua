@@ -42,8 +42,8 @@ Most cleaner apps optimize for big numbers and vague confidence. Gargantua optim
 
 ## Features
 
-- **Deep Clean** — YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, and language build caches.
-- **Dev Purge** — narrow-scope view limited to developer artifacts, Docker, and Homebrew so a routine cleanup can't accidentally widen into a full scan.
+- **Deep Clean** — YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, language build caches, and review-gated stale developer versions.
+- **Dev Purge** — narrow-scope view limited to developer artifacts, Docker, Homebrew, and stale developer versions so a routine cleanup can't accidentally widen into a full scan.
 - **Developer Tools** — tool-native Homebrew and Docker cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
 - **Smart Uninstaller** — app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state.
 - **Duplicate Finder** — duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
@@ -69,11 +69,12 @@ Gargantua's trust layer uses three safety levels:
 | `review` | Files that may be removable, but could contain preferences, sync state, offline data, or context the user should inspect. | Shown, explained, not silently selected. |
 | `protected` | Files with system impact, privilege implications, or high risk of data loss. | Visible for transparency; destructive flows hard-reject them. |
 
-Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships four evidence shapes:
+Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships five evidence shapes:
 
 - **Path-based cleanup rules** — 51 files / 287 rules across apps, browsers, developer tools, and system locations.
 - **Path-based remnant rules** — 2 generic files / 28 rules plus 5 app-pack files / 41 app-specific rules for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
 - **Command-action rules** — 3 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) recorded with tool version, exit code, and arguments per run.
+- **Code-native stale-version discovery** — Xcode DeviceSupport and JetBrains Toolbox version directories grouped by product/family/version with keep-latest, current-version, and pinned-path guards.
 - **Dynamic `pkgutil` receipt evidence** — Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.
 
 Trust Layer parity is *evidence-shape* parity, not Mole-shell line parity — every shape is explainable, bounded, reversible, and audited. Deferred Mole behaviors (`nix-collect-garbage`, `npm cache clean`, `go clean -modcache`, version-retention loops, receipt-driven deletion) are tracked in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
