@@ -71,6 +71,43 @@ struct AIModelIntelligenceScanAdapterTests {
         #expect(results.isEmpty)
     }
 
+    @Test("known stores can opt into extensionless model blobs only")
+    func extensionlessKnownStoreBlobs() async throws {
+        let fixture = try FixtureTree()
+        let primaryStore = try fixture.makeDir("Ollama/models/blobs")
+        let secondaryStore = try fixture.makeDir("Ollama-copy/models/blobs")
+        try fixture.makeFile("Ollama/models/blobs/sha256-deadbeef", byteCount: 512)
+        try fixture.makeFile("Ollama-copy/models/blobs/sha256-deadbeef", byteCount: 512)
+        try fixture.makeFile("Ollama/models/blobs/archive.zip", byteCount: 512)
+        try fixture.makeFile("Ollama-copy/models/blobs/archive.zip", byteCount: 512)
+
+        let adapter = makeAdapter(
+            knownStores: [
+                AIModelStoreDefinition(
+                    id: "ollama-primary",
+                    displayName: "Ollama",
+                    roots: [primaryStore],
+                    includeExtensionlessLargeFiles: true
+                ),
+                AIModelStoreDefinition(
+                    id: "ollama-secondary",
+                    displayName: "Ollama Copy",
+                    roots: [secondaryStore],
+                    includeExtensionlessLargeFiles: true
+                ),
+            ],
+            orphanRoots: []
+        )
+
+        let findings = adapter.discoverFindings()
+        let results = try await adapter.scan(progress: nil)
+
+        #expect(findings.duplicateGroups.count == 1)
+        #expect(findings.duplicateGroups.first?.fileName == "sha256-deadbeef")
+        #expect(results.count == 2)
+        #expect(results.allSatisfy { !$0.path.hasSuffix("archive.zip") })
+    }
+
     @Test("user exclusions suppress orphan and duplicate model candidates")
     func userExclusionsSuppressCandidates() async throws {
         let fixture = try FixtureTree()
@@ -108,6 +145,26 @@ struct AIModelIntelligenceScanAdapterTests {
         let results = try await adapter.scan(progress: nil)
 
         #expect(results.isEmpty)
+    }
+
+    @Test("protected parent roots do not suppress allowed descendant scan roots")
+    func protectedParentDoesNotBlanketBlockDescendants() async throws {
+        let fixture = try FixtureTree()
+        let downloads = try fixture.makeDir("Downloads")
+        try fixture.makeFile("Downloads/model.gguf", byteCount: 512)
+
+        let policy = ProtectedRootPolicy(entries: [
+            ProtectedRootEntry(path: fixture.root.path, reason: "fixture parent root"),
+        ])
+        let adapter = makeAdapter(
+            knownStores: [],
+            orphanRoots: [downloads],
+            protectedRoots: policy
+        )
+
+        let results = try await adapter.scan(progress: nil)
+
+        #expect(results.map(\.name) == ["Orphan model weight — model.gguf"])
     }
 
     @Test("category gate keeps AI model intelligence out of non-AI profiles")

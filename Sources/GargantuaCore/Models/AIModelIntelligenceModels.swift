@@ -74,19 +74,7 @@ public struct AIModelScanPolicy: Sendable {
     }
 
     public func protectionReason(for path: String) -> String? {
-        let url = URL(fileURLWithPath: path)
-        if let exact = protectedRoots.protectionReason(for: url) {
-            return exact
-        }
-
-        let target = Self.normalizedPath(path)
-        for entry in protectedRoots.entries where !entry.path.contains("*") {
-            let root = Self.normalizedPath(entry.path)
-            if target.hasPrefix(root + "/") {
-                return entry.reason
-            }
-        }
-        return nil
+        protectedRoots.protectionReason(for: URL(fileURLWithPath: path))
     }
 
     public static func normalizedPath(_ path: String) -> String {

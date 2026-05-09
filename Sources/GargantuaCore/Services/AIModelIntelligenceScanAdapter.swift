@@ -206,7 +206,8 @@ private extension AIModelIntelligenceScanAdapter {
     ) -> AIModelFileCandidate? {
         let ext = url.pathExtension.lowercased()
         let extensionMatches = Self.modelExtensions.contains(ext)
-        guard extensionMatches || store?.includeExtensionlessLargeFiles == true else { return nil }
+        let extensionlessStoreBlob = ext.isEmpty && store?.includeExtensionlessLargeFiles == true
+        guard extensionMatches || extensionlessStoreBlob else { return nil }
 
         let size = Int64(values?.fileSize ?? 0)
         guard size >= policy.minimumModelFileSize else { return nil }
