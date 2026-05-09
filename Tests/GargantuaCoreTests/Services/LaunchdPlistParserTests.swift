@@ -167,6 +167,19 @@ struct LaunchdPlistParserTests {
 
     // MARK: - Disk read
 
+    @Test("Integer-encoded booleans (0/1) coerce to false/true")
+    func integerEncodedBooleansCoerced() throws {
+        let plist = try DefaultLaunchdPlistParser().parse(dictionary: [
+            "Label": "com.legacy.numeric.bool",
+            "RunAtLoad": 1,
+            "Disabled": 0,
+            "KeepAlive": 1,
+        ])
+        #expect(plist.runAtLoad == true)
+        #expect(plist.disabled == false)
+        #expect(plist.keepAlive == true)
+    }
+
     @Test("Reading nonexistent file throws .unreadable")
     func unreadableFileThrows() {
         let parser = DefaultLaunchdPlistParser()

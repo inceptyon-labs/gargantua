@@ -59,7 +59,7 @@ public struct DefaultLaunchdPlistParser: LaunchdPlistParsing {
 
         let keepAlive: Bool
         if let raw = dict["KeepAlive"] {
-            if let bool = raw as? Bool {
+            if let bool = Self.coerceBool(raw) {
                 keepAlive = bool
             } else if let conditions = raw as? [String: Any], !conditions.isEmpty {
                 // Non-empty conditions dict means launchd is asked to keep it
@@ -72,14 +72,14 @@ public struct DefaultLaunchdPlistParser: LaunchdPlistParsing {
             keepAlive = false
         }
 
-        let runAtLoad = (dict["RunAtLoad"] as? Bool) ?? false
-        let startInterval = dict["StartInterval"] as? Int
+        let runAtLoad = Self.coerceBool(dict["RunAtLoad"]) ?? false
+        let startInterval = Self.coerceInt(dict["StartInterval"])
 
         let startCalendarInterval = parseCalendarIntervals(dict["StartCalendarInterval"])
 
         let watchPaths = (dict["WatchPaths"] as? [String]) ?? []
         let queueDirectories = (dict["QueueDirectories"] as? [String]) ?? []
-        let disabled = (dict["Disabled"] as? Bool) ?? false
+        let disabled = Self.coerceBool(dict["Disabled"]) ?? false
 
         return LaunchdPlist(
             label: label,
@@ -109,11 +109,32 @@ public struct DefaultLaunchdPlistParser: LaunchdPlistParsing {
 
     private func calendarInterval(from dict: [String: Any]) -> LaunchdCalendarInterval {
         LaunchdCalendarInterval(
-            minute: dict["Minute"] as? Int,
-            hour: dict["Hour"] as? Int,
-            day: dict["Day"] as? Int,
-            weekday: dict["Weekday"] as? Int,
-            month: dict["Month"] as? Int
+            minute: Self.coerceInt(dict["Minute"]),
+            hour: Self.coerceInt(dict["Hour"]),
+            day: Self.coerceInt(dict["Day"]),
+            weekday: Self.coerceInt(dict["Weekday"]),
+            month: Self.coerceInt(dict["Month"])
         )
+    }
+
+    /// Property lists round-trip booleans through `NSNumber`, so a `<true/>`
+    /// element bridges back as `Bool` cleanly — but a numeric `<integer>0</integer>`
+    /// won't cast to `Bool` directly. Some legacy plists encode booleans as
+    /// `0` / `1` integers; coerce both shapes.
+    private static func coerceBool(_ value: Any?) -> Bool? {
+        guard let value else { return nil }
+        if let bool = value as? Bool { return bool }
+        if let int = value as? Int { return int != 0 }
+        if let number = value as? NSNumber { return number.boolValue }
+        return nil
+    }
+
+    /// Coerce numeric plist values that may bridge as `Int`, `Int64`, or
+    /// `NSNumber` depending on the plist format.
+    private static func coerceInt(_ value: Any?) -> Int? {
+        guard let value else { return nil }
+        if let int = value as? Int { return int }
+        if let number = value as? NSNumber { return number.intValue }
+        return nil
     }
 }

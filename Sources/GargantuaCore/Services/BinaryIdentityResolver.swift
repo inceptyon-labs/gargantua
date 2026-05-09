@@ -18,11 +18,14 @@ public protocol BinaryIdentityResolving: Sendable {
 /// Default implementation. Caches results per binary path because `codesign`
 /// is slow at scale (the launchd item index can easily walk hundreds of
 /// distinct binaries on a developer machine).
+///
+/// The cache is unbounded — instances are intended to live for the duration
+/// of a single inventory pass, not across long-running app sessions. Call
+/// `clearCache()` between passes if reusing.
 public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unchecked Sendable {
     private let bundleReader: AppBundleReading
     private let signatureVerifier: any DetailedCodeSignatureVerifying
     private let registry: KnownVendorRegistry
-    private let fileManager: FileManager
 
     private let cacheLock = NSLock()
     private var cache: [String: BinaryIdentity] = [:]
@@ -30,13 +33,11 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
     public init(
         bundleReader: AppBundleReading = DefaultAppBundleReader(),
         signatureVerifier: any DetailedCodeSignatureVerifying = DefaultCodeSignatureVerifier(),
-        registry: KnownVendorRegistry = .default,
-        fileManager: FileManager = .default
+        registry: KnownVendorRegistry = .default
     ) {
         self.bundleReader = bundleReader
         self.signatureVerifier = signatureVerifier
         self.registry = registry
-        self.fileManager = fileManager
     }
 
     public func resolve(binaryPath: String) -> BinaryIdentity {
@@ -115,10 +116,14 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
     }
 
     /// Walks up the path looking for the nearest `.app`, `.framework`, `.appex`,
-    /// `.xpc`, or `.bundle` ancestor. Returns `nil` if the binary lives outside
-    /// any bundle (e.g. `/usr/local/bin/foo`, `/opt/homebrew/bin/bar`).
+    /// `.systemextension`, `.xpc`, or `.bundle` ancestor. Returns `nil` if the
+    /// binary lives outside any bundle (e.g. `/usr/local/bin/foo`,
+    /// `/opt/homebrew/bin/bar`).
+    ///
+    /// `.systemextension` matters for endpoint security and VPN agents which
+    /// commonly ship as system extensions and are flagged sensitive.
     func enclosingBundleURL(for binaryPath: String) -> URL? {
-        let bundleExtensions: Set<String> = ["app", "framework", "appex", "xpc", "bundle"]
+        let bundleExtensions: Set<String> = ["app", "framework", "appex", "systemextension", "xpc", "bundle"]
         var current = URL(fileURLWithPath: binaryPath).standardizedFileURL
         // Cap at a reasonable depth to avoid pathological symlink loops.
         for _ in 0 ..< 32 {
