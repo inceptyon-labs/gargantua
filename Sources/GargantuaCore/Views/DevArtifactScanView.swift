@@ -56,19 +56,22 @@ public struct DevArtifactScanView: View {
 
     private let onExplain: ((ScanResult) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
+    private let onCleanupCompleted: ((CleanupResult) -> Void)?
 
     public init(
         profile: CleanupProfile = .developer,
         scanRoots: [URL]? = nil,
         adapter: (any ScanAdapter)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
-        onResolveFilter: ((String) async -> ScanFilterSet?)? = nil
+        onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
+        onCleanupCompleted: ((CleanupResult) -> Void)? = nil
     ) {
         self.profile = profile
         self.scanRoots = scanRoots
         self.adapterOverride = adapter
         self.onExplain = onExplain
         self.onResolveFilter = onResolveFilter
+        self.onCleanupCompleted = onCleanupCompleted
     }
 
     public var body: some View {
@@ -227,6 +230,7 @@ extension DevArtifactScanView {
             isCleaning = false
             cleanupResult = result
             phase = .summary
+            onCleanupCompleted?(result)
         }
     }
 

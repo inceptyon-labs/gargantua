@@ -95,7 +95,8 @@ struct MainContentView: View {
                                     session: deepCleanSession,
                                     onExplain: explainHandler,
                                     onAdvisory: advisoryHandler,
-                                    onResolveFilter: scanFilterHandler
+                                    onResolveFilter: scanFilterHandler,
+                                    onCleanupCompleted: dashboardCleanupHandler
                                 )
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
@@ -141,7 +142,8 @@ struct MainContentView: View {
                                     profile: .devPurge,
                                     scanRoots: resolvedScanRoots,
                                     onExplain: explainHandler,
-                                    onResolveFilter: scanFilterHandler
+                                    onResolveFilter: scanFilterHandler,
+                                    onCleanupCompleted: dashboardCleanupHandler
                                 )
                             case "devTools":
                                 DeveloperToolsView(session: devToolsSession)
@@ -249,6 +251,15 @@ struct MainContentView: View {
     /// scan-view signature.
     private var narrateHandler: CleanupNarrator {
         { result in await aiService.narrate(cleanup: result) }
+    }
+
+    /// Closure handed to destination views (Deep Clean, Dev Purge) so they
+    /// can shrink the dashboard's triage alerts immediately when a cleanup
+    /// frees space. Without this the NEXT ACTIONS roadmap stays stuck on
+    /// whichever destination was rank 1 at triage time, even after the user
+    /// has already emptied it.
+    private var dashboardCleanupHandler: (CleanupResult) -> Void {
+        { result in dashboardSession.applyCleanupDelta(result) }
     }
 
     /// Initialize persistence once at app boot. The app cannot provide a

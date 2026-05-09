@@ -16,6 +16,7 @@ public struct DeepCleanView: View {
     private let onExplain: ((ScanResult) -> Void)?
     private let onAdvisory: (([ScanResult]) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
+    private let onCleanupCompleted: ((CleanupResult) -> Void)?
 
     public init(
         profile: CleanupProfile = .deep,
@@ -23,7 +24,8 @@ public struct DeepCleanView: View {
         session: DeepCleanSessionState,
         onExplain: ((ScanResult) -> Void)? = nil,
         onAdvisory: (([ScanResult]) -> Void)? = nil,
-        onResolveFilter: ((String) async -> ScanFilterSet?)? = nil
+        onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
+        onCleanupCompleted: ((CleanupResult) -> Void)? = nil
     ) {
         self.profile = profile
         self.adapterOverride = adapter
@@ -31,6 +33,7 @@ public struct DeepCleanView: View {
         self.onExplain = onExplain
         self.onAdvisory = onAdvisory
         self.onResolveFilter = onResolveFilter
+        self.onCleanupCompleted = onCleanupCompleted
     }
 
     @MainActor
@@ -239,6 +242,7 @@ public struct DeepCleanView: View {
             // already reset to idle — don't pivot to a summary.
             guard !Task.isCancelled else { return }
             session.finishCleanup(result: result)
+            onCleanupCompleted?(result)
         }
     }
 
