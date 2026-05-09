@@ -259,6 +259,10 @@ public struct DeveloperToolPreviewAdapter: Sendable {
             throw DeveloperToolPreviewError.notInstalled(tool)
         }
 
+        if tool == .docker {
+            return try dockerPreview(executable: executable)
+        }
+
         let arguments = Self.previewArguments(for: tool)
         let output = try runner.run(
             executable: executable,
@@ -287,6 +291,67 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         )
     }
 
+    private func dockerPreview(executable: URL) throws -> DeveloperToolPreview {
+        let structuredArguments = Self.structuredPreviewArguments(for: .docker)
+        let structuredOutput = try runner.run(
+            executable: executable,
+            arguments: structuredArguments,
+            timeout: timeout,
+            maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
+        )
+
+        if structuredOutput.exitCode == 0 {
+            let rawOutput = structuredOutput.stdout.isEmpty ? structuredOutput.stderr : structuredOutput.stdout
+            let commandPreview = [executable.path] + structuredArguments
+            let items = Self.parseDockerSystemDFJSON(output: rawOutput, commandPreview: commandPreview)
+            if !items.isEmpty {
+                return DeveloperToolPreview(
+                    tool: .docker,
+                    commandPreview: commandPreview,
+                    items: items,
+                    rawOutput: rawOutput
+                )
+            }
+        } else {
+            let stderr = structuredOutput.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if DeveloperToolPreviewError.isDockerDaemonNotRunning(stderr: stderr) {
+                throw DeveloperToolPreviewError.daemonNotRunning(.docker)
+            }
+        }
+
+        return try legacyDockerPreview(executable: executable)
+    }
+
+    private func legacyDockerPreview(executable: URL) throws -> DeveloperToolPreview {
+        let arguments = Self.previewArguments(for: .docker)
+        let output = try runner.run(
+            executable: executable,
+            arguments: arguments,
+            timeout: timeout,
+            maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
+        )
+        guard output.exitCode == 0 else {
+            let stderr = output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if DeveloperToolPreviewError.isDockerDaemonNotRunning(stderr: stderr) {
+                throw DeveloperToolPreviewError.daemonNotRunning(.docker)
+            }
+            throw DeveloperToolPreviewError.commandFailed(
+                tool: .docker,
+                exitCode: output.exitCode,
+                stderr: stderr
+            )
+        }
+
+        let rawOutput = output.stdout.isEmpty ? output.stderr : output.stdout
+        let commandPreview = [executable.path] + arguments
+        return DeveloperToolPreview(
+            tool: .docker,
+            commandPreview: commandPreview,
+            items: Self.parsePreview(tool: .docker, commandPreview: commandPreview, output: rawOutput),
+            rawOutput: rawOutput
+        )
+    }
+
     static func previewArguments(for tool: DeveloperTool) -> [String] {
         switch tool {
         case .homebrew:
@@ -296,115 +361,12 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         }
     }
 
-    static func parsePreview(
-        tool: DeveloperTool,
-        commandPreview: [String],
-        output: String
-    ) -> [DeveloperToolPreviewItem] {
+    static func structuredPreviewArguments(for tool: DeveloperTool) -> [String] {
         switch tool {
         case .homebrew:
-            parseHomebrewCleanupPreview(output: output, commandPreview: commandPreview)
+            previewArguments(for: tool)
         case .docker:
-            parseDockerSystemDF(output: output, commandPreview: commandPreview)
+            ["system", "df", "--format", "json"]
         }
-    }
-
-    private static func parseHomebrewCleanupPreview(
-        output: String,
-        commandPreview: [String]
-    ) -> [DeveloperToolPreviewItem] {
-        output.split(separator: "\n").enumerated().compactMap { index, rawLine in
-            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty else { return nil }
-            guard line.lowercased().contains("would") || line.lowercased().contains("remove") else {
-                return nil
-            }
-
-            let bytes = parseFirstSize(in: line)
-            return DeveloperToolPreviewItem(
-                id: "homebrew-\(index)",
-                tool: .homebrew,
-                title: line,
-                reclaimableBytes: bytes,
-                commandPreview: commandPreview
-            )
-        }
-    }
-
-    private static func parseDockerSystemDF(
-        output: String,
-        commandPreview: [String]
-    ) -> [DeveloperToolPreviewItem] {
-        output.split(separator: "\n").compactMap { rawLine in
-            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty else { return nil }
-            let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
-            guard fields.count >= 5, fields[0] != "TYPE" else { return nil }
-            guard let reclaimableIndex = fields.indices.last(where: { fields[$0].contains("B") }) else {
-                return nil
-            }
-            let reclaimableToken = fields[reclaimableIndex]
-            let reclaimableBytes = parseDockerReclaimable(reclaimableToken)
-            let metricsStart = max(1, reclaimableIndex - 3)
-            let type = fields[..<metricsStart].joined(separator: " ")
-            return DeveloperToolPreviewItem(
-                id: "docker-\(type.lowercased().replacingOccurrences(of: " ", with: "-"))",
-                tool: .docker,
-                title: type,
-                detail: line,
-                reclaimableBytes: reclaimableBytes,
-                commandPreview: commandPreview
-            )
-        }
-    }
-
-    static func parseDockerReclaimable(_ token: String) -> Int64? {
-        let sizePart = token.split(separator: "(").first.map(String.init) ?? token
-        return parseSize(sizePart)
-    }
-
-    static func parseFirstSize(in line: String) -> Int64? {
-        let pattern = #"(?i)(\d+(?:\.\d+)?)\s*([KMGT]?B)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(line.startIndex ..< line.endIndex, in: line)
-        guard let match = regex.firstMatch(in: line, range: range),
-              match.numberOfRanges == 3,
-              let valueRange = Range(match.range(at: 1), in: line),
-              let unitRange = Range(match.range(at: 2), in: line) else {
-            return nil
-        }
-        return parseSize("\(line[valueRange])\(line[unitRange])")
-    }
-
-    static func parseSize(_ token: String) -> Int64? {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pattern = #"(?i)^(\d+(?:\.\d+)?)\s*([KMGT]?B)$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(trimmed.startIndex ..< trimmed.endIndex, in: trimmed)
-        guard let match = regex.firstMatch(in: trimmed, range: range),
-              match.numberOfRanges == 3,
-              let valueRange = Range(match.range(at: 1), in: trimmed),
-              let unitRange = Range(match.range(at: 2), in: trimmed),
-              let value = Double(trimmed[valueRange]) else {
-            return nil
-        }
-
-        let unit = trimmed[unitRange].uppercased()
-        let multiplier: Double = switch unit {
-        case "KB": 1_000
-        case "MB": 1_000_000
-        case "GB": 1_000_000_000
-        case "TB": 1_000_000_000_000
-        default: 1
-        }
-
-        // Guard the Int64 cast: reject non-finite, negative, or out-of-range
-        // products instead of trapping. `Double(Int64.max)` rounds up, so `<`
-        // is conservative and keeps the cast safe.
-        let product = value * multiplier
-        guard product.isFinite, product >= 0, product < Double(Int64.max) else {
-            return nil
-        }
-        return Int64(product)
     }
 }

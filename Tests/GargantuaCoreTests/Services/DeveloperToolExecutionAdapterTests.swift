@@ -61,6 +61,7 @@ struct DeveloperToolExecutionAdapterTests {
         let docker = try makeScratchBinary(name: "docker")
         defer { try? FileManager.default.removeItem(at: docker.deletingLastPathComponent()) }
 
+        let audit = AuditSpy()
         let runner = StubRunner(outputs: [
             "docker volume prune --force": ProcessOutput(stdout: "Deleted Volumes: a\n", stderr: "", exitCode: 0),
         ])
@@ -69,13 +70,19 @@ struct DeveloperToolExecutionAdapterTests {
                 DeveloperToolBinaryResolver.dockerEnvVarName: docker.path,
             ]),
             runner: runner,
-            auditRecorder: AuditSpy()
+            auditRecorder: audit
         )
 
         _ = try adapter.execute(.dockerVolumePrune, preview: dockerPreview(volumeBytes: 900), confirmationMethod: .fullModal)
 
         #expect(runner.calls.map(\.arguments) == [["volume", "prune", "--force"]])
         #expect(runner.calls.first?.timeout == 60)
+        let entry = try #require(audit.entries.first)
+        #expect(entry.command == "docker volume prune --force")
+        #expect(entry.safetyLevel == .protected_)
+        #expect(entry.confirmationMethod == .fullModal)
+        #expect(entry.cleanupMethod == .toolNative)
+        #expect(entry.bytesFreed == 900)
     }
 
     @Test("successful execution writes developer-tools audit entry shape")
@@ -109,6 +116,35 @@ struct DeveloperToolExecutionAdapterTests {
         #expect(entry.confirmationMethod == .summaryDialog)
         #expect(entry.cleanupMethod == .toolNative)
         #expect(entry.bytesFreed == 12_000_000)
+    }
+
+    @Test("unknown byte estimates audit as zero instead of borrowing another preview total")
+    func unknownEstimateAuditsAsZero() throws {
+        let brew = try makeScratchBinary(name: "brew")
+        defer { try? FileManager.default.removeItem(at: brew.deletingLastPathComponent()) }
+
+        let audit = AuditSpy()
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.homebrewEnvVarName: brew.path,
+            ]),
+            runner: StubRunner(outputs: [
+                "brew autoremove": ProcessOutput(stdout: "Uninstalled unused formulae\n", stderr: "", exitCode: 0),
+            ]),
+            auditRecorder: audit
+        )
+
+        let result = try adapter.execute(
+            .homebrewAutoremove,
+            preview: homebrewPreview(bytes: 12_000_000),
+            confirmationMethod: .summaryDialog
+        )
+
+        let entry = try #require(audit.entries.first)
+        #expect(result.estimatedBytesFreed == 0)
+        #expect(entry.command == "brew autoremove")
+        #expect(entry.bytesFreed == 0)
+        #expect(entry.confirmationMethod == .summaryDialog)
     }
 
     @Test("failure surfaces stderr and does not write audit")

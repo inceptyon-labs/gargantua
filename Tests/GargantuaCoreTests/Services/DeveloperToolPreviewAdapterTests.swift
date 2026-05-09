@@ -114,12 +114,49 @@ struct DeveloperToolPreviewAdapterTests {
         #expect(preview.reclaimableBytes == 1_012_500_000)
     }
 
-    @Test("Docker preview invokes system df and parses reclaimable column")
-    func dockerPreview() throws {
+    @Test("Docker preview prefers structured system df JSON when available")
+    func dockerStructuredPreview() throws {
         let docker = try makeScratchBinary(name: "docker")
         defer { try? FileManager.default.removeItem(at: docker.deletingLastPathComponent()) }
 
         let runner = StubRunner(outputs: [
+            "docker system df --format json": ProcessOutput(
+                stdout: """
+                {"Type":"Images","TotalCount":"12","Active":"4","Size":"8.5GB","Reclaimable":"2.1GB (24%)"}
+                {"Type":"Local Volumes","TotalCount":"5","Active":"5","Size":"10GB","Reclaimable":"0B (0%)"}
+                {"Type":"Build Cache","TotalCount":"30","Active":"0","Size":"1.2GB","Reclaimable":"800MB"}
+                """,
+                stderr: "",
+                exitCode: 0
+            ),
+        ])
+        let adapter = DeveloperToolPreviewAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.dockerEnvVarName: docker.path,
+            ]),
+            runner: runner
+        )
+
+        let preview = try adapter.preview(.docker)
+
+        #expect(runner.calls.map(\.arguments) == [["system", "df", "--format", "json"]])
+        #expect(preview.commandPreview == [docker.path, "system", "df", "--format", "json"])
+        #expect(preview.items.map(\.title) == ["Images", "Local Volumes", "Build Cache"])
+        #expect(preview.items.first?.detail?.contains("Reclaimable: 2.1GB (24%)") == true)
+        #expect(preview.reclaimableBytes == 2_900_000_000)
+    }
+
+    @Test("Docker preview falls back to legacy table when JSON format is unavailable")
+    func dockerPreviewFallsBackToLegacyTable() throws {
+        let docker = try makeScratchBinary(name: "docker")
+        defer { try? FileManager.default.removeItem(at: docker.deletingLastPathComponent()) }
+
+        let runner = StubRunner(outputs: [
+            "docker system df --format json": ProcessOutput(
+                stdout: "",
+                stderr: "template parsing error: function \"json\" not defined",
+                exitCode: 1
+            ),
             "docker system df": ProcessOutput(
                 stdout: """
                 TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
@@ -140,7 +177,10 @@ struct DeveloperToolPreviewAdapterTests {
 
         let preview = try adapter.preview(.docker)
 
-        #expect(runner.calls.map(\.arguments) == [["system", "df"]])
+        #expect(runner.calls.map(\.arguments) == [
+            ["system", "df", "--format", "json"],
+            ["system", "df"],
+        ])
         #expect(preview.commandPreview == [docker.path, "system", "df"])
         #expect(preview.items.map(\.title) == ["Images", "Build Cache", "Volumes"])
         #expect(preview.reclaimableBytes == 2_900_000_000)
@@ -168,7 +208,10 @@ struct DeveloperToolPreviewAdapterTests {
         )) {
             _ = try adapter.preview(.docker)
         }
-        #expect(runner.calls.map(\.arguments) == [["system", "df"]])
+        #expect(runner.calls.map(\.arguments) == [
+            ["system", "df", "--format", "json"],
+            ["system", "df"],
+        ])
     }
 
     @Test("Docker daemon-down stderr maps to .daemonNotRunning, not commandFailed")
@@ -213,6 +256,7 @@ struct DeveloperToolPreviewAdapterTests {
     func noDestructiveCommands() {
         #expect(DeveloperToolPreviewAdapter.previewArguments(for: .homebrew) == ["cleanup", "-n"])
         #expect(DeveloperToolPreviewAdapter.previewArguments(for: .docker) == ["system", "df"])
+        #expect(DeveloperToolPreviewAdapter.structuredPreviewArguments(for: .docker) == ["system", "df", "--format", "json"])
     }
 
     private func makeScratchBinary(name: String) throws -> URL {

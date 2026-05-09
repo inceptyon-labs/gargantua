@@ -27,14 +27,18 @@ extension DeveloperToolsView {
 
     static func confirmationItem(for request: ExecutionRequest) -> ScanResult {
         let operation = request.operation
+        let estimatedBytes = operation.estimatedReclaimableBytes(in: request.preview)
+        let explanation = estimatedBytes == nil
+            ? "\(operation.confirmationExplanation) \(operation.estimateUnavailableDetail)"
+            : operation.confirmationExplanation
         return ScanResult(
             id: "developer-tool-\(operation.id)",
             name: operation.label,
             path: operation.commandName,
-            size: operation.estimatedReclaimableBytes(in: request.preview) ?? request.preview.reclaimableBytes,
+            size: estimatedBytes ?? 0,
             safety: operation.safety,
             confidence: 80,
-            explanation: operation.detail,
+            explanation: explanation,
             source: SourceAttribution(name: operation.tool.displayName),
             category: "developer_tools",
             tags: ["developer_tools", operation.tool.rawValue, operation.id],
@@ -47,11 +51,25 @@ extension DeveloperToolsView {
         beforeBytes: Int64?,
         afterBytes: Int64?
     ) -> String {
-        guard let beforeBytes, let afterBytes else {
-            return "\(operation.label) completed. Preview refreshed."
+        switch (beforeBytes, afterBytes) {
+        case let (.some(before), .some(after)):
+            let recovered = max(0, before - after)
+            if recovered == 0 {
+                return "\(operation.label) completed. Preview refreshed; no reclaimable decrease was reported."
+            }
+            return "\(operation.label) completed. Preview dropped by \(AlertItem.formatBytes(recovered))."
+        case (.none, .none):
+            return "\(operation.label) completed. Preview refreshed; exact reclaimed bytes are unavailable for this command."
+        case (.none, .some(_)):
+            return "\(operation.label) completed. Preview refreshed; no before-run estimate was available."
+        case (.some(_), .none):
+            return "\(operation.label) completed. Preview refreshed; the updated preview no longer reports an exact estimate."
         }
-        let recovered = max(0, beforeBytes - afterBytes)
-        return "\(operation.label) completed. Preview dropped by \(AlertItem.formatBytes(recovered))."
+    }
+
+    static func refreshFailureMessage(operation: DeveloperToolCleanupOperation, error: Error) -> String {
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        return "\(operation.label) completed, but the preview refresh failed: \(message)"
     }
 
     /// Fold a new per-tool preview result into the phase.
@@ -142,7 +160,6 @@ extension DeveloperToolsView {
         await loadPreview(for: tool)
     }
 
-
     /// Start Docker Desktop and poll until the daemon answers, then refresh
     /// the Docker preview. Lifecycle activity is published on
     /// `dockerLifecycleActivity` so the panel can show a busy state instead
@@ -208,6 +225,17 @@ extension DeveloperToolsView {
 
         do {
             _ = try executionProvider(operation, request.preview, tier)
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            executionLogger.error("Execution for \(operation.id, privacy: .public) failed: \(message, privacy: .private)")
+            await MainActor.run {
+                session.executionNotices[operation.id] = .failure(message)
+                session.executingOperationID = nil
+            }
+            return
+        }
+
+        do {
             let refreshed = try previewProvider(operation.tool)
             let afterBytes = operation.estimatedReclaimableBytes(in: refreshed)
             await MainActor.run {
@@ -220,10 +248,12 @@ extension DeveloperToolsView {
                 session.executingOperationID = nil
             }
         } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            executionLogger.error("Execution for \(operation.id, privacy: .public) failed: \(message, privacy: .private)")
+            executionLogger.error("Preview refresh after \(operation.id, privacy: .public) failed: \(error.localizedDescription, privacy: .private)")
             await MainActor.run {
-                session.executionNotices[operation.id] = .failure(message)
+                session.executionNotices[operation.id] = .success(Self.refreshFailureMessage(
+                    operation: operation,
+                    error: error
+                ))
                 session.executingOperationID = nil
             }
         }

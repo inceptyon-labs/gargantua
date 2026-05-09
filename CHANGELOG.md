@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Developer Tools now prefers structured Docker `system df --format json` previews when available,
+  falls back to the legacy table output, and explains unknown post-run byte estimates instead of borrowing unrelated totals.
+- Protected Developer Tools operations now carry stronger risk copy and safety styling; Docker volume prune and Docker system prune
+  route through full-modal acknowledgment with explicit data-loss wording.
 - Reviewed snapshot now ships **51 cleanup files / 287 rules**, **2 generic + 5 app-pack remnant files / 28 + 41 rules**, and **3 command-action rules**. See `docs/mole-rule-parity-audit.md` for what's deferred.
 - Synced the reviewed Mole-expanded rule snapshot to the public `gargantua-rules` repository.
 

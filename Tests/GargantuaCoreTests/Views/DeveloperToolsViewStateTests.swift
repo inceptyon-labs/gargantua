@@ -324,6 +324,50 @@ struct DeveloperToolsViewExecutionFlowTests {
         #expect(confirmationTier(for: [DeveloperToolsView.confirmationItem(for: reviewRequest)]) == .summaryDialog)
     }
 
+    @Test("protected confirmation item explains what Docker data can be lost")
+    func protectedConfirmationItemCarriesRiskCopy() {
+        let docker = preview(tool: .docker, items: [
+            DeveloperToolPreviewItem(
+                id: "docker-volumes",
+                tool: .docker,
+                title: "Local Volumes",
+                reclaimableBytes: 100,
+                commandPreview: ["docker", "system", "df"]
+            ),
+        ])
+
+        let item = DeveloperToolsView.confirmationItem(for: DeveloperToolsView.ExecutionRequest(
+            operation: .dockerVolumePrune,
+            preview: docker
+        ))
+
+        #expect(item.safety == .protected_)
+        #expect(item.size == 100)
+        #expect(item.explanation.contains("databases"))
+        #expect(item.explanation.contains("cannot be rebuilt"))
+    }
+
+    @Test("unknown-estimate operations do not borrow unrelated preview bytes")
+    func unknownEstimateConfirmationItemUsesZero() {
+        let brew = preview(tool: .homebrew, items: [
+            DeveloperToolPreviewItem(
+                id: "homebrew-0",
+                tool: .homebrew,
+                title: "Would remove foo",
+                reclaimableBytes: 12_000_000,
+                commandPreview: ["brew", "cleanup", "-n"]
+            ),
+        ])
+
+        let item = DeveloperToolsView.confirmationItem(for: DeveloperToolsView.ExecutionRequest(
+            operation: .homebrewAutoremove,
+            preview: brew
+        ))
+
+        #expect(item.size == 0)
+        #expect(item.explanation.contains("does not report an exact reclaim estimate"))
+    }
+
     @Test("success message reports post-run preview delta")
     func successMessageReportsDelta() {
         let message = DeveloperToolsView.successMessage(
@@ -334,6 +378,23 @@ struct DeveloperToolsViewExecutionFlowTests {
 
         #expect(message.contains("Prune dangling images completed"))
         #expect(message.contains("1.5 GB"))
+    }
+
+    @Test("success message explains unknown and unchanged estimates")
+    func successMessageExplainsUnknownEstimates() {
+        let unknown = DeveloperToolsView.successMessage(
+            operation: .homebrewAutoremove,
+            beforeBytes: nil,
+            afterBytes: nil
+        )
+        let unchanged = DeveloperToolsView.successMessage(
+            operation: .dockerBuilderPrune,
+            beforeBytes: 500,
+            afterBytes: 500
+        )
+
+        #expect(unknown.contains("exact reclaimed bytes are unavailable"))
+        #expect(unchanged.contains("no reclaimable decrease"))
     }
 }
 

@@ -104,6 +104,14 @@ struct AcknowledgeableItemRow: View {
                     .foregroundStyle(GargantuaColors.ink3)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                if item.safety == .protected_, !item.explanation.isEmpty {
+                    Text(item.explanation)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.protected_)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer()

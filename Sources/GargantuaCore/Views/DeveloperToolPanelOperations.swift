@@ -38,18 +38,30 @@ extension DeveloperToolPanel {
                         Text(operation.label)
                             .font(GargantuaFonts.label)
                             .foregroundStyle(GargantuaColors.ink)
-                        Text(operation.safety.rawValue.capitalized)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(operation.safety.tintColor)
+                        safetyLabel(for: operation)
                     }
                     Text(operation.detail)
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                         .lineLimit(2)
+                    if let riskDetail = operation.riskDetail {
+                        HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space1) {
+                            Image(systemName: "lock.shield")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(riskDetail)
+                                .font(GargantuaFonts.caption)
+                        }
+                        .foregroundStyle(GargantuaColors.protected_)
+                        .lineLimit(2)
+                    }
                     if let bytes = operation.estimatedReclaimableBytes(in: preview) {
                         Text(Self.formatBytes(bytes) + " previewed")
                             .font(GargantuaFonts.monoData)
                             .foregroundStyle(GargantuaColors.ink2)
+                    } else {
+                        Text("Exact reclaim estimate unavailable")
+                            .font(GargantuaFonts.monoData)
+                            .foregroundStyle(GargantuaColors.ink3)
                     }
                 }
                 Spacer(minLength: GargantuaSpacing.space3)
@@ -62,6 +74,26 @@ extension DeveloperToolPanel {
         }
         .padding(.horizontal, GargantuaSpacing.space3)
         .padding(.vertical, GargantuaSpacing.space2)
+        .background(operation.safety == .protected_ ? GargantuaColors.protectedDim : Color.clear)
+        .overlay(alignment: .leading) {
+            if operation.safety == .protected_ {
+                Rectangle()
+                    .fill(GargantuaColors.protected_)
+                    .frame(width: 3)
+            }
+        }
+    }
+
+    func safetyLabel(for operation: DeveloperToolCleanupOperation) -> some View {
+        HStack(spacing: GargantuaSpacing.space1) {
+            if operation.safety == .protected_ {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            Text(operation.safety.rawValue.capitalized)
+                .font(GargantuaFonts.caption)
+        }
+        .foregroundStyle(operation.safety.tintColor)
     }
 
     func runButton(

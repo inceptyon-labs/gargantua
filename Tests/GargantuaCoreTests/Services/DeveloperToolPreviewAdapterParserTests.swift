@@ -81,6 +81,38 @@ struct DeveloperToolPreviewAdapterParserTests {
         #expect(DeveloperToolPreviewAdapter.parseDockerReclaimable("99999999999999TB(100%)") == nil)
     }
 
+    @Test("parseDockerSystemDFJSON accepts newline-delimited JSON rows")
+    func parseDockerSystemDFJSONLines() {
+        let rows = DeveloperToolPreviewAdapter.parseDockerSystemDFJSON(
+            output: """
+            {"Type":"Images","TotalCount":"12","Active":"4","Size":"8.5GB","Reclaimable":"2.1GB (24%)"}
+            {"Type":"Local Volumes","TotalCount":"5","Active":"5","Size":"10GB","Reclaimable":"0B (0%)"}
+            {"Type":"Build Cache","TotalCount":"30","Active":"0","Size":"1.2GB","Reclaimable":"800MB"}
+            """,
+            commandPreview: ["docker", "system", "df", "--format", "json"]
+        )
+
+        #expect(rows.map(\.title) == ["Images", "Local Volumes", "Build Cache"])
+        #expect(rows.map(\.reclaimableBytes) == [.some(2_100_000_000), .some(0), .some(800_000_000)])
+        #expect(rows.first?.detail?.contains("Total: 12") == true)
+    }
+
+    @Test("parseDockerSystemDFJSON accepts top-level JSON array")
+    func parseDockerSystemDFJSONArray() {
+        let rows = DeveloperToolPreviewAdapter.parseDockerSystemDFJSON(
+            output: """
+            [
+              {"type":"Containers","total":2,"active":0,"size":"4MB","reclaimable":"4MB (100%)"},
+              {"type":"Build Cache","total":1,"active":0,"size":"512MB","reclaimable":"512MB"}
+            ]
+            """,
+            commandPreview: ["docker", "system", "df", "--format", "json"]
+        )
+
+        #expect(rows.map(\.title) == ["Containers", "Build Cache"])
+        #expect(rows.map(\.reclaimableBytes) == [.some(4_000_000), .some(512_000_000)])
+    }
+
     // MARK: - DeveloperToolPreview.reclaimableBytes saturation
 
     @Test("reclaimableBytes saturates at Int64.max instead of trapping on sum overflow")

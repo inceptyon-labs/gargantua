@@ -56,6 +56,27 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
         }
     }
 
+    public var riskDetail: String? {
+        switch self {
+        case .dockerVolumePrune:
+            "Docker volumes can hold databases, uploads, and project state that cannot be rebuilt from images."
+        case .dockerSystemPrune:
+            "This broad Docker prune can remove stopped-container state, untagged images, networks, and build cache; expect rebuilds or re-pulls."
+        case .homebrewPruneAll:
+            "This removes all cached Homebrew downloads, including files you may want offline."
+        default:
+            nil
+        }
+    }
+
+    public var estimateUnavailableDetail: String {
+        "This command does not report an exact reclaim estimate; Gargantua records 0 bytes in the audit entry when the tool cannot provide one."
+    }
+
+    public var confirmationExplanation: String {
+        [detail, riskDetail].compactMap(\.self).joined(separator: " ")
+    }
+
     public var safety: SafetyLevel {
         switch self {
         case .homebrewPruneAll, .dockerVolumePrune, .dockerSystemPrune:
