@@ -1,6 +1,6 @@
 # Mole Rule Parity Audit
 
-Audit date: 2026-04-24 UTC (refreshed 2026-05-06)
+Audit date: 2026-04-24 UTC (refreshed 2026-05-09)
 Bean: `gargantua-81zc` (refresh: `gargantua-ds8g` under epic `gargantua-wpl6`)
 Mole source: `tw93/Mole@fd209bf1c8e7f1c07a3d5cb3f2c5c38ab730ad8e`
 Mole commit date: 2026-04-24T08:02:08+08:00
@@ -18,10 +18,10 @@ After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closi
 | Path-based developer cleanup | 19 | 118 |
 | Path-based system cleanup | 8 | 44 |
 | Path-based generic uninstall/remnant | 2 | 28 |
-| Path-based app-specific uninstall packs | 5 | 41 |
+| Path-based app-specific uninstall packs | 7 | 63 |
 | Command-action rules (developer) | 3 | 3 |
 | Code-native stale-version discovery | n/a — discovered at scan time | Xcode DeviceSupport + JetBrains Toolbox version sets |
-| **Total static rules** | **61** | **346** |
+| **Total static rules** | **63** | **368** |
 | Dynamic `pkgutil` receipt evidence | n/a — discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
 
 The pkgutil channel is intentionally not file-counted: receipts are inspected per uninstall (`PackageReceiptExpander` → `ReceiptRemnantBuilder`) and surface as `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, install date, and ownership provenance. Receipts are *evidence*, not permission — shared system paths (`/Library/LaunchDaemons`, `/Library/PrivilegedHelperTools`, `/Library/Frameworks`, etc.) upgrade to `.protected_`, and protected-root entries drop on the floor.
@@ -87,14 +87,14 @@ Remaining gaps or deliberately deferred behavior:
 
 - Low-signal or highly niche GUI app cache paths from Mole can be added later, but the high-value cloud, office, communication, VM, media, productivity, launcher, game, and remote desktop families are now represented.
 - Dynamic pruning behaviors remain out of YAML, including app-specific retention loops and checks that require command execution or app-aware current-version logic.
-- App-specific protection checks such as Spotify offline-media detection and Raycast clipboard-history protection are represented conservatively by review-gated rules or narrow cache paths, not by broad data-directory deletion.
+- App-specific protection checks such as Spotify offline-media detection are represented conservatively by review-gated rules or narrow cache paths, not by broad data-directory deletion. Raycast clipboard/history protection is now covered in the app-specific uninstall pack.
 
 Classification posture used for the port:
 
 - `safe`: cache, code cache, GPU cache, temp files, non-user logs, crash-report cache, media transcode cache where regenerated.
 - `review`: offline media, sync databases, local storage, clipboard/history caches, app-specific support data, plugin caches with user projects nearby.
 - `protected`: sync roots, user documents, credentials, account databases, keychains, browser cookies, active app state.
-- `out-of-scope until app-specific guard exists`: Spotify-style offline-media detection, Raycast clipboard-history protection, and other app-specific "cache but contains user data" checks.
+- `out-of-scope until app-specific guard exists`: Spotify-style offline-media detection and other app-specific "cache but contains user data" checks.
 
 ### Developer Tooling
 
@@ -145,13 +145,13 @@ Ported from Mole in `gargantua-jjue`, with app-specific packs and receipt eviden
 - User-level static patterns: WebKit WebContent, HTTPStorages, cookies, Application Scripts, Services/Workflows, QuickLook generators, Internet Plug-Ins, Audio Plug-Ins, PreferencePanes, Input Methods, Screen Savers, Frameworks, Contextual Menu Items, Spotlight importers, ColorPickers, SyncedPreferences, Address Book plug-ins, Accessibility bundles, Mail bundles, XDG-style config/data directories, dotfiles, ByHost preferences, CrashReporter, diagnostic reports, shared file lists, and NSURLSession downloads.
 - Bundle-ID-derived remnants: app extension containers under Application Scripts, Containers, FileProvider, and Group Containers using bundle ID, team ID, and name variants where available.
 - System-level remnants: `/Library/Application Support`, `/Library/Caches`, `/Library/Logs`, `/Library/Preferences`, plug-ins/extensions, privileged helpers, LaunchAgent/Daemon variants, and protected package receipts.
-- App-specific uninstall packs (`gargantua-uv74`): Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed each get a curated remnant rule file under `uninstall_rules/app_packs/` covering CLI shims, helper bundles, sandbox containers, and well-known support paths the generic remnant rules can't infer from bundle ID alone. 5 files / 41 rules.
+- App-specific uninstall packs (`gargantua-uv74`, `gargantua-v85l`): Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast each get curated remnant rule files under `uninstall_rules/app_packs/` covering CLI shims, helper bundles, sandbox containers, project-root protection, automation/history carve-outs, and well-known support paths the generic remnant rules can't infer from bundle ID alone. 7 files / 63 rules.
 - Receipt/BOM expansion (`gargantua-rloy`, surfaced via `gargantua-4bub` MCP and `gargantua-q05d` UI): `PackageReceiptExpander` runs `pkgutil --pkgs` / `--pkg-info` / `--files` and feeds candidates through `ReceiptRemnantBuilder`, which drops protected roots, upgrades shared system paths to `.protected_`, and emits `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, and install date. The Smart Uninstaller plan-review row renders a `RECEIPT` badge plus the package identifier; MCP's `explain` tool returns the same provenance in its structured response.
 - Scanner support: Mole-style app-name variants now include lowercase compound forms such as `maestro-studio`, and literal template hits resolve to the filesystem's actual child casing before dedupe.
 
 Remaining gaps or deliberately deferred behavior:
 
-- ~~App-specific uninstall knowledge: Android Studio, Xcode, JetBrains, Unity/Unreal/Godot, VS Code, Docker, Maestro Studio, Raycast.~~ **Mostly addressed.** Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed shipped under `gargantua-uv74`. Unity/Unreal/Godot, Maestro Studio, and Raycast remain candidates for the next pack batch — they were held back because their remnants either need active-session detection (Maestro), shared with user projects (game engines), or sit too close to clipboard/automation history that should not be touched (Raycast).
+- ~~App-specific uninstall knowledge: Android Studio, Xcode, JetBrains, Unity/Unreal/Godot, VS Code, Docker, Maestro Studio, Raycast.~~ **Mostly addressed.** Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed shipped under `gargantua-uv74`; Unity/Unreal/Godot and Raycast shipped under `gargantua-v85l` with review/protected treatment for shared projects, version-pinned templates, clipboard/history data, and user automation. Maestro Studio remains deferred until active-session/project-adjacent paths can be separated.
 - ~~Receipt/BOM expansion: package receipt files are protected, but Gargantua still cannot declaratively expand BOM contents into owned installed files.~~ **Addressed.** See the `PackageReceiptExpander` / `ReceiptRemnantBuilder` bullet above. What remains deferred: receipt-driven *deletion* without an explicit user override (receipts are evidence, not permission), and BOM expansion outside the Smart Uninstaller flow.
 - Login item removal, defaults-domain deletion, app-name variant command workflows, and sensitive-data preflight UX beyond current review/protected classification.
 
@@ -202,11 +202,11 @@ A future bean can promote any of these once the UX models the consequence honest
 
 - **Command-action rules** (`gargantua-y84i`): `CommandActionRule` schema + simctl/pnpm/go starter set in `command_rules/developer/`. MCP `scan`/`clean` integration and the in-app cleanup-flow surface for command rules remain open as next-tier follow-ups.
 - **Receipt/BOM uninstall evidence** (`gargantua-rloy`): `PackageReceiptExpander` + `ReceiptRemnantBuilder`. Surfaced in MCP `explain` (`gargantua-4bub`), Smart Uninstaller plan-review row (`gargantua-q05d`), and cross-app shared-receipt behavior + CONTRIBUTING docs (`gargantua-hkbg`).
-- **App-specific uninstall packs** (`gargantua-uv74`): vendored snapshot for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
+- **App-specific uninstall packs** (`gargantua-uv74`, `gargantua-v85l`): vendored snapshot for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
 
 Open tail items, not blocking the epic:
 
 - Promotion of any **command-action hold-list** entry (see below) once its UX models the consequence honestly.
-- Next batch of **app packs** — Unity/Unreal/Godot, Maestro Studio, Raycast — held back on the criteria noted in the Uninstall And Remnant Rules section.
+- Remaining **app pack** candidate: Maestro Studio, held back until active-session and project-adjacent paths can be separated.
 - The signature **Confidence Orbit** finally rendering on the Smart Uninstaller picker (`gargantua-bcpw`) is part of this epic's brand surface even though it's not strictly a parity item.
 - Public rule sync to `inceptyon-labs/gargantua-rules` remains the long-running maintenance task that is not gated on parity work.

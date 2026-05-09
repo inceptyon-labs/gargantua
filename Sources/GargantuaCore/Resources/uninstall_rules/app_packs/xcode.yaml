@@ -24,7 +24,7 @@
 #   ~/Library/Developer/CoreSimulator
 remnant_rules:
 
-  - id: xcode_derived_data
+  - id: xcode_uninstall_derived_data
     name: Xcode DerivedData
     category: caches
     path_templates:
@@ -40,7 +40,7 @@ remnant_rules:
     regenerates: true
     tags: [app_pack, xcode, cache, derived]
 
-  - id: xcode_archives
+  - id: xcode_uninstall_archives
     name: Xcode Archives
     category: support_files
     path_templates:
@@ -94,7 +94,7 @@ remnant_rules:
     regenerates: true
     tags: [app_pack, xcode, device_support]
 
-  - id: xcode_caches
+  - id: xcode_uninstall_caches
     name: Xcode caches
     category: caches
     path_templates:

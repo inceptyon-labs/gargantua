@@ -98,6 +98,16 @@ swift run GargantuaMCP       # or scan via MCP for a structured dry-run
 
 Mole parity status and the inventory of deferred items live in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md). Use it as the reference for what's intentionally not yet ported.
 
+### App-pack remnant rules
+
+App-specific uninstall packs live under `uninstall_rules/app_packs/` and should be used when a generic bundle-ID or app-name template cannot explain ownership or risk precisely enough.
+
+- Every `app_pack` rule must declare `applies_to.bundle_ids`; broad packs without bundle scoping are rejected by integration tests.
+- Curated app-pack rows are evaluated before generic remnant rows. If both match the same path, the app-pack rule's safety, confidence, explanation, and source win during dedupe.
+- Keep broad support directories `review` unless every child is known disposable. Use `exclude` to carve out credentials, history, automation, sync state, and other sensitive children before surfacing the directory.
+- Common project roots, signing keys, credentials, clipboard/history stores, and user-authored automation should be `protected` or deliberately excluded.
+- Add focused tests for new families: scoping, app-name variants when used, sensitive-data preflight, protected carve-outs, and generic-vs-app-pack dedupe.
+
 ### Receipt evidence (pkgutil)
 
 A third evidence shape covers files that aren't expressible as a single YAML path: installer-placed files discovered by reading the installer's own bill-of-materials. Smart Uninstaller asks `pkgutil` which packages a target app plausibly owns, expands each receipt's BOM, and surfaces the candidates alongside YAML-rule remnants.

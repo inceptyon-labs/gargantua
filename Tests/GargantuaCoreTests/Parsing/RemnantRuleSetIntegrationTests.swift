@@ -23,13 +23,13 @@ struct RemnantRuleSetIntegrationTests {
     @Test("Expected number of remnant rule files loaded")
     func expectedFileCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        #expect(result.filesLoaded == 7)
+        #expect(result.filesLoaded == 9)
     }
 
     @Test("Expected number of remnant rules loaded")
     func expectedRuleCount() throws {
         let result = try loader.loadRules(from: rulesDirectory)
-        #expect(result.rules.count == 69)
+        #expect(result.rules.count == 91)
     }
 
     @Test("App packs scope every rule with applies_to.bundle_ids")
@@ -59,6 +59,11 @@ struct RemnantRuleSetIntegrationTests {
             "jetbrains_license_state_protected",
             "vscode_user_settings_protected",
             "zed_settings_protected",
+            "unity_project_roots_protected",
+            "unreal_project_roots_protected",
+            "godot_project_roots_protected",
+            "raycast_sensitive_history_protected",
+            "raycast_user_automation_protected",
         ]
 
         for id in protectedIDs {
@@ -111,5 +116,36 @@ struct RemnantRuleSetIntegrationTests {
         #expect(rulesByID["generic_launch_daemons"]?.safety == .protected_)
         #expect(rulesByID["generic_package_receipts"]?.safety == .protected_)
         #expect(rulesByID["generic_webkit_webcontent_storage"]?.safety == .safe)
+    }
+
+    @Test("Game-engine and Raycast app packs scope variants and sensitive carve-outs")
+    func appPackBatch2Coverage() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let rulesByID = Dictionary(uniqueKeysWithValues: result.rules.map { ($0.id, $0) })
+
+        #expect(rulesByID["unity_engine_caches"]?.appliesTo?.bundleIDs.contains("com.unity3d.unityhub") == true)
+        #expect(rulesByID["unreal_derived_data_cache"]?.safety == .review)
+        #expect(rulesByID["godot_editor_state"]?.pathTemplates.contains("~/.config/{appNameVariant}") == true)
+        #expect(rulesByID["godot_editor_state"]?.appliesTo?.bundleIDs.contains("org.godotengine.godot4") == true)
+
+        #expect(rulesByID["raycast_support_state"]?.exclude.contains("clipboard*") == true)
+        #expect(rulesByID["raycast_support_state"]?.exclude.contains("Raycast.sqlite*") == true)
+        #expect(rulesByID["raycast_support_state"]?.safety == .review)
+        #expect(rulesByID["raycast_transient_caches"]?.safety == .safe)
+        #expect(rulesByID["raycast_sensitive_history_protected"]?.safety == .protected_)
+        #expect(rulesByID["raycast_user_automation_protected"]?.safety == .protected_)
+    }
+
+    @Test("App-pack paths do not target protected filesystem roots directly")
+    func appPackRulesAvoidProtectedRootTargets() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let appPackRules = result.rules.filter { $0.tags.contains("app_pack") }
+        let forbiddenRoots = Set(["~", "~/Library", "/", "/Applications", "/Library", "/System", "/Users"])
+
+        for rule in appPackRules {
+            for path in rule.pathTemplates {
+                #expect(!forbiddenRoots.contains(path), "\(rule.id) targets protected root \(path)")
+            }
+        }
     }
 }

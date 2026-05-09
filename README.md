@@ -72,7 +72,7 @@ Gargantua's trust layer uses three safety levels:
 Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships five evidence shapes:
 
 - **Path-based cleanup rules** — 51 files / 287 rules across apps, browsers, developer tools, and system locations.
-- **Path-based remnant rules** — 2 generic files / 28 rules plus 5 app-pack files / 41 app-specific rules for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
+- **Path-based remnant rules** — 2 generic files / 28 rules plus 7 app-pack files / 63 app-specific rules for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
 - **Command-action rules** — 3 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) recorded with tool version, exit code, and arguments per run.
 - **Code-native stale-version discovery** — Xcode DeviceSupport and JetBrains Toolbox version directories grouped by product/family/version with keep-latest, current-version, and pinned-path guards.
 - **Dynamic `pkgutil` receipt evidence** — Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.

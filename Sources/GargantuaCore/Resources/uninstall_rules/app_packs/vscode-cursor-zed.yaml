@@ -89,7 +89,7 @@ remnant_rules:
     regenerates: true
     tags: [app_pack, vscode, cursor, cache, extension_host]
 
-  - id: vscode_logs
+  - id: vscode_family_logs
     name: VS Code / Cursor / Zed logs
     category: logs
     path_templates:

@@ -111,7 +111,7 @@ remnant_rules:
     regenerates: false
     tags: [app_pack, docker, config]
 
-  - id: docker_buildx_cache
+  - id: docker_desktop_buildx_cache
     name: Docker Buildx cache
     category: caches
     path_templates:
