@@ -261,7 +261,8 @@ public struct DeepCleanView: View {
                 let adapter: any ScanAdapter = try adapterOverride
                     ?? ProfileScanAdapterFactory.make(
                         profile: profile,
-                        staleVersionPinnedPaths: staleVersionPinnedPaths
+                        staleVersionPinnedPaths: staleVersionPinnedPaths,
+                        aiModelExcludedPaths: staleVersionPinnedPaths
                     )
                 let results = try await adapter.scan(
                     progress: session.scanProgress,

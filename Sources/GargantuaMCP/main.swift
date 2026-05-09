@@ -113,9 +113,11 @@ private func loadPathExclusionPatterns() -> Set<String> {
 // the default profile pipeline. Optional adapter failures never break the path
 // scan; an empty optional result list is the worst case.
 private let scanRunner: MCPScanToolHandler.Scanner = { profile in
+    let pathExclusions = loadPathExclusionPatterns()
     let adapter = try ProfileScanAdapterFactory.make(
         profile: profile,
-        staleVersionPinnedPaths: loadPathExclusionPatterns()
+        staleVersionPinnedPaths: pathExclusions,
+        aiModelExcludedPaths: pathExclusions
     )
     return try runBlocking {
         try await adapter.scan(progress: nil)

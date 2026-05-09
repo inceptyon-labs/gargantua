@@ -208,15 +208,16 @@ Trust Layer rules specific to command-action rules:
 
 ### Code-native scan adapters
 
-Some cleanup evidence cannot be modeled honestly in YAML. Version-retention loops are the first example: a directory is not removable just because its name sorts older than another directory. These live in Swift scan adapters such as `StaleVersionScanAdapter`, not in `cleanup_rules/`.
+Some cleanup evidence cannot be modeled honestly in YAML. Version-retention loops are the first example: a directory is not removable just because its name sorts older than another directory. Model-aware duplicate/orphan discovery is another: a `.gguf` is not safe just because it is large, and two files are only duplicate candidates when the app can explain the filename/size evidence. These live in Swift scan adapters such as `StaleVersionScanAdapter` and `AIModelIntelligenceScanAdapter`, not in `cleanup_rules/`.
 
 Rules for adding a code-native adapter:
 
-- Keep candidates grouped by product/family/version so the UI can explain what was kept and why.
-- Default to `review` unless ownership, current version, and restore path are explicit.
-- Support keep-latest-N and a user pin/exclusion path before surfacing a candidate.
+- Keep candidates grouped by the domain's real decision axis: product/family/version for retention, duplicate group for same-name/same-size files, or orphan file when no known store owns it.
+- Default to `review` unless ownership, current version, restore path, and consequence are explicit.
+- Support user exclusions before surfacing a candidate, and never bypass protected-root checks.
+- Do not inspect local AI model contents; use only filenames, paths, sizes, timestamps, and store metadata needed for classification.
 - Route results as ordinary `ScanResult` rows so existing confirmation, protected-root checks, cleanup, and audit flows stay in control.
-- Add focused tests for version parsing, retention decisions, pins/current-version guards, and profile category gating.
+- Add focused tests for the adapter's evidence model: retention decisions, duplicate grouping, orphan thresholds, exclusions, protected roots, and profile category gating.
 
 ## Code Validation
 

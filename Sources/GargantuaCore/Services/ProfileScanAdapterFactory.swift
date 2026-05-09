@@ -5,7 +5,8 @@ public enum ProfileScanAdapterFactory {
     public static func make(
         profile: CleanupProfile,
         scanRoots: [URL]? = nil,
-        staleVersionPinnedPaths: Set<String> = []
+        staleVersionPinnedPaths: Set<String> = [],
+        aiModelExcludedPaths: Set<String> = []
     ) throws -> any ScanAdapter {
         let categories = Set(profile.categories)
         let staleVersionPolicy = StaleVersionRetentionPolicy(pinnedPaths: staleVersionPinnedPaths)
@@ -16,6 +17,11 @@ public enum ProfileScanAdapterFactory {
                 StaleVersionScanAdapter.loadDefaults(
                     categories: categories,
                     policy: staleVersionPolicy
+                ),
+                AIModelIntelligenceScanAdapter.loadDefaults(
+                    categories: categories,
+                    scanRoots: scanRoots,
+                    excludedPaths: aiModelExcludedPaths
                 ),
             ]
         )

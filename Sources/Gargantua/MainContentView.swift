@@ -126,6 +126,7 @@ struct MainContentView: View {
                                 AIModelsView(
                                     profile: .aiModels,
                                     scanRoots: resolvedScanRoots,
+                                    aiModelExcludedPaths: pathExclusionPatterns,
                                     session: aiModelsSession,
                                     onExplain: explainHandler,
                                     onAdvisory: advisoryHandler,

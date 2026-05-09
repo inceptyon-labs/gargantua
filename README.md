@@ -49,7 +49,7 @@ Most cleaner apps optimize for big numbers and vague confidence. Gargantua optim
 - **Duplicate Finder** — duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
 - **File Health** — empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
 - **Disk Explorer** — interactive treemap and directory drill-down for understanding where space goes before cleaning.
-- **AI Models cleanup** — dedicated profile for downloaded LLM and diffusion model storage, biased toward `review` since re-downloading is expensive.
+- **AI Models cleanup** — dedicated profile for downloaded LLM and diffusion model storage, with review-only duplicate/orphan model-file intelligence since re-downloading is expensive.
 - **Cleanup Profiles** — built-in (`Developer`, `Light Cleanup`, `Deep Clean`, `Dev Purge`, `AI Models`) and custom profiles that decide which rule categories run and which safety overrides apply.
 - **Explainability** — per-item explanations sourced from rules, metadata, and optional local or cloud model inference.
 - **Scheduled Scans** — launchd-backed background scans with interval presets, custom cron expressions, profile selection, and skip-on-battery.

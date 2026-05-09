@@ -8,8 +8,8 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "AIModels
 /// Mirrors DevArtifactScanView's phase machine (idle → scanning → results →
 /// cleaning → summary) but presents a DiskExplorerView-style centered idle
 /// CTA because there's only one logical scope (AI models) — no per-category
-/// checkboxes. Runs a `NativeScanAdapter` against the `aiModels` profile and
-/// renders results with `ScanBucketListView`.
+/// checkboxes. Runs the profile scan pipeline against the `aiModels` profile
+/// and renders results with `ScanBucketListView`.
 ///
 /// State lives on an injected `AIModelsState` so a scan triggered here
 /// survives sidebar navigation. The header's Refresh / Rescan buttons are
@@ -18,6 +18,7 @@ public struct AIModelsView: View {
     private let profile: CleanupProfile
     private let adapterOverride: (any ScanAdapter)?
     private let scanRoots: [URL]?
+    private let aiModelExcludedPaths: Set<String>
     private let session: AIModelsState
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -30,6 +31,7 @@ public struct AIModelsView: View {
         profile: CleanupProfile = .aiModels,
         scanRoots: [URL]? = nil,
         adapter: (any ScanAdapter)? = nil,
+        aiModelExcludedPaths: Set<String> = [],
         session: AIModelsState,
         onExplain: ((ScanResult) -> Void)? = nil,
         onAdvisory: (([ScanResult]) -> Void)? = nil,
@@ -38,6 +40,7 @@ public struct AIModelsView: View {
         self.profile = profile
         self.scanRoots = scanRoots
         self.adapterOverride = adapter
+        self.aiModelExcludedPaths = aiModelExcludedPaths
         self.session = session
         self.onExplain = onExplain
         self.onAdvisory = onAdvisory
@@ -53,6 +56,7 @@ public struct AIModelsView: View {
             profile: profile,
             scanRoots: nil,
             adapter: adapter,
+            aiModelExcludedPaths: [],
             session: AIModelsState(),
             onExplain: nil,
             onAdvisory: nil,
@@ -302,7 +306,11 @@ extension AIModelsView {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
-                    ?? NativeScanAdapter.loadDefaults(profile: profile, scanRoots: scanRoots)
+                    ?? ProfileScanAdapterFactory.make(
+                        profile: profile,
+                        scanRoots: scanRoots,
+                        aiModelExcludedPaths: aiModelExcludedPaths
+                    )
                 let results = try await adapter.scan(progress: session.scanProgress, observer: session.pathStream)
 
                 let duration = Date().timeIntervalSince(start)

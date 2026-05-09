@@ -113,6 +113,7 @@ Remaining gaps or deliberately deferred behavior:
 - Version-pruning behavior is now partially addressed outside YAML by `StaleVersionScanAdapter`: Xcode DeviceSupport and JetBrains Toolbox app-version directories are grouped by product/family/version, keep latest retained versions, honor pinned paths and current-version hints, and surface old versions as `review`.
 - Remaining version-pruning gaps include Xcode documentation indexes, simulator/runtime availability beyond static DeviceSupport directories, Android SDK platforms/build-tools/NDK/cmake retention, Claude Code/Codex/Cursor agent runtime versions, and any cleanup that needs live active-use identity before the app can separate "old" from "unused."
 - Broad or risky project artifacts remain conservative: generic `bin`/`obj`, Terraform project caches, shell-history backups, Prometheus WAL, model caches, and upload staging are review-gated.
+- AI model duplicate/orphan intelligence is now handled by `AIModelIntelligenceScanAdapter`, but this is Gargantua-native value rather than Mole parity: it uses filename, size, timestamp, and known-store metadata to surface review-only duplicate candidates and orphan weights without inspecting model contents or claiming safe deletion.
 
 Pre-port classification:
 

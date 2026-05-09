@@ -192,9 +192,11 @@ public struct DashboardView: View {
         let profile = resolveTriageProfile()
         Task {
             do {
+                let pathExclusions = staleVersionPinnedPaths()
                 let adapter = try ProfileScanAdapterFactory.make(
                     profile: profile,
-                    staleVersionPinnedPaths: staleVersionPinnedPaths()
+                    staleVersionPinnedPaths: pathExclusions,
+                    aiModelExcludedPaths: pathExclusions
                 )
                 let results = try await adapter.scan(progress: progress)
                 session.alerts = AlertItem.aggregate(from: results)

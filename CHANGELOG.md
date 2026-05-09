@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cloud AI (Anthropic)** with Keychain-only key storage, per-request redaction, optional 4 KB content-preview consent, hard monthly spend cap, and a dynamic Anthropic model picker.
 - **Disk Explorer** treemap and directory drill-down for visualizing reclaimable space before cleaning.
 - **AI Models** profile and view for downloaded LLM/diffusion model storage, biased toward `review`.
+- **AI model intelligence** for review-only duplicate model candidates and orphan `.gguf` / `.safetensors` / `.onnx` / PyTorch-family weights, using filename/size metadata without reading model contents.
 - **File Health** scans (empty files, big files, similar images, broken symlinks) backed by a vendored `czkawka_cli`.
 - **Duplicate Finder** backed by a vendored `fclones`, scoped to user-defined personal-scope roots.
 - **Command-action rules** schema (`Resources/command_rules/`) with starter coverage for `xcrun simctl delete unavailable`, `pnpm store prune`, and `go clean -cache`; surfaced through scan + cleanup.
