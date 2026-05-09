@@ -111,6 +111,17 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         firstByPID.reserveCapacity(firstSamples.count)
         for sample in firstSamples { firstByPID[sample.pid] = sample }
 
+        // Within a single scan, most processes share the same UID (the
+        // logged-in user), so caching the lookup avoids ~95% of redundant
+        // `getpwuid_r` calls per scan.
+        var userNameCache: [UInt32: String?] = [:]
+        let resolveUser: (UInt32) -> String? = { uid in
+            if let cached = userNameCache[uid] { return cached }
+            let name = userNameForUID(uid)
+            userNameCache[uid] = name
+            return name
+        }
+
         var items: [ProcessItem] = []
         items.reserveCapacity(secondSamples.count)
         for current in secondSamples {
@@ -124,7 +135,12 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
                 if priorOpt.executablePath == current.executablePath { return priorOpt }
                 return nil
             }()
-            let item = makeItem(prior: prior, current: current, launchdItems: launchdItems)
+            let item = makeItem(
+                prior: prior,
+                current: current,
+                launchdItems: launchdItems,
+                resolveUser: resolveUser
+            )
             items.append(item)
         }
 
@@ -143,7 +159,8 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     private func makeItem(
         prior: RawProcessSample?,
         current: RawProcessSample,
-        launchdItems: [LaunchdItem]
+        launchdItems: [LaunchdItem],
+        resolveUser: (UInt32) -> String?
     ) -> ProcessItem {
         let cpuFraction = computeCPUFraction(prior: prior, current: current)
         let identity = current.executablePath.map(resolver.resolve)
@@ -187,7 +204,7 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
             parentPID: current.parentPID,
             command: current.command,
             uid: current.uid,
-            owningUser: userNameForUID(current.uid) ?? String(current.uid),
+            owningUser: resolveUser(current.uid) ?? String(current.uid),
             executablePath: current.executablePath,
             cpuFraction: cpuFraction,
             residentBytes: current.residentBytes,

@@ -47,6 +47,13 @@ public struct ProcessInventoryView: View {
                 await session.scan(metric: sortMetric, topN: Self.defaultTopN)
             }
         }
+        .onChange(of: session.scan?.scannedAt) { _, _ in
+            // Drop stale expansion state — a row that's no longer in the
+            // visible list shouldn't keep its expanded marker.
+            if let expandedID, !(session.scan?.items.contains(where: { $0.id == expandedID }) ?? false) {
+                self.expandedID = nil
+            }
+        }
     }
 
     // MARK: - States
@@ -171,8 +178,11 @@ public struct ProcessInventoryView: View {
                 .foregroundStyle(GargantuaColors.ink3)
             ForEach(ProcessSortMetric.allCases, id: \.self) { metric in
                 Button {
+                    // Re-sort the existing snapshot in place rather than
+                    // re-running a 500 ms scan — toggling between CPU and
+                    // Memory should feel instant.
                     sortMetric = metric
-                    Task { await session.scan(metric: metric, topN: Self.defaultTopN) }
+                    session.resort(by: metric)
                 } label: {
                     Text(metric.displayLabel)
                         .font(GargantuaFonts.caption)
@@ -329,6 +339,33 @@ public final class ProcessInventorySession {
             await scanner.scan(metric: metric, topN: topN)
         }.value
         self.scan = result
+    }
+
+    /// Re-rank the existing snapshot in place. Avoids the 500 ms sample
+    /// window when the user just wants to toggle between CPU and Memory.
+    /// The top-N cap from the original scan is preserved.
+    public func resort(by metric: ProcessSortMetric) {
+        guard let current = scan else { return }
+        if current.sortedBy == metric { return }
+        let resorted = Self.rank(current.items, by: metric)
+        self.scan = ProcessInventoryScan(
+            items: resorted,
+            totalProcessCount: current.totalProcessCount,
+            sortedBy: metric,
+            topN: current.topN,
+            scannedAt: current.scannedAt
+        )
+    }
+
+    private static func rank(_ items: [ProcessItem], by metric: ProcessSortMetric) -> [ProcessItem] {
+        items.sorted { lhs, rhs in
+            let lhsP: Double = metric == .cpu ? lhs.cpuFraction : Double(lhs.residentBytes)
+            let rhsP: Double = metric == .cpu ? rhs.cpuFraction : Double(rhs.residentBytes)
+            if lhsP != rhsP { return lhsP > rhsP }
+            let nameCmp = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
+            return lhs.id < rhs.id
+        }
     }
 }
 

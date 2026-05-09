@@ -95,8 +95,12 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
             // BSD info: parent PID, UID, command name. Dropping the process
             // when this fails matches the Activity Monitor behaviour for
             // kernel tasks: they're invisible rather than half-populated.
+            //
+            // Use `.size` (not `.stride`) — `proc_pidinfo` writes exactly the
+            // C struct size; with trailing alignment padding `.stride` could
+            // exceed `.size` and the equality check would drop every sample.
             var bsd = proc_bsdinfo()
-            let bsdSize = Int32(MemoryLayout<proc_bsdinfo>.stride)
+            let bsdSize = Int32(MemoryLayout<proc_bsdinfo>.size)
             let bsdResult = withUnsafeMutablePointer(to: &bsd) { ptr -> Int32 in
                 proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, UnsafeMutableRawPointer(ptr), bsdSize)
             }
@@ -106,7 +110,7 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
             // for processes whose task port we can't open — return without
             // the sample rather than synthesising a misleading zero.
             var task = proc_taskinfo()
-            let taskSize = Int32(MemoryLayout<proc_taskinfo>.stride)
+            let taskSize = Int32(MemoryLayout<proc_taskinfo>.size)
             let taskResult = withUnsafeMutablePointer(to: &task) { ptr -> Int32 in
                 proc_pidinfo(pid, PROC_PIDTASKINFO, 0, UnsafeMutableRawPointer(ptr), taskSize)
             }
@@ -158,20 +162,20 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
         }
 
         private static func commandName(from bsd: proc_bsdinfo) -> String {
-            // `pbi_comm` is a fixed-length C array of `CChar` (16 bytes). Mirror
-            // it into a Swift array so we can pass a pointer to `String(cString:)`
-            // without relying on tuple bridging.
-            let mirror = Mirror(reflecting: bsd.pbi_comm)
-            var bytes: [CChar] = []
-            bytes.reserveCapacity(mirror.children.count + 1)
-            for child in mirror.children {
-                if let value = child.value as? CChar {
-                    if value == 0 { break }
-                    bytes.append(value)
+            // `pbi_comm` is a fixed-length C tuple of `CChar` (`MAXCOMLEN+1`
+            // bytes). Read through `withUnsafeBytes` for direct pointer
+            // access, then append an explicit null terminator before handing
+            // to `String(cString:)`. The kernel always null-terminates, but
+            // the trailing zero costs nothing and prevents reading past the
+            // tuple if a malformed record ever surfaces.
+            withUnsafeBytes(of: bsd.pbi_comm) { rawBuffer -> String in
+                var bytes = [UInt8](rawBuffer)
+                bytes.append(0)
+                return bytes.withUnsafeBufferPointer { ptr in
+                    guard let base = ptr.baseAddress else { return "" }
+                    return String(cString: base)
                 }
             }
-            bytes.append(0)
-            return String(cString: bytes)
         }
     #endif
 
