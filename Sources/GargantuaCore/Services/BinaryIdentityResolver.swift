@@ -13,6 +13,16 @@ public protocol BinaryIdentityResolving: Sendable {
     /// always return a value — when nothing can be determined, the returned
     /// identity has `vendor == .unsigned` and most fields are `nil`.
     func resolve(binaryPath: String) -> BinaryIdentity
+
+    /// Drop any cached identities. Callers that drive long-lived inventory
+    /// passes (Background Items review pane, scheduled scans) should call this
+    /// at the start of each pass so a replaced binary doesn't keep its prior
+    /// trusted classification. Default no-op for stateless implementations.
+    func clearCache()
+}
+
+extension BinaryIdentityResolving {
+    public func clearCache() {}
 }
 
 /// Default implementation. Caches results per binary path because `codesign`
@@ -122,16 +132,22 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
         )
     }
 
-    /// Walks up the path looking for the nearest `.app`, `.framework`, `.appex`,
-    /// `.systemextension`, `.xpc`, or `.bundle` ancestor. Returns `nil` if the
-    /// binary lives outside any bundle (e.g. `/usr/local/bin/foo`,
-    /// `/opt/homebrew/bin/bar`).
+    /// Returns the nearest `.app`, `.framework`, `.appex`, `.systemextension`,
+    /// `.xpc`, or `.bundle` ancestor of `binaryPath` — or `binaryPath` itself
+    /// when it already names such a bundle (the case for SMAppService /
+    /// `sfltool dumpbtm` records that surface the bundle URL directly rather
+    /// than the executable inside it). Returns `nil` if the binary lives
+    /// outside any bundle (e.g. `/usr/local/bin/foo`).
     ///
     /// `.systemextension` matters for endpoint security and VPN agents which
     /// commonly ship as system extensions and are flagged sensitive.
     func enclosingBundleURL(for binaryPath: String) -> URL? {
         let bundleExtensions: Set<String> = ["app", "framework", "appex", "systemextension", "xpc", "bundle"]
-        var current = URL(fileURLWithPath: binaryPath).standardizedFileURL
+        let start = URL(fileURLWithPath: binaryPath).standardizedFileURL
+        if bundleExtensions.contains(start.pathExtension) {
+            return start
+        }
+        var current = start
         // Cap at a reasonable depth to avoid pathological symlink loops.
         for _ in 0 ..< 32 {
             let parent = current.deletingLastPathComponent()

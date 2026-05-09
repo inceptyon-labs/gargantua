@@ -142,6 +142,71 @@ struct BackgroundItemScannerTests {
         #expect(item?.isOrphaned == true)
     }
 
+    @Test("Relative ProgramArguments[0] is treated as exists, not orphaned")
+    func relativeProgramNotOrphaned() {
+        // launchd resolves bare program names through _PATH_STDPATH; the
+        // scanner must not flag "foo" as orphaned just because it's not on
+        // disk relative to the host process's working directory.
+        let plist = LaunchdPlist(label: "com.example.relbin", programArguments: ["bare-tool", "--flag"])
+        let scanner = makeScanner(
+            launchd: [
+                LaunchdItem(
+                    domain: .userAgent,
+                    plistPath: "/Users/me/Library/LaunchAgents/relbin.plist",
+                    plist: plist
+                ),
+            ],
+            login: .empty,
+            existingFiles: [] // empty file system — but bare-tool isn't absolute
+        )
+        let item = try? #require(scanner.scan().items.first)
+        #expect(item?.isOrphaned == false)
+        #expect(item?.reasons.contains(.orphaned) == false)
+    }
+
+    @Test("Login items with same bundle ID but different URLs get distinct IDs")
+    func loginItemsDistinctIDsForSameBundle() {
+        let url1 = URL(fileURLWithPath: "/Applications/Foo.app")
+        let url2 = URL(fileURLWithPath: "/Applications/Foo.app/Contents/Library/LoginItems/Helper.app")
+        let records = [
+            LoginItemRecord(name: "Foo", bundleIdentifier: "com.example.foo", url: url1),
+            LoginItemRecord(name: "Foo Helper", bundleIdentifier: "com.example.foo", url: url2),
+        ]
+        let scanner = makeScanner(
+            launchd: [],
+            login: LoginItemEnumeration(records: records, needsPrivileges: false),
+            existingFiles: [url1.path, url2.path]
+        )
+        let scan = scanner.scan()
+        let ids = Set(scan.items.map(\.id))
+        #expect(ids.count == 2)
+    }
+
+    @Test("Resolver clearCache is invoked at the start of every scan")
+    func resolverCacheCleared() {
+        final class CountingResolver: BinaryIdentityResolving, @unchecked Sendable {
+            var clearCount = 0
+            func resolve(binaryPath: String) -> BinaryIdentity {
+                BinaryIdentity(binaryPath: binaryPath, vendor: .unsigned)
+            }
+            func clearCache() { clearCount += 1 }
+        }
+
+        let counting = CountingResolver()
+        let scanner = DefaultBackgroundItemScanner(
+            launchdIndex: StubLaunchdIndex(items: []),
+            loginItems: StubLoginItems(enumeration: .empty),
+            resolver: counting,
+            classifier: BackgroundItemSafetyClassifier(),
+            explainer: BackgroundItemExplainer(),
+            fileExists: { _ in true },
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        _ = scanner.scan()
+        _ = scanner.scan()
+        #expect(counting.clearCount == 2)
+    }
+
     @Test("ID is stable across rescans for the same source/label/path")
     func stableID() {
         let plist = LaunchdPlist(label: "com.stable.thing", program: "/usr/local/bin/thing")

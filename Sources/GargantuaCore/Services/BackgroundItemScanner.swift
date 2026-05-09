@@ -72,6 +72,12 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     }
 
     public func scan() -> BackgroundItemScan {
+        // The default resolver caches per binary path across resolve() calls
+        // and is held as a stored property; without an explicit clear, a
+        // replaced binary at the same path could keep its prior trusted
+        // identity across rescans and silently reclassify as `safe`.
+        resolver.clearCache()
+
         let launchdItems = launchdIndex.enumerate()
         var items: [BackgroundItem] = []
         var unparseable = 0
@@ -105,7 +111,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         let source = BackgroundItemSource(domain: launchd.domain)
         let exePath = plist.executablePath
         let identity = exePath.map(resolver.resolve)
-        let exists = exePath.map(fileExists) ?? false
+        let exists = exePath.map(executableExists) ?? false
 
         let classifierInput = BackgroundItemClassifierInput(
             label: plist.label,
@@ -126,7 +132,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         )
 
         return BackgroundItem(
-            id: makeID(source: source, label: plist.label, plistPath: launchd.plistPath),
+            id: makeID(source: source, label: plist.label, secondaryKey: launchd.plistPath),
             label: plist.label,
             source: source,
             plistPath: launchd.plistPath,
@@ -135,14 +141,20 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             safety: classification.safety,
             reasons: classification.reasons,
             explanation: explanation,
-            isOrphaned: !exists && exePath != nil
+            isOrphaned: isAbsolute(exePath) && !exists
         )
     }
 
     private func makeLoginItem(_ record: LoginItemRecord) -> BackgroundItem {
         let exePath = record.url?.path
         let identity = exePath.map(resolver.resolve)
-        let exists = exePath.map(fileExists) ?? (record.url != nil)
+        let exists = exePath.map(executableExists) ?? (record.url != nil)
+
+        // Login-item IDs include the URL (or team identifier) as a secondary
+        // key so multiple BTM records that share a bundle ID — e.g. an app's
+        // main entry plus a helper at a separate URL — get distinct IDs and
+        // don't collide in `ForEach` selection / expansion state.
+        let secondary = record.url?.path ?? record.teamIdentifier
 
         let classifierInput = BackgroundItemClassifierInput(
             label: record.bundleIdentifier ?? record.name,
@@ -163,7 +175,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         )
 
         return BackgroundItem(
-            id: makeID(source: .loginItem, label: record.bundleIdentifier ?? record.name, plistPath: nil),
+            id: makeID(source: .loginItem, label: record.bundleIdentifier ?? record.name, secondaryKey: secondary),
             label: record.name,
             source: .loginItem,
             plistPath: nil,
@@ -172,13 +184,28 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             safety: classification.safety,
             reasons: classification.reasons,
             explanation: explanation,
-            isOrphaned: !exists && exePath != nil
+            isOrphaned: isAbsolute(exePath) && !exists
         )
     }
 
-    private func makeID(source: BackgroundItemSource, label: String, plistPath: String?) -> String {
-        if let plistPath {
-            return "\(source.rawSourceKey)|\(label)|\(plistPath)"
+    /// `launchd` resolves bare program names through `_PATH_STDPATH`, so a
+    /// `ProgramArguments[0]` like `"foo"` may be a perfectly valid job whose
+    /// binary lives in `/usr/bin/foo`. Treat anything non-absolute as
+    /// "exists, source unknown" rather than rushing it into the orphaned
+    /// safe-cleanup bucket.
+    private func executableExists(at path: String) -> Bool {
+        guard isAbsolute(path) else { return true }
+        return fileExists(path)
+    }
+
+    private func isAbsolute(_ path: String?) -> Bool {
+        guard let path else { return false }
+        return path.hasPrefix("/")
+    }
+
+    private func makeID(source: BackgroundItemSource, label: String, secondaryKey: String?) -> String {
+        if let secondaryKey, !secondaryKey.isEmpty {
+            return "\(source.rawSourceKey)|\(label)|\(secondaryKey)"
         }
         return "\(source.rawSourceKey)|\(label)"
     }
@@ -186,12 +213,16 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     // MARK: - Sort
 
     /// Sort order for the review pane: protected last (the user can't act on
-    /// them), review before safe (those need attention), then by display label.
+    /// them), review before safe (those need attention), then by display label,
+    /// then by id as a final tie-breaker so duplicate display names don't
+    /// reorder scan-to-scan.
     static func severityOrdering(_ lhs: BackgroundItem, _ rhs: BackgroundItem) -> Bool {
         let lRank = severityRank(lhs.safety)
         let rRank = severityRank(rhs.safety)
         if lRank != rRank { return lRank < rRank }
-        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        let nameComparison = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+        if nameComparison != .orderedSame { return nameComparison == .orderedAscending }
+        return lhs.id < rhs.id
     }
 
     private static func severityRank(_ safety: SafetyLevel) -> Int {
