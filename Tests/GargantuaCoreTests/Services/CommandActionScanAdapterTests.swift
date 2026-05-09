@@ -40,7 +40,8 @@ struct CommandActionScanAdapterTests {
     private func rule(
         id: String = "rule_a",
         tool: String = "pnpm",
-        category: String = "developer_tool_command"
+        category: String = CommandActionRuleCategory.developer,
+        consequence: String? = nil
     ) -> CommandActionRule {
         CommandActionRule(
             id: id,
@@ -50,6 +51,7 @@ struct CommandActionScanAdapterTests {
             safety: .safe,
             confidence: 90,
             explanation: "test rule",
+            consequence: consequence,
             category: category,
             affectedRoots: ["~/Library/test"],
             source: SourceAttribution(name: tool)
@@ -128,6 +130,51 @@ struct CommandActionScanAdapterTests {
         #expect(results.first?.commandActionRuleID == "alpha")
     }
 
+    @Test("Advanced command rules are gated by the advanced category")
+    func advancedCommandCategoryIsOptIn() async throws {
+        let pnpm = try makeBinary(name: "pnpm")
+        defer { try? FileManager.default.removeItem(at: pnpm.deletingLastPathComponent()) }
+
+        let rules = [
+            rule(id: "regular", category: CommandActionRuleCategory.developer),
+            rule(id: "advanced", category: CommandActionRuleCategory.advanced),
+        ]
+        let regularAdapter = CommandActionScanAdapter(
+            rules: rules,
+            executor: StubExecutor(),
+            resolver: resolver(tool: "pnpm", binary: pnpm),
+            categories: [CommandActionRuleCategory.developer]
+        )
+        let advancedAdapter = CommandActionScanAdapter(
+            rules: rules,
+            executor: StubExecutor(),
+            resolver: resolver(tool: "pnpm", binary: pnpm),
+            categories: [CommandActionRuleCategory.advanced]
+        )
+
+        let regularResults = try await regularAdapter.scan(progress: nil)
+        let advancedResults = try await advancedAdapter.scan(progress: nil)
+
+        #expect(regularResults.map(\.commandActionRuleID) == ["regular"])
+        #expect(advancedResults.map(\.commandActionRuleID) == ["advanced"])
+    }
+
+    @Test("Command consequences are surfaced in scan result explanations")
+    func consequenceCopySurfacesInExplanation() async throws {
+        let pnpm = try makeBinary(name: "pnpm")
+        defer { try? FileManager.default.removeItem(at: pnpm.deletingLastPathComponent()) }
+        let adapter = CommandActionScanAdapter(
+            rules: [rule(id: "advanced", consequence: "Future installs may need network access.")],
+            executor: StubExecutor(),
+            resolver: resolver(tool: "pnpm", binary: pnpm)
+        )
+
+        let result = try #require(try await adapter.scan(progress: nil).first)
+
+        #expect(result.explanation.contains("test rule"))
+        #expect(result.explanation.contains("Consequence: Future installs may need network access."))
+    }
+
     @Test("Failed preview drops the rule rather than failing the whole scan")
     func previewFailureDropsRule() async throws {
         let pnpm = try makeBinary(name: "pnpm")
@@ -161,8 +208,8 @@ struct CommandActionScanAdapterTests {
                 confidence: 100,
                 explanation: "x",
                 source: SourceAttribution(name: "test"),
-                category: "system_cache"
-            )
+                category: "system_cache",
+            ),
         ])
         let pnpm = try makeBinary(name: "pnpm")
         defer { try? FileManager.default.removeItem(at: pnpm.deletingLastPathComponent()) }
@@ -200,8 +247,8 @@ struct CommandActionScanAdapterTests {
                 confidence: 100,
                 explanation: "",
                 source: SourceAttribution(name: "test"),
-                category: "system_cache"
-            )
+                category: "system_cache",
+            ),
         ])
         let composite = CompositeScanAdapter(primary: primary, bestEffort: [ThrowingAdapter()])
         let results = try await composite.scan(progress: nil)

@@ -21,7 +21,7 @@ struct CleanupProfileTests {
         // (simctl, pnpm store prune, go clean) under the same Dev Purge
         // umbrella as the path-based dev artifact rules.
         #expect(Set(purge.categories) == Set([
-            "dev_artifacts", "docker", "homebrew", "developer_tool_command"
+            "dev_artifacts", "docker", "homebrew", CommandActionRuleCategory.developer
         ]))
         #expect(!purge.categories.contains("browser_cache"))
         #expect(!purge.categories.contains("system_cache"))
@@ -49,6 +49,16 @@ struct CleanupProfileTests {
         #expect(deep.categories.contains("similar_images"))
         #expect(deep.categories.contains("empty_files"))
         #expect(deep.categories.contains("broken_symlinks"))
+        #expect(!deep.categories.contains(CommandActionRuleCategory.advanced))
+    }
+
+    @Test("Advanced Commands profile is opt-in and isolated from routine profiles")
+    func advancedCommandsProfile() {
+        let advanced = CleanupProfile.advancedCommands
+        #expect(advanced.categories == [CommandActionRuleCategory.advanced])
+        #expect(!CleanupProfile.developer.categories.contains(CommandActionRuleCategory.advanced))
+        #expect(!CleanupProfile.devPurge.categories.contains(CommandActionRuleCategory.advanced))
+        #expect(!CleanupProfile.deep.categories.contains(CommandActionRuleCategory.advanced))
     }
 
     @Test("Developer profile has age-based safety override")
@@ -69,9 +79,9 @@ struct CleanupProfileTests {
         }
     }
 
-    @Test("Three built-in profiles exist")
+    @Test("Four built-in profiles exist")
     func builtInCount() {
-        #expect(CleanupProfile.builtIn.count == 3)
+        #expect(CleanupProfile.builtIn.count == 4)
     }
 
     @Test("resolve returns persisted profile when active ID matches a user override")
@@ -112,6 +122,16 @@ struct CleanupProfileTests {
             fallback: .deep
         )
         #expect(resolved.id == "devPurge")
+    }
+
+    @Test("resolve finds advancedCommands")
+    func resolveFindsAdvancedCommands() {
+        let resolved = CleanupProfile.resolve(
+            activeProfileID: "advancedCommands",
+            persisted: [],
+            fallback: .deep
+        )
+        #expect(resolved.id == "advancedCommands")
     }
 
     @Test("resolve falls back to fallback when ID is unknown")

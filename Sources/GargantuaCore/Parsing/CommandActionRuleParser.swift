@@ -100,6 +100,7 @@ public struct CommandActionRuleParser: Sendable {
         let regenerates = optionalBool("regenerates", from: mapping) ?? false
         let regenerateCommand = optionalString("regenerate_command", from: mapping)
         let affectedRoots = optionalStringArray("affected_roots", from: mapping)
+        let consequence = optionalString("consequence", from: mapping)
         let preconditions = try parsePreconditions(from: mapping, index: index, filePath: filePath)
         let source = try parseSource(from: mapping, index: index, filePath: filePath)
         let tags = optionalStringArray("tags", from: mapping)
@@ -113,6 +114,7 @@ public struct CommandActionRuleParser: Sendable {
             safety: safety,
             confidence: confidence,
             explanation: explanation,
+            consequence: consequence,
             category: category,
             regenerates: regenerates,
             regenerateCommand: regenerateCommand,

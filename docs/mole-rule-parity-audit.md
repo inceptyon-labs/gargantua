@@ -15,13 +15,13 @@ After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closi
 | --- | ---: | ---: |
 | Path-based app cleanup | 9 | 58 |
 | Path-based browser cleanup | 15 | 54 |
-| Path-based developer cleanup | 19 | 118 |
-| Path-based system cleanup | 8 | 44 |
+| Path-based developer cleanup | 19 | 132 |
+| Path-based system cleanup | 8 | 43 |
 | Path-based generic uninstall/remnant | 2 | 28 |
 | Path-based app-specific uninstall packs | 7 | 63 |
-| Command-action rules (developer) | 3 | 3 |
+| Command-action rules (developer + advanced) | 4 | 4 |
 | Code-native stale-version discovery | n/a — discovered at scan time | Xcode DeviceSupport + JetBrains Toolbox version sets |
-| **Total static rules** | **63** | **368** |
+| **Total static rules** | **64** | **382** |
 | Dynamic `pkgutil` receipt evidence | n/a — discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
 
 The pkgutil channel is intentionally not file-counted: receipts are inspected per uninstall (`PackageReceiptExpander` → `ReceiptRemnantBuilder`) and surface as `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, install date, and ownership provenance. Receipts are *evidence*, not permission — shared system paths (`/Library/LaunchDaemons`, `/Library/PrivilegedHelperTools`, `/Library/Frameworks`, etc.) upgrade to `.protected_`, and protected-root entries drop on the floor.
@@ -109,7 +109,7 @@ Ported from Mole in `gargantua-kjv0`:
 
 Remaining gaps or deliberately deferred behavior:
 
-- Command-backed pruning remains out of YAML: pnpm store pruning behavior, `go clean`, `nix-collect-garbage`, unavailable simulator deletion, package-manager prune commands, and tool-aware old-version retention loops.
+- Command-backed pruning is partially modeled through `CommandActionRule`: `xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, and opt-in `go clean -modcache` ship as audited command rules. `npm cache clean`, `nix-collect-garbage`, other package-manager prune commands, and tool-aware old-version retention loops remain deferred.
 - Version-pruning behavior is now partially addressed outside YAML by `StaleVersionScanAdapter`: Xcode DeviceSupport and JetBrains Toolbox app-version directories are grouped by product/family/version, keep latest retained versions, honor pinned paths and current-version hints, and surface old versions as `review`.
 - Remaining version-pruning gaps include Xcode documentation indexes, simulator/runtime availability beyond static DeviceSupport directories, Android SDK platforms/build-tools/NDK/cmake retention, Claude Code/Codex/Cursor agent runtime versions, and any cleanup that needs live active-use identity before the app can separate "old" from "unused."
 - Broad or risky project artifacts remain conservative: generic `bin`/`obj`, Terraform project caches, shell-history backups, Prometheus WAL, model caches, and upload staging are review-gated.
@@ -120,7 +120,7 @@ Pre-port classification:
 - `safe`: build caches, package-manager caches, generated dependency caches, tool logs, crash-report caches.
 - `review`: global package stores that double as offline mirrors, emulator/device support directories, CI workspaces, database/API tool caches, AI assistant pending uploads.
 - `protected`: credentials/config directories such as `.aws` config, Docker config, kube config, SSH/GPG material, IDE settings, source workspaces.
-- `out-of-scope until engine support`: tool-aware commands such as `npm cache clean`, `pnpm store prune`, `go clean`, `nix-collect-garbage`, `xcrun simctl delete unavailable`, and version-pruning loops.
+- `out-of-scope until engine support`: remaining tool-aware commands such as `npm cache clean`, `nix-collect-garbage`, additional package-manager prune commands, and version-pruning loops. The shipped command-rule slice covers simctl, pnpm, and Go cache/modcache cleanup with explicit audit evidence.
 
 ### System And User Cleanup
 
@@ -168,7 +168,7 @@ The current YAML schema is strong for static path rules: it supports paths, sing
 
 Remaining gaps for full Mole parity:
 
-1. ~~Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools.~~ **Partially addressed.** The `CommandActionRule` schema and a starter set (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`) ship under `Sources/GargantuaCore/Resources/command_rules/`. Audit entries are written as `kind: command` with the captured tool version, exit code, and argument list. See the **Command-action hold list** below for what remains intentionally deferred.
+1. ~~Command-backed cleanup: Mole uses tool-aware commands for package managers, simulators, Homebrew, Docker, Go, Nix, and other tools.~~ **Partially addressed.** The `CommandActionRule` schema and a starter set (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, plus opt-in `go clean -modcache`) ship under `Sources/GargantuaCore/Resources/command_rules/`. Audit entries are written as `kind: command` with the captured tool version, exit code, and argument list. See the **Command-action hold list** below for what remains intentionally deferred.
 2. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints and UX before they can be more than review-gated path findings.
 3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup. Gargantua now has a first code-native retention guard for Xcode DeviceSupport and JetBrains Toolbox versions; remaining families stay deferred until their active-use identity is explicit.
 4. ~~Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.~~ **Addressed.** `PackageReceiptExpander` (`gargantua-rloy`) runs `pkgutil --pkgs` / `--pkg-info` / `--files`, matches candidates through `PackageMatcher`, and produces `PackageReceiptCandidate`s carrying pkg ID, version, and install date. `ReceiptRemnantBuilder` converts those candidates into `RemnantItem`s with the `pkgutil-bom` tag, dropping protected roots and upgrading shared system paths to `.protected_`. Provenance surfaces in the Smart Uninstaller plan-review row (`gargantua-q05d`) as a `RECEIPT` badge + package identifier line, and in MCP's `explain` tool (`gargantua-4bub`) as a structured `receiptProvenance` field. Receipts are *evidence*, not deletion permission.
@@ -187,11 +187,12 @@ Remaining gaps for full Mole parity:
 
 The following Mole-equivalent commands have an obvious adapter shape but are deliberately *not* in the bundled `command_rules/` snapshot. They sit on a "review-tier minimum, surprising semantics" hold list — they ship only after a more careful UX and dry-run story.
 
+`go clean -modcache` graduated from this hold list in `gargantua-2nnq` as `advanced_command_action`: it is review-only, isolated in the `Advanced Commands` profile, declares `~/go/pkg/mod` as its affected root, and surfaces network/offline restore cost before cleanup.
+
 | Command | Reason for hold |
 | --- | --- |
 | `nix-collect-garbage` | Generation rollback semantics. Users who relied on `nixos-rebuild --rollback` or per-shell generations to recover from a bad change will silently lose that rollback target. Needs explicit "this also drops your rollback history" UX. |
 | `npm cache clean` (`--force` required) | Offline install semantics. npm's cache doubles as the offline mirror that `npm ci` and `npm install --offline` rely on. Pruning it costs network on the next install and breaks airgapped/CI flows that don't expect re-fetch. |
-| `go clean -modcache` | Re-fetch costs network. The module cache is shared across projects and can be tens of gigabytes; clearing it forces every project to re-download on the next build. Distinct rule from `go clean -cache` (already shipped) which only touches the build cache. |
 | Tool-aware version-retention loops beyond the shipped Xcode DeviceSupport + JetBrains Toolbox slice | Active-use detection plus per-tool identity resolution required. "Old ≠ safe" without a per-tool concept of which version is in use; shipped stale-version rows remain `review` and future families need the same keep-latest/current/pin guardrails. |
 
 A future bean can promote any of these once the UX models the consequence honestly. They live on the `gargantua-wpl6` epic as candidates, not commitments.
@@ -200,13 +201,13 @@ A future bean can promote any of these once the UX models the consequence honest
 
 `gargantua-wpl6` is the closing epic for "Mole-parity gap closing — Trust Layer-aligned." Its three primary threads have all landed:
 
-- **Command-action rules** (`gargantua-y84i`): `CommandActionRule` schema + simctl/pnpm/go starter set in `command_rules/developer/`. MCP `scan`/`clean` integration and the in-app cleanup-flow surface for command rules remain open as next-tier follow-ups.
+- **Command-action rules** (`gargantua-y84i`, `gargantua-2nnq`): `CommandActionRule` schema + simctl/pnpm/go starter set in `command_rules/developer/`, with `go clean -modcache` promoted as an opt-in advanced command carrying consequence and restore copy.
 - **Receipt/BOM uninstall evidence** (`gargantua-rloy`): `PackageReceiptExpander` + `ReceiptRemnantBuilder`. Surfaced in MCP `explain` (`gargantua-4bub`), Smart Uninstaller plan-review row (`gargantua-q05d`), and cross-app shared-receipt behavior + CONTRIBUTING docs (`gargantua-hkbg`).
 - **App-specific uninstall packs** (`gargantua-uv74`, `gargantua-v85l`): vendored snapshot for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
 
 Open tail items, not blocking the epic:
 
-- Promotion of any **command-action hold-list** entry (see below) once its UX models the consequence honestly.
+- Promotion of the remaining **command-action hold-list** entries (see below) once their UX models the consequence honestly.
 - Remaining **app pack** candidate: Maestro Studio, held back until active-session and project-adjacent paths can be separated.
 - The signature **Confidence Orbit** finally rendering on the Smart Uninstaller picker (`gargantua-bcpw`) is part of this epic's brand surface even though it's not strictly a parity item.
 - Public rule sync to `inceptyon-labs/gargantua-rules` remains the long-running maintenance task that is not gated on parity work.

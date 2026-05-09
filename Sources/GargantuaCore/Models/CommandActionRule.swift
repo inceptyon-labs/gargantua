@@ -1,5 +1,10 @@
 import Foundation
 
+public enum CommandActionRuleCategory {
+    public static let developer = "developer_tool_command"
+    public static let advanced = "advanced_command_action"
+}
+
 /// A declarative, YAML-driven cleanup rule that runs an external tool command
 /// rather than deleting filesystem paths directly.
 ///
@@ -48,6 +53,11 @@ public struct CommandActionRule: Codable, Sendable, Identifiable, Equatable {
     /// classified the way it is. Surfaced in the cleanup confirmation flow.
     public let explanation: String
 
+    /// Explicit consequence copy for review/advanced command actions. This is
+    /// appended to the surfaced explanation so confirmation dialogs describe
+    /// the likely restore cost before the user runs the tool-native cleanup.
+    public let consequence: String?
+
     /// Scan category for grouping and profile filtering.
     /// Convention: `developer_tool_command` for developer tooling commands.
     public let category: String
@@ -82,6 +92,7 @@ public struct CommandActionRule: Codable, Sendable, Identifiable, Equatable {
         safety: SafetyLevel,
         confidence: Int,
         explanation: String,
+        consequence: String? = nil,
         category: String,
         regenerates: Bool = false,
         regenerateCommand: String? = nil,
@@ -98,6 +109,7 @@ public struct CommandActionRule: Codable, Sendable, Identifiable, Equatable {
         self.safety = safety
         self.confidence = confidence
         self.explanation = explanation
+        self.consequence = consequence?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.category = category
         self.regenerates = regenerates
         self.regenerateCommand = regenerateCommand

@@ -18,7 +18,7 @@ struct CommandActionRuleSetIntegrationTests {
     func allFilesLoadCleanly() throws {
         let result = try loader.loadRules(from: rulesDirectory)
         #expect(result.isClean, "Parse errors: \(result.errors.map(\.description))")
-        #expect(result.filesLoaded >= 3)
+        #expect(result.filesLoaded >= 4)
     }
 
     @Test("Starter set is present")
@@ -27,13 +27,18 @@ struct CommandActionRuleSetIntegrationTests {
         #expect(ids.contains("simctl_delete_unavailable"))
         #expect(ids.contains("pnpm_store_prune"))
         #expect(ids.contains("go_clean_cache"))
+        #expect(ids.contains("go_clean_modcache"))
     }
 
-    @Test("All command rules use the developer_tool_command category")
-    func sharedCategory() throws {
+    @Test("All command rules use known command categories")
+    func knownCategories() throws {
         let result = try loader.loadRules(from: rulesDirectory)
+        let allowed = Set([
+            CommandActionRuleCategory.developer,
+            CommandActionRuleCategory.advanced,
+        ])
         for rule in result.rules {
-            #expect(rule.category == "developer_tool_command", "\(rule.id) has unexpected category: \(rule.category)")
+            #expect(allowed.contains(rule.category), "\(rule.id) has unexpected category: \(rule.category)")
         }
     }
 
@@ -56,6 +61,18 @@ struct CommandActionRuleSetIntegrationTests {
         let result = try loader.loadRules(from: rulesDirectory)
         for rule in result.rules {
             #expect(!rule.affectedRoots.isEmpty, "\(rule.id) has no affected_roots — Trust Layer can't validate it")
+        }
+    }
+
+    @Test("Advanced commands are review-only with explicit consequence and restore copy")
+    func advancedCommandsStayReviewOnly() throws {
+        let result = try loader.loadRules(from: rulesDirectory)
+        let advanced = result.rules.filter { $0.category == CommandActionRuleCategory.advanced }
+        #expect(!advanced.isEmpty)
+        for rule in advanced {
+            #expect(rule.safety == .review, "\(rule.id) must stay review-only")
+            #expect(rule.consequence?.isEmpty == false, "\(rule.id) must explain consequences")
+            #expect(rule.regenerateCommand?.isEmpty == false, "\(rule.id) must explain restore path")
         }
     }
 }

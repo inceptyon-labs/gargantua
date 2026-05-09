@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI model intelligence** for review-only duplicate model candidates and orphan `.gguf` / `.safetensors` / `.onnx` / PyTorch-family weights, using filename/size metadata without reading model contents.
 - **File Health** scans (empty files, big files, similar images, broken symlinks) backed by a vendored `czkawka_cli`.
 - **Duplicate Finder** backed by a vendored `fclones`, scoped to user-defined personal-scope roots.
-- **Command-action rules** schema (`Resources/command_rules/`) with starter coverage for `xcrun simctl delete unavailable`, `pnpm store prune`, and `go clean -cache`; surfaced through scan + cleanup.
+- **Command-action rules** schema (`Resources/command_rules/`) with starter coverage for `xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, and opt-in `go clean -modcache`; surfaced through scan + cleanup.
 - **Stale-version discovery** for review-gated Xcode DeviceSupport and JetBrains Toolbox version sets, using keep-latest retention, current-version hints, and pinned-path exclusions before surfacing old versions.
 - **App-pack remnant rules** for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
 - **`pkgutil` receipt evidence** in Smart Uninstaller and the MCP `explain` tool: shows pkg ID, version, and install date as ownership provenance, never as deletion permission.
@@ -40,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   falls back to the legacy table output, and explains unknown post-run byte estimates instead of borrowing unrelated totals.
 - Protected Developer Tools operations now carry stronger risk copy and safety styling; Docker volume prune and Docker system prune
   route through full-modal acknowledgment with explicit data-loss wording.
-- Reviewed snapshot now ships **51 cleanup files / 287 rules**, **2 generic + 7 app-pack remnant files / 28 + 63 rules**, and **3 command-action rules**. See `docs/mole-rule-parity-audit.md` for what's deferred.
+- Reviewed snapshot now ships **51 cleanup files / 287 rules**, **2 generic + 7 app-pack remnant files / 28 + 63 rules**, and **4 command-action rules**. See `docs/mole-rule-parity-audit.md` for what's deferred.
+- Advanced command-action cleanup now has an opt-in `Advanced Commands` profile plus parser validation that requires review safety, affected roots outside protected roots, explicit consequence copy, a bounded timeout, and restore guidance before bundled advanced YAML can load.
 - Smart Uninstaller now evaluates curated `app_pack` rules before broad generic remnant rules so app-specific review/protected classifications win during path dedupe.
 - Synced the reviewed Mole-expanded rule snapshot to the public `gargantua-rules` repository.
 

@@ -26,6 +26,7 @@ struct CommandActionRuleParserTests {
             safety: safe
             confidence: 95
             explanation: Removes simulator runtimes Xcode has marked as unavailable.
+            consequence: Re-download unavailable runtimes from Xcode settings if needed.
             category: developer_tool_command
             regenerates: true
             regenerate_command: "Xcode → Settings → Components"
@@ -54,6 +55,7 @@ struct CommandActionRuleParserTests {
         #expect(rule.safety == .safe)
         #expect(rule.confidence == 95)
         #expect(rule.explanation == "Removes simulator runtimes Xcode has marked as unavailable.")
+        #expect(rule.consequence == "Re-download unavailable runtimes from Xcode settings if needed.")
         #expect(rule.category == "developer_tool_command")
         #expect(rule.regenerates == true)
         #expect(rule.regenerateCommand == "Xcode → Settings → Components")
@@ -86,6 +88,7 @@ struct CommandActionRuleParserTests {
         let file = try parser.parse(yaml: yaml)
         let rule = try #require(file.rules.first)
         #expect(rule.dryRunArguments == nil)
+        #expect(rule.consequence == nil)
         #expect(rule.regenerates == false)
         #expect(rule.regenerateCommand == nil)
         #expect(rule.affectedRoots == [])
@@ -160,6 +163,62 @@ struct CommandActionRuleParserTests {
         }
     }
 
+    @Test("Loader rejects command affected roots that target protected roots")
+    func loaderRejectsProtectedAffectedRoot() throws {
+        let dir = try makeRuleDirectory(yaml: """
+        rules:
+          - id: bad_root
+            name: Bad Root
+            tool: go
+            arguments: [clean, -modcache]
+            safety: review
+            confidence: 70
+            explanation: bad root
+            category: advanced_command_action
+            regenerates: true
+            regenerate_command: go mod download
+            consequence: would touch root
+            affected_roots:
+              - "/"
+            source: { name: Go }
+        """)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let loader = CommandActionRuleLoader(protectedRootPolicy: ProtectedRootPolicy(entries: [
+            ProtectedRootEntry(path: "/", reason: "filesystem root"),
+        ]))
+        let result = try loader.loadRules(from: dir)
+
+        #expect(result.rules.isEmpty)
+        #expect(result.errors.count == 1)
+        #expect(result.errors.first?.description.contains("affected_roots") == true)
+    }
+
+    @Test("Loader requires consequence and restore copy for advanced command rules")
+    func loaderRequiresAdvancedCommandConsequenceAndRestore() throws {
+        let dir = try makeRuleDirectory(yaml: """
+        rules:
+          - id: missing_advanced_copy
+            name: Missing Advanced Copy
+            tool: go
+            arguments: [clean, -modcache]
+            safety: review
+            confidence: 70
+            explanation: advanced command
+            category: advanced_command_action
+            affected_roots:
+              - "~/go/pkg/mod"
+            source: { name: Go }
+        """)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let result = try CommandActionRuleLoader(protectedRootPolicy: ProtectedRootPolicy(entries: [])).loadRules(from: dir)
+
+        #expect(result.rules.isEmpty)
+        #expect(result.errors.map(\.description).contains { $0.contains("consequence") })
+        #expect(result.errors.map(\.description).contains { $0.contains("regenerate_command") })
+    }
+
     // MARK: - Required fields
 
     @Test("Reports the missing field for an incomplete rule")
@@ -199,5 +258,13 @@ struct CommandActionRuleParserTests {
         #expect(throws: CommandActionRuleParseError.self) {
             _ = try parser.parse(yaml: yaml)
         }
+    }
+
+    private func makeRuleDirectory(yaml: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CommandActionRuleParserTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try yaml.write(to: dir.appendingPathComponent("rules.yaml"), atomically: true, encoding: .utf8)
+        return dir
     }
 }

@@ -128,7 +128,7 @@ public struct CommandActionScanAdapter: ScanAdapter {
             size: preview.estimatedBytes ?? 0,
             safety: preview.effectiveSafety,
             confidence: rule.confidence,
-            explanation: rule.explanation,
+            explanation: rule.userFacingExplanation,
             source: rule.source,
             lastAccessed: nil,
             category: rule.category,
@@ -136,6 +136,13 @@ public struct CommandActionScanAdapter: ScanAdapter {
             regenerates: rule.regenerates,
             regenerateCommand: rule.regenerateCommand
         )
+    }
+}
+
+private extension CommandActionRule {
+    var userFacingExplanation: String {
+        guard let consequence, !consequence.isEmpty else { return explanation }
+        return "\(explanation) Consequence: \(consequence)"
     }
 }
 

@@ -108,7 +108,7 @@ struct MCPListProfilesToolHandlerTests {
         #expect(output.active == "")
     }
 
-    @Test("snapshot surfaces all three built-ins with active: light")
+    @Test("snapshot surfaces all built-ins with active: light")
     func builtInsDefault() throws {
         let subject = handler(provider: {
             ProfilesSnapshot(profiles: CleanupProfile.builtIn, active: "light")
@@ -116,7 +116,7 @@ struct MCPListProfilesToolHandlerTests {
         let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
         #expect(output.active == "light")
         let names = Set(output.profiles.map(\.name))
-        #expect(names == ["developer", "light", "deep"])
+        #expect(names == ["developer", "light", "deep", "advancedCommands"])
     }
 
     @Test("custom profiles are listed by identifier")

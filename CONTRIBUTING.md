@@ -192,9 +192,10 @@ A complete command-action rule:
     - --json
   safety: safe                                 # safe | review (protected is rejected at parse)
   confidence: 95
-  category: developer_tool_command
+  category: developer_tool_command             # or advanced_command_action
   regenerates: true
   regenerate_command: "Xcode → Settings → Components"
+  consequence: "Optional review-copy describing restore cost."
   affected_roots:                              # required; cross-checked vs protected_roots
     - "~/Library/Developer/CoreSimulator/Devices"
   preconditions:
@@ -213,7 +214,8 @@ Trust Layer rules specific to command-action rules:
 
 - **`protected` is rejected at parse time.** Command-action rules describe tool invocations, not filesystem deletions; the `protected` floor only applies to path rules. Rules whose impact is unsafe enough to need `protected` semantics belong as path rules with explicit affected paths.
 - **No dry-run means `review`.** When `dry_run_arguments` is omitted (or the dry-run runs but the bytes-reclaimable estimator returns nil), the *effective* safety used in the cleanup confirmation flow is downgraded to `review` regardless of the YAML's declared safety. The user is asked to confirm via the summary dialog, not the single-button path.
-- **`affected_roots` is required and conservative.** Declare every root the command may touch up front so the cleanup pipeline can reject rules whose roots intersect the bundled `protected_roots.yaml` policy.
+- **`affected_roots` is required and conservative.** Declare every root the command may touch up front so the loader can reject rules whose roots intersect the bundled `protected_roots.yaml` policy before the rule is registered.
+- **Advanced commands are opt-in.** Use `category: advanced_command_action` for high-consequence commands such as global cache deletion that may break offline work or force large re-downloads. Advanced command rules must declare `safety: review`, `consequence`, `regenerate_command`, `affected_roots`, and a bounded `timeout_seconds`; they surface only through the `Advanced Commands` profile.
 - **Audit evidence is verbose by design.** Every successful run writes an entry with the exact tool version (`<tool> --version`), the literal argument list, the exit code, and a `kind: command` discriminator so audit consumers can tell at a glance which evidence model produced the entry.
 
 ### Code-native scan adapters

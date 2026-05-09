@@ -1,0 +1,31 @@
+rules:
+  - id: go_clean_modcache
+    name: Go module download cache
+    tool: go
+    arguments:
+      - clean
+      - -modcache
+    safety: review
+    confidence: 72
+    explanation: |
+      Removes the Go module download cache (`go clean -modcache`). This can
+      reclaim a large shared cache, but it affects every Go project that uses
+      the default module store.
+    consequence: |
+      Future `go build`, `go test`, and `go mod download` runs may need network
+      access to re-download modules. Offline or air-gapped projects can fail
+      until their dependencies are fetched again.
+    category: advanced_command_action
+    regenerates: true
+    regenerate_command: "go mod download (or the next go build/test)"
+    affected_roots:
+      - "~/go/pkg/mod"
+    preconditions:
+      timeout_seconds: 180
+    source:
+      name: Go
+      bundle_id: org.golang.go
+    tags:
+      - go
+      - module-cache
+      - advanced-command

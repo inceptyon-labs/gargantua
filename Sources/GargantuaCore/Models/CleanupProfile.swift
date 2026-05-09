@@ -79,7 +79,7 @@ extension CleanupProfile {
         categories: [
             "browser_cache", "system_cache", "system_logs", "temp_files", "trash",
             "app_cache", "dev_artifacts", "docker", "homebrew", "installers",
-            "developer_tool_command",
+            CommandActionRuleCategory.developer,
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -111,7 +111,7 @@ extension CleanupProfile {
             "browser_cache", "browser_data", "system_cache", "system_logs",
             "temp_files", "trash", "app_cache", "app_data", "dev_artifacts", "docker", "homebrew",
             "installers", "similar_images", "empty_files", "broken_symlinks", "ai_models",
-            "developer_tool_command",
+            CommandActionRuleCategory.developer,
         ],
         safetyOverrides: [
             SafetyOverride(
@@ -133,7 +133,7 @@ extension CleanupProfile {
         id: "devPurge",
         name: "Dev Purge",
         description: "Developer artifacts + Docker + Homebrew only",
-        categories: ["dev_artifacts", "docker", "homebrew", "developer_tool_command"],
+        categories: ["dev_artifacts", "docker", "homebrew", CommandActionRuleCategory.developer],
         safetyOverrides: [
             SafetyOverride(
                 condition: "age > 30d",
@@ -166,8 +166,20 @@ extension CleanupProfile {
         ]
     )
 
+    /// Built-in Advanced Commands profile.
+    ///
+    /// Opt-in surface for high-consequence tool-native cleanup commands that
+    /// force re-downloads or can affect rollback/offline workflows. These are
+    /// deliberately not included in Developer, Deep Clean, or Dev Purge.
+    public static let advancedCommands = CleanupProfile(
+        id: "advancedCommands",
+        name: "Advanced Commands",
+        description: "Review-only tool-native cleanups with explicit restore costs",
+        categories: [CommandActionRuleCategory.advanced]
+    )
+
     /// All built-in profiles.
-    public static let builtIn: [CleanupProfile] = [.developer, .light, .deep]
+    public static let builtIn: [CleanupProfile] = [.developer, .light, .deep, .advancedCommands]
 
     /// Resolve a cleanup profile for the given active profile ID.
     ///
@@ -184,7 +196,7 @@ extension CleanupProfile {
         if let match = persisted.first(where: { $0.id == activeProfileID }) {
             return match
         }
-        for profile in [CleanupProfile.developer, .light, .deep, .devPurge, .aiModels]
+        for profile in [CleanupProfile.developer, .light, .deep, .devPurge, .aiModels, .advancedCommands]
             where profile.id == activeProfileID {
             return profile
         }
