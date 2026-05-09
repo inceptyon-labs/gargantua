@@ -132,6 +132,8 @@ struct MainContentView: View {
                                     onAdvisory: advisoryHandler,
                                     onResolveFilter: scanFilterHandler
                                 )
+                            case "backgroundItems":
+                                BackgroundItemsView(onExplain: explainHandler)
                             case "rules":
                                 if let persistence {
                                     RuleViewerView(persistence: persistence)
