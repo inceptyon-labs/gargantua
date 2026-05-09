@@ -102,12 +102,15 @@ struct BinaryIdentityResolverTests {
 
     @Test("Developer-ID-signed binary with known team classifies as .thirdPartyKnown")
     func knownThirdPartyClassified() {
-        let path = "/Applications/Microsoft Word.app"
+        let path = "/Applications/CustomKnown.app"
+        let registry = KnownVendorRegistry(entries: [
+            KnownVendorEntry(teamIdentifier: "TEAMKN", displayName: "CustomKnown"),
+        ])
         let verifier = StubDetailedVerifier(details: [
             path: CodeSignatureDetails(
                 valid: true,
-                teamIdentifier: "UBF8T346G9",
-                signingIdentity: "Developer ID Application: Microsoft Corporation",
+                teamIdentifier: "TEAMKN",
+                signingIdentity: "Developer ID Application: Custom Inc.",
                 isNotarized: true,
                 isAppleAnchor: false,
                 isAppleGenericAnchor: true
@@ -116,19 +119,51 @@ struct BinaryIdentityResolverTests {
         let resolver = DefaultBinaryIdentityResolver(
             bundleReader: StubBundleReader(metadata: [
                 path: AppBundleMetadata(
-                    bundleID: "com.microsoft.Word",
-                    name: "Microsoft Word",
+                    bundleID: "com.custom.app",
+                    name: "CustomKnown",
                     bundlePath: path
                 ),
             ]),
             signatureVerifier: verifier,
-            registry: .default
+            registry: registry
         )
 
-        let identity = resolver.resolve(binaryPath: path + "/Contents/MacOS/Microsoft Word")
+        let identity = resolver.resolve(binaryPath: path + "/Contents/MacOS/CustomKnown")
         #expect(identity.vendor == .thirdPartyKnown)
-        #expect(identity.vendorDisplayName == "Microsoft")
-        #expect(identity.bundleIdentifier == "com.microsoft.Word")
+        #expect(identity.vendorDisplayName == "CustomKnown")
+        #expect(identity.bundleIdentifier == "com.custom.app")
+        #expect(identity.sensitiveCategories.isEmpty)
+    }
+
+    @Test("Valid signature without Apple-generic anchor classifies as .unsigned (anti-spoof)")
+    func adHocSignatureWithTeamIDIsNotTrusted() {
+        // An ad-hoc / self-signed binary that happens to embed a Team
+        // ID-shaped string in its signing dict must NOT be elevated to
+        // `thirdPartyKnown` even if the registry has a matching entry.
+        let path = "/tmp/spoofed"
+        let registry = KnownVendorRegistry(entries: [
+            KnownVendorEntry(teamIdentifier: "2BUA8C4S2C", displayName: "1Password",
+                             sensitiveCategories: [.passwordManager]),
+        ])
+        let verifier = StubDetailedVerifier(details: [
+            path: CodeSignatureDetails(
+                valid: true,
+                teamIdentifier: "2BUA8C4S2C",
+                signingIdentity: nil,
+                isNotarized: nil,
+                isAppleAnchor: false,
+                isAppleGenericAnchor: false
+            ),
+        ])
+        let resolver = DefaultBinaryIdentityResolver(
+            bundleReader: StubBundleReader(metadata: [:]),
+            signatureVerifier: verifier,
+            registry: registry
+        )
+
+        let identity = resolver.resolve(binaryPath: path)
+        #expect(identity.vendor == .unsigned)
+        #expect(identity.vendorDisplayName == nil)
         #expect(identity.sensitiveCategories.isEmpty)
     }
 
@@ -233,8 +268,10 @@ struct BinaryIdentityResolverTests {
         #expect(identity.isSensitiveVendor)
         #expect(identity.sensitiveCategories == [.passwordManager])
     }
+}
 
-    // MARK: - Caching
+@Suite("BinaryIdentityResolver caching")
+struct BinaryIdentityResolverCachingTests {
 
     @Test("Resolver caches identity per binary path")
     func cachesPerPath() {
@@ -242,7 +279,7 @@ struct BinaryIdentityResolverTests {
         let verifier = StubDetailedVerifier(details: [
             path: CodeSignatureDetails(
                 valid: true,
-                teamIdentifier: "UBF8T346G9",
+                teamIdentifier: "TEAM1",
                 signingIdentity: nil,
                 isNotarized: true,
                 isAppleAnchor: false,
@@ -269,7 +306,7 @@ struct BinaryIdentityResolverTests {
         let verifier = StubDetailedVerifier(details: [
             path: CodeSignatureDetails(
                 valid: true,
-                teamIdentifier: "UBF8T346G9",
+                teamIdentifier: "TEAM1",
                 signingIdentity: nil,
                 isNotarized: true,
                 isAppleAnchor: false,

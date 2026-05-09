@@ -55,6 +55,12 @@ public struct LaunchdPlist: Sendable, Equatable {
     /// `ProgramArguments` — argv vector, with `[0]` being the executable.
     public let programArguments: [String]
 
+    /// `BundleProgram` — relative path inside an app bundle to the executable.
+    /// Used by SMAppService-registered jobs (modern login items / agents). The
+    /// caller resolves it against the registering app's bundle since launchd
+    /// doesn't store the bundle path in the plist itself.
+    public let bundleProgram: String?
+
     /// `MachServices` keys — Mach service names this job advertises.
     public let machServices: [String]
 
@@ -92,6 +98,7 @@ public struct LaunchdPlist: Sendable, Equatable {
         label: String,
         program: String? = nil,
         programArguments: [String] = [],
+        bundleProgram: String? = nil,
         machServices: [String] = [],
         sockets: [String] = [],
         keepAlive: Bool = false,
@@ -105,6 +112,7 @@ public struct LaunchdPlist: Sendable, Equatable {
         self.label = label
         self.program = program
         self.programArguments = programArguments
+        self.bundleProgram = bundleProgram
         self.machServices = machServices
         self.sockets = sockets
         self.keepAlive = keepAlive
@@ -117,6 +125,8 @@ public struct LaunchdPlist: Sendable, Equatable {
     }
 
     /// First-choice executable path: `Program` if set, else `programArguments[0]`.
+    /// `BundleProgram` is intentionally not returned here because resolving it
+    /// requires the registering app's bundle path, which isn't in the plist.
     public var executablePath: String? {
         if let program, !program.isEmpty { return program }
         return programArguments.first

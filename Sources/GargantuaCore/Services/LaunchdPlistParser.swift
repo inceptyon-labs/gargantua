@@ -4,6 +4,8 @@ import Foundation
 public enum LaunchdPlistParserError: Error, Equatable, Sendable {
     /// The file at the given path could not be read off disk.
     case unreadable(String)
+    /// The file is larger than the parser's size cap; refused to read.
+    case oversized(path: String, size: Int)
     /// The plist parsed but the root was not a dictionary.
     case rootNotDictionary
     /// The plist is missing the required `Label` key.
@@ -22,11 +24,24 @@ public protocol LaunchdPlistParsing: Sendable {
 
 /// Default parser using `PropertyListSerialization`.
 public struct DefaultLaunchdPlistParser: LaunchdPlistParsing {
+    /// Maximum plist file size we'll attempt to parse, in bytes. launchd plists
+    /// are kilobyte-scale in practice; this cap keeps a hostile or pathological
+    /// plist from exhausting memory during enumeration. 1 MiB is ~100x larger
+    /// than the largest plists observed in the wild.
+    public static let maxPlistSize: Int = 1 << 20
+
     public init() {}
 
     public func parse(plistURL: URL) throws -> LaunchdPlist {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: plistURL.path)
+        if let size = (attrs?[.size] as? NSNumber)?.intValue, size > Self.maxPlistSize {
+            throw LaunchdPlistParserError.oversized(path: plistURL.path, size: size)
+        }
         guard let data = try? Data(contentsOf: plistURL) else {
             throw LaunchdPlistParserError.unreadable(plistURL.path)
+        }
+        if data.count > Self.maxPlistSize {
+            throw LaunchdPlistParserError.oversized(path: plistURL.path, size: data.count)
         }
         let raw = try PropertyListSerialization.propertyList(from: data, format: nil)
         guard let dict = raw as? [String: Any] else {
@@ -42,6 +57,7 @@ public struct DefaultLaunchdPlistParser: LaunchdPlistParsing {
 
         let program = dict["Program"] as? String
         let programArguments = (dict["ProgramArguments"] as? [String]) ?? []
+        let bundleProgram = dict["BundleProgram"] as? String
 
         let machServices: [String]
         if let raw = dict["MachServices"] as? [String: Any] {
@@ -85,6 +101,7 @@ public struct DefaultLaunchdPlistParser: LaunchdPlistParsing {
             label: label,
             program: program,
             programArguments: programArguments,
+            bundleProgram: bundleProgram,
             machServices: machServices,
             sockets: sockets,
             keepAlive: keepAlive,

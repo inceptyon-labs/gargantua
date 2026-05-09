@@ -33,14 +33,28 @@ struct KnownVendorRegistryTests {
         #expect(result.sensitiveCategories == [.passwordManager])
     }
 
-    @Test("Known non-sensitive vendor has empty sensitive categories")
-    func microsoftIsKnownNotSensitive() throws {
-        let result = try #require(KnownVendorRegistry.default.lookup(
-            teamIdentifier: "UBF8T346G9",
-            bundleIdentifier: "com.microsoft.Word"
+    @Test("Custom registry can include known non-sensitive vendor entries")
+    func customRegistryNotSensitive() throws {
+        let registry = KnownVendorRegistry(entries: [
+            KnownVendorEntry(
+                teamIdentifier: "TEAMNS",
+                displayName: "Generic Vendor"
+            ),
+        ])
+        let result = try #require(registry.lookup(
+            teamIdentifier: "TEAMNS",
+            bundleIdentifier: "com.example.app"
         ))
-        #expect(result.displayName == "Microsoft")
+        #expect(result.displayName == "Generic Vendor")
         #expect(result.sensitiveCategories.isEmpty)
+    }
+
+    @Test("Default registry contains only sensitive entries")
+    func defaultRegistryIsSensitiveOnly() {
+        for entry in KnownVendorRegistry.default.entries {
+            #expect(!entry.sensitiveCategories.isEmpty,
+                    "Default registry entry \(entry.displayName) is non-sensitive — broad team-only matches should be opt-in via custom registries")
+        }
     }
 
     @Test("Bundle-ID-qualified entry preferred over team-only entry")

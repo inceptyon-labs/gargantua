@@ -89,6 +89,13 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
         )
         let vendor = classifyVendor(details: details, registryEntry: registryEntry)
 
+        // Only surface the registry entry's display name and sensitive
+        // categories when the binary actually passed the anchor check that
+        // gates `.thirdPartyKnown`. A spoofed Team ID on an ad-hoc-signed
+        // binary lands in `.unsigned`; in that case we must not propagate any
+        // claim derived from a registry hit.
+        let trustedRegistryEntry = (vendor == .thirdPartyKnown) ? registryEntry : nil
+
         if let bundleURL {
             logger.debug(
                 "Resolved \(binaryPath, privacy: .public) → bundle \(bundleURL.path, privacy: .public), vendor \(vendor.rawValue, privacy: .public)"
@@ -110,8 +117,8 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
             signatureValid: details.valid,
             isNotarized: details.isNotarized,
             vendor: vendor,
-            vendorDisplayName: registryEntry?.displayName,
-            sensitiveCategories: registryEntry?.sensitiveCategories ?? []
+            vendorDisplayName: trustedRegistryEntry?.displayName,
+            sensitiveCategories: trustedRegistryEntry?.sensitiveCategories ?? []
         )
     }
 
@@ -149,9 +156,14 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
             return .apple
         }
 
-        // Without a valid signature *and* a Team ID we can't reliably
-        // distinguish third-party-known from third-party-unknown.
-        guard details.valid == true, details.teamIdentifier != nil else {
+        // For third-party classification we require BOTH a valid signature AND
+        // an Apple-generic anchor — without the anchor check, an ad-hoc/self-
+        // signed binary that happens to embed a Team ID-shaped string in its
+        // signing dict could spoof its way to `.thirdPartyKnown`.
+        guard details.valid == true,
+              details.isAppleGenericAnchor,
+              details.teamIdentifier != nil
+        else {
             return .unsigned
         }
 

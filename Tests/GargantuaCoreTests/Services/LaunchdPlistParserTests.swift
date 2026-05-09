@@ -167,6 +167,52 @@ struct LaunchdPlistParserTests {
 
     // MARK: - Disk read
 
+    @Test("BundleProgram (SMAppService modern jobs) is preserved")
+    func bundleProgramExtracted() throws {
+        let plist = try DefaultLaunchdPlistParser().parse(dictionary: [
+            "Label": "com.example.smappservice",
+            "BundleProgram": "Contents/MacOS/Helper",
+        ])
+        #expect(plist.bundleProgram == "Contents/MacOS/Helper")
+        #expect(plist.program == nil)
+        #expect(plist.programArguments.isEmpty)
+        // executablePath returns nil because resolving BundleProgram requires
+        // the registering app's bundle path which isn't in the plist.
+        #expect(plist.executablePath == nil)
+    }
+
+    @Test("Plist file larger than maxPlistSize is rejected with .oversized")
+    func oversizedPlistRejected() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LaunchdPlistParserTests-oversized-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Build a plist that is structurally valid but larger than the cap by
+        // padding a string value with garbage.
+        let bigString = String(repeating: "A", count: DefaultLaunchdPlistParser.maxPlistSize + 1)
+        let dict: [String: Any] = [
+            "Label": "com.example.huge",
+            "Program": bigString,
+        ]
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: dict,
+            format: .xml,
+            options: 0
+        )
+        let url = dir.appendingPathComponent("huge.plist")
+        try data.write(to: url)
+
+        do {
+            _ = try DefaultLaunchdPlistParser().parse(plistURL: url)
+            Issue.record("Expected .oversized to be thrown")
+        } catch let LaunchdPlistParserError.oversized(_, size) {
+            #expect(size > DefaultLaunchdPlistParser.maxPlistSize)
+        } catch {
+            Issue.record("Expected .oversized but got: \(error)")
+        }
+    }
+
     @Test("Integer-encoded booleans (0/1) coerce to false/true")
     func integerEncodedBooleansCoerced() throws {
         let plist = try DefaultLaunchdPlistParser().parse(dictionary: [

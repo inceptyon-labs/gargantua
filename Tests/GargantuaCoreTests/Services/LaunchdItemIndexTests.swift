@@ -169,6 +169,21 @@ struct LaunchdItemIndexTests {
         #expect(items.first?.parseError != nil)
     }
 
+    @Test("LaunchAgents subdirectories are NOT descended into (launchd doesn't auto-load them)")
+    func launchAgentsSubdirectoriesIgnored() throws {
+        let roots = try makeTempRoots()
+        defer { try? FileManager.default.removeItem(at: roots.root) }
+
+        let nestedDir = roots.userAgents.appendingPathComponent("Subfolder", isDirectory: true)
+        try FileManager.default.createDirectory(at: nestedDir, withIntermediateDirectories: true)
+        try writePlist(label: "com.nested.thing", to: nestedDir)
+        try writePlist(label: "com.flat.thing", to: roots.userAgents)
+
+        let items = makeIndex(roots: roots).enumerate()
+        let labels = items.compactMap { $0.plist?.label }
+        #expect(labels == ["com.flat.thing"])
+    }
+
     @Test("StartupItems directory descends one level for the per-item plist")
     func startupItemsDescendsOneLevel() throws {
         let roots = try makeTempRoots()

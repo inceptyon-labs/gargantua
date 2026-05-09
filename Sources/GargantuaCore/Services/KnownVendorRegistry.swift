@@ -71,9 +71,13 @@ public struct KnownVendorRegistry: Sendable {
 
     /// Default registry shipped with Gargantua.
     ///
-    /// Conservative starter set — covers vendors that commonly appear in
-    /// `~/Library/LaunchAgents` and `/Library/LaunchDaemons` on developer
-    /// machines, with a bias toward marking sensitive categories correctly.
+    /// Sensitive categories only. Broad team-only entries for popular vendors
+    /// (Microsoft/Google/Adobe/etc.) are intentionally NOT included — that
+    /// would mark every product they ship as safe-by-default, including any
+    /// sensitive product (e.g. Microsoft Defender, Google Drive) under the
+    /// same Team ID. Anything signed by a non-sensitive vendor falls through
+    /// to `.thirdPartyUnknown` instead, which still defaults to `review` and
+    /// presents the Team ID and signing identity to the user.
     public static let `default` = KnownVendorRegistry(entries: [
 
         // MARK: - Password managers
@@ -131,16 +135,5 @@ public struct KnownVendorRegistry: Sendable {
               sensitiveCategories: [.accessibility]),
         .init(teamIdentifier: "QMHRBA9LYL", displayName: "Keyboard Maestro",
               sensitiveCategories: [.accessibility]),
-
-        // MARK: - Known, non-sensitive
-
-        .init(teamIdentifier: "UBF8T346G9", displayName: "Microsoft"),
-        .init(teamIdentifier: "JQ525L2MZD", displayName: "Adobe"),
-        .init(teamIdentifier: "EQHXZ8M8AV", displayName: "Google"),
-        .init(teamIdentifier: "BJ4HAAB9B3", displayName: "Spotify"),
-        .init(teamIdentifier: "9JA89QQLNQ", displayName: "Docker"),
-        .init(teamIdentifier: "Q9MMAVJVA3", displayName: "Slack"),
-        .init(teamIdentifier: "43AQ936H96", displayName: "Zoom"),
-        .init(teamIdentifier: "MK7Z27EUNL", displayName: "Mozilla"),
     ])
 }

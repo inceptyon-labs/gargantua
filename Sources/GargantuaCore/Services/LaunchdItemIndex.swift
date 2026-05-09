@@ -56,7 +56,7 @@ public struct DefaultLaunchdItemIndex: LaunchdItemIndexing {
         var items: [LaunchdItem] = []
 
         for (domain, root) in sources {
-            for plistURL in plistURLs(under: root) {
+            for plistURL in plistURLs(under: root, domain: domain) {
                 let item = makeItem(domain: domain, plistURL: plistURL)
                 let key = DedupeKey(
                     domain: domain,
@@ -74,11 +74,13 @@ public struct DefaultLaunchdItemIndex: LaunchdItemIndexing {
 
     // MARK: - Enumeration
 
-    /// Returns `.plist` files directly inside `root`. We do not recurse — all
-    /// four conventional source directories are flat by macOS convention.
-    /// `StartupItems` is the one exception: it contains per-item directories,
-    /// but the launchd-aware `.plist` (when present) lives at one level deep.
-    private func plistURLs(under root: URL) -> [URL] {
+    /// Returns `.plist` files directly inside `root`. The Launch{Agents,Daemons}
+    /// directories are flat by macOS convention — surfacing plists from
+    /// nested subdirectories there could mislead users into thinking launchd
+    /// auto-loads them. `StartupItems` is the legacy exception: each entry is
+    /// a directory containing a `StartupParameters.plist`, so we descend one
+    /// level only for that domain.
+    private func plistURLs(under root: URL, domain: LaunchdDomain) -> [URL] {
         guard fileManager.fileExists(atPath: root.path) else { return [] }
         guard let contents = try? fileManager.contentsOfDirectory(
             at: root,
@@ -92,6 +94,7 @@ public struct DefaultLaunchdItemIndex: LaunchdItemIndexing {
         for url in contents {
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if isDir {
+                guard domain == .startupItem else { continue }
                 if let nested = try? fileManager.contentsOfDirectory(
                     at: url,
                     includingPropertiesForKeys: nil,
