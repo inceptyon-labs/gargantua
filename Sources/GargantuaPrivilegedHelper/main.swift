@@ -119,6 +119,19 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
                     error: "Helper missing plist path for trash op."
                 )
             }
+            // Defense-in-depth: even if a compromised signed client skipped
+            // the app-side "disable first" gate, the helper boots the job
+            // out of system before trashing the plist. bootout against an
+            // unloaded job is a no-op (exit 36 / "could not find").
+            // LaunchAgents in `/Library/LaunchAgents/` are controlled in
+            // `gui/<uid>` rather than `system`, so we limit the bootout
+            // safety net to the daemons sub-tree we actually loaded as root.
+            if path.hasPrefix("/Library/LaunchDaemons/") {
+                let preBootout = DefaultLaunchctlRunner().run(["bootout", "system/\(request.label)"])
+                HelperLog.write(
+                    "trashLaunchPlist pre-bootout system/\(request.label) exit=\(preBootout.exitCode)"
+                )
+            }
             do {
                 var trashURL: NSURL?
                 try FileManager.default.trashItem(

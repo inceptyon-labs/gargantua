@@ -88,14 +88,18 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
             let bootoutOK = bootout.succeeded || bootout.exitCode == 36
             let disable = launchctl.run(["disable", "gui/\(uid)/\(item.label)"])
             let succeeded = bootoutOK && disable.succeeded
+            // The audit must reflect the step that *actually* dictated the
+            // outcome. When bootout fails we surface its args/exit; when
+            // bootout was acceptable but disable failed, we surface disable.
+            let primary = bootoutOK ? disable : bootout
             return record(
                 item: item,
                 action: .disable,
                 succeeded: succeeded,
-                error: succeeded ? nil : (disable.stderr.isEmpty ? bootout.stderr : disable.stderr),
+                error: succeeded ? nil : (primary.stderr.isEmpty ? "launchctl exited \(primary.exitCode)" : primary.stderr),
                 tool: "launchctl",
-                arguments: disable.arguments,
-                exitCode: disable.exitCode
+                arguments: primary.arguments,
+                exitCode: primary.exitCode
             )
         case .system:
             let bootout = await helper.perform(
@@ -106,26 +110,30 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 )
             )
             let bootoutOK = bootout.succeeded || bootout.exitCode == 36
-            let disable = await helper.perform(
+            let disable = bootoutOK ? await helper.perform(
                 PrivilegedBackgroundItemRequest(
                     operation: .disableDaemon,
                     label: item.label,
                     plistPath: item.plistPath
                 )
-            )
-            let succeeded = bootoutOK && disable.succeeded
+            ) : nil
+            let succeeded = bootoutOK && (disable?.succeeded ?? false)
+            // Audit the step whose outcome decided the overall outcome:
+            // either the failed bootout, or (if bootout was OK) the disable.
+            let primaryOp: PrivilegedBackgroundItemOperation = bootoutOK ? .disableDaemon : .bootoutDaemon
+            let primary = bootoutOK ? disable : bootout
             return record(
                 item: item,
                 action: .disable,
                 succeeded: succeeded,
-                error: succeeded ? nil : (disable.error ?? bootout.error ?? disable.stderr),
+                error: succeeded ? nil : (primary?.error ?? primary?.stderr ?? "launchctl rejected"),
                 tool: "launchctl",
                 arguments: PrivilegedBackgroundItemValidator.launchctlArguments(
-                    for: .disableDaemon,
+                    for: primaryOp,
                     label: item.label,
-                    plistPath: nil
+                    plistPath: item.plistPath
                 ) ?? [],
-                exitCode: disable.exitCode ?? -1
+                exitCode: primary?.exitCode ?? -1
             )
         }
     }
@@ -149,24 +157,26 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
             let enable = launchctl.run(["enable", "gui/\(uid)/\(item.label)"])
             // Re-bootstrap from the original plist so the user-side enable
             // also re-loads the job. Skip when the plist is missing (login
-            // items, defensive — already filtered above).
+            // items, defensive — already filtered above). Bootstrap is only
+            // attempted after enable succeeded so a failure point pins to
+            // the right subcommand in the audit.
             var bootstrap: LaunchctlResult?
-            if let path = item.plistPath {
+            if enable.succeeded, let path = item.plistPath {
                 bootstrap = launchctl.run(["bootstrap", "gui/\(uid)", path])
             }
             // bootstrap returns 37 when the job is already loaded, which we
             // treat as success-equivalent.
             let bootstrapOK = bootstrap.map { $0.succeeded || $0.exitCode == 37 } ?? true
             let succeeded = enable.succeeded && bootstrapOK
-            let stderr = enable.stderr.isEmpty ? (bootstrap?.stderr ?? "") : enable.stderr
+            let primary: LaunchctlResult = !enable.succeeded ? enable : (bootstrap ?? enable)
             return record(
                 item: item,
                 action: .enable,
                 succeeded: succeeded,
-                error: succeeded ? nil : stderr,
+                error: succeeded ? nil : (primary.stderr.isEmpty ? "launchctl exited \(primary.exitCode)" : primary.stderr),
                 tool: "launchctl",
-                arguments: enable.arguments,
-                exitCode: enable.exitCode
+                arguments: primary.arguments,
+                exitCode: primary.exitCode
             )
         case .system:
             let enable = await helper.perform(
@@ -177,7 +187,7 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 )
             )
             var bootstrap: PrivilegedBackgroundItemResponse?
-            if let path = item.plistPath {
+            if enable.succeeded, let path = item.plistPath {
                 bootstrap = await helper.perform(
                     PrivilegedBackgroundItemRequest(
                         operation: .bootstrapDaemon,
@@ -188,18 +198,20 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
             }
             let bootstrapOK = bootstrap.map { $0.succeeded || $0.exitCode == 37 } ?? true
             let succeeded = enable.succeeded && bootstrapOK
+            let primaryOp: PrivilegedBackgroundItemOperation = enable.succeeded ? .bootstrapDaemon : .enableDaemon
+            let primary: PrivilegedBackgroundItemResponse = !enable.succeeded ? enable : (bootstrap ?? enable)
             return record(
                 item: item,
                 action: .enable,
                 succeeded: succeeded,
-                error: succeeded ? nil : (enable.error ?? bootstrap?.error ?? enable.stderr),
+                error: succeeded ? nil : (primary.error ?? primary.stderr ?? "launchctl rejected"),
                 tool: "launchctl",
                 arguments: PrivilegedBackgroundItemValidator.launchctlArguments(
-                    for: .enableDaemon,
+                    for: primaryOp,
                     label: item.label,
-                    plistPath: nil
+                    plistPath: item.plistPath
                 ) ?? [],
-                exitCode: enable.exitCode ?? -1
+                exitCode: primary.exitCode ?? -1
             )
         }
     }

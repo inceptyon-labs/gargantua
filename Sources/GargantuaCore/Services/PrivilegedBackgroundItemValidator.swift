@@ -2,36 +2,55 @@ import Foundation
 
 /// Validates `PrivilegedBackgroundItemRequest` payloads inside the privileged
 /// helper before any subprocess or trash op runs. The validator is intentionally
-/// pure (no side effects beyond `FileManager` lookups) so it can be unit-tested
+/// pure (no side effects beyond filesystem reads) so it can be unit-tested
 /// from within `GargantuaCore` without involving the helper binary.
 public struct PrivilegedBackgroundItemValidator: Sendable {
-    /// Filesystem accessor; injected so tests can fake existence/symlinks
-    /// without writing to `/Library/LaunchDaemons/` for real.
+    /// Filesystem accessor; injected so tests can fake existence/symlinks/plist
+    /// content without writing to `/Library/LaunchDaemons/` for real.
     public struct FileSystem: Sendable {
         public let fileExists: @Sendable (String, UnsafeMutablePointer<ObjCBool>?) -> Bool
         public let resolvedSymlinkPath: @Sendable (String) -> String
+        /// Read the plist at `path` and return its `Label` value, or `nil` if
+        /// the file can't be read or the `Label` key is missing/invalid.
+        public let plistLabel: @Sendable (String) -> String?
 
         public init(
             fileExists: @escaping @Sendable (String, UnsafeMutablePointer<ObjCBool>?) -> Bool,
-            resolvedSymlinkPath: @escaping @Sendable (String) -> String
+            resolvedSymlinkPath: @escaping @Sendable (String) -> String,
+            plistLabel: @escaping @Sendable (String) -> String?
         ) {
             self.fileExists = fileExists
             self.resolvedSymlinkPath = resolvedSymlinkPath
+            self.plistLabel = plistLabel
         }
 
         public static let live = FileSystem(
             fileExists: { path, isDir in FileManager.default.fileExists(atPath: path, isDirectory: isDir) },
-            resolvedSymlinkPath: { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+            resolvedSymlinkPath: { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path },
+            plistLabel: { path in
+                let url = URL(fileURLWithPath: path)
+                guard let parsed = try? DefaultLaunchdPlistParser().parse(plistURL: url) else { return nil }
+                return parsed.label
+            }
         )
     }
 
-    /// Allow-listed parent directories for plist operations. `/System/` and
-    /// `/Library/PrivilegedHelperTools/` are intentionally excluded — those
-    /// belong to the OS or to other helpers, not to user-initiated cleanup.
-    public static let allowedPlistDirectories: Set<String> = [
-        "/Library/LaunchAgents",
-        "/Library/LaunchDaemons",
-    ]
+    /// Operation-specific allow-listed parent directories. The label-only
+    /// `launchctl` ops (`bootout`/`disable`/`enable`) AND `bootstrap` only
+    /// accept plists from `/Library/LaunchDaemons/` — they target the
+    /// `system` domain which is daemons-only. Trash also accepts
+    /// `/Library/LaunchAgents/` because system agents are root-owned files
+    /// even though their launchctl control is user-domain.
+    public static func allowedDirectories(
+        for operation: PrivilegedBackgroundItemOperation
+    ) -> Set<String> {
+        switch operation {
+        case .bootoutDaemon, .disableDaemon, .enableDaemon, .bootstrapDaemon:
+            return ["/Library/LaunchDaemons"]
+        case .trashLaunchPlist:
+            return ["/Library/LaunchAgents", "/Library/LaunchDaemons"]
+        }
+    }
 
     /// Label format: starts with an alphanumeric, then `[A-Za-z0-9._-]` up to
     /// 254 chars. Excludes spaces, slashes, parent traversal, and any control
@@ -74,32 +93,31 @@ public struct PrivilegedBackgroundItemValidator: Sendable {
 
     // MARK: - Operation-specific validation
 
+    /// Every privileged operation requires a plist witness on disk in the
+    /// operation's allow-listed directory whose internal `Label` matches the
+    /// request. The path proves the label was discovered through legitimate
+    /// enumeration; the in-plist Label check prevents a renamed-file attack
+    /// (filename `com.safe.plist` carrying `Label = com.attacker.evil`).
     private func validateOperationContext(_ request: PrivilegedBackgroundItemRequest) throws {
-        switch request.operation {
-        case .bootoutDaemon, .disableDaemon, .enableDaemon:
-            // Pure label ops — no path needed; the launchctl target is
-            // `system/<label>` which the helper builds itself.
-            return
-        case .bootstrapDaemon:
-            guard let path = request.plistPath else {
-                throw PrivilegedBackgroundItemValidationError.missingPlistPath
-            }
-            try validatePlistPath(path, label: request.label)
-            // `bootstrap` requires the plist to exist on disk so launchd
-            // can read it.
-            try requireFileExists(path)
-        case .trashLaunchPlist:
-            guard let path = request.plistPath else {
-                throw PrivilegedBackgroundItemValidationError.missingPlistPath
-            }
-            try validatePlistPath(path, label: request.label)
-            try requireFileExists(path)
+        guard let path = request.plistPath else {
+            throw PrivilegedBackgroundItemValidationError.missingPlistPath
         }
+        try validatePlistPath(
+            path,
+            label: request.label,
+            allowedDirectories: Self.allowedDirectories(for: request.operation)
+        )
+        try requireFileExists(path)
+        try requirePlistLabel(path: path, expectedLabel: request.label)
     }
 
     // MARK: - Path validation
 
-    private func validatePlistPath(_ path: String, label: String) throws {
+    private func validatePlistPath(
+        _ path: String,
+        label: String,
+        allowedDirectories: Set<String>
+    ) throws {
         // Reject any path that doesn't standardize back to itself — kills
         // `..` traversal, double slashes, and trailing components without
         // re-walking the filesystem ourselves.
@@ -117,14 +135,16 @@ public struct PrivilegedBackgroundItemValidator: Sendable {
             throw PrivilegedBackgroundItemValidationError.symlinkRejected(path)
         }
 
-        // Parent directory must be exactly one of the allow-listed roots.
+        // Parent directory must be exactly one of the allow-listed roots
+        // for this operation.
         let parent = url.deletingLastPathComponent().path
-        guard Self.allowedPlistDirectories.contains(parent) else {
+        guard allowedDirectories.contains(parent) else {
             throw PrivilegedBackgroundItemValidationError.rejectedPath(path)
         }
 
-        // Filename must be `<label>.plist` — prevents disabling label X while
-        // pointing the trash op at plist Y.
+        // Filename must be `<label>.plist`. This is a coarse cross-check;
+        // the real label binding is the in-plist `Label` value validated by
+        // `requirePlistLabel`.
         let filename = url.lastPathComponent
         guard filename == "\(label).plist" else {
             throw PrivilegedBackgroundItemValidationError.labelPathMismatch(label: label, path: path)
@@ -135,6 +155,18 @@ public struct PrivilegedBackgroundItemValidator: Sendable {
         var isDir: ObjCBool = false
         guard fs.fileExists(path, &isDir), !isDir.boolValue else {
             throw PrivilegedBackgroundItemValidationError.missingPath(path)
+        }
+    }
+
+    private func requirePlistLabel(path: String, expectedLabel: String) throws {
+        guard let actual = fs.plistLabel(path) else {
+            throw PrivilegedBackgroundItemValidationError.unreadablePlist(path)
+        }
+        guard actual == expectedLabel else {
+            throw PrivilegedBackgroundItemValidationError.labelPathMismatch(
+                label: expectedLabel,
+                path: path
+            )
         }
     }
 
@@ -172,6 +204,7 @@ public enum PrivilegedBackgroundItemValidationError: Error, LocalizedError, Equa
     case symlinkRejected(String)
     case labelPathMismatch(label: String, path: String)
     case missingPath(String)
+    case unreadablePlist(String)
 
     public var errorDescription: String? {
         switch self {
@@ -189,6 +222,8 @@ public enum PrivilegedBackgroundItemValidationError: Error, LocalizedError, Equa
             "Privileged helper rejected label/path mismatch: label=\(label) path=\(path)"
         case .missingPath(let path):
             "Privileged helper plist path does not exist (or is a directory): \(path)"
+        case .unreadablePlist(let path):
+            "Privileged helper could not read launchd plist (missing or invalid): \(path)"
         }
     }
 }

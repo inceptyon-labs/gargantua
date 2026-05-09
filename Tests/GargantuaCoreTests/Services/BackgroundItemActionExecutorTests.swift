@@ -145,6 +145,25 @@ struct BackgroundItemActionExecutorTests {
         #expect(entries[0].commandArguments == ["disable", "gui/501/com.acme.tool"])
     }
 
+    @Test("Disable failure on bootout records bootout's args/exit, not the disable that never ran")
+    func disableFailureRecordsFailingSubcommand() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let launchctl = FakeLaunchctl()
+        // Real bootout failure (not the tolerated 36).
+        launchctl.setExit(5, forSubcommand: "bootout", stderr: "no permission")
+        let (executor, writer) = makeExecutor(launchctl: launchctl, auditDir: dir)
+
+        let outcome = await executor.disable(makeItem())
+
+        #expect(!outcome.succeeded)
+        let entries = try writer.readEntries()
+        #expect(entries.count == 1)
+        // The audit must reflect bootout (the failing step), not disable.
+        #expect(entries[0].commandArguments?.first == "bootout")
+        #expect(entries[0].commandExitCode == 5)
+    }
+
     @Test("Disable tolerates bootout exit 36 (job not loaded)")
     func disableToleratesNotLoaded() async throws {
         let dir = try tempDir()
