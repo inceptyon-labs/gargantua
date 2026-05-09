@@ -23,6 +23,8 @@ private final class PrivilegedHelperDelegate: NSObject, NSXPCListenerDelegate {
 }
 
 private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstallXPCProtocol {
+    private let backgroundItemValidator = PrivilegedBackgroundItemValidator()
+
     func moveItemsToTrash(
         requestData: Data,
         withReply reply: @escaping (Data) -> Void
@@ -40,6 +42,107 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
             let data = (try? PrivilegedUninstallXPCCodec.encoder.encode(response)) ?? Data()
             reply(data)
         }
+    }
+
+    func performBackgroundItemAction(
+        requestData: Data,
+        withReply reply: @escaping (Data) -> Void
+    ) {
+        let response: PrivilegedBackgroundItemResponse
+        do {
+            let request = try PrivilegedUninstallXPCCodec.decoder.decode(
+                PrivilegedBackgroundItemRequest.self,
+                from: requestData
+            )
+            response = handleBackgroundItem(request)
+        } catch {
+            // Decode failures use the existing uninstall error envelope so
+            // the client can render a generic helper failure with the same
+            // path it already handles.
+            let envelope = PrivilegedUninstallErrorResponse(error: error.localizedDescription)
+            let data = (try? PrivilegedUninstallXPCCodec.encoder.encode(envelope)) ?? Data()
+            reply(data)
+            return
+        }
+        let data = (try? PrivilegedUninstallXPCCodec.encoder.encode(response)) ?? Data()
+        reply(data)
+    }
+
+    private func handleBackgroundItem(
+        _ request: PrivilegedBackgroundItemRequest
+    ) -> PrivilegedBackgroundItemResponse {
+        do {
+            try backgroundItemValidator.validate(request)
+        } catch {
+            HelperLog.write(
+                "background-item validation rejected \(request.operation.rawValue) "
+                    + "label=\(request.label) path=\(request.plistPath ?? "<nil>"): \(error.localizedDescription)"
+            )
+            return PrivilegedBackgroundItemResponse(
+                id: request.id,
+                succeeded: false,
+                error: error.localizedDescription
+            )
+        }
+
+        switch request.operation {
+        case .bootoutDaemon, .disableDaemon, .enableDaemon, .bootstrapDaemon:
+            guard let arguments = PrivilegedBackgroundItemValidator.launchctlArguments(
+                for: request.operation,
+                label: request.label,
+                plistPath: request.plistPath
+            ) else {
+                return PrivilegedBackgroundItemResponse(
+                    id: request.id,
+                    succeeded: false,
+                    error: "Helper could not build launchctl arguments for \(request.operation.rawValue)."
+                )
+            }
+            let result = runLaunchctl(arguments: arguments)
+            HelperLog.write(
+                "launchctl \(arguments.joined(separator: " ")) exit=\(result.exitCode)"
+            )
+            return PrivilegedBackgroundItemResponse(
+                id: request.id,
+                succeeded: result.succeeded,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                exitCode: result.exitCode,
+                trashPath: nil,
+                error: result.succeeded ? nil : (result.stderr.isEmpty ? "launchctl exited \(result.exitCode)" : result.stderr)
+            )
+        case .trashLaunchPlist:
+            guard let path = request.plistPath else {
+                return PrivilegedBackgroundItemResponse(
+                    id: request.id,
+                    succeeded: false,
+                    error: "Helper missing plist path for trash op."
+                )
+            }
+            do {
+                var trashURL: NSURL?
+                try FileManager.default.trashItem(
+                    at: URL(fileURLWithPath: path),
+                    resultingItemURL: &trashURL
+                )
+                return PrivilegedBackgroundItemResponse(
+                    id: request.id,
+                    succeeded: true,
+                    trashPath: (trashURL as URL?)?.path
+                )
+            } catch {
+                HelperLog.write("trashLaunchPlist failed for \(path): \(error.localizedDescription)")
+                return PrivilegedBackgroundItemResponse(
+                    id: request.id,
+                    succeeded: false,
+                    error: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func runLaunchctl(arguments: [String]) -> LaunchctlResult {
+        DefaultLaunchctlRunner().run(arguments)
     }
 
     private func remove(_ item: PrivilegedUninstallItem) -> PrivilegedUninstallItemResult {

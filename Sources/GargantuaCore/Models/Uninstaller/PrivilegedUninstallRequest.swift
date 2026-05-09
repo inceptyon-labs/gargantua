@@ -93,6 +93,17 @@ public struct PrivilegedUninstallErrorResponse: Codable, Sendable, Equatable {
         requestData: Data,
         withReply reply: @escaping (Data) -> Void
     )
+
+    /// Perform a single Background Items operation (disable / enable /
+    /// bootout / bootstrap / trash plist). The helper validates `requestData`
+    /// against `PrivilegedBackgroundItemRequest` and runs the matching
+    /// subprocess or trash op. Reply is `PrivilegedBackgroundItemResponse`,
+    /// JSON-encoded; on a decode failure the helper returns
+    /// `PrivilegedUninstallErrorResponse` so the existing error path is reusable.
+    func performBackgroundItemAction(
+        requestData: Data,
+        withReply reply: @escaping (Data) -> Void
+    )
 }
 
 public enum PrivilegedUninstallXPCCodec {

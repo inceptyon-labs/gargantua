@@ -8,13 +8,21 @@ import SwiftUI
 /// synthetic `ScanResult` so the existing `AIExplanationController` can drive
 /// the AI-fallback sheet without a parallel pipeline.
 public struct BackgroundItemsView: View {
-    @State private var session = BackgroundItemsSession()
+    @State private var session: BackgroundItemsSession
     @State private var expandedID: String?
     @State private var filter: BackgroundItemFilter = .all
+    @State private var pendingAction: PendingBackgroundItemAction?
+    @State private var lastError: String?
     private let onExplain: ((ScanResult) -> Void)?
 
-    public init(onExplain: ((ScanResult) -> Void)? = nil) {
+    public init(
+        onExplain: ((ScanResult) -> Void)? = nil,
+        actionExecutor: (any BackgroundItemActionExecuting)? = nil
+    ) {
         self.onExplain = onExplain
+        self._session = State(
+            initialValue: BackgroundItemsSession(actionExecutor: actionExecutor)
+        )
     }
 
     public var body: some View {
@@ -38,6 +46,29 @@ public struct BackgroundItemsView: View {
         .background(GargantuaColors.void_)
         .task {
             if session.scan == nil { await session.scan() }
+        }
+        .sheet(item: $pendingAction) { pending in
+            BackgroundItemActionConfirmation(
+                item: pending.item,
+                action: pending.action,
+                onConfirm: {
+                    let toRun = pending
+                    pendingAction = nil
+                    Task { await runAction(toRun) }
+                },
+                onCancel: { pendingAction = nil }
+            )
+        }
+        .alert(
+            "Background item action failed",
+            isPresented: Binding(
+                get: { lastError != nil },
+                set: { if !$0 { lastError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { lastError = nil }
+        } message: {
+            Text(lastError ?? "")
         }
     }
 
@@ -115,6 +146,7 @@ public struct BackgroundItemsView: View {
                             BackgroundItemRow(
                                 item: item,
                                 isExpanded: expandedID == item.id,
+                                isBusy: session.busyItemIDs.contains(item.id),
                                 onToggleExpand: {
                                     withAnimation(.easeOut(duration: 0.15)) {
                                         expandedID = expandedID == item.id ? nil : item.id
@@ -122,7 +154,13 @@ public struct BackgroundItemsView: View {
                                 },
                                 onReveal: { revealInFinder(item) },
                                 onExplain: onExplain != nil ? { explain(item) } : nil,
-                                onOpenLoginSettings: openLoginItemsSettings
+                                onOpenLoginSettings: openLoginItemsSettings,
+                                onAction: { action in
+                                    pendingAction = PendingBackgroundItemAction(
+                                        item: item,
+                                        action: action
+                                    )
+                                }
                             )
                         }
                     }
@@ -239,6 +277,13 @@ public struct BackgroundItemsView: View {
         onExplain(item.toScanResult())
     }
 
+    private func runAction(_ pending: PendingBackgroundItemAction) async {
+        let outcome = await session.perform(pending.action, on: pending.item)
+        if !outcome.succeeded, let error = outcome.error {
+            lastError = error
+        }
+    }
+
     private static let timestampFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
@@ -288,11 +333,19 @@ public enum BackgroundItemFilter: CaseIterable, Equatable {
 public final class BackgroundItemsSession {
     public private(set) var scan: BackgroundItemScan?
     public private(set) var isScanning = false
+    /// IDs of items currently being mutated. The row uses this to render a
+    /// spinner inline so the user gets feedback while `launchctl` runs.
+    public private(set) var busyItemIDs: Set<String> = []
 
     private let scanner: any BackgroundItemScanning
+    private let actionExecutor: (any BackgroundItemActionExecuting)?
 
-    public init(scanner: any BackgroundItemScanning = DefaultBackgroundItemScanner()) {
+    public init(
+        scanner: any BackgroundItemScanning = DefaultBackgroundItemScanner(),
+        actionExecutor: (any BackgroundItemActionExecuting)? = DefaultBackgroundItemActionExecutor()
+    ) {
         self.scanner = scanner
+        self.actionExecutor = actionExecutor
     }
 
     public func scan() async {
@@ -305,6 +358,54 @@ public final class BackgroundItemsSession {
             scanner.scan()
         }.value
         self.scan = result
+    }
+
+    /// Run a `BackgroundItemAction` against `item`, marking the row busy for
+    /// the duration. After success, the session re-scans so the row's
+    /// disabled/enabled state reflects the new ground truth.
+    public func perform(
+        _ action: BackgroundItemAction,
+        on item: BackgroundItem
+    ) async -> BackgroundItemActionOutcome {
+        guard let actionExecutor else {
+            return BackgroundItemActionOutcome(
+                itemID: item.id,
+                action: action,
+                succeeded: false,
+                error: "Action executor is not configured."
+            )
+        }
+        busyItemIDs.insert(item.id)
+        defer { busyItemIDs.remove(item.id) }
+
+        let outcome: BackgroundItemActionOutcome
+        switch action {
+        case .disable:
+            outcome = await actionExecutor.disable(item)
+        case .enable:
+            outcome = await actionExecutor.enable(item)
+        case .delete:
+            outcome = await actionExecutor.delete(item, confirmedAt: item.safety.confirmationTier)
+        }
+
+        if outcome.succeeded {
+            await scan()
+        }
+        return outcome
+    }
+}
+
+/// Identifies a pending action awaiting user confirmation. Stored on the view
+/// rather than the session so dismissing the sheet doesn't have to round-trip
+/// through `@Observable`.
+public struct PendingBackgroundItemAction: Identifiable, Equatable {
+    public let item: BackgroundItem
+    public let action: BackgroundItemAction
+    public var id: String { "\(item.id)|\(action.rawValue)" }
+
+    public init(item: BackgroundItem, action: BackgroundItemAction) {
+        self.item = item
+        self.action = action
     }
 }
 

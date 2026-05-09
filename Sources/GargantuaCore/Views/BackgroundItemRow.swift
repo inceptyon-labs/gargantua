@@ -12,27 +12,55 @@ import SwiftUI
 public struct BackgroundItemRow: View {
     public let item: BackgroundItem
     public let isExpanded: Bool
+    public let isBusy: Bool
     public let onToggleExpand: () -> Void
     public let onReveal: () -> Void
     public let onExplain: (() -> Void)?
     public let onOpenLoginSettings: (() -> Void)?
+    public let onAction: ((BackgroundItemAction) -> Void)?
 
     @State private var isHovered = false
 
     public init(
         item: BackgroundItem,
         isExpanded: Bool,
+        isBusy: Bool = false,
         onToggleExpand: @escaping () -> Void,
         onReveal: @escaping () -> Void,
         onExplain: (() -> Void)? = nil,
-        onOpenLoginSettings: (() -> Void)? = nil
+        onOpenLoginSettings: (() -> Void)? = nil,
+        onAction: ((BackgroundItemAction) -> Void)? = nil
     ) {
         self.item = item
         self.isExpanded = isExpanded
+        self.isBusy = isBusy
         self.onToggleExpand = onToggleExpand
         self.onReveal = onReveal
         self.onExplain = onExplain
         self.onOpenLoginSettings = onOpenLoginSettings
+        self.onAction = onAction
+    }
+
+    /// Whether the user can disable / enable / delete this item. Login items
+    /// and startup items are out of scope; protected items are read-only.
+    private var supportsActions: Bool {
+        switch item.source {
+        case .userLaunchAgent, .systemLaunchAgent, .launchDaemon: true
+        case .startupItem, .loginItem: false
+        }
+    }
+
+    private var canDelete: Bool {
+        guard supportsActions, item.plistPath != nil else { return false }
+        return item.safety != .protected_ && item.reasons.contains(.disabledFlag)
+    }
+
+    private var canDisable: Bool {
+        supportsActions && item.safety != .protected_ && !item.reasons.contains(.disabledFlag)
+    }
+
+    private var canEnable: Bool {
+        supportsActions && item.safety != .protected_ && item.reasons.contains(.disabledFlag)
     }
 
     public var body: some View {
@@ -135,6 +163,10 @@ public struct BackgroundItemRow: View {
 
     private var trailingControls: some View {
         HStack(spacing: GargantuaSpacing.space2) {
+            if isBusy {
+                AccretionDiskView(activityRate: 12, size: 14, color: GargantuaColors.accretion)
+            }
+
             if isHovered, let onExplain {
                 Button(action: onExplain) {
                     HStack(spacing: 4) {
@@ -147,6 +179,10 @@ public struct BackgroundItemRow: View {
                 }
                 .buttonStyle(.plain)
                 .help("Generate an AI explanation")
+            }
+
+            if isHovered, let onAction, supportsActions {
+                actionButtonGroup(onAction: onAction)
             }
 
             if item.source == .loginItem, let onOpenLoginSettings {
@@ -175,6 +211,49 @@ public struct BackgroundItemRow: View {
             }
             .buttonStyle(.plain)
             .help(isExpanded ? "Collapse details" : "Show details")
+        }
+    }
+
+    private func actionButtonGroup(onAction: @escaping (BackgroundItemAction) -> Void) -> some View {
+        HStack(spacing: 4) {
+            if canDisable {
+                Button {
+                    onAction(.disable)
+                } label: {
+                    Image(systemName: "pause.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(GargantuaColors.review)
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("Disable this item")
+            }
+
+            if canEnable {
+                Button {
+                    onAction(.enable)
+                } label: {
+                    Image(systemName: "play.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(GargantuaColors.safe)
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("Re-enable this item")
+            }
+
+            if canDelete {
+                Button {
+                    onAction(.delete)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(GargantuaColors.review)
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("Move plist to Trash")
+            }
         }
     }
 
@@ -278,6 +357,18 @@ public struct BackgroundItemRow: View {
         }
         if let onExplain {
             Button("Explain with AI") { onExplain() }
+        }
+        if let onAction, supportsActions {
+            Divider()
+            if canDisable {
+                Button("Disable") { onAction(.disable) }
+            }
+            if canEnable {
+                Button("Re-enable") { onAction(.enable) }
+            }
+            if canDelete {
+                Button("Move plist to Trash") { onAction(.delete) }
+            }
         }
         Button("Copy label") {
             NSPasteboard.general.clearContents()
