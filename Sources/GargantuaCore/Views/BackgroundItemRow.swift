@@ -71,56 +71,59 @@ public struct BackgroundItemRow: View {
 
     // MARK: - Collapsed header
 
+    // The outer container is intentionally a tap-gesture-bearing HStack
+    // rather than a Button. Wrapping everything in a SwiftUI Button on macOS
+    // absorbs the hit before nested action Buttons (Explain, Reveal, chevron)
+    // can register, leaving them unresponsive. The tap gesture drives the
+    // expand toggle while the nested Buttons stay independently clickable.
     private var collapsedHeader: some View {
-        Button(action: onToggleExpand) {
-            HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-                safetyIcon
-                    .padding(.top, 2)
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            safetyIcon
+                .padding(.top, 2)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: GargantuaSpacing.space2) {
-                        Text(item.displayName)
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-                            .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Text(item.displayName)
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+                        .lineLimit(1)
 
-                        Text(item.source.displayLabel)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.ink3)
-                    }
-
-                    Text(item.explanation)
-                        .font(GargantuaFonts.body)
-                        .foregroundStyle(GargantuaColors.ink2)
-                        .lineLimit(2)
-
-                    if let plistPath = item.plistPath {
-                        Text(plistPath)
-                            .font(GargantuaFonts.monoPath)
-                            .foregroundStyle(GargantuaColors.ink3)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    } else if item.source == .loginItem {
-                        Text("Manage in System Settings → Login Items")
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.accent)
-                    }
-
-                    if !item.reasons.isEmpty {
-                        reasonChips
-                            .padding(.top, 2)
-                    }
+                    Text(item.source.displayLabel)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                trailingControls
+                Text(item.explanation)
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .lineLimit(2)
+
+                if let plistPath = item.plistPath {
+                    Text(plistPath)
+                        .font(GargantuaFonts.monoPath)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else if item.source == .loginItem {
+                    Text("Manage in System Settings → Login Items")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.accent)
+                }
+
+                if !item.reasons.isEmpty {
+                    reasonChips
+                        .padding(.top, 2)
+                }
             }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space3)
-            .padding(.leading, GargantuaSpacing.space1) // clear the 3pt safety bar
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
+            .onTapGesture(perform: onToggleExpand)
+
+            trailingControls
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space3)
+        .padding(.leading, GargantuaSpacing.space1) // clear the 3pt safety bar
     }
 
     private var safetyIcon: some View {
@@ -164,10 +167,14 @@ public struct BackgroundItemRow: View {
                 .help("Reveal plist in Finder")
             }
 
-            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 14, height: 14)
+            Button(action: onToggleExpand) {
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse details" : "Show details")
         }
     }
 

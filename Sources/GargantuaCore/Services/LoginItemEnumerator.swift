@@ -71,10 +71,15 @@ public struct DefaultLoginItemEnumerator: LoginItemEnumerating {
         let result = runner()
         let parsed = SfltoolDumpbtmParser.parse(result.output)
 
-        // Heuristic: an empty parse with non-zero exit, or a parse that
-        // surfaces zero records, both flag as `needsPrivileges` so the UI
-        // can hint at the limitation rather than show a misleading "0 items."
-        let needsPrivs = parsed.isEmpty
+        // `needsPrivileges` is true when sfltool returned no usable output
+        // AND something went wrong (non-zero exit OR completely empty output).
+        // A successful run that genuinely produced zero records leaves the
+        // flag false so the footer doesn't mislead users on a clean machine.
+        let exitedCleanly = result.exitCode == 0
+        let producedAnyOutput = !result.output
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+        let needsPrivs = parsed.isEmpty && (!exitedCleanly || !producedAnyOutput)
         return LoginItemEnumeration(records: parsed, needsPrivileges: needsPrivs)
     }
 
@@ -90,7 +95,10 @@ public struct DefaultLoginItemEnumerator: LoginItemEnumerating {
 
         let stdoutPipe = Pipe()
         process.standardOutput = stdoutPipe
-        process.standardError = Pipe()
+        // Discard stderr — we don't surface it, and the default Pipe()'s
+        // 64 KB buffer would deadlock the child if sfltool ever flooded
+        // diagnostics there. /dev/null has unlimited capacity.
+        process.standardError = FileHandle(forWritingAtPath: "/dev/null") ?? FileHandle.standardError
 
         do {
             try process.run()

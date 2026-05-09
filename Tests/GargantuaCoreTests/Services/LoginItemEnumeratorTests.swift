@@ -98,6 +98,18 @@ struct LoginItemEnumeratorTests {
         #expect(result.needsPrivileges)
     }
 
+    @Test("Clean run that parses zero records keeps needsPrivileges = false")
+    func cleanRunZeroRecords() {
+        // Realistic scenario: sfltool ran successfully and produced a
+        // 'Records [0]:' header but no entries. Don't surface a misleading
+        // 'limited' footer in that case.
+        let output = "Records [0]:\n"
+        let enumerator = DefaultLoginItemEnumerator(runner: { (output, 0) })
+        let result = enumerator.enumerate()
+        #expect(result.records.isEmpty)
+        #expect(!result.needsPrivileges)
+    }
+
     @Test("Enumerator surfaces parsed records and clears needsPrivileges")
     func parsedRecordsClearPrivileges() {
         let stub = """
