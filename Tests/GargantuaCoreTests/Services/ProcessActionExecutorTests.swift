@@ -322,6 +322,47 @@ struct ProcessActionExecutorTests {
         #expect(entries.isEmpty)
     }
 
+    @Test("Remove source on a protected process refuses up front, no routing")
+    func removeSourceProtectedRefused() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let signaler = FakeSignaler()
+        let (executor, _) = makeExecutor(signaler: signaler, auditDir: dir)
+
+        let item = makeItem(
+            launchSource: .launchd(
+                domain: .systemDaemon,
+                label: "com.apple.thing",
+                plistPath: "/Library/LaunchDaemons/com.apple.thing.plist"
+            ),
+            launchConfidence: .exact,
+            safety: .protected_
+        )
+        let outcome = await executor.removeSource(item)
+
+        #expect(!outcome.succeeded)
+        #expect(outcome.routedPlistPath == nil)
+        #expect(outcome.error == ProcessActionRefusal.protectedItem.errorDescription)
+    }
+
+    @Test("Stop on a process with no executablePath records the command in the audit files")
+    func stopWithoutExecutablePath() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let signaler = FakeSignaler()
+        signaler.enqueueAlive([false])
+        let (executor, writer) = makeExecutor(signaler: signaler, auditDir: dir)
+
+        let outcome = await executor.stop(makeItem(executablePath: nil))
+
+        #expect(outcome.succeeded)
+        let entries = try writer.readEntries()
+        #expect(entries.count == 1)
+        // When the process has no executable path (kernel task introspection
+        // failure, sandbox restriction), audit falls back to command name.
+        #expect(entries[0].files.first?.path == "tool")
+    }
+
     @Test("Remove source on a heuristic match refuses with no plist routing")
     func removeSourceHeuristicRefused() async throws {
         let dir = try tempDir()

@@ -65,7 +65,7 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
         if term.alreadyGone {
             return record(StopAuditAttempt(
                 item: item, succeeded: true, error: nil,
-                signal: SIGTERM, exitCode: 0, escalated: false
+                signal: SIGTERM, resultCode: 0, escalated: false
             ))
         }
 
@@ -73,7 +73,7 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
             return record(StopAuditAttempt(
                 item: item, succeeded: false,
                 error: errnoDescription(term.errno, signal: SIGTERM),
-                signal: SIGTERM, exitCode: term.errno, escalated: false
+                signal: SIGTERM, resultCode: term.errno, escalated: false
             ))
         }
 
@@ -82,7 +82,7 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
         if !signaler.isAlive(pid: item.pid) {
             return record(StopAuditAttempt(
                 item: item, succeeded: true, error: nil,
-                signal: SIGTERM, exitCode: 0, escalated: false
+                signal: SIGTERM, resultCode: 0, escalated: false
             ))
         }
 
@@ -91,14 +91,14 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
         if kill.alreadyGone {
             return record(StopAuditAttempt(
                 item: item, succeeded: true, error: nil,
-                signal: SIGKILL, exitCode: 0, escalated: true
+                signal: SIGKILL, resultCode: 0, escalated: true
             ))
         }
         if !kill.succeeded {
             return record(StopAuditAttempt(
                 item: item, succeeded: false,
                 error: errnoDescription(kill.errno, signal: SIGKILL),
-                signal: SIGKILL, exitCode: kill.errno, escalated: true
+                signal: SIGKILL, resultCode: kill.errno, escalated: true
             ))
         }
 
@@ -109,7 +109,7 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
             succeeded: !stillAlive,
             error: stillAlive ? "Process still running after SIGKILL." : nil,
             signal: SIGKILL,
-            exitCode: stillAlive ? -1 : 0,
+            resultCode: stillAlive ? -1 : 0,
             escalated: true
         ))
     }
@@ -118,6 +118,14 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
 
     @MainActor
     public func removeSource(_ item: ProcessItem) async -> ProcessActionOutcome {
+        // Gate `.protected_` here even though the routing-eligible source set
+        // (launchd with exact/path confidence) rarely intersects with it —
+        // an Apple-signed daemon can match exactly. Routing the user to
+        // Background Items would only land on a row whose disable button is
+        // already refused, so refuse up front with a precise reason.
+        guard item.safety != .protected_ else {
+            return refuse(item: item, action: .removeSource, refusal: .protectedItem)
+        }
         switch router.route(item) {
         case let .routeToBackgroundItems(plistPath, _):
             // No audit entry — the actual disable/delete runs through
@@ -158,12 +166,18 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
     /// Bundle of fields a single audit row needs. Inlined struct so the
     /// `record` callsite stays under SwiftLint's parameter-count cap and so
     /// future fields (signal name, attempt count) only touch one signature.
+    ///
+    /// `resultCode` carries either `0` for success, `-1` when the process
+    /// survived `SIGKILL`, or the `errno` returned by `kill(2)` on failure.
+    /// It is recorded as `commandExitCode` to match the audit shape Task 3
+    /// uses for `launchctl` results, but is not a Unix wait status — `kill(2)`
+    /// has no exit code, only an errno.
     private struct StopAuditAttempt {
         let item: ProcessItem
         let succeeded: Bool
         let error: String?
         let signal: Int32
-        let exitCode: Int32
+        let resultCode: Int32
         let escalated: Bool
     }
 
@@ -189,7 +203,7 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
             bytesFreed: 0,
             kind: .command,
             commandToolVersion: nil,
-            commandExitCode: attempt.exitCode,
+            commandExitCode: attempt.resultCode,
             commandArguments: arguments
         )
         try? audit.write(entry)

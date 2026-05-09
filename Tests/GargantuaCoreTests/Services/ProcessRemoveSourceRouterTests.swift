@@ -132,4 +132,19 @@ struct ProcessRemoveSourceRouterTests {
             Issue.record("Expected unsupported, got \(routing)")
         }
     }
+
+    @Test("Empty plist path on a launchd source refuses with .noPlistPath (defensive)")
+    func emptyPlistPathRefused() {
+        let router = ProcessRemoveSourceRouter()
+        let item = makeItem(
+            launchSource: .launchd(domain: .userAgent, label: "com.acme.tool", plistPath: ""),
+            launchConfidence: .exact
+        )
+        let routing = router.route(item)
+        if case let .unsupported(refusal, _) = routing {
+            #expect(refusal == .noPlistPath)
+        } else {
+            Issue.record("Expected .noPlistPath, got \(routing)")
+        }
+    }
 }

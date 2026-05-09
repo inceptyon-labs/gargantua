@@ -334,8 +334,14 @@ public struct ProcessInventoryView: View {
             // Successful `.removeSource` carries the plist path the receiver
             // pane should pre-select; navigation happens after the sheet has
             // already dismissed so the destination view animates in cleanly.
-            if let path = outcome.routedPlistPath, let onNavigateToBackgroundItems {
-                onNavigateToBackgroundItems(path)
+            if let path = outcome.routedPlistPath {
+                if let onNavigateToBackgroundItems {
+                    onNavigateToBackgroundItems(path)
+                } else {
+                    // No nav handler wired — surface a clear message so the
+                    // user isn't left wondering why the sheet just dismissed.
+                    lastError = "Background Items navigation is not configured. Open the Background Items pane manually to act on this source."
+                }
             }
             return
         }
