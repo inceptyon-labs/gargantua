@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum PersonalScopeNotice: Equatable {
@@ -70,7 +71,14 @@ final class PersonalScopeSettingsViewModel: ObservableObject {
     }
 
     func addDraftPattern() {
-        let raw = normalizedPattern
+        addRaw(normalizedPattern, fromPicker: false)
+    }
+
+    func addPickedPath(_ path: String) {
+        addRaw(path.trimmingCharacters(in: .whitespacesAndNewlines), fromPicker: true)
+    }
+
+    private func addRaw(_ raw: String, fromPicker: Bool) {
         guard !raw.isEmpty else {
             notice = .empty
             return
@@ -84,7 +92,7 @@ final class PersonalScopeSettingsViewModel: ObservableObject {
             if try persistence.addPersonalScopeRoot(path: pattern) == nil {
                 notice = .duplicate(pattern)
             } else {
-                newPattern = ""
+                if !fromPicker { newPattern = "" }
                 notice = .added(pattern)
                 postChangeNotification()
             }
@@ -207,6 +215,26 @@ struct PersonalScopeSettingsSection: View {
                 action: model.addDraftPattern
             )
             .help("Add personal-scope folder")
+
+            GargantuaIconButton(
+                icon: "folder.badge.plus",
+                help: "Choose folder from disk",
+                color: GargantuaColors.accent,
+                action: chooseFolders
+            )
+        }
+    }
+
+    private func chooseFolders() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.canCreateDirectories = false
+
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            model.addPickedPath(url.standardizedFileURL.path)
         }
     }
 

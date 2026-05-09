@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private enum ProtectedRootNotice: Equatable {
@@ -69,7 +70,14 @@ private final class ProtectedRootsSettingsViewModel: ObservableObject {
     }
 
     func addDraftPath() {
-        let path = normalizedNewPath
+        addRaw(normalizedNewPath, fromPicker: false)
+    }
+
+    func addPickedPath(_ path: String) {
+        addRaw(path.trimmingCharacters(in: .whitespacesAndNewlines), fromPicker: true)
+    }
+
+    private func addRaw(_ path: String, fromPicker: Bool) {
         guard Self.isValidPath(path) else {
             notice = .empty
             return
@@ -82,7 +90,7 @@ private final class ProtectedRootsSettingsViewModel: ObservableObject {
         }
 
         if store.add(path: path) {
-            newPath = ""
+            if !fromPicker { newPath = "" }
             notice = .added(path)
             userEntries = store.loadEntries()
         } else {
@@ -181,6 +189,26 @@ struct ProtectedRootsSettingsSection: View {
                 action: model.addDraftPath
             )
             .help("Add user protected root")
+
+            GargantuaIconButton(
+                icon: "folder.badge.plus",
+                help: "Choose folder from disk",
+                color: GargantuaColors.accent,
+                action: chooseFolders
+            )
+        }
+    }
+
+    private func chooseFolders() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.canCreateDirectories = false
+
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            model.addPickedPath(url.standardizedFileURL.path)
         }
     }
 

@@ -88,7 +88,7 @@ struct ScanRootsSettingsSection: View {
             return
         }
 
-        let updated = ScanRootSettings.normalizedStrings(from: storedScanRoots + [root])
+        let updated = mergedScanRoots(adding: [root])
         guard updated.count > storedScanRoots.count else {
             scanRootError = "That scan root is already listed."
             return
@@ -126,12 +126,24 @@ struct ScanRootsSettingsSection: View {
     }
 
     private func appendScanRoots(_ roots: [String]) {
-        let updated = ScanRootSettings.normalizedStrings(from: storedScanRoots + roots)
+        let updated = mergedScanRoots(adding: roots)
         guard updated.count > storedScanRoots.count else {
             scanRootError = "Selected scan roots are already listed or invalid."
             return
         }
         persistScanRoots(updated)
+    }
+
+    /// Combine existing custom roots with the provided additions. When the
+    /// persisted list is empty, the UI was showing the auto-detected
+    /// defaults; promote them into the persisted list so they survive the
+    /// transition from Automatic to Custom mode.
+    private func mergedScanRoots(adding additions: [String]) -> [String] {
+        let existing = storedScanRoots
+        let defaults = existing.isEmpty
+            ? PathExpander.defaultScanRoots().map(\.standardizedFileURL.path)
+            : []
+        return ScanRootSettings.normalizedStrings(from: existing + defaults + additions)
     }
 
     private func persistScanRoots(_ roots: [String]) {

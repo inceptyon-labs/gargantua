@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum PathExclusionNotice: Equatable {
@@ -66,7 +67,14 @@ final class PathExclusionSettingsViewModel: ObservableObject {
     }
 
     func addDraftPattern() {
-        let pattern = normalizedPattern
+        addRaw(normalizedPattern, fromPicker: false)
+    }
+
+    func addPickedPath(_ path: String) {
+        addRaw(path.trimmingCharacters(in: .whitespacesAndNewlines), fromPicker: true)
+    }
+
+    private func addRaw(_ pattern: String, fromPicker: Bool) {
         guard !pattern.isEmpty else {
             notice = .empty
             return
@@ -76,7 +84,7 @@ final class PathExclusionSettingsViewModel: ObservableObject {
             if try persistence.addExclusionEntry(pattern: pattern) == nil {
                 notice = .duplicate(pattern)
             } else {
-                newPattern = ""
+                if !fromPicker { newPattern = "" }
                 notice = .added(pattern)
             }
             entries = try persistence.fetchExclusionEntries()
@@ -190,6 +198,26 @@ struct PathExclusionSettingsSection: View {
                 action: model.addDraftPattern
             )
             .help("Add exclusion entry")
+
+            GargantuaIconButton(
+                icon: "folder.badge.plus",
+                help: "Choose folder from disk",
+                color: GargantuaColors.accent,
+                action: chooseFolders
+            )
+        }
+    }
+
+    private func chooseFolders() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.canCreateDirectories = false
+
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            model.addPickedPath(url.standardizedFileURL.path)
         }
     }
 
