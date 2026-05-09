@@ -136,6 +136,27 @@ struct ScheduledScanServiceTests {
         #expect(installer.unregisterCount == 1)
     }
 
+    @Test("controller skips register when LaunchAgent plist missing from bundle")
+    func controllerSkipsRegisterWhenAgentNotFound() throws {
+        let installer = SpyScheduledScanAgentInstaller(initialStatus: .notFound)
+        let controller = ScheduledScanController(installer: installer)
+
+        #expect(try controller.synchronize(configuration: ScheduledScanConfiguration(isEnabled: true)) == .notFound)
+        #expect(installer.registerCount == 0)
+
+        #expect(try controller.synchronize(configuration: ScheduledScanConfiguration(isEnabled: false)) == .notFound)
+        #expect(installer.unregisterCount == 0)
+    }
+
+    @Test("controller skips register when platform is unavailable")
+    func controllerSkipsRegisterWhenUnavailable() throws {
+        let installer = SpyScheduledScanAgentInstaller(initialStatus: .unavailable)
+        let controller = ScheduledScanController(installer: installer)
+
+        #expect(try controller.synchronize(configuration: ScheduledScanConfiguration(isEnabled: true)) == .unavailable)
+        #expect(installer.registerCount == 0)
+    }
+
     @Test("runner records a pending summary and notifies when due")
     @MainActor
     func runnerRecordsSummary() async throws {
@@ -251,7 +272,11 @@ struct ScheduledScanServiceTests {
 private final class SpyScheduledScanAgentInstaller: ScheduledScanAgentInstalling, @unchecked Sendable {
     var registerCount = 0
     var unregisterCount = 0
-    private var currentStatus: ScheduledScanAgentStatus = .notRegistered
+    private var currentStatus: ScheduledScanAgentStatus
+
+    init(initialStatus: ScheduledScanAgentStatus = .notRegistered) {
+        self.currentStatus = initialStatus
+    }
 
     func status() -> ScheduledScanAgentStatus {
         currentStatus

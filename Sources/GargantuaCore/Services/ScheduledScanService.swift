@@ -363,18 +363,25 @@ public final class ScheduledScanController: @unchecked Sendable {
     @discardableResult
     /// Registers or unregisters the launch agent to match the supplied configuration.
     public func synchronize(configuration: ScheduledScanConfiguration) throws -> ScheduledScanAgentStatus {
+        let current = installer.status()
         if configuration.isEnabled {
-            let current = installer.status()
             switch current {
             case .enabled, .requiresApproval:
                 return current
-            case .notRegistered, .notFound, .unavailable, .unknown:
+            case .notFound, .unavailable:
+                // Plist missing from bundle (unsigned dev build) or platform unsupported.
+                // Surface status without throwing a confusing -67028 codesign error.
+                return current
+            case .notRegistered, .unknown:
                 return try installer.register()
             }
         } else {
-            let current = installer.status()
-            guard current != .notRegistered else { return current }
-            return try installer.unregister()
+            switch current {
+            case .notRegistered, .notFound, .unavailable:
+                return current
+            case .enabled, .requiresApproval, .unknown:
+                return try installer.unregister()
+            }
         }
     }
 }
