@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // Single row in the Process Inventory pane.
 //
 // Mirrors `BackgroundItemRow`'s layout: 3pt safety bar on the leading edge,
@@ -51,8 +53,12 @@ public struct ProcessInventoryRow: View {
     }
 
     /// Remove Source surfaces only when the launchd link is confident enough
-    /// to safely route the user to the right Background Items row.
+    /// to safely route the user to the right Background Items row, and the
+    /// safety tier permits the disable that would follow on the destination
+    /// pane. Mirrors the executor's refusal so the user never sees a
+    /// dead-end affordance.
     private var canRemoveSource: Bool {
+        guard item.safety != .protected_ else { return false }
         guard case .launchd = item.launchSource else { return false }
         return item.launchConfidence == .exact || item.launchConfidence == .path
     }

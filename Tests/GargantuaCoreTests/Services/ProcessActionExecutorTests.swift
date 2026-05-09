@@ -3,6 +3,8 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+// swiftlint:disable file_length
+
 private struct SignalCall: Equatable {
     let signal: Int32
     let pid: Int32
@@ -19,6 +21,8 @@ struct ProcessActionExecutorTests {
         nonisolated(unsafe) private var _calls: [SignalCall] = []
         nonisolated(unsafe) private var _aliveResponses: [Bool] = []
         nonisolated(unsafe) private var _sendResponses: [Int32: [Int32]] = [:] // signal → errno queue
+        nonisolated(unsafe) private var _startTimeResponses: [UInt64?] = []
+        nonisolated(unsafe) private var _defaultStartTime: UInt64? = 1_000
         private let lock = NSLock()
 
         var calls: [SignalCall] { lock.withLock { _calls } }
@@ -38,6 +42,21 @@ struct ProcessActionExecutorTests {
             }
         }
 
+        /// Queue start-time responses, popped in order. Each successive
+        /// `startTime(pid:)` call drains one. When exhausted, returns the
+        /// configured default (matches the snapshot's start time so identity
+        /// checks pass).
+        func enqueueStartTime(_ values: [UInt64?]) {
+            lock.withLock { _startTimeResponses.append(contentsOf: values) }
+        }
+
+        /// Set the default start time returned once the queue is exhausted.
+        /// Tests that don't care about the recycle-detection branch can
+        /// leave this at its default.
+        func setDefaultStartTime(_ value: UInt64?) {
+            lock.withLock { _defaultStartTime = value }
+        }
+
         func send(_ signal: Int32, to pid: Int32) -> ProcessSignalResult {
             lock.withLock { _calls.append(SignalCall(signal: signal, pid: pid)) }
             let errno = lock.withLock { () -> Int32 in
@@ -55,6 +74,13 @@ struct ProcessActionExecutorTests {
                 return _aliveResponses.removeFirst()
             }
         }
+
+        func startTime(pid _: Int32) -> UInt64? {
+            lock.withLock {
+                guard !_startTimeResponses.isEmpty else { return _defaultStartTime }
+                return _startTimeResponses.removeFirst()
+            }
+        }
     }
 
     // MARK: - Fixtures
@@ -67,6 +93,7 @@ struct ProcessActionExecutorTests {
 
     private func makeItem(
         pid: Int32 = 4242,
+        startTimeUnixSeconds: UInt64 = 1_000,
         command: String = "tool",
         executablePath: String? = "/usr/local/bin/tool",
         launchSource: ProcessLaunchSource = .userSession,
@@ -74,9 +101,10 @@ struct ProcessActionExecutorTests {
         safety: SafetyLevel = .review
     ) -> ProcessItem {
         ProcessItem(
-            id: "\(pid)|0|\(executablePath ?? command)",
+            id: "\(pid)|\(startTimeUnixSeconds)|\(executablePath ?? command)",
             pid: pid,
             parentPID: 1,
+            startTimeUnixSeconds: startTimeUnixSeconds,
             command: command,
             uid: 501,
             owningUser: "me",
@@ -166,7 +194,7 @@ struct ProcessActionExecutorTests {
         #expect(entries[0].commandExitCode == 0)
     }
 
-    @Test("Process gone before the click still audits a SIGTERM attempt as success")
+    @Test("Process gone before the click still audits SIGTERM with ESRCH as the result code")
     func processGoneBeforeFirstSignal() async throws {
         let dir = try tempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -182,6 +210,84 @@ struct ProcessActionExecutorTests {
         let entries = try writer.readEntries()
         #expect(entries.count == 1)
         #expect(entries[0].commandArguments == ["-\(SIGTERM)", "4242"])
+        // ESRCH (not 0) — audit must distinguish "delivered" from "already gone".
+        #expect(entries[0].commandExitCode == ESRCH)
+    }
+
+    // MARK: - Stop PID-recycling defense
+
+    @Test("PID recycle BEFORE SIGTERM short-circuits and never sends a signal")
+    func pidRecycleBeforeTermAborts() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let signaler = FakeSignaler()
+        // Pre-flight start time is for a different process.
+        signaler.enqueueStartTime([9_999])
+        let (executor, writer) = makeExecutor(signaler: signaler, auditDir: dir)
+
+        let outcome = await executor.stop(makeItem(startTimeUnixSeconds: 1_000))
+
+        #expect(outcome.succeeded)
+        // Critical: no signal was sent — we declined to kill a stranger.
+        #expect(signaler.calls.isEmpty)
+        let entries = try writer.readEntries()
+        #expect(entries.count == 1)
+        #expect(entries[0].commandExitCode == ESRCH)
+    }
+
+    @Test("PID recycle BEFORE SIGKILL escalation aborts without sending SIGKILL")
+    func pidRecycleBeforeKillAborts() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let signaler = FakeSignaler()
+        // Pre-SIGTERM check matches; post-grace check shows recycled PID.
+        signaler.enqueueStartTime([1_000, 9_999])
+        signaler.enqueueAlive([true])
+        let (executor, writer) = makeExecutor(signaler: signaler, auditDir: dir)
+
+        let outcome = await executor.stop(makeItem(startTimeUnixSeconds: 1_000))
+
+        #expect(outcome.succeeded)
+        // Only the SIGTERM was sent — SIGKILL was suppressed.
+        #expect(signaler.calls == [.init(signal: SIGTERM, pid: 4242)])
+        let entries = try writer.readEntries()
+        #expect(entries.count == 1)
+        // Recorded as a SIGTERM-only success.
+        #expect(entries[0].commandArguments == ["-\(SIGTERM)", "4242"])
+    }
+
+    // MARK: - Cancellation
+
+    @Test("Task cancellation between SIGTERM and SIGKILL stops the escalation")
+    func cancellationBetweenTermAndKill() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let signaler = FakeSignaler()
+        let writer = AuditWriter(logDirectory: dir)
+        let executor = DefaultProcessActionExecutor(
+            signaler: signaler,
+            audit: writer,
+            termGraceNanoseconds: 0,
+            killGraceNanoseconds: 0,
+            now: { Date(timeIntervalSince1970: 1_715_000_000) },
+            // Sleep cancels the task it's running inside — which is the
+            // detached child below, NOT this test's task. That mirrors the
+            // production case where the user dismisses the view (cancelling
+            // the row's action task) during the grace window.
+            sleep: { _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+        )
+
+        let item = makeItem()
+        let outcome = await Task { @MainActor in
+            await executor.stop(item)
+        }.value
+
+        #expect(!outcome.succeeded)
+        #expect(outcome.error?.contains("cancelled") == true)
+        // SIGKILL must NOT have been sent.
+        #expect(signaler.calls == [.init(signal: SIGTERM, pid: 4242)])
     }
 
     @Test("SIGKILL fails (EPERM) records the escalation chain with kill's errno")

@@ -257,6 +257,7 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
             ),
             pid: current.pid,
             parentPID: current.parentPID,
+            startTimeUnixSeconds: current.startTimeUnixSeconds,
             command: current.command,
             uid: current.uid,
             owningUser: resolveUser(current.uid) ?? String(current.uid),

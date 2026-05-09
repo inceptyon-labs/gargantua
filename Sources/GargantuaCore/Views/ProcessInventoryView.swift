@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // Top-level view for the Process Inventory pane.
 //
 // Stop and Remove Source mutations route through `ProcessInventorySession` →

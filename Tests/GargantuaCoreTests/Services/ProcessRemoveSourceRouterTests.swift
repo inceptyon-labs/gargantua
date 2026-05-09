@@ -13,6 +13,7 @@ struct ProcessRemoveSourceRouterTests {
             id: "1234|0|/usr/local/bin/tool",
             pid: 1234,
             parentPID: 1,
+            startTimeUnixSeconds: 0,
             command: "tool",
             uid: 501,
             owningUser: "me",

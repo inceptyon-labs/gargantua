@@ -128,6 +128,13 @@ public struct ProcessItem: Sendable, Equatable, Identifiable {
     /// Parent process ID at the time of the snapshot.
     public let parentPID: Int32
 
+    /// Process start time in Unix epoch seconds, captured at snapshot time.
+    /// Used by `ProcessActionExecutor` to detect PID recycling between
+    /// SIGTERM and the SIGKILL fallback — if the start time changes between
+    /// snapshots, the original process is gone and the recycled PID belongs
+    /// to an unrelated process that we must not signal.
+    public let startTimeUnixSeconds: UInt64
+
     /// Short command name (`pbi_comm` from `PROC_PIDTBSDINFO`). May be
     /// truncated to 16 bytes by Darwin — that's fine for the row's
     /// "fall back to command" path.
@@ -175,6 +182,7 @@ public struct ProcessItem: Sendable, Equatable, Identifiable {
         id: String,
         pid: Int32,
         parentPID: Int32,
+        startTimeUnixSeconds: UInt64,
         command: String,
         uid: UInt32,
         owningUser: String,
@@ -191,6 +199,7 @@ public struct ProcessItem: Sendable, Equatable, Identifiable {
         self.id = id
         self.pid = pid
         self.parentPID = parentPID
+        self.startTimeUnixSeconds = startTimeUnixSeconds
         self.command = command
         self.uid = uid
         self.owningUser = owningUser

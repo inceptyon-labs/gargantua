@@ -58,14 +58,29 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
             return refuse(item: item, action: .stop, refusal: refusal)
         }
 
+        // Defense against PID recycling: if the snapshot's process exited
+        // between the click and the signal, signaling the recycled PID would
+        // hit an unrelated process. `proc_pidinfo` is much harder to spoof
+        // than the PID alone — it reports the boot-relative start time of
+        // whatever process currently owns the PID. Mismatch ⇒ original gone.
+        if let preStart = signaler.startTime(pid: item.pid), preStart != item.startTimeUnixSeconds {
+            return record(StopAuditAttempt(
+                item: item, succeeded: true, error: nil,
+                signal: SIGTERM, resultCode: ESRCH, escalated: false
+            ))
+        }
+
         let term = signaler.send(SIGTERM, to: item.pid)
         // `ESRCH` on the very first SIGTERM means the process exited between
         // the snapshot and the click — treat as a success and audit it so
         // the user has evidence the click landed on a real PID at the time.
+        // Recording `ESRCH` (rather than 0) keeps the audit honest: a
+        // forensic reader can distinguish "signal delivered" from "target
+        // was already gone."
         if term.alreadyGone {
             return record(StopAuditAttempt(
                 item: item, succeeded: true, error: nil,
-                signal: SIGTERM, resultCode: 0, escalated: false
+                signal: SIGTERM, resultCode: ESRCH, escalated: false
             ))
         }
 
@@ -79,7 +94,22 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
 
         // Wait for cooperative shutdown.
         await sleep(termGraceNanoseconds)
+        if Task.isCancelled {
+            return record(StopAuditAttempt(
+                item: item, succeeded: false,
+                error: "Stop was cancelled before SIGKILL escalation.",
+                signal: SIGTERM, resultCode: ECANCELED, escalated: false
+            ))
+        }
         if !signaler.isAlive(pid: item.pid) {
+            return record(StopAuditAttempt(
+                item: item, succeeded: true, error: nil,
+                signal: SIGTERM, resultCode: 0, escalated: false
+            ))
+        }
+        // Re-verify identity before escalating: if PID was recycled during
+        // the grace window, the SIGKILL would land on a stranger.
+        if let postStart = signaler.startTime(pid: item.pid), postStart != item.startTimeUnixSeconds {
             return record(StopAuditAttempt(
                 item: item, succeeded: true, error: nil,
                 signal: SIGTERM, resultCode: 0, escalated: false
@@ -91,7 +121,7 @@ public struct DefaultProcessActionExecutor: ProcessActionExecuting {
         if kill.alreadyGone {
             return record(StopAuditAttempt(
                 item: item, succeeded: true, error: nil,
-                signal: SIGKILL, resultCode: 0, escalated: true
+                signal: SIGKILL, resultCode: ESRCH, escalated: true
             ))
         }
         if !kill.succeeded {

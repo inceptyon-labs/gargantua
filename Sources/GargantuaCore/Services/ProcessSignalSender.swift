@@ -28,6 +28,12 @@ public protocol ProcessSignalSending: Sendable {
     /// Probe whether `pid` is currently addressable. Implemented as
     /// `kill(pid, 0)` in the default — returns `false` on `ESRCH`.
     func isAlive(pid: Int32) -> Bool
+    /// Read the process's start time in Unix epoch seconds, or `nil` if the
+    /// PID is gone or the call failed. Used to detect PID recycling between
+    /// `SIGTERM` and the `SIGKILL` fallback — if the start time changes,
+    /// the original process exited and the recycled PID belongs to an
+    /// unrelated process we must not signal.
+    func startTime(pid: Int32) -> UInt64?
 }
 
 public struct DefaultProcessSignalSender: ProcessSignalSending {
@@ -46,5 +52,20 @@ public struct DefaultProcessSignalSender: ProcessSignalSending {
         let result = Darwin.kill(pid, 0)
         if result == 0 { return true }
         return Darwin.errno != ESRCH
+    }
+
+    public func startTime(pid: Int32) -> UInt64? {
+        // `proc_pidinfo` with `PROC_PIDTBSDINFO` returns the process's
+        // BSD info, including `pbi_start_tvsec` (start time in seconds).
+        // Match the size check the snapshot provider uses — `proc_pidinfo`
+        // writes exactly the C struct size; `.stride` could exceed `.size`
+        // on platforms with trailing alignment padding.
+        var info = proc_bsdinfo()
+        let infoSize = Int32(MemoryLayout<proc_bsdinfo>.size)
+        let result = withUnsafeMutablePointer(to: &info) { ptr -> Int32 in
+            proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, UnsafeMutableRawPointer(ptr), infoSize)
+        }
+        guard result == infoSize else { return nil }
+        return UInt64(info.pbi_start_tvsec)
     }
 }
