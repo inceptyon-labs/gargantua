@@ -18,6 +18,11 @@ public struct RawProcessSample: Sendable, Equatable {
     /// Full executable path from `proc_pidpath`. `nil` when the call failed
     /// (kernel tasks, processes the caller can't introspect, etc.).
     public let executablePath: String?
+    /// Process start time, expressed as Unix epoch seconds (`pbi_start_tvsec`).
+    /// Critical for distinguishing a recycled PID from the same long-lived
+    /// process across snapshots — without it, a respawned helper that reuses
+    /// its parent's PID would inherit the prior CPU baseline.
+    public let startTimeUnixSeconds: UInt64
     /// Sum of user + system CPU time in nanoseconds since the process began.
     public let cpuTimeNanoseconds: UInt64
     /// Resident memory in bytes.
@@ -31,6 +36,7 @@ public struct RawProcessSample: Sendable, Equatable {
         uid: UInt32,
         command: String,
         executablePath: String?,
+        startTimeUnixSeconds: UInt64,
         cpuTimeNanoseconds: UInt64,
         residentBytes: UInt64,
         sampledAt: Date
@@ -40,6 +46,7 @@ public struct RawProcessSample: Sendable, Equatable {
         self.uid = uid
         self.command = command
         self.executablePath = executablePath
+        self.startTimeUnixSeconds = startTimeUnixSeconds
         self.cpuTimeNanoseconds = cpuTimeNanoseconds
         self.residentBytes = residentBytes
         self.sampledAt = sampledAt
@@ -126,6 +133,7 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
                 uid: bsd.pbi_uid,
                 command: command,
                 executablePath: executablePath,
+                startTimeUnixSeconds: UInt64(bsd.pbi_start_tvsec),
                 cpuTimeNanoseconds: cpuTime,
                 residentBytes: task.pti_resident_size,
                 sampledAt: timestamp

@@ -110,7 +110,12 @@ public struct ProcessSafetyClassifier: Sendable {
         }
 
         // 5. Known third-party vendor backed by a launchd item → safe.
+        //    Only when the launchd link is `.exact` or `.path`; a label-only
+        //    `.heuristic` match is too loose to auto-promote a process to
+        //    "will respawn cleanly when needed" — it might just share a name
+        //    with an unrelated plist.
         if case .launchd = input.launchSource,
+           input.launchConfidence == .exact || input.launchConfidence == .path,
            let identity = input.identity,
            identity.vendor == .thirdPartyKnown,
            !identity.isSensitiveVendor {

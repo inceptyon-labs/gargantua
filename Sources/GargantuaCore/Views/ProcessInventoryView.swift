@@ -113,9 +113,21 @@ public struct ProcessInventoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Filter first, then apply the top-N cap. The scanner returns the full
+    /// ranked population so the UI can re-rank between CPU and Memory
+    /// without losing items that fall outside one ranking but would have
+    /// been near the top of the other.
+    private func visibleItems(_ scan: ProcessInventoryScan) -> [ProcessItem] {
+        let filtered = safetyFilter.apply(scan.items)
+        if let topN = scan.topN, topN > 0 {
+            return Array(filtered.prefix(topN))
+        }
+        return filtered
+    }
+
     @ViewBuilder
     private func resultsState(_ scan: ProcessInventoryScan) -> some View {
-        let visible = safetyFilter.apply(scan.items)
+        let visible = visibleItems(scan)
 
         VStack(spacing: 0) {
             controlBar(scan: scan, visibleCount: visible.count)
@@ -310,113 +322,5 @@ public enum ProcessSafetyFilter: CaseIterable, Equatable {
         case .sensitive: items.filter { $0.reasons.contains(.sensitiveVendor) }
         case .orphaned: items.filter { $0.reasons.contains(.orphaned) }
         }
-    }
-}
-
-// MARK: - Session
-
-/// Lightweight async wrapper around `ProcessInventoryScanning` so the view can
-/// kick scans off the main actor and observe the result via `@Observable`.
-@MainActor
-@Observable
-public final class ProcessInventorySession {
-    public private(set) var scan: ProcessInventoryScan?
-    public private(set) var isScanning = false
-
-    private let scanner: any ProcessInventoryScanning
-
-    public init(scanner: any ProcessInventoryScanning = DefaultProcessInventoryScanner()) {
-        self.scanner = scanner
-    }
-
-    public func scan(metric: ProcessSortMetric, topN: Int?) async {
-        guard !isScanning else { return }
-        isScanning = true
-        defer { isScanning = false }
-
-        let scanner = self.scanner
-        let result = await Task.detached(priority: .userInitiated) {
-            await scanner.scan(metric: metric, topN: topN)
-        }.value
-        self.scan = result
-    }
-
-    /// Re-rank the existing snapshot in place. Avoids the 500 ms sample
-    /// window when the user just wants to toggle between CPU and Memory.
-    /// The top-N cap from the original scan is preserved.
-    public func resort(by metric: ProcessSortMetric) {
-        guard let current = scan else { return }
-        if current.sortedBy == metric { return }
-        let resorted = Self.rank(current.items, by: metric)
-        self.scan = ProcessInventoryScan(
-            items: resorted,
-            totalProcessCount: current.totalProcessCount,
-            sortedBy: metric,
-            topN: current.topN,
-            scannedAt: current.scannedAt
-        )
-    }
-
-    private static func rank(_ items: [ProcessItem], by metric: ProcessSortMetric) -> [ProcessItem] {
-        items.sorted { lhs, rhs in
-            let lhsP: Double = metric == .cpu ? lhs.cpuFraction : Double(lhs.residentBytes)
-            let rhsP: Double = metric == .cpu ? rhs.cpuFraction : Double(rhs.residentBytes)
-            if lhsP != rhsP { return lhsP > rhsP }
-            let nameCmp = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
-            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
-            return lhs.id < rhs.id
-        }
-    }
-}
-
-// MARK: - Synthetic ScanResult bridge
-
-extension ProcessItem {
-    /// Convert to a `ScanResult` so the existing `AIExplanationController`
-    /// can drive the AI fallback sheet without a parallel pipeline. This is
-    /// strictly a presentation bridge — nothing in the cleanup engine ever
-    /// reads a synthetic result.
-    public func toScanResult() -> ScanResult {
-        let attribution = SourceAttribution(
-            name: identity?.vendorDisplayName ?? identity?.bundleName ?? command,
-            bundleID: identity?.bundleIdentifier,
-            verifySignature: false
-        )
-        let categoryName: String = {
-            switch launchSource {
-            case .launchd: "background_process_launchd"
-            case .foregroundApp: "background_process_foreground"
-            case .userSession: "background_process_user_session"
-            case .childProcess: "background_process_child"
-            case .unknown: "background_process_unknown"
-            }
-        }()
-        var tags = reasons.map(\.rawValue)
-        tags.append("confidence:\(launchConfidence.rawValue)")
-        return ScanResult(
-            id: id,
-            name: displayName,
-            path: executablePath ?? command,
-            size: 0,
-            safety: safety,
-            confidence: explanationConfidence,
-            explanation: explanation,
-            source: attribution,
-            lastAccessed: nil,
-            category: categoryName,
-            tags: tags,
-            regenerates: false,
-            regenerateCommand: nil
-        )
-    }
-
-    /// Heuristic confidence for the explanation sheet. Identity + bundle
-    /// present → 90, signed but unbundled → 70, unsigned → 40, no identity
-    /// → 30. Used only in the synthetic bridge.
-    private var explanationConfidence: Int {
-        guard let identity else { return 30 }
-        if identity.bundlePath != nil, identity.vendor != .unsigned { return 90 }
-        if identity.vendor == .unsigned { return 40 }
-        return 70
     }
 }
