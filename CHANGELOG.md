@@ -9,9 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added Mole-backed app cleanup coverage for cloud-sync, Office/mail, communication, virtualization, creative/media, productivity, launcher, game, utility, and remote desktop caches.
-- Expanded Smart Uninstaller remnant rules with Mole-backed WebKit, HTTP storage, app script, plug-in, XDG config, app extension, system-level, and protected receipt templates.
-- Synced the reviewed Mole-expanded rule snapshot to the public `gargantua-rules` repository and documented that the snapshot is not yet full Mole parity.
+- **Sparkle 2 auto-updates** with EdDSA-signed appcasts, signed-feed enforcement, and stable/beta channels (`Settings → About`).
+- **Privileged helper** (`GargantuaPrivilegedHelper`) registered via SMAppService and reached over XPC, used for elevated-trust uninstall paths so the app never invokes `sudo`.
+- **Scheduled scans** backed by a `GargantuaScheduler` LaunchAgent registered through SMAppService, with interval presets, a custom 5-field cron expression, profile selection, and skip-on-battery (`Settings → Automation`).
+- **MCP SSE transport** alongside stdio: bind localhost or LAN, bearer-token auth in Keychain, generate/rotate/revoke from `Settings → Network`.
+- **Claude Code Agent** integration for non-interactive maintenance runs with read-only-by-default tools, per-session destructive-tool grants, and configurable model/turn limits.
+- **Local MLX inference** with a self-built `mlx.metallib` colocated in the app bundle, idle-unload after 60 s, model staging under `~/Library/Application Support/Gargantua/Models/`.
+- **Cloud AI (Anthropic)** with Keychain-only key storage, per-request redaction, optional 4 KB content-preview consent, hard monthly spend cap, and a dynamic Anthropic model picker.
+- **Disk Explorer** treemap and directory drill-down for visualizing reclaimable space before cleaning.
+- **AI Models** profile and view for downloaded LLM/diffusion model storage, biased toward `review`.
+- **File Health** scans (empty files, big files, similar images, broken symlinks) backed by a vendored `czkawka_cli`.
+- **Duplicate Finder** backed by a vendored `fclones`, scoped to user-defined personal-scope roots.
+- **Command-action rules** schema (`Resources/command_rules/`) with starter coverage for `xcrun simctl delete unavailable`, `pnpm store prune`, and `go clean -cache`; surfaced through scan + cleanup.
+- **App-pack remnant rules** for Docker, Xcode, Android Studio, JetBrains, and VS Code/Cursor/Zed.
+- **`pkgutil` receipt evidence** in Smart Uninstaller and the MCP `explain` tool: shows pkg ID, version, and install date as ownership provenance, never as deletion permission.
+- **Protected-roots policy** (`safety_policy/protected_roots.yaml`) hard-blocking cleanup at filesystem roots regardless of rule classification, with user-extendable but bundled-immutable entries.
+- **Menu bar widget** with optional launch-at-login via `SMAppService.loginItem`.
+- **Audit trail** at `~/Library/Logs/Gargantua/audit.json` for every MCP-triggered cleanup attempt, with retention configurable in `Settings → About`.
+- **Release pipeline**: `Scripts/release.sh` orchestrates build → assemble → strip → codesign → notarize app → DMG → notarize DMG → `spctl --assess` → signed Sparkle appcast.
+- **Local publish flow**: `Scripts/publish.sh` runs the release pipeline and then uploads the DMG + `appcast.xml` to a GitHub Release and pushes `Casks/gargantua.rb` to `inceptyon-labs/homebrew-tap`.
+- **Vendored helpers** built from source via `Scripts/fetch-vendored-bins.sh` (`fclones`, `czkawka_cli`); installation verified by `Scripts/smoke/verify-vendored-bins.sh`.
+- **CI**: SwiftLint + `swift test --enable-code-coverage` with a 40% floor enforced by `Scripts/coverage-priorities.sh` on `macos-15`.
+- **Mole rule parity expansion**: app cleanup coverage for cloud-sync, Office/mail, communication, virtualization, creative/media, productivity, launcher, game, utility, and remote desktop caches; Smart Uninstaller remnant templates for WebKit, HTTP storage, app scripts, plug-ins, XDG config, app extensions, system-level paths, and protected receipts.
+
+### Changed
+
+- Reviewed snapshot now ships **51 cleanup files / 287 rules**, **2 generic + 5 app-pack remnant files / 28 + 41 rules**, and **3 command-action rules**. See `docs/mole-rule-parity-audit.md` for what's deferred.
+- Synced the reviewed Mole-expanded rule snapshot to the public `gargantua-rules` repository.
+
+### Fixed
+
+- `MCP explain` no longer advertises a top-level `oneOf` schema, which broke Anthropic API tool registration.
+- `NSHumanReadableCopyright` in `Info.plist` corrected to AGPL-3.0 (was incorrectly labelled MIT).
 
 ## [0.1.0] - 2026-04-23
 

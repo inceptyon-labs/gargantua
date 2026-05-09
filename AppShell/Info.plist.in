@@ -38,7 +38,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © Gargantua contributors. MIT licensed.</string>
+    <string>Copyright © Inceptyon Labs and Gargantua contributors. AGPL-3.0 licensed.</string>
     <key>NSDesktopFolderUsageDescription</key>
     <string>Gargantua scans your Desktop folder to find duplicate, unused, and large files you may want to clean up.</string>
     <key>NSDocumentsFolderUsageDescription</key>

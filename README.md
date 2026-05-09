@@ -14,11 +14,21 @@
 
 Gargantua is a native macOS cleaner for developers and power users. It scans common cache, build-artifact, duplicate-file, and app-remnant locations, classifies findings by risk, explains why each item is considered safe or risky, and only removes files through explicit user-controlled flows.
 
-The project is built as a Swift Package with three executables:
+The project is built as a Swift Package with four executables:
 
 - `Gargantua` — the SwiftUI macOS app
 - `GargantuaMCP` — a local Model Context Protocol server for automation-driven scans and guarded cleanups
+- `GargantuaScheduler` — a launchd-driven background runner used by Scheduled Scans
 - `GargantuaPrivilegedHelper` — an SMAppService/XPC helper for operations that require elevated trust
+
+## Install
+
+```sh
+brew tap inceptyon-labs/tap
+brew install --cask gargantua
+```
+
+This pulls the signed, notarized DMG from the latest GitHub Release. Updates after install are delivered through the in-app Sparkle channel, so the cask only tracks `:latest`. Apple Silicon, macOS 14 (Sonoma) or newer.
 
 ## Why Gargantua Exists
 
@@ -233,9 +243,10 @@ If you discover a security issue — especially anything involving the privilege
 
 Requirements:
 
-- macOS 14 or newer
-- Xcode 15 or newer with Swift 5.10
-- Apple Silicon is the primary development and test target
+- macOS 14 (Sonoma) or newer; **macOS 15 + the latest stable Xcode is required** to resolve the `mlx-swift-lm` dependency, which declares `swift-tools-version: 6.1`.
+- Apple Silicon is the only supported architecture for development and release builds.
+- Xcode Command Line Tools (`xcode-select --install`) — provides `codesign`, `notarytool`, `stapler`, `iconutil`, `swift`.
+- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) — `mlx-swift`'s `BuildMetallibPlugin` shells out to `xcrun metal` to compile shaders.
 
 Clone and build:
 
@@ -269,20 +280,21 @@ For the local helper binaries and MLX shader setup used by the test/release scri
 Scripts/test.sh
 ```
 
-## Release Builds
+## Releasing
 
-The release pipeline is script-based and keeps `Package.swift` as the source of truth.
+Releases are cut locally on a developer's Mac. The pipeline produces a signed, notarized, stapled DMG plus a signed Sparkle appcast, uploads both to a GitHub Release, and pushes a refreshed Cask to `inceptyon-labs/homebrew-tap`.
 
 ```bash
-git tag v0.1.0
-Scripts/release.sh
+Scripts/release-interactive.sh
 ```
 
-Release signing and notarization use local environment values from `.env.release`, which is intentionally ignored. See `Scripts/release/README.md` for the required variables and release flow. The release flow also stages a signed Sparkle appcast under `dist/sparkle-updates/` for upload to the HTTPS location configured by `SPARKLE_FEED_URL`.
+The interactive entry point shows the current version, prompts for the bump type (patch / minor / major / beta / custom), updates `CHANGELOG.md`, creates the git tag, runs the build + sign + notarize + upload + tap-push pipeline, and offers to push the tag at the end.
+
+For non-interactive runs (you've already created the tag), use `Scripts/publish.sh` directly. Both are thin wrappers around `Scripts/release.sh`. The full one-time-setup checklist (Apple Developer ID cert, notarytool keychain profile, Sparkle EdDSA keypair, `gh` CLI, tap repo permissions) and per-release steps live in [`docs/RELEASING.md`](docs/RELEASING.md). Per-stage details for the build pipeline itself are in [`Scripts/release/README.md`](Scripts/release/README.md).
 
 Useful supporting scripts:
 
-- `Scripts/fetch-vendored-bins.sh` — refresh pinned helper binaries (`fclones`, `czkawka`)
+- `Scripts/fetch-vendored-bins.sh` — refresh pinned helper binaries (`fclones`, `czkawka_cli`)
 - `Scripts/build-metallib.sh` — build the MLX Metal shader library used by local inference
 - `Scripts/smoke/verify-vendored-bins.sh` — confirm an installed app resolves its bundled helpers
 - `Scripts/smoke/privileged-helper.sh` — smoke-test privileged helper installation and status
