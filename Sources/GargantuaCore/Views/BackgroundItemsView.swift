@@ -147,6 +147,7 @@ public struct BackgroundItemsView: View {
                                 item: item,
                                 isExpanded: expandedID == item.id,
                                 isBusy: session.busyItemIDs.contains(item.id),
+                                isSessionDisabled: session.sessionDisabledIDs.contains(item.id),
                                 onToggleExpand: {
                                     withAnimation(.easeOut(duration: 0.15)) {
                                         expandedID = expandedID == item.id ? nil : item.id
@@ -336,6 +337,13 @@ public final class BackgroundItemsSession {
     /// IDs of items currently being mutated. The row uses this to render a
     /// spinner inline so the user gets feedback while `launchctl` runs.
     public private(set) var busyItemIDs: Set<String> = []
+    /// IDs the user disabled in this session. The scanner derives the
+    /// `disabledFlag` reason from the plist's `Disabled` key, but
+    /// `launchctl disable` writes runtime state to launchd's disabled DB
+    /// instead — so a fresh scan after a successful disable still reports
+    /// the plist as enabled. Carry the in-session disable state forward so
+    /// the Delete button reveals on the same row the user just disabled.
+    public private(set) var sessionDisabledIDs: Set<String> = []
 
     private let scanner: any BackgroundItemScanning
     private let actionExecutor: (any BackgroundItemActionExecuting)?
@@ -378,17 +386,31 @@ public final class BackgroundItemsSession {
         busyItemIDs.insert(item.id)
         defer { busyItemIDs.remove(item.id) }
 
+        // The executor's delete pre-condition checks `disabledFlag` to enforce
+        // "disable runs first." When the user disabled the item earlier in
+        // this session, the plist key still reads as enabled, so synthesize
+        // the reason on the fly.
+        let effectiveItem = sessionDisabledIDs.contains(item.id)
+            ? item.withSessionDisabled()
+            : item
+
         let outcome: BackgroundItemActionOutcome
         switch action {
         case .disable:
-            outcome = await actionExecutor.disable(item)
+            outcome = await actionExecutor.disable(effectiveItem)
         case .enable:
-            outcome = await actionExecutor.enable(item)
+            outcome = await actionExecutor.enable(effectiveItem)
         case .delete:
-            outcome = await actionExecutor.delete(item, confirmedAt: item.safety.confirmationTier)
+            outcome = await actionExecutor.delete(effectiveItem, confirmedAt: item.safety.confirmationTier)
         }
 
         if outcome.succeeded {
+            switch action {
+            case .disable:
+                sessionDisabledIDs.insert(item.id)
+            case .enable, .delete:
+                sessionDisabledIDs.remove(item.id)
+            }
             await scan()
         }
         return outcome

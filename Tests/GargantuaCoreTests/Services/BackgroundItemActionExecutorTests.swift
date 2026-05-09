@@ -266,6 +266,27 @@ struct BackgroundItemActionExecutorTests {
         #expect(entries[0].confirmationMethod == .summaryDialog)
     }
 
+    @Test("Delete on system launch agent routes trash through helper, not direct trasher")
+    func deleteSystemAgentUsesHelperTrash() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let helper = FakeHelper()
+        let trasher = FakeTrasher()
+        let (executor, _) = makeExecutor(helper: helper, trasher: trasher, auditDir: dir)
+        let item = makeItem(
+            source: .systemLaunchAgent,
+            plistPath: "/Library/LaunchAgents/com.acme.tool.plist",
+            reasons: [.disabledFlag]
+        )
+
+        let outcome = await executor.delete(item, confirmedAt: .summaryDialog)
+
+        #expect(outcome.succeeded)
+        #expect(trasher.trashed.isEmpty, "root-owned plists must not bypass the helper")
+        #expect(helper.calls.map(\.operation) == [.trashLaunchPlist])
+        #expect(helper.calls.first?.plistPath == "/Library/LaunchAgents/com.acme.tool.plist")
+    }
+
     @Test("Delete on system-domain item routes through helper trash op")
     func deleteSystemDomainUsesHelper() async throws {
         let dir = try tempDir()

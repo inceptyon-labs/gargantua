@@ -13,6 +13,7 @@ public struct BackgroundItemRow: View {
     public let item: BackgroundItem
     public let isExpanded: Bool
     public let isBusy: Bool
+    public let isSessionDisabled: Bool
     public let onToggleExpand: () -> Void
     public let onReveal: () -> Void
     public let onExplain: (() -> Void)?
@@ -25,6 +26,7 @@ public struct BackgroundItemRow: View {
         item: BackgroundItem,
         isExpanded: Bool,
         isBusy: Bool = false,
+        isSessionDisabled: Bool = false,
         onToggleExpand: @escaping () -> Void,
         onReveal: @escaping () -> Void,
         onExplain: (() -> Void)? = nil,
@@ -34,6 +36,7 @@ public struct BackgroundItemRow: View {
         self.item = item
         self.isExpanded = isExpanded
         self.isBusy = isBusy
+        self.isSessionDisabled = isSessionDisabled
         self.onToggleExpand = onToggleExpand
         self.onReveal = onReveal
         self.onExplain = onExplain
@@ -50,17 +53,24 @@ public struct BackgroundItemRow: View {
         }
     }
 
+    /// Treat the row as disabled if either the plist's `Disabled` key is set
+    /// or the user just ran disable in this session (runtime state lives in
+    /// launchd's disabled DB, not the plist).
+    private var isDisabled: Bool {
+        item.reasons.contains(.disabledFlag) || isSessionDisabled
+    }
+
     private var canDelete: Bool {
         guard supportsActions, item.plistPath != nil else { return false }
-        return item.safety != .protected_ && item.reasons.contains(.disabledFlag)
+        return item.safety != .protected_ && isDisabled
     }
 
     private var canDisable: Bool {
-        supportsActions && item.safety != .protected_ && !item.reasons.contains(.disabledFlag)
+        supportsActions && item.safety != .protected_ && !isDisabled
     }
 
     private var canEnable: Bool {
-        supportsActions && item.safety != .protected_ && item.reasons.contains(.disabledFlag)
+        supportsActions && item.safety != .protected_ && isDisabled
     }
 
     public var body: some View {

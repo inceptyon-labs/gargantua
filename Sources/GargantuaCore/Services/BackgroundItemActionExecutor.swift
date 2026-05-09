@@ -227,19 +227,13 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
             return refuse(item: item, action: .delete, refusal: .deleteRequiresDisable)
         }
 
+        // Trash routing depends on the plist *location*, not the launchctl
+        // domain. System launch agents are controlled in `gui/<uid>` (user
+        // domain) but their plists live in root-owned `/Library/LaunchAgents/`,
+        // so the trash op still has to go through the privileged helper.
+        _ = domain
         do {
-            switch domain {
-            case .user:
-                let trashPath = try trasher.trash(plistPath)
-                return recordDelete(
-                    item: item,
-                    plistPath: plistPath,
-                    confirmation: confirmation,
-                    succeeded: true,
-                    error: nil,
-                    trashPath: trashPath
-                )
-            case .system:
+            if requiresPrivilegedTrash(plistPath: plistPath) {
                 let response = await helper.perform(
                     PrivilegedBackgroundItemRequest(
                         operation: .trashLaunchPlist,
@@ -255,6 +249,16 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                     error: response.succeeded ? nil : (response.error ?? response.stderr),
                     trashPath: response.trashPath
                 )
+            } else {
+                let trashPath = try trasher.trash(plistPath)
+                return recordDelete(
+                    item: item,
+                    plistPath: plistPath,
+                    confirmation: confirmation,
+                    succeeded: true,
+                    error: nil,
+                    trashPath: trashPath
+                )
             }
         } catch {
             return recordDelete(
@@ -266,6 +270,14 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 trashPath: nil
             )
         }
+    }
+
+    /// Plist paths under root-owned launchd directories must go through the
+    /// privileged helper. The only sub-tree the user can trash directly is
+    /// the per-user `~/Library/LaunchAgents/`.
+    private func requiresPrivilegedTrash(plistPath: String) -> Bool {
+        plistPath.hasPrefix("/Library/LaunchAgents/")
+            || plistPath.hasPrefix("/Library/LaunchDaemons/")
     }
 
     // MARK: - Domain dispatch

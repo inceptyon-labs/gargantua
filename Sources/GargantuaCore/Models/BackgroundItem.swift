@@ -146,6 +146,27 @@ public struct BackgroundItem: Sendable, Equatable, Identifiable {
         self.isOrphaned = isOrphaned
     }
 
+    /// Return a copy of this item with the `disabledFlag` reason added.
+    /// Used by the action session to materialize the runtime-disabled state
+    /// (which lives in launchd's disabled DB, not the plist) so the executor
+    /// can run its `delete` precondition check against a unified signal.
+    public func withSessionDisabled() -> BackgroundItem {
+        var augmented = reasons
+        augmented.insert(.disabledFlag)
+        return BackgroundItem(
+            id: id,
+            label: label,
+            source: source,
+            plistPath: plistPath,
+            executablePath: executablePath,
+            identity: identity,
+            safety: safety,
+            reasons: augmented,
+            explanation: explanation,
+            isOrphaned: isOrphaned
+        )
+    }
+
     /// Display name used by the row's primary line. Prefers vendor display
     /// name when known, then bundle name, then label.
     public var displayName: String {
