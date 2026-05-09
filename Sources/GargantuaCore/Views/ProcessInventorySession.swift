@@ -9,11 +9,19 @@ import Foundation
 public final class ProcessInventorySession {
     public private(set) var scan: ProcessInventoryScan?
     public private(set) var isScanning = false
+    /// IDs of processes currently being acted on. The row uses this to render
+    /// a spinner inline so the user gets feedback while `kill(2)` runs.
+    public private(set) var busyItemIDs: Set<String> = []
 
     private let scanner: any ProcessInventoryScanning
+    private let actionExecutor: (any ProcessActionExecuting)?
 
-    public init(scanner: any ProcessInventoryScanning = DefaultProcessInventoryScanner()) {
+    public init(
+        scanner: any ProcessInventoryScanning = DefaultProcessInventoryScanner(),
+        actionExecutor: (any ProcessActionExecuting)? = DefaultProcessActionExecutor()
+    ) {
         self.scanner = scanner
+        self.actionExecutor = actionExecutor
     }
 
     public func scan(metric: ProcessSortMetric, topN: Int?) async {
@@ -26,6 +34,42 @@ public final class ProcessInventorySession {
             await scanner.scan(metric: metric, topN: topN)
         }.value
         self.scan = result
+    }
+
+    /// Run a `ProcessAction` against `item`, marking the row busy for the
+    /// duration. After a successful `.stop`, the session re-scans so the row
+    /// disappears (or shows the orphaned-state if the source is still on
+    /// disk). `.removeSource` does not re-scan — the caller is expected to
+    /// navigate away to the Background Items pane.
+    public func perform(
+        _ action: ProcessAction,
+        on item: ProcessItem,
+        metric: ProcessSortMetric,
+        topN: Int?
+    ) async -> ProcessActionOutcome {
+        guard let actionExecutor else {
+            return ProcessActionOutcome(
+                processID: item.id,
+                action: action,
+                succeeded: false,
+                error: "Process action executor is not configured."
+            )
+        }
+        busyItemIDs.insert(item.id)
+        defer { busyItemIDs.remove(item.id) }
+
+        let outcome: ProcessActionOutcome
+        switch action {
+        case .stop:
+            outcome = await actionExecutor.stop(item)
+        case .removeSource:
+            outcome = await actionExecutor.removeSource(item)
+        }
+
+        if outcome.succeeded, action == .stop {
+            await scan(metric: metric, topN: topN)
+        }
+        return outcome
     }
 
     /// Re-rank the existing snapshot in place. Avoids the 500 ms sample

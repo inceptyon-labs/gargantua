@@ -1,26 +1,37 @@
 import AppKit
 import SwiftUI
 
-/// Top-level view for the Process Inventory pane.
-///
-/// Read-only surface — kill / remove-source actions land in task 5. The
-/// Explain action converts the focused `ProcessItem` into a synthetic
-/// `ScanResult` so the existing `AIExplanationController` can drive the
-/// AI-fallback sheet without a parallel pipeline.
+// Top-level view for the Process Inventory pane.
+//
+// Stop and Remove Source mutations route through `ProcessInventorySession` →
+// `ProcessActionExecutor`. Remove Source is a navigation handoff to the
+// Background Items pane (which owns the disable/delete pipeline).
+// swiftlint:disable:next type_body_length
 public struct ProcessInventoryView: View {
-    @State private var session = ProcessInventorySession()
+    @State private var session: ProcessInventorySession
     @State private var expandedID: String?
     @State private var sortMetric: ProcessSortMetric = .cpu
     @State private var safetyFilter: ProcessSafetyFilter = .all
+    @State private var pendingAction: PendingProcessAction?
+    @State private var lastError: String?
     private let onExplain: ((ScanResult) -> Void)?
+    private let onNavigateToBackgroundItems: ((_ plistPath: String) -> Void)?
 
     /// Default top-N cap. Snapshot views shouldn't fight Activity Monitor for
     /// completeness — surfacing the top 50 keeps cognitive load low and lets
     /// the user re-rank by toggling the metric.
     public static let defaultTopN: Int = 50
 
-    public init(onExplain: ((ScanResult) -> Void)? = nil) {
+    public init(
+        onExplain: ((ScanResult) -> Void)? = nil,
+        onNavigateToBackgroundItems: ((_ plistPath: String) -> Void)? = nil,
+        actionExecutor: (any ProcessActionExecuting)? = nil
+    ) {
         self.onExplain = onExplain
+        self.onNavigateToBackgroundItems = onNavigateToBackgroundItems
+        self._session = State(
+            initialValue: ProcessInventorySession(actionExecutor: actionExecutor ?? DefaultProcessActionExecutor())
+        )
     }
 
     public var body: some View {
@@ -53,6 +64,29 @@ public struct ProcessInventoryView: View {
             if let expandedID, !(session.scan?.items.contains(where: { $0.id == expandedID }) ?? false) {
                 self.expandedID = nil
             }
+        }
+        .sheet(item: $pendingAction) { pending in
+            ProcessActionConfirmation(
+                item: pending.item,
+                action: pending.action,
+                onConfirm: {
+                    let toRun = pending
+                    pendingAction = nil
+                    Task { await runAction(toRun) }
+                },
+                onCancel: { pendingAction = nil }
+            )
+        }
+        .alert(
+            "Process action failed",
+            isPresented: Binding(
+                get: { lastError != nil },
+                set: { if !$0 { lastError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { lastError = nil }
+        } message: {
+            Text(lastError ?? "")
         }
     }
 
@@ -145,6 +179,7 @@ public struct ProcessInventoryView: View {
                             ProcessInventoryRow(
                                 item: item,
                                 isExpanded: expandedID == item.id,
+                                isBusy: session.busyItemIDs.contains(item.id),
                                 onToggleExpand: {
                                     withAnimation(.easeOut(duration: 0.15)) {
                                         expandedID = expandedID == item.id ? nil : item.id
@@ -152,7 +187,10 @@ public struct ProcessInventoryView: View {
                                 },
                                 onRevealBinary: { revealBinary(item) },
                                 onRevealPlist: { revealPlist(item) },
-                                onExplain: onExplain != nil ? { explain(item) } : nil
+                                onExplain: onExplain != nil ? { explain(item) } : nil,
+                                onAction: { action in
+                                    pendingAction = PendingProcessAction(item: item, action: action)
+                                }
                             )
                         }
                     }
@@ -255,7 +293,7 @@ public struct ProcessInventoryView: View {
                 .fill(GargantuaColors.border)
                 .frame(height: 1)
             HStack(spacing: GargantuaSpacing.space2) {
-                Text("Read-only — actions land in a future update.")
+                Text("Stop and Remove Source actions are recorded to the audit log.")
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
                 Spacer()
@@ -285,11 +323,46 @@ public struct ProcessInventoryView: View {
         onExplain(item.toScanResult())
     }
 
+    private func runAction(_ pending: PendingProcessAction) async {
+        let outcome = await session.perform(
+            pending.action,
+            on: pending.item,
+            metric: sortMetric,
+            topN: Self.defaultTopN
+        )
+        if outcome.succeeded {
+            // Successful `.removeSource` carries the plist path the receiver
+            // pane should pre-select; navigation happens after the sheet has
+            // already dismissed so the destination view animates in cleanly.
+            if let path = outcome.routedPlistPath, let onNavigateToBackgroundItems {
+                onNavigateToBackgroundItems(path)
+            }
+            return
+        }
+        if let error = outcome.error {
+            lastError = error
+        }
+    }
+
     private static let timestampFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
         return f
     }()
+}
+
+/// Identifies a pending action awaiting user confirmation. Stored on the view
+/// rather than the session so dismissing the sheet doesn't have to round-trip
+/// through `@Observable`.
+public struct PendingProcessAction: Identifiable, Equatable {
+    public let item: ProcessItem
+    public let action: ProcessAction
+    public var id: String { "\(item.id)|\(action.rawValue)" }
+
+    public init(item: ProcessItem, action: ProcessAction) {
+        self.item = item
+        self.action = action
+    }
 }
 
 // MARK: - Filter

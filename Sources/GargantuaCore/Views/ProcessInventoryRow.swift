@@ -12,27 +12,49 @@ import SwiftUI
 public struct ProcessInventoryRow: View {
     public let item: ProcessItem
     public let isExpanded: Bool
+    public let isBusy: Bool
     public let onToggleExpand: () -> Void
     public let onRevealBinary: (() -> Void)?
     public let onRevealPlist: (() -> Void)?
     public let onExplain: (() -> Void)?
+    public let onAction: ((ProcessAction) -> Void)?
 
     @State private var isHovered = false
 
     public init(
         item: ProcessItem,
         isExpanded: Bool,
+        isBusy: Bool = false,
         onToggleExpand: @escaping () -> Void,
         onRevealBinary: (() -> Void)? = nil,
         onRevealPlist: (() -> Void)? = nil,
-        onExplain: (() -> Void)? = nil
+        onExplain: (() -> Void)? = nil,
+        onAction: ((ProcessAction) -> Void)? = nil
     ) {
         self.item = item
         self.isExpanded = isExpanded
+        self.isBusy = isBusy
         self.onToggleExpand = onToggleExpand
         self.onRevealBinary = onRevealBinary
         self.onRevealPlist = onRevealPlist
         self.onExplain = onExplain
+        self.onAction = onAction
+    }
+
+    /// Stop is offered for any user-controllable process. The executor still
+    /// re-checks at run time — this gate is just the hover affordance.
+    private var canStop: Bool {
+        guard item.safety != .protected_ else { return false }
+        if item.pid <= 1 { return false }
+        if let path = item.executablePath, path.hasPrefix("/System/") { return false }
+        return true
+    }
+
+    /// Remove Source surfaces only when the launchd link is confident enough
+    /// to safely route the user to the right Background Items row.
+    private var canRemoveSource: Bool {
+        guard case .launchd = item.launchSource else { return false }
+        return item.launchConfidence == .exact || item.launchConfidence == .path
     }
 
     public var body: some View {
@@ -156,6 +178,10 @@ public struct ProcessInventoryRow: View {
 
     private var trailingControls: some View {
         HStack(spacing: GargantuaSpacing.space2) {
+            if isBusy {
+                AccretionDiskView(activityRate: 12, size: 14, color: GargantuaColors.accretion)
+            }
+
             if isHovered, let onExplain {
                 Button(action: onExplain) {
                     HStack(spacing: 4) {
@@ -168,6 +194,10 @@ public struct ProcessInventoryRow: View {
                 }
                 .buttonStyle(.plain)
                 .help("Generate an AI explanation")
+            }
+
+            if isHovered, let onAction {
+                actionButtonGroup(onAction: onAction)
             }
 
             if let onRevealBinary, item.executablePath != nil {
@@ -188,6 +218,36 @@ public struct ProcessInventoryRow: View {
             }
             .buttonStyle(.plain)
             .help(isExpanded ? "Collapse details" : "Show details")
+        }
+    }
+
+    private func actionButtonGroup(onAction: @escaping (ProcessAction) -> Void) -> some View {
+        HStack(spacing: 4) {
+            if canStop {
+                Button {
+                    onAction(.stop)
+                } label: {
+                    Image(systemName: "stop.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(GargantuaColors.review)
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("Stop this process")
+            }
+
+            if canRemoveSource {
+                Button {
+                    onAction(.removeSource)
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 13))
+                        .foregroundStyle(GargantuaColors.accent)
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .help("Open this process's source in Background Items")
+            }
         }
     }
 
@@ -303,6 +363,15 @@ public struct ProcessInventoryRow: View {
 
     @ViewBuilder
     private var contextMenu: some View {
+        if let onAction, canStop {
+            Button("Stop process") { onAction(.stop) }
+        }
+        if let onAction, canRemoveSource {
+            Button("Open source in Background Items") { onAction(.removeSource) }
+        }
+        if (canStop || canRemoveSource) && (onAction != nil) {
+            Divider()
+        }
         if let onRevealBinary, item.executablePath != nil {
             Button("Reveal binary in Finder") { onRevealBinary() }
         }

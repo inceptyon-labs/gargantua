@@ -1,25 +1,30 @@
 import AppKit
 import SwiftUI
 
-/// Top-level view for the Background Items review pane.
-///
-/// Read-only surface — no mutations. Disable / re-enable / delete actions land
-/// in task 3. The Explain action converts the focused `BackgroundItem` into a
-/// synthetic `ScanResult` so the existing `AIExplanationController` can drive
-/// the AI-fallback sheet without a parallel pipeline.
+// swiftlint:disable file_length
+
+// Top-level view for the Background Items review pane.
+//
+// Pre-selection (`preSelectedPlistPath`) lets Process Inventory navigate here
+// for the "remove source" handoff — the row matching the plist path expands
+// once the scan lands.
+// swiftlint:disable:next type_body_length
 public struct BackgroundItemsView: View {
     @State private var session: BackgroundItemsSession
     @State private var expandedID: String?
     @State private var filter: BackgroundItemFilter = .all
     @State private var pendingAction: PendingBackgroundItemAction?
     @State private var lastError: String?
+    @Binding private var preSelectedPlistPath: String?
     private let onExplain: ((ScanResult) -> Void)?
 
     public init(
         onExplain: ((ScanResult) -> Void)? = nil,
-        actionExecutor: (any BackgroundItemActionExecuting)? = nil
+        actionExecutor: (any BackgroundItemActionExecuting)? = nil,
+        preSelectedPlistPath: Binding<String?> = .constant(nil)
     ) {
         self.onExplain = onExplain
+        self._preSelectedPlistPath = preSelectedPlistPath
         self._session = State(
             initialValue: BackgroundItemsSession(actionExecutor: actionExecutor)
         )
@@ -46,6 +51,19 @@ public struct BackgroundItemsView: View {
         .background(GargantuaColors.void_)
         .task {
             if session.scan == nil { await session.scan() }
+            consumePendingPreSelection()
+        }
+        .onChange(of: preSelectedPlistPath) { _, _ in
+            // Re-trigger when Process Inventory navigates here a second time
+            // for the same path — clearing then re-setting the binding makes
+            // SwiftUI fire this even if the value matches the previous nil.
+            consumePendingPreSelection()
+        }
+        .onChange(of: session.scan?.scannedAt) { _, _ in
+            // First scan can finish after the .task body runs (the session
+            // kicks the scan in detached priority); apply pre-selection once
+            // the scan lands.
+            consumePendingPreSelection()
         }
         .sheet(item: $pendingAction) { pending in
             BackgroundItemActionConfirmation(
@@ -283,6 +301,32 @@ public struct BackgroundItemsView: View {
         if !outcome.succeeded, let error = outcome.error {
             lastError = error
         }
+    }
+
+    /// If the parent passed a plist path to pre-select, expand the matching
+    /// row (and switch to the All filter so it's actually visible) once the
+    /// scan has produced an item with that plist path. Clears the binding so
+    /// the parent can re-trigger the same handoff later.
+    private func consumePendingPreSelection() {
+        guard let path = preSelectedPlistPath else { return }
+        guard let scan = session.scan else { return }
+        guard let match = scan.items.first(where: { $0.plistPath == path }) else {
+            // Scan didn't surface the path — most likely a daemon plist that
+            // requires elevated enumeration. Surface as a soft error so the
+            // user understands why navigation didn't land somewhere visible.
+            lastError = "Could not locate that source in the Background Items list. It may require elevated enumeration."
+            preSelectedPlistPath = nil
+            return
+        }
+        // The path may belong to an item filtered out by the current chip
+        // (e.g. Sensitive). Drop back to All so the row actually shows.
+        if !filter.apply([match]).contains(where: { $0.id == match.id }) {
+            filter = .all
+        }
+        withAnimation(.easeOut(duration: 0.15)) {
+            expandedID = match.id
+        }
+        preSelectedPlistPath = nil
     }
 
     private static let timestampFormatter: RelativeDateTimeFormatter = {

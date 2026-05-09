@@ -1,6 +1,8 @@
-import GargantuaCore
 import Foundation
+import GargantuaCore
 import SwiftUI
+
+// swiftlint:disable file_length
 
 // Root content view for the Gargantua window.
 //
@@ -14,6 +16,11 @@ struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(AIEnginePreference.userDefaultsKey) private var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
     @State private var sidebarSelection: String? = "dashboard"
+    /// Plist path the Process Inventory pane asked Background Items to
+    /// pre-select. Set when the user clicks "Open source" on a launchd-backed
+    /// process; the Background Items view consumes + clears it once it lands
+    /// on the matching row.
+    @State private var pendingBackgroundItemPlistPath: String?
     @State private var persistence: PersistenceController?
     @State private var dashboardSession = DashboardSessionState()
     @State private var deepCleanSession = DeepCleanSessionState()
@@ -133,9 +140,18 @@ struct MainContentView: View {
                                     onResolveFilter: scanFilterHandler
                                 )
                             case "backgroundItems":
-                                BackgroundItemsView(onExplain: explainHandler)
+                                BackgroundItemsView(
+                                    onExplain: explainHandler,
+                                    preSelectedPlistPath: $pendingBackgroundItemPlistPath
+                                )
                             case "processInventory":
-                                ProcessInventoryView(onExplain: explainHandler)
+                                ProcessInventoryView(
+                                    onExplain: explainHandler,
+                                    onNavigateToBackgroundItems: { plistPath in
+                                        pendingBackgroundItemPlistPath = plistPath
+                                        sidebarSelection = "backgroundItems"
+                                    }
+                                )
                             case "rules":
                                 if let persistence {
                                     RuleViewerView(persistence: persistence)
