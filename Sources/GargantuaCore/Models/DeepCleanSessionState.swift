@@ -121,19 +121,34 @@ public final class DeepCleanSessionState {
         activeTask = nil
         isCleaning = false
         cleanupResult = result
+        // Drop the items we just cleaned out of scanResults so dismissing
+        // the summary returns the user to the results view minus what was
+        // removed — instead of forcing a full re-scan to see what's left.
+        if let current = scanResults {
+            let succeededIDs = Set(result.succeededItems.map(\.item.id))
+            scanResults = current.filter { !succeededIDs.contains($0.id) }
+            selectedResultIDs.subtract(succeededIDs)
+        }
         phase = .summary
     }
 
     public func dismissSummary() {
         activeTask?.cancel()
         activeTask = nil
-        scanProgress = ScanProgress()
-        scanDuration = 0
         cleanupResult = nil
-        scanResults = nil
-        selectedResultIDs = []
+        showConfirmation = false
         activeCleanupMethod = .trash
-        pathStream.clear()
-        phase = .idle
+        if let remaining = scanResults, !remaining.isEmpty {
+            // Return to the results bucket view so the user can keep
+            // working through what's left without re-scanning.
+            phase = .results
+        } else {
+            scanProgress = ScanProgress()
+            scanDuration = 0
+            scanResults = nil
+            selectedResultIDs = []
+            pathStream.clear()
+            phase = .idle
+        }
     }
 }
