@@ -55,11 +55,12 @@ struct GargantuaApp: App {
     }
 
     private var menuBarScene: some Scene {
-        MenuBarExtra(isInserted: $menuBarWidgetEnabled) {
+        MenuBarExtra(
+            "G",
+            isInserted: $menuBarWidgetEnabled
+        ) {
             GargantuaMenuBarSceneContent(model: menuBarStatusModel)
                 .preferredColorScheme(.dark)
-        } label: {
-            MenuBarStatusLabel(snapshot: menuBarStatusModel.snapshot)
         }
         .menuBarExtraStyle(.window)
     }
@@ -165,6 +166,7 @@ struct GargantuaApp: App {
 
 // MARK: - App Delegate
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("GargantuaMainWindow")
 
