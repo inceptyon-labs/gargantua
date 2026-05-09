@@ -134,6 +134,8 @@ struct MainContentView: View {
                                 )
                             case "backgroundItems":
                                 BackgroundItemsView(onExplain: explainHandler)
+                            case "processInventory":
+                                ProcessInventoryView(onExplain: explainHandler)
                             case "rules":
                                 if let persistence {
                                     RuleViewerView(persistence: persistence)

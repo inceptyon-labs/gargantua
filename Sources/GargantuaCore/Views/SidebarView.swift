@@ -62,6 +62,7 @@ extension SidebarSection {
                 SidebarItem(id: "diskExplorer", label: "Disk Explorer", icon: "internaldrive"),
                 SidebarItem(id: "aiModels", label: "AI Models", icon: "brain"),
                 SidebarItem(id: "backgroundItems", label: "Background Items", icon: "clock.badge.questionmark"),
+                SidebarItem(id: "processInventory", label: "Processes", icon: "cpu"),
             ]
         ),
         SidebarSection(
