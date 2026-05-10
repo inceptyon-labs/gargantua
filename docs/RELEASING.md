@@ -35,9 +35,11 @@ You need a `Developer ID Application` cert (paid Apple Developer membership). Th
 
 1. In Xcode → Settings → Accounts → Manage Certificates → `+` → **Developer ID Application**.
 2. Verify it's in the login Keychain:
+
    ```sh
    security find-identity -v -p codesigning
    ```
+
    You should see something like `1) ABC123… "Developer ID Application: Inceptyon Labs LLC (TEAMID1234)"`.
 3. Copy that **exact** quoted string into `.env.release` as `SIGNING_IDENTITY`.
 
@@ -165,10 +167,10 @@ If the publish step fails partway through, the local tag is left in place. After
    open -a Gargantua
    ```
 
-   - First-launch should not show "unidentified developer".
-   - Settings → About should report the new version.
-   - Trigger a Duplicate Finder scan on `~/Downloads`. Expect a TCC prompt for Downloads access (string from `Info.plist` → `NSDownloadsFolderUsageDescription`), then no further prompts.
-   - `Scripts/smoke/verify-vendored-bins.sh /Applications/Gargantua.app` confirms `fclones` / `czkawka_cli` resolved correctly.
+- First-launch should not show "unidentified developer".
+- Settings → About should report the new version.
+- Trigger a Duplicate Finder scan on `~/Downloads`. Expect a TCC prompt for Downloads access (string from `Info.plist` → `NSDownloadsFolderUsageDescription`), then no further prompts.
+- `Scripts/smoke/verify-vendored-bins.sh /Applications/Gargantua.app` confirms `fclones` / `czkawka_cli` resolved correctly.
 
 ## Sparkle update flow
 
