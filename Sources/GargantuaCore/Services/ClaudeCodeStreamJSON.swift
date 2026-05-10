@@ -143,11 +143,11 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
 
         guard let type = obj["type"] as? String else { return nil }
         switch type {
-        case "system":   return parseSystem(obj)
+        case "system": return parseSystem(obj)
         case "assistant": return parseAssistant(obj)
-        case "user":     return parseUserMessage(obj)
-        case "result":   return parseResult(obj)
-        default:         return .unknown(type: type)
+        case "user": return parseUserMessage(obj)
+        case "result": return parseResult(obj)
+        default: return .unknown(type: type)
         }
     }
 

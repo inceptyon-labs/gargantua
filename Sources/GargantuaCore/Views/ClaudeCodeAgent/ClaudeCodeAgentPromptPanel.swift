@@ -48,7 +48,7 @@ struct ClaudeCodeAgentPromptPanel: View {
         .font(GargantuaFonts.body)
         .foregroundStyle(GargantuaColors.ink)
         .textFieldStyle(.plain)
-        .lineLimit(3...12)
+        .lineLimit(3 ... 12)
         .padding(.horizontal, GargantuaSpacing.space3)
         .padding(.vertical, GargantuaSpacing.space3)
         .background(GargantuaColors.surface3)
@@ -73,9 +73,9 @@ struct ClaudeCodeAgentPromptPanel: View {
 
             (
                 Text(ClaudeCodeAgentHelpContent.disclaimerLeadIn).bold()
-                + Text(" — ")
-                + Text(ClaudeCodeAgentHelpContent.disclaimerFallback).foregroundColor(GargantuaColors.ink3)
-                + Text(".")
+                    + Text(" — ")
+                    + Text(ClaudeCodeAgentHelpContent.disclaimerFallback).foregroundColor(GargantuaColors.ink3)
+                    + Text(".")
             )
             .font(GargantuaFonts.caption)
             .foregroundStyle(GargantuaColors.ink2)

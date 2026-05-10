@@ -125,6 +125,7 @@ struct CzkawkaOutputParserTests {
     }
 
     // MARK: - czkawka 11.x output formats
+
     //
     // czkawka 11 changed several subcommands to emit quoted paths, plus a
     // human-readable byte count for `big`. These tests use real samples from

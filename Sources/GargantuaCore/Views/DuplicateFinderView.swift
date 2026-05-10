@@ -251,10 +251,10 @@ public struct DuplicateFinderView: View {
                         + "~/Downloads, ~/Desktop, ~/Pictures, ~/Movies, ~/Music — or inside "
                         + "app-managed sub-trees like ~/Documents/Adobe. Clear dependency trees and caches via Deep Clean."
                 )
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 460)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 460)
 
                 Button(action: { showEverything = true }) {
                     Text("Show all duplicates")

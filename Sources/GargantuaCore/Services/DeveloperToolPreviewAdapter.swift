@@ -589,9 +589,9 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         return enumerator.compactMap { item -> Int64? in
             guard let fileURL = item as? URL,
                   let values = try? fileURL.resourceValues(forKeys: [
-                    .isRegularFileKey,
-                    .totalFileAllocatedSizeKey,
-                    .fileAllocatedSizeKey,
+                      .isRegularFileKey,
+                      .totalFileAllocatedSizeKey,
+                      .fileAllocatedSizeKey,
                   ]),
                   values.isRegularFile == true else {
                 return nil

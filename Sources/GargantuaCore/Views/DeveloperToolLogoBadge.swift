@@ -116,9 +116,9 @@ struct DeveloperToolLogoBadge: View {
 
     private var pnpmMark: some View {
         VStack(spacing: markSize * 0.06) {
-            ForEach(0..<3, id: \.self) { row in
+            ForEach(0 ..< 3, id: \.self) { row in
                 HStack(spacing: markSize * 0.06) {
-                    ForEach(0..<3, id: \.self) { column in
+                    ForEach(0 ..< 3, id: \.self) { column in
                         RoundedRectangle(cornerRadius: max(1, markSize * 0.035))
                             .fill(pnpmColor(row: row, column: column))
                             .frame(width: markSize * 0.25, height: markSize * 0.25)

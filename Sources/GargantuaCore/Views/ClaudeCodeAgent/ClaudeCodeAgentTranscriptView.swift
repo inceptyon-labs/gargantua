@@ -128,8 +128,8 @@ struct ClaudeCodeAgentTranscriptView: View {
                 .foregroundStyle(GargantuaColors.ink2)
 
             Text(controller.status.isRunning
-                 ? "The model is starting up. Tool calls and assistant messages will appear here as the run progresses."
-                 : "Compose a prompt on the left and press **Start run**. Tool calls, assistant messages, and the final result will appear here.")
+                ? "The model is starting up. Tool calls and assistant messages will appear here as the run progresses."
+                : "Compose a prompt on the left and press **Start run**. Tool calls, assistant messages, and the final result will appear here.")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -393,6 +393,6 @@ private struct MaxTurnsRecoveryCard: View {
 
     private var recoveryMessage: String {
         "Claude used all \(result.numTurns ?? 0) allowed turns before finishing. " +
-        "Re-running raises the budget by 5 turns and replays the same prompt."
+            "Re-running raises the budget by 5 turns and replays the same prompt."
     }
 }

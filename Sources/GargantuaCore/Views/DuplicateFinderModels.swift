@@ -345,7 +345,7 @@ public enum DuplicateFinderScopeFilter {
         guard let minLen = split.map(\.count).min(), minLen >= 1 else { return false }
 
         var commonDepth = 0
-        for index in 0..<minLen {
+        for index in 0 ..< minLen {
             let segment = split[0][index]
             if split.allSatisfy({ $0[index] == segment }) {
                 commonDepth = index + 1

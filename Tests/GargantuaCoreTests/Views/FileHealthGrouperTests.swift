@@ -210,7 +210,7 @@ struct FileHealthGroupContextTests {
     func mixedGroupedAndUngrouped() {
         let results = [
             makeCzkawkaResult(category: .similarImages, counter: 0, groupID: 1),
-            makeCzkawkaResult(category: .similarImages, counter: 1),  // no group
+            makeCzkawkaResult(category: .similarImages, counter: 1), // no group
             makeCzkawkaResult(category: .similarImages, counter: 2, groupID: 1),
         ]
         let tab = FileHealthGrouper.group(results).first!

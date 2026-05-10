@@ -289,7 +289,7 @@ public enum DuplicatePathDifferentiator {
         var result: [String: String] = [:]
         for (idx, components) in split.enumerated() {
             let upper = max(prefixLen, components.count - suffixLen)
-            let slice = components[prefixLen..<upper]
+            let slice = components[prefixLen ..< upper]
             // Empty differentiator (path is exactly the common prefix) shouldn't
             // happen for a real duplicate group, but fall back to the filename.
             let label = slice.isEmpty

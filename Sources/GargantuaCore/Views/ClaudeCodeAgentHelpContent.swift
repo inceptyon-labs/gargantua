@@ -1,6 +1,6 @@
 import SwiftUI
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 /// Single source of truth for the Agent Run "when to use this" copy. Both the
@@ -264,8 +264,8 @@ private struct ExamplePromptRow: View {
 
     private func copy() {
         #if canImport(AppKit)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(example.prompt, forType: .string)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(example.prompt, forType: .string)
         #endif
         didCopy = true
         Task {

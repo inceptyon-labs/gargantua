@@ -146,9 +146,9 @@ public struct CzkawkaOutputParser: Sendable {
         if let parenStart = line.firstIndex(of: "("),
            let parenEnd = line[parenStart...].firstIndex(of: ")")
         {
-            let inside = line[line.index(after: parenStart)..<parenEnd]
+            let inside = line[line.index(after: parenStart) ..< parenEnd]
             if let bytes = Int64(inside),
-               let dashRange = line.range(of: " - ", range: parenEnd..<line.endIndex)
+               let dashRange = line.range(of: " - ", range: parenEnd ..< line.endIndex)
             {
                 let after = String(line[dashRange.upperBound...])
                 let unquoted = unquoteLeadingPath(after)
@@ -183,7 +183,7 @@ public struct CzkawkaOutputParser: Sendable {
         guard line.hasPrefix("\"") else { return line }
         let afterOpen = line.index(after: line.startIndex)
         guard let closing = line[afterOpen...].firstIndex(of: "\"") else { return line }
-        return String(line[afterOpen..<closing])
+        return String(line[afterOpen ..< closing])
     }
 
     /// Strip trailing annotations some czkawka commands append after the path

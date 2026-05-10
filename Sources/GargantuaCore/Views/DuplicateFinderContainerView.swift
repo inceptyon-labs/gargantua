@@ -112,48 +112,48 @@ public struct DuplicateFinderContainerView: View {
                         .frame(maxWidth: 420)
                 }
 
-            HStack(spacing: GargantuaSpacing.space3) {
-                if state.cachedResults != nil {
-                    Button(action: showCachedResults) {
-                        Text("View previous results")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-                            .padding(.horizontal, GargantuaSpacing.space4)
-                            .padding(.vertical, GargantuaSpacing.space2)
-                            .background(
-                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                    .fill(GargantuaColors.accent)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                HStack(spacing: GargantuaSpacing.space3) {
+                    if state.cachedResults != nil {
+                        Button(action: showCachedResults) {
+                            Text("View previous results")
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(GargantuaColors.ink)
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.vertical, GargantuaSpacing.space2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                        .fill(GargantuaColors.accent)
+                                )
+                        }
+                        .buttonStyle(.plain)
 
-                    Button(action: startScan) {
-                        Text("Scan again")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-                            .padding(.horizontal, GargantuaSpacing.space4)
-                            .padding(.vertical, GargantuaSpacing.space2)
-                            .background(
-                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                    .fill(GargantuaColors.surface3)
-                            )
+                        Button(action: startScan) {
+                            Text("Scan again")
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(GargantuaColors.ink)
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.vertical, GargantuaSpacing.space2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                        .fill(GargantuaColors.surface3)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button(action: startScan) {
+                            Text("Scan for duplicates")
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(GargantuaColors.ink)
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.vertical, GargantuaSpacing.space2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                        .fill(GargantuaColors.accent)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Button(action: startScan) {
-                        Text("Scan for duplicates")
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-                            .padding(.horizontal, GargantuaSpacing.space4)
-                            .padding(.vertical, GargantuaSpacing.space2)
-                            .background(
-                                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                    .fill(GargantuaColors.accent)
-                            )
-                    }
-                    .buttonStyle(.plain)
                 }
-            }
 
                 Spacer()
             }

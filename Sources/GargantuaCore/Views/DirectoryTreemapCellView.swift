@@ -292,6 +292,7 @@ struct DirectoryTreemapCellView: View {
 }
 
 // MARK: - Helper computed properties
+
 //
 // Hoisted into an extension so the view's struct body stays under SwiftLint's
 // type-body-length budget. These are all pure derivations from `item` /

@@ -1,6 +1,6 @@
 import SwiftUI
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 struct ClaudeCodeAgentRunDetailsDisclosure: View {
@@ -128,8 +128,8 @@ struct ClaudeCodeAgentRunDetailsDisclosure: View {
 
     private func copyPromptToPasteboard() {
         #if canImport(AppKit)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(renderedPrompt, forType: .string)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(renderedPrompt, forType: .string)
         #endif
         didCopyPrompt = true
         Task {

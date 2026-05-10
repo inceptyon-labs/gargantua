@@ -218,7 +218,7 @@ struct MCPScanToolHandlerTests {
         // 20 above the cap, with strictly increasing sizes so we can pin
         // exactly which items survive the trim.
         let extra = 20
-        let results = (0..<(cap + extra)).map { idx in
+        let results = (0 ..< (cap + extra)).map { idx in
             Self.makeResult(
                 id: "item-\(String(format: "%04d", idx))",
                 size: Int64(idx + 1) * 1_000,
@@ -266,7 +266,7 @@ struct MCPScanToolHandlerTests {
         let cap = MCPScanToolHandler.maxItemsInWireOutput
 
         // Trimmed case.
-        let trimmedResults = (0..<(cap + 5)).map { idx in
+        let trimmedResults = (0 ..< (cap + 5)).map { idx in
             Self.makeResult(id: "item-\(idx)", size: Int64(idx + 1) * 1_000, safety: .safe)
         }
         let trimmedSubject = handler(scanner: { _ in trimmedResults })
