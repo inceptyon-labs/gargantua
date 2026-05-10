@@ -272,7 +272,7 @@ struct DuplicateFinderScopeFilterColocatedTests {
 }
 
 @Suite("DuplicateFinderScopeFilter.hiddenSummary")
-struct DuplicateFinderScopeFilterHiddenSummaryTests {
+struct DuplicateFinderHiddenSummaryTests {
 
     @Test("Counts hidden groups, files, and reclaimable bytes")
     func hiddenCounts() {

@@ -343,7 +343,9 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
         lock.withLock { handlers.removeValue(forKey: key) }
     }
 
+    // swiftlint:disable:next static_over_final_class
     override class func canInit(with request: URLRequest) -> Bool { true }
+    // swiftlint:disable:next static_over_final_class
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {

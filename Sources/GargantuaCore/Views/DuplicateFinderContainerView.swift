@@ -292,10 +292,8 @@ public struct DuplicateFinderContainerView: View {
             var existing: Set<String> = []
             existing.reserveCapacity(paths.count)
             let fileManager = FileManager.default
-            for path in paths {
-                if fileManager.fileExists(atPath: path) {
-                    existing.insert(path)
-                }
+            for path in paths where fileManager.fileExists(atPath: path) {
+                existing.insert(path)
             }
             let pruned = DuplicateFinderRefresh.prune(
                 results: snapshot,

@@ -98,6 +98,7 @@ public struct AnthropicModelsAPIClient: AnthropicModelsFetching {
         let hasMore: Bool
         let lastID: String?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case data
             case hasMore = "has_more"

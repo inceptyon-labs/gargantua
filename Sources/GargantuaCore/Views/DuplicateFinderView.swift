@@ -256,7 +256,7 @@ public struct DuplicateFinderView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)
 
-                Button(action: { showEverything = true }) {
+                Button(action: { showEverything = true }, label: {
                     Text("Show all duplicates")
                         .font(GargantuaFonts.label)
                         .foregroundStyle(GargantuaColors.ink)
@@ -266,7 +266,7 @@ public struct DuplicateFinderView: View {
                             RoundedRectangle(cornerRadius: GargantuaRadius.small)
                                 .fill(GargantuaColors.surface3)
                         )
-                }
+                })
                 .buttonStyle(.plain)
                 .padding(.top, GargantuaSpacing.space1)
             } else {
@@ -689,8 +689,14 @@ struct DuplicateFinderDerivation {
     }
 }
 
-struct DuplicateFinderHiddenSummary {
-    let groups: Int
-    let files: Int
-    let reclaimableBytes: Int64
+public struct DuplicateFinderHiddenSummary: Sendable, Equatable {
+    public let groups: Int
+    public let files: Int
+    public let reclaimableBytes: Int64
+
+    public init(groups: Int, files: Int, reclaimableBytes: Int64) {
+        self.groups = groups
+        self.files = files
+        self.reclaimableBytes = reclaimableBytes
+    }
 }

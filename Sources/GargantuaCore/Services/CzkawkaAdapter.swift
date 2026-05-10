@@ -271,8 +271,10 @@ public struct CzkawkaAdapter: ScanAdapter {
             // czkawka's `broken` defaults to PDF only and requires the
             // --checked-types flag repeated per value (no comma-list); enable
             // every supported check type so the category surfaces real findings.
-            args += ["-c", "PDF", "-c", "AUDIO", "-c", "IMAGE",
-                     "-c", "ARCHIVE", "-c", "VIDEO",]
+            args += [
+                "-c", "PDF", "-c", "AUDIO", "-c", "IMAGE",
+                "-c", "ARCHIVE", "-c", "VIDEO",
+            ]
         default:
             // `bigFiles` has no minimum-size flag in this czkawka build; the
             // default `-n` cap (top-N biggest) already produces useful output.

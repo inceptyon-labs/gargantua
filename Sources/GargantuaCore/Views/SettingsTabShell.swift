@@ -54,7 +54,7 @@ struct SettingsTabBar: View {
     private func tabButton(_ tab: SettingsTab, index: Int) -> some View {
         let isSelected = selection == tab
         let shortcutCharacter = Character("\(index + 1)")
-        return Button(action: { selection = tab }) {
+        return Button(action: { selection = tab }, label: {
             HStack(spacing: GargantuaSpacing.space2) {
                 Image(systemName: tab.icon)
                     .font(.system(size: 13))
@@ -73,7 +73,7 @@ struct SettingsTabBar: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
             .contentShape(Rectangle())
-        }
+        })
         .buttonStyle(.plain)
         .keyboardShortcut(KeyEquivalent(shortcutCharacter), modifiers: .command)
         .help("\(tab.helpText) (⌘\(index + 1))")

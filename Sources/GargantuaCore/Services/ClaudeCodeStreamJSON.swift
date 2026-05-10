@@ -178,13 +178,11 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
             return nil
         }
 
-        for block in content {
-            if (block["type"] as? String) == "tool_use" {
-                let name = block["name"] as? String ?? "tool"
-                let inputSummary = Self.summarize(json: block["input"])
-                let payload = Self.toolUsePayload(name: name, input: block["input"])
-                return .toolUse(name: name, inputSummary: inputSummary, payload: payload)
-            }
+        for block in content where (block["type"] as? String) == "tool_use" {
+            let name = block["name"] as? String ?? "tool"
+            let inputSummary = Self.summarize(json: block["input"])
+            let payload = Self.toolUsePayload(name: name, input: block["input"])
+            return .toolUse(name: name, inputSummary: inputSummary, payload: payload)
         }
         let texts: [String] = content.compactMap {
             ($0["type"] as? String) == "text" ? $0["text"] as? String : nil
@@ -228,7 +226,7 @@ public struct ClaudeCodeStreamJSONParser: Sendable {
         // modelUsage is keyed by model id; surface the first key for display.
         let model: String? = {
             guard let usage = obj["modelUsage"] as? [String: Any] else { return nil }
-            return usage.keys.sorted().first
+            return usage.keys.min()
         }()
 
         return .terminal(ClaudeCodeStreamTerminalResult(

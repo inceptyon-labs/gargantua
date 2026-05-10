@@ -12,19 +12,25 @@ import Foundation
 /// `NativeScanAdapter.scan` — it never reports sizes or item counts.
 public enum DevArtifactDetection {
 
+    private struct EcosystemMarker {
+        let ecosystem: String
+        let names: Set<String>
+        let suffixes: Set<String>
+    }
+
     /// Markers (filename or extension match) that indicate a given ecosystem
     /// has projects on this machine. Order doesn't matter — first match per
     /// ecosystem flips that ecosystem on and we move to the next directory.
-    private static let ecosystemMarkers: [(ecosystem: String, names: Set<String>, suffixes: Set<String>)] = [
-        ("node", ["package.json", "node_modules", "yarn.lock", "pnpm-lock.yaml"], []),
-        ("python", ["requirements.txt", "pyproject.toml", "Pipfile", "setup.py", ".venv", "venv"], []),
-        ("rust", ["Cargo.toml", "target"], []),
-        ("go", ["go.mod", "go.sum"], []),
-        ("jvm", ["build.gradle", "build.gradle.kts", "settings.gradle", "pom.xml", ".gradle"], []),
-        ("dotnet", ["packages.config", "global.json"], [".csproj", ".fsproj", ".vbproj", ".sln"]),
-        ("ruby", ["Gemfile", "Gemfile.lock", ".bundle"], []),
-        ("php", ["composer.json", "composer.lock", "vendor"], []),
-        ("xcode", ["Package.swift", ".swiftpm", "DerivedData"], [".xcodeproj", ".xcworkspace"]),
+    private static let ecosystemMarkers: [EcosystemMarker] = [
+        EcosystemMarker(ecosystem: "node", names: ["package.json", "node_modules", "yarn.lock", "pnpm-lock.yaml"], suffixes: []),
+        EcosystemMarker(ecosystem: "python", names: ["requirements.txt", "pyproject.toml", "Pipfile", "setup.py", ".venv", "venv"], suffixes: []),
+        EcosystemMarker(ecosystem: "rust", names: ["Cargo.toml", "target"], suffixes: []),
+        EcosystemMarker(ecosystem: "go", names: ["go.mod", "go.sum"], suffixes: []),
+        EcosystemMarker(ecosystem: "jvm", names: ["build.gradle", "build.gradle.kts", "settings.gradle", "pom.xml", ".gradle"], suffixes: []),
+        EcosystemMarker(ecosystem: "dotnet", names: ["packages.config", "global.json"], suffixes: [".csproj", ".fsproj", ".vbproj", ".sln"]),
+        EcosystemMarker(ecosystem: "ruby", names: ["Gemfile", "Gemfile.lock", ".bundle"], suffixes: []),
+        EcosystemMarker(ecosystem: "php", names: ["composer.json", "composer.lock", "vendor"], suffixes: []),
+        EcosystemMarker(ecosystem: "xcode", names: ["Package.swift", ".swiftpm", "DerivedData"], suffixes: [".xcodeproj", ".xcworkspace"]),
     ]
 
     /// Cross-cutting buckets are additive across ecosystems and applicable
@@ -96,13 +102,9 @@ public enum DevArtifactDetection {
                 detected.insert(marker.ecosystem)
                 continue
             }
-            if !marker.suffixes.isEmpty {
-                for entry in entries {
-                    if marker.suffixes.contains(where: { entry.hasSuffix($0) }) {
-                        detected.insert(marker.ecosystem)
-                        break
-                    }
-                }
+            if !marker.suffixes.isEmpty,
+               entries.contains(where: { entry in marker.suffixes.contains(where: entry.hasSuffix) }) {
+                detected.insert(marker.ecosystem)
             }
         }
     }

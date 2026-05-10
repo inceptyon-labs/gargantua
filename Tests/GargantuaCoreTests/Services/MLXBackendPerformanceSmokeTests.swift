@@ -136,6 +136,7 @@ struct MLXBackendPerformanceSmokeTests {
         String(format: "%.1f", Double(bytes) / 1_048_576)
     }
 
+    // swiftlint:disable:next function_body_length
     private static func representativeCases() -> [SmokeCase] {
         [
             makeCase(SmokeCaseSpec(

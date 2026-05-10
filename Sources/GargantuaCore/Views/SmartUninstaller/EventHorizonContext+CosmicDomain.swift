@@ -20,61 +20,65 @@ extension EventHorizonContext {
     /// wins over the bare `~/Library` fallback chain.
     public static func cosmicDomain(forPath path: String) -> CosmicDomain? {
         let normalized = abbreviateHome(path)
-        for mapping in domainMappings {
-            if normalized.hasPrefix(mapping.prefix) {
-                return CosmicDomain(displayRoot: mapping.root, phrase: mapping.phrase)
-            }
+        for mapping in domainMappings where normalized.hasPrefix(mapping.prefix) {
+            return CosmicDomain(displayRoot: mapping.root, phrase: mapping.phrase)
         }
         return nil
     }
 
-    private static let domainMappings: [(prefix: String, root: String, phrase: String)] = [
+    private struct DomainMapping {
+        let prefix: String
+        let root: String
+        let phrase: String
+    }
+
+    private static let domainMappings: [DomainMapping] = [
         // Developer roots — most specific first so they don't get caught by ~/Library/Developer.
-        ("~/Library/Developer/Xcode/DerivedData", "DerivedData", "Decoding derived data singularity"),
-        ("~/Library/Developer/Xcode/iOS DeviceSupport", "iOS DeviceSupport", "Mapping simulator artifact constellations"),
-        ("~/Library/Developer/Xcode/Archives", "Xcode Archives", "Cataloguing archived build remnants"),
-        ("~/Library/Developer/CoreSimulator", "CoreSimulator", "Charting simulator orbit decay"),
-        ("~/Library/Developer/Xcode", "Xcode", "Probing Xcode strata"),
-        ("~/Library/Developer", "Developer", "Sweeping developer support fields"),
+        DomainMapping(prefix: "~/Library/Developer/Xcode/DerivedData", root: "DerivedData", phrase: "Decoding derived data singularity"),
+        DomainMapping(prefix: "~/Library/Developer/Xcode/iOS DeviceSupport", root: "iOS DeviceSupport", phrase: "Mapping simulator artifact constellations"),
+        DomainMapping(prefix: "~/Library/Developer/Xcode/Archives", root: "Xcode Archives", phrase: "Cataloguing archived build remnants"),
+        DomainMapping(prefix: "~/Library/Developer/CoreSimulator", root: "CoreSimulator", phrase: "Charting simulator orbit decay"),
+        DomainMapping(prefix: "~/Library/Developer/Xcode", root: "Xcode", phrase: "Probing Xcode strata"),
+        DomainMapping(prefix: "~/Library/Developer", root: "Developer", phrase: "Sweeping developer support fields"),
 
         // User Library — the bulk of cleanup work.
-        ("~/Library/Caches", "~/Library/Caches", "Surveying cache residue in deep orbit"),
-        ("~/Library/Logs", "~/Library/Logs", "Probing log telemetry streams"),
-        ("~/Library/Containers", "~/Library/Containers", "Scanning container boundary topology"),
-        ("~/Library/Group Containers", "Group Containers", "Mapping shared container fields"),
-        ("~/Library/Application Support", "Application Support", "Cataloguing support constellation"),
-        ("~/Library/Application Scripts", "Application Scripts", "Tracing sandbox script anchors"),
-        ("~/Library/Preferences", "~/Library/Preferences", "Probing preference manifold geometry"),
-        ("~/Library/Saved Application State", "Saved State", "Recovering quantum state from prior orbits"),
-        ("~/Library/HTTPStorages", "HTTPStorages", "Sweeping network storage residue"),
-        ("~/Library/WebKit", "WebKit", "Charting browser engine debris"),
-        ("~/Library/LaunchAgents", "LaunchAgents", "Auditing autonomous agent signatures"),
-        ("~/Library/Mobile Documents", "iCloud Drive", "Charting cloud-mirrored mass"),
+        DomainMapping(prefix: "~/Library/Caches", root: "~/Library/Caches", phrase: "Surveying cache residue in deep orbit"),
+        DomainMapping(prefix: "~/Library/Logs", root: "~/Library/Logs", phrase: "Probing log telemetry streams"),
+        DomainMapping(prefix: "~/Library/Containers", root: "~/Library/Containers", phrase: "Scanning container boundary topology"),
+        DomainMapping(prefix: "~/Library/Group Containers", root: "Group Containers", phrase: "Mapping shared container fields"),
+        DomainMapping(prefix: "~/Library/Application Support", root: "Application Support", phrase: "Cataloguing support constellation"),
+        DomainMapping(prefix: "~/Library/Application Scripts", root: "Application Scripts", phrase: "Tracing sandbox script anchors"),
+        DomainMapping(prefix: "~/Library/Preferences", root: "~/Library/Preferences", phrase: "Probing preference manifold geometry"),
+        DomainMapping(prefix: "~/Library/Saved Application State", root: "Saved State", phrase: "Recovering quantum state from prior orbits"),
+        DomainMapping(prefix: "~/Library/HTTPStorages", root: "HTTPStorages", phrase: "Sweeping network storage residue"),
+        DomainMapping(prefix: "~/Library/WebKit", root: "WebKit", phrase: "Charting browser engine debris"),
+        DomainMapping(prefix: "~/Library/LaunchAgents", root: "LaunchAgents", phrase: "Auditing autonomous agent signatures"),
+        DomainMapping(prefix: "~/Library/Mobile Documents", root: "iCloud Drive", phrase: "Charting cloud-mirrored mass"),
 
         // Trash + downloads.
-        ("~/.Trash", "~/.Trash", "Sweeping the disposal corridor"),
-        ("~/Downloads", "~/Downloads", "Surveying recent arrival debris"),
+        DomainMapping(prefix: "~/.Trash", root: "~/.Trash", phrase: "Sweeping the disposal corridor"),
+        DomainMapping(prefix: "~/Downloads", root: "~/Downloads", phrase: "Surveying recent arrival debris"),
 
         // Package managers.
-        ("~/.npm", "~/.npm", "Detecting JS dependency debris"),
-        ("~/.yarn", "~/.yarn", "Tracing Yarn lock anomalies"),
-        ("~/.pnpm-store", "~/.pnpm-store", "Mapping pnpm content store"),
-        ("~/.cargo", "~/.cargo", "Charting Cargo registry orbit"),
-        ("~/.cache", "~/.cache", "Probing XDG cache residue"),
-        ("~/.gradle", "~/.gradle", "Detecting Gradle wrapper remnants"),
+        DomainMapping(prefix: "~/.npm", root: "~/.npm", phrase: "Detecting JS dependency debris"),
+        DomainMapping(prefix: "~/.yarn", root: "~/.yarn", phrase: "Tracing Yarn lock anomalies"),
+        DomainMapping(prefix: "~/.pnpm-store", root: "~/.pnpm-store", phrase: "Mapping pnpm content store"),
+        DomainMapping(prefix: "~/.cargo", root: "~/.cargo", phrase: "Charting Cargo registry orbit"),
+        DomainMapping(prefix: "~/.cache", root: "~/.cache", phrase: "Probing XDG cache residue"),
+        DomainMapping(prefix: "~/.gradle", root: "~/.gradle", phrase: "Detecting Gradle wrapper remnants"),
 
         // Homebrew + system temp.
-        ("/opt/homebrew/var/homebrew", "Homebrew cellar", "Auditing Homebrew formulae remnants"),
-        ("/usr/local/var/homebrew", "Homebrew cellar", "Auditing Homebrew formulae remnants"),
-        ("/private/var/folders", "system temp", "Scanning system temp accretion"),
+        DomainMapping(prefix: "/opt/homebrew/var/homebrew", root: "Homebrew cellar", phrase: "Auditing Homebrew formulae remnants"),
+        DomainMapping(prefix: "/usr/local/var/homebrew", root: "Homebrew cellar", phrase: "Auditing Homebrew formulae remnants"),
+        DomainMapping(prefix: "/private/var/folders", root: "system temp", phrase: "Scanning system temp accretion"),
 
         // System Library (read-mostly but valid for Light/Light scans).
-        ("/Library/Caches", "/Library/Caches", "Probing root-level cache residue"),
-        ("/Library/Logs", "/Library/Logs", "Tracing system log telemetry"),
-        ("/Library/Application Support", "/Library/Application Support", "Mapping system support constellation"),
+        DomainMapping(prefix: "/Library/Caches", root: "/Library/Caches", phrase: "Probing root-level cache residue"),
+        DomainMapping(prefix: "/Library/Logs", root: "/Library/Logs", phrase: "Tracing system log telemetry"),
+        DomainMapping(prefix: "/Library/Application Support", root: "/Library/Application Support", phrase: "Mapping system support constellation"),
 
         // Catch-all home.
-        ("~/Library", "~/Library", "Sweeping the user library nebula"),
+        DomainMapping(prefix: "~/Library", root: "~/Library", phrase: "Sweeping the user library nebula"),
     ]
 
     private static func abbreviateHome(_ path: String) -> String {

@@ -317,7 +317,7 @@ public enum DuplicateFinderScopeFilter {
         personalRoots: [URL]?,
         excludeManaged: Bool,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
-    ) -> (groups: Int, files: Int, reclaimableBytes: Int64) {
+    ) -> DuplicateFinderHiddenSummary {
         let visible = Set(
             apply(
                 to: results,
@@ -332,7 +332,11 @@ public enum DuplicateFinderScopeFilter {
             let (next, overflow) = sum.addingReportingOverflow(group.reclaimableCeilingBytes)
             return overflow ? Int64.max : next
         }
-        return (groups: hiddenGroups.count, files: hidden.count, reclaimableBytes: bytes)
+        return DuplicateFinderHiddenSummary(
+            groups: hiddenGroups.count,
+            files: hidden.count,
+            reclaimableBytes: bytes
+        )
     }
 
     /// Detect the intra-archive / intra-payload shape: every file in the
