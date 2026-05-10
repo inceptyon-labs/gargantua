@@ -75,11 +75,10 @@ extension DeveloperToolPanel {
         .padding(.horizontal, GargantuaSpacing.space3)
         .padding(.vertical, GargantuaSpacing.space2)
         .background(operation.safety == .protected_ ? GargantuaColors.protectedDim : Color.clear)
-        .overlay(alignment: .leading) {
+        .overlay {
             if operation.safety == .protected_ {
-                Rectangle()
-                    .fill(GargantuaColors.protected_)
-                    .frame(width: 3)
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(GargantuaColors.protected_.opacity(0.55), lineWidth: 1)
             }
         }
     }

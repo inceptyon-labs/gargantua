@@ -89,18 +89,25 @@ public struct AIAdvisorySheet: View {
                 Image(systemName: "sparkles.rectangle.stack")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(GargantuaColors.accent)
-                Text("Review Advisories")
+                Text(controller.currentRequestIsTriage ? "Suspicious Triage" : "Review Advisories")
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
                 Spacer()
             }
-            Text("Suggestions are advisory only — safety classifications come from YAML rules and are never changed.")
+            Text(headerSubtitle)
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
+    }
+
+    private var headerSubtitle: String {
+        if controller.currentRequestIsTriage {
+            return "AI reviews only the highest-signal candidates. This is triage, not malware detection."
+        }
+        return "Suggestions are advisory only — safety classifications come from YAML rules and are never changed."
     }
 
     // MARK: - States
@@ -130,7 +137,7 @@ public struct AIAdvisorySheet: View {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 24))
                     .foregroundStyle(GargantuaColors.ink3)
-                Text("No review-tier items to advise on.")
+                Text(controller.currentRequestIsTriage ? "No suspicious candidates to advise on." : "No review-tier items to advise on.")
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink2)
             }

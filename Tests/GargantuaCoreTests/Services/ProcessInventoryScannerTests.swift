@@ -146,19 +146,59 @@ struct ProcessInventoryScannerTests {
         #expect(scan.items.map(\.command) == ["large", "small"])
     }
 
-    @Test("topN is metadata; scanner returns the full ranked population")
-    func topNIsMetadata() async {
-        // The scanner now returns all items so the view can re-rank by
-        // another metric without losing items outside the original top-N
-        // slice. The view applies `.prefix(topN)` at render time.
+    @Test("topN caps the resolved item population")
+    func topNCapsResolvedPopulation() async {
         let samples = (1 ... 100).map { i in
             sample(pid: Int32(i), command: "p\(i)", path: "/p\(i)", cpuTime: UInt64(i) * 1_000_000, at: 1)
         }
         let scanner = makeScanner(first: [], second: samples)
         let scan = await scanner.scan(metric: .cpu, topN: 10)
-        #expect(scan.items.count == 100)
+        #expect(scan.items.count == 10)
         #expect(scan.totalProcessCount == 100)
         #expect(scan.topN == 10)
+    }
+
+    @Test("topN limits identity resolution")
+    func topNLimitsIdentityResolution() async {
+        final class CountingResolver: BinaryIdentityResolving, @unchecked Sendable {
+            var resolved: [String] = []
+            func resolve(binaryPath: String) -> BinaryIdentity {
+                resolved.append(binaryPath)
+                return BinaryIdentity(binaryPath: binaryPath, vendor: .unsigned)
+            }
+            func clearCache() {}
+        }
+
+        let samples = (1 ... 100).map { i in
+            sample(
+                pid: Int32(i),
+                command: "p\(i)",
+                path: "/p\(i)",
+                cpuTime: 0,
+                rss: UInt64(i) * 1_000_000,
+                at: 1
+            )
+        }
+        let resolver = CountingResolver()
+        let scanner = DefaultProcessInventoryScanner(
+            snapshotProvider: TwoShotProvider(first: [], second: samples),
+            launchdIndex: StubLaunchdIndex(items: []),
+            resolver: resolver,
+            matcher: ProcessLaunchSourceMatcher(),
+            classifier: ProcessSafetyClassifier(),
+            fileExists: { _ in true },
+            userNameForUID: { _ in nil },
+            foregroundPIDs: { [] },
+            sampleIntervalNanoseconds: 0,
+            now: { Date() },
+            sleep: { _ in }
+        )
+
+        let scan = await scanner.scan(metric: .rss, topN: 10)
+
+        #expect(scan.items.count == 10)
+        #expect(scan.totalProcessCount == 100)
+        #expect(resolver.resolved.count == 10)
     }
 
     @Test("Resolver clearCache invoked at the start of every scan")
@@ -248,15 +288,15 @@ struct ProcessInventoryScannerTests {
         #expect(scan.items.first(where: { $0.command == "unknown-proc" })?.owningUser == "6502")
     }
 
-    @Test("Total process count reflects the live snapshot, with topN as metadata")
-    func totalCountAndTopNMetadata() async {
+    @Test("Total process count reflects the live snapshot with a capped item list")
+    func totalCountWithCappedItemList() async {
         let samples = (1 ... 5).map { i in
             sample(pid: Int32(i), command: "p\(i)", path: "/p\(i)", cpuTime: 0, rss: UInt64(i) * 1_000_000, at: 1)
         }
         let scanner = makeScanner(first: [], second: samples)
         let scan = await scanner.scan(metric: .rss, topN: 2)
         #expect(scan.totalProcessCount == 5)
-        #expect(scan.items.count == 5)
+        #expect(scan.items.count == 2)
         #expect(scan.topN == 2)
     }
 

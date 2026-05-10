@@ -147,6 +147,116 @@ struct DeveloperToolExecutionAdapterTests {
         #expect(entry.confirmationMethod == .summaryDialog)
     }
 
+    @Test("Xcode simulator cleanup runs through xcrun and audits preview bytes")
+    func xcodeSimulatorCleanup() throws {
+        let xcrun = try makeScratchBinary(name: "xcrun")
+        defer { try? FileManager.default.removeItem(at: xcrun.deletingLastPathComponent()) }
+
+        let audit = AuditSpy()
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.xcrunEnvVarName: xcrun.path,
+            ]),
+            runner: StubRunner(outputs: [
+                "xcrun simctl delete unavailable": ProcessOutput(stdout: "Deleted 2 devices\n", stderr: "", exitCode: 0),
+            ]),
+            auditRecorder: audit
+        )
+
+        let result = try adapter.execute(
+            .xcodeDeleteUnavailableSimulators,
+            preview: xcodePreview(bytes: 24_000_000),
+            confirmationMethod: .summaryDialog
+        )
+
+        let entry = try #require(audit.entries.first)
+        #expect(result.commandPreview == [xcrun.path, "simctl", "delete", "unavailable"])
+        #expect(entry.command == "xcrun simctl delete unavailable")
+        #expect(entry.safetyLevel == .review)
+        #expect(entry.bytesFreed == 24_000_000)
+    }
+
+    @Test("pnpm and Go unknown byte estimates audit as zero")
+    func pnpmAndGoUnknownEstimateAuditsAsZero() throws {
+        let pnpm = try makeScratchBinary(name: "pnpm")
+        let go = try makeScratchBinary(name: "go")
+        defer {
+            try? FileManager.default.removeItem(at: pnpm.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: go.deletingLastPathComponent())
+        }
+
+        let audit = AuditSpy()
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.pnpmEnvVarName: pnpm.path,
+                DeveloperToolBinaryResolver.goEnvVarName: go.path,
+            ]),
+            runner: StubRunner(outputs: [
+                "pnpm store prune": ProcessOutput(stdout: "Removed cached packages\n", stderr: "", exitCode: 0),
+                "go clean -cache": ProcessOutput(stdout: "", stderr: "", exitCode: 0),
+            ]),
+            auditRecorder: audit
+        )
+
+        let pnpmResult = try adapter.execute(
+            .pnpmStorePrune,
+            preview: pnpmPreview(),
+            confirmationMethod: .summaryDialog
+        )
+        let goResult = try adapter.execute(
+            .goCleanCache,
+            preview: goPreview(),
+            confirmationMethod: .summaryDialog
+        )
+
+        #expect(pnpmResult.estimatedBytesFreed == 0)
+        #expect(goResult.estimatedBytesFreed == 0)
+        #expect(audit.entries.map(\.command) == ["pnpm store prune", "go clean -cache"])
+        #expect(audit.entries.map(\.bytesFreed) == [0, 0])
+    }
+
+    @Test("Cargo extracted cache purge removes only previewed cache directories")
+    func cargoCachePurge() throws {
+        let cargo = try makeScratchBinary(name: "cargo")
+        let cargoHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DeveloperToolExecutionAdapterTests-cargo-home-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: cargo.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: cargoHome)
+        }
+        let registrySrc = cargoHome.appendingPathComponent("registry/src", isDirectory: true)
+        let gitCheckouts = cargoHome.appendingPathComponent("git/checkouts", isDirectory: true)
+        let registryCache = cargoHome.appendingPathComponent("registry/cache", isDirectory: true)
+        try makeSizedFile(at: registrySrc.appendingPathComponent("crate/lib.rs"), byteCount: 128)
+        try makeSizedFile(at: gitCheckouts.appendingPathComponent("repo/main.rs"), byteCount: 256)
+        try makeSizedFile(at: registryCache.appendingPathComponent("crate.crate"), byteCount: 512)
+
+        let audit = AuditSpy()
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.cargoEnvVarName: cargo.path,
+            ]),
+            runner: StubRunner(outputs: [:]),
+            auditRecorder: audit
+        )
+
+        let result = try adapter.execute(
+            .cargoPurgeExtractedCaches,
+            preview: cargoPreview(registrySrc: registrySrc, gitCheckouts: gitCheckouts),
+            confirmationMethod: .summaryDialog
+        )
+
+        let entry = try #require(audit.entries.first)
+        #expect(!FileManager.default.fileExists(atPath: registrySrc.path))
+        #expect(!FileManager.default.fileExists(atPath: gitCheckouts.path))
+        #expect(FileManager.default.fileExists(atPath: registryCache.path))
+        #expect(result.commandPreview == [cargo.path, "cache", "purge-extracted"])
+        #expect(result.estimatedBytesFreed > 0)
+        #expect(entry.command == "cargo cache purge-extracted")
+        #expect(entry.files.map(\.path).sorted() == [gitCheckouts.path, registrySrc.path].sorted())
+        #expect(entry.safetyLevel == .review)
+    }
+
     @Test("failure surfaces stderr and does not write audit")
     func failureSurfacesStderr() throws {
         let docker = try makeScratchBinary(name: "docker")
@@ -225,6 +335,83 @@ struct DeveloperToolExecutionAdapterTests {
         )
     }
 
+    private func xcodePreview(bytes: Int64?) -> DeveloperToolPreview {
+        DeveloperToolPreview(
+            tool: .xcode,
+            commandPreview: ["xcrun", "simctl", "list", "-j", "devices", "unavailable"],
+            items: [
+                DeveloperToolPreviewItem(
+                    id: "xcode-simulator-AAAA",
+                    tool: .xcode,
+                    title: "iPhone 14",
+                    reclaimableBytes: bytes,
+                    commandPreview: ["xcrun", "simctl", "list", "-j", "devices", "unavailable"]
+                ),
+            ],
+            rawOutput: ""
+        )
+    }
+
+    private func pnpmPreview() -> DeveloperToolPreview {
+        DeveloperToolPreview(
+            tool: .pnpm,
+            commandPreview: ["pnpm", "store", "path"],
+            items: [
+                DeveloperToolPreviewItem(
+                    id: "pnpm-store",
+                    tool: .pnpm,
+                    title: "pnpm content-addressable store",
+                    detail: "/Users/me/Library/pnpm/store/v10",
+                    commandPreview: ["pnpm", "store", "path"]
+                ),
+            ],
+            rawOutput: ""
+        )
+    }
+
+    private func goPreview() -> DeveloperToolPreview {
+        DeveloperToolPreview(
+            tool: .go,
+            commandPreview: ["go", "env", "-json", "GOCACHE", "GOMODCACHE"],
+            items: [
+                DeveloperToolPreviewItem(
+                    id: "go-build-cache",
+                    tool: .go,
+                    title: "Go build cache",
+                    detail: "/Users/me/Library/Caches/go-build",
+                    commandPreview: ["go", "env", "-json", "GOCACHE", "GOMODCACHE"]
+                ),
+            ],
+            rawOutput: ""
+        )
+    }
+
+    private func cargoPreview(registrySrc: URL, gitCheckouts: URL) -> DeveloperToolPreview {
+        DeveloperToolPreview(
+            tool: .cargo,
+            commandPreview: ["cargo", "--version"],
+            items: [
+                DeveloperToolPreviewItem(
+                    id: "cargo-registry-src",
+                    tool: .cargo,
+                    title: "Cargo extracted registry sources",
+                    detail: registrySrc.path,
+                    reclaimableBytes: DeveloperToolPreviewAdapter.directorySize(at: registrySrc),
+                    commandPreview: ["cargo", "--version"]
+                ),
+                DeveloperToolPreviewItem(
+                    id: "cargo-git-checkouts",
+                    tool: .cargo,
+                    title: "Cargo git dependency checkouts",
+                    detail: gitCheckouts.path,
+                    reclaimableBytes: DeveloperToolPreviewAdapter.directorySize(at: gitCheckouts),
+                    commandPreview: ["cargo", "--version"]
+                ),
+            ],
+            rawOutput: ""
+        )
+    }
+
     private func makeScratchBinary(name: String) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("DeveloperToolExecutionAdapterTests-\(UUID().uuidString)", isDirectory: true)
@@ -233,5 +420,13 @@ struct DeveloperToolExecutionAdapterTests {
         try Data("#!/bin/sh\n".utf8).write(to: url)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         return url
+    }
+
+    private func makeSizedFile(at url: URL, byteCount: Int) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(repeating: 1, count: byteCount).write(to: url)
     }
 }

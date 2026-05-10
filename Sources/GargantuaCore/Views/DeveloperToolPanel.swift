@@ -37,34 +37,38 @@ struct DeveloperToolPanel: View {
     @State private var isPreviewExpanded: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
+        VStack(alignment: .leading, spacing: 0) {
             toolHeader
             Rectangle()
                 .fill(GargantuaColors.borderSoft)
                 .frame(height: 1)
 
-            switch preview {
-            case .loading:
-                HStack(spacing: GargantuaSpacing.space2) {
-                    AccretionDiskView(activityRate: 12, size: 14, color: GargantuaColors.accent)
-                    Text("Running preview…")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
+            Group {
+                switch preview {
+                case .loading:
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        AccretionDiskView(activityRate: 12, size: 14, color: GargantuaColors.accent)
+                        Text("Running preview…")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                case .loaded(let p):
+                    previewBody(p)
+                case .daemonStopped(let tool):
+                    daemonStoppedBody(tool: tool)
+                case .failed(let message):
+                    failureBody(message: message)
                 }
-            case .loaded(let p):
-                previewBody(p)
-            case .daemonStopped(let tool):
-                daemonStoppedBody(tool: tool)
-            case .failed(let message):
-                failureBody(message: message)
             }
+            .padding(GargantuaSpacing.space4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(GargantuaSpacing.space4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: GargantuaRadius.medium)
                 .fill(GargantuaColors.surface2)
         )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
         .overlay(
             RoundedRectangle(cornerRadius: GargantuaRadius.medium)
                 .stroke(GargantuaColors.border, lineWidth: 1)
@@ -75,9 +79,8 @@ struct DeveloperToolPanel: View {
 
     private var toolHeader: some View {
         HStack(alignment: .center, spacing: GargantuaSpacing.space2) {
-            Image(systemName: icon(for: availability.tool))
-                .foregroundStyle(GargantuaColors.ink2)
-                .frame(width: 18, alignment: .center)
+            DeveloperToolLogoBadge(tool: availability.tool, size: 28)
+
             Text(availability.tool.displayName)
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
@@ -92,11 +95,35 @@ struct DeveloperToolPanel: View {
                 stopDockerButton
             }
             Spacer()
-            if case .loaded(let p) = preview, p.reclaimableBytes > 0 {
-                Text("\(Self.formatBytes(p.reclaimableBytes)) reclaimable")
+            headerMetric
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GargantuaColors.surface3)
+    }
+
+    @ViewBuilder
+    private var headerMetric: some View {
+        if case .loaded(let p) = preview, p.hasKnownReclaimableBytes {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Text(Self.formatBytes(p.reclaimableBytes))
                     .font(GargantuaFonts.monoData)
                     .foregroundStyle(GargantuaColors.ink)
+                Text("reclaimable")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink2)
             }
+            .padding(.horizontal, GargantuaSpacing.space2)
+            .padding(.vertical, GargantuaSpacing.space1)
+            .background(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .fill(GargantuaColors.surface1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .stroke(GargantuaColors.borderSoft, lineWidth: 1)
+            )
         }
     }
 
@@ -173,7 +200,7 @@ struct DeveloperToolPanel: View {
     private func previewDisclosure(_ preview: DeveloperToolPreview) -> some View {
         let count = preview.items.count
         let suffix: String = {
-            if preview.reclaimableBytes > 0 {
+            if preview.hasKnownReclaimableBytes {
                 return ", \(Self.formatBytes(preview.reclaimableBytes))"
             }
             return ""
@@ -291,29 +318,7 @@ struct DeveloperToolPanel: View {
                     .foregroundStyle(GargantuaColors.ink2)
             }
 
-            Button(action: onStartDocker) {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    if dockerLifecycleActivity == .starting {
-                        AccretionDiskView(activityRate: 18, size: 14, color: .white)
-                        Text("Starting Docker…")
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Start Docker")
-                    }
-                }
-                .font(GargantuaFonts.label)
-                .foregroundStyle(.white)
-                .padding(.horizontal, GargantuaSpacing.space4)
-                .padding(.vertical, GargantuaSpacing.space2)
-                .background(
-                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                        .fill(GargantuaColors.accent)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(dockerLifecycleActivity != nil)
-            .accessibilityLabel("Start Docker daemon")
+            dockerStartButton(idleTitle: "Start Docker", busyTitle: "Starting Docker…")
         }
     }
 
@@ -332,21 +337,53 @@ struct DeveloperToolPanel: View {
                 .lineLimit(5)
                 .multilineTextAlignment(.leading)
 
-            Button {
-                onRetry()
-            } label: {
-                Text("Try again")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(.horizontal, GargantuaSpacing.space3)
-                    .padding(.vertical, GargantuaSpacing.space1)
-                    .background(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(GargantuaColors.surface3)
-                    )
+            HStack(spacing: GargantuaSpacing.space2) {
+                Button {
+                    onRetry()
+                } label: {
+                    Text("Try again")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+                        .padding(.horizontal, GargantuaSpacing.space3)
+                        .padding(.vertical, GargantuaSpacing.space1)
+                        .background(
+                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                                .fill(GargantuaColors.surface3)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                if availability.tool == .docker {
+                    dockerStartButton(idleTitle: "Restart Docker", busyTitle: "Restarting Docker…")
+                }
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private func dockerStartButton(idleTitle: String, busyTitle: String) -> some View {
+        Button(action: onStartDocker) {
+            HStack(spacing: GargantuaSpacing.space2) {
+                if dockerLifecycleActivity == .starting {
+                    AccretionDiskView(activityRate: 18, size: 14, color: .white)
+                    Text(busyTitle)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(idleTitle)
+                }
+            }
+            .font(GargantuaFonts.label)
+            .foregroundStyle(.white)
+            .padding(.horizontal, GargantuaSpacing.space4)
+            .padding(.vertical, GargantuaSpacing.space2)
+            .background(
+                RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                    .fill(GargantuaColors.accent)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(dockerLifecycleActivity != nil)
+        .accessibilityLabel("\(idleTitle) daemon")
     }
 
     // MARK: - Helpers
@@ -376,13 +413,6 @@ struct DeveloperToolPanel: View {
             return ChipState(label: "Checking…", color: GargantuaColors.ink3)
         case .failed:
             return ChipState(label: "Error", color: GargantuaColors.review)
-        }
-    }
-
-    private func icon(for tool: DeveloperTool) -> String {
-        switch tool {
-        case .homebrew: "mug"
-        case .docker: "shippingbox"
         }
     }
 

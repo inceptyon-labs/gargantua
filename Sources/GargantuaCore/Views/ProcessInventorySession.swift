@@ -36,6 +36,11 @@ public final class ProcessInventorySession {
         self.scan = result
     }
 
+    public func clearSnapshot() {
+        scan = nil
+        busyItemIDs.removeAll()
+    }
+
     /// Run a `ProcessAction` against `item`, marking the row busy for the
     /// duration. After a successful `.stop`, the session re-scans so the row
     /// disappears (or shows the orphaned-state if the source is still on
@@ -72,9 +77,9 @@ public final class ProcessInventorySession {
         return outcome
     }
 
-    /// Re-rank the existing snapshot in place. Avoids the 500 ms sample
+    /// Re-rank the captured snapshot in place. Avoids the 500 ms sample
     /// window when the user just wants to toggle between CPU and Memory.
-    /// The top-N cap from the original scan is preserved.
+    /// If the original scan was top-N capped, this re-sorts that same slice.
     public func resort(by metric: ProcessSortMetric) {
         guard let current = scan else { return }
         if current.sortedBy == metric { return }

@@ -17,46 +17,58 @@ public struct BackgroundItemsView: View {
     @State private var lastError: String?
     @Binding private var preSelectedPlistPath: String?
     private let onExplain: ((ScanResult) -> Void)?
+    private let onTriage: (([ScanResult]) -> Void)?
 
     public init(
+        session: BackgroundItemsSession? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
+        onTriage: (([ScanResult]) -> Void)? = nil,
         actionExecutor: (any BackgroundItemActionExecuting)? = nil,
         preSelectedPlistPath: Binding<String?> = .constant(nil)
     ) {
         self.onExplain = onExplain
+        self.onTriage = onTriage
         self._preSelectedPlistPath = preSelectedPlistPath
         self._session = State(
-            initialValue: BackgroundItemsSession(actionExecutor: actionExecutor)
+            initialValue: session ?? BackgroundItemsSession(actionExecutor: actionExecutor)
         )
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            ScanResultsHeader(
-                title: "Background Items",
-                subtitle: subtitleText,
-                subtitleStyle: .voice,
-                onRescan: { Task { await session.scan() } },
-                isBusy: session.isScanning
-            )
-
             if session.scan == nil, !session.isScanning {
-                idleState
-            } else if session.isScanning {
-                scanningState
-            } else if let scan = session.scan {
-                resultsState(scan)
+                startView
+            } else {
+                ScanResultsHeader(
+                    title: "Background Items",
+                    subtitle: subtitleText,
+                    subtitleStyle: .voice,
+                    onBack: { clearScan() },
+                    onRescan: { startScan() },
+                    isBusy: session.isScanning
+                )
+
+                if session.isScanning {
+                    scanningState
+                } else if let scan = session.scan {
+                    resultsState(scan)
+                }
             }
         }
         .background(GargantuaColors.void_)
         .task {
-            if session.scan == nil { await session.scan() }
+            if preSelectedPlistPath != nil, session.scan == nil, !session.isScanning {
+                await session.scan()
+            }
             consumePendingPreSelection()
         }
         .onChange(of: preSelectedPlistPath) { _, _ in
             // Re-trigger when Process Inventory navigates here a second time
             // for the same path — clearing then re-setting the binding makes
             // SwiftUI fire this even if the value matches the previous nil.
+            if preSelectedPlistPath != nil, session.scan == nil, !session.isScanning {
+                Task { await session.scan() }
+            }
             consumePendingPreSelection()
         }
         .onChange(of: session.scan?.scannedAt) { _, _ in
@@ -102,34 +114,55 @@ public struct BackgroundItemsView: View {
         return "Trace what runs in the background. Decide what to trust."
     }
 
-    private var idleState: some View {
-        VStack(spacing: GargantuaSpacing.space3) {
-            Spacer()
-            Image(systemName: "clock.badge.questionmark")
-                .font(.system(size: 36))
-                .foregroundStyle(GargantuaColors.ink3)
-            Text("Scan launch agents, daemons, and login items")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-            Text("Read-only. Nothing changes until you say so.")
-                .font(GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink2)
-            Button {
-                Task { await session.scan() }
-            } label: {
-                Text("Start Scan")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(GargantuaColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    private var startView: some View {
+        VStack(spacing: 0) {
+            PageHeaderView(
+                title: "Background Items",
+                subtitle: "Trace what starts itself, then decide what to trust.",
+                subtitleStyle: .voice
+            )
+
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: GargantuaSpacing.space3) {
+                        Spacer(minLength: 0)
+
+                        GargantuaBrandIcon(
+                            resourceName: "background-items-gargantua-gpt2",
+                            fallbackSystemName: "clock.badge.questionmark",
+                            fallbackColor: GargantuaColors.ink4
+                        )
+
+                        Text("Scan launch agents and daemons")
+                            .font(GargantuaFonts.heading)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text("Scans first. Disable, enable, and remove actions require confirmation after review.")
+                            .font(GargantuaFonts.body)
+                            .foregroundStyle(GargantuaColors.ink2)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 390)
+
+                        Button(action: startScan) {
+                            Text("Start Scan")
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.vertical, GargantuaSpacing.space2)
+                                .background(GargantuaColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, GargantuaSpacing.space2)
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: proxy.size.height)
+                }
             }
-            .buttonStyle(.plain)
-            .padding(.top, GargantuaSpacing.space2)
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var scanningState: some View {
@@ -193,17 +226,103 @@ public struct BackgroundItemsView: View {
     }
 
     private func controlBar(scan: BackgroundItemScan, visibleCount: Int) -> some View {
-        HStack(spacing: GargantuaSpacing.space3) {
+        let triageResults = suspiciousTriageResults(scan)
+        return HStack(spacing: GargantuaSpacing.space3) {
             ForEach(BackgroundItemFilter.allCases, id: \.self) { option in
                 filterButton(option, scan: scan)
             }
             Spacer()
+            if let onTriage, !triageResults.isEmpty {
+                aiTriageButton {
+                    onTriage(triageResults)
+                }
+            }
             Text("\(visibleCount) shown")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
+    }
+
+    private func aiTriageButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .font(.system(size: 11, weight: .medium))
+                Text("Suspicious Triage")
+                    .font(GargantuaFonts.caption)
+            }
+            .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+        .help("Analyze the top suspicious background item candidates with the active AI engine")
+    }
+
+    private func suspiciousTriageResults(_ scan: BackgroundItemScan) -> [ScanResult] {
+        scan.items.compactMap { item -> (score: Int, result: ScanResult)? in
+            let triage = backgroundItemTriageSignals(for: item)
+            guard triage.score >= 45 else { return nil }
+            return (triage.score, backgroundItemTriageResult(for: item, signals: triage.signals))
+        }
+        .sorted { lhs, rhs in
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.result.name.localizedCaseInsensitiveCompare(rhs.result.name) == .orderedAscending
+        }
+        .prefix(6)
+        .map(\.result)
+    }
+
+    private func backgroundItemTriageSignals(for item: BackgroundItem) -> (score: Int, signals: [String]) {
+        guard item.safety != .protected_ else { return (0, []) }
+        var score = 0
+        var signals: [String] = []
+
+        func add(_ points: Int, _ signal: String) {
+            score += points
+            signals.append(signal)
+        }
+
+        if item.reasons.contains(.unsigned) { add(90, "unsigned binary") }
+        if item.reasons.contains(.orphaned) { add(80, "orphaned executable") }
+        if item.reasons.contains(.orphanedVendor) { add(70, "orphaned vendor") }
+        if item.source == .startupItem { add(45, "legacy startup item") }
+        if item.source == .launchDaemon { add(30, "runs as launch daemon") }
+        if item.reasons.contains(.listensForRequests) { add(25, "listens for requests") }
+        if item.reasons.contains(.persistentlyRunning) { add(20, "persistent at boot or login") }
+        if item.identity == nil { add(20, "no resolved identity") }
+
+        if let path = item.executablePath ?? item.plistPath {
+            let lower = path.lowercased()
+            if lower.hasPrefix("/tmp/") || lower.hasPrefix("/private/tmp/") || lower.contains("/var/folders/") {
+                add(35, "temporary-path item")
+            }
+            if lower.contains("/downloads/") {
+                add(20, "runs from downloads")
+            }
+        }
+
+        return (score, signals)
+    }
+
+    private func backgroundItemTriageResult(for item: BackgroundItem, signals: [String]) -> ScanResult {
+        let base = item.toScanResult()
+        let readableSignals = signals.joined(separator: ", ")
+        return ScanResult(
+            id: "triage:\(base.id)",
+            name: base.name,
+            path: base.path,
+            size: base.size,
+            safety: base.safety,
+            confidence: base.confidence,
+            explanation: "Triage signals: \(readableSignals). \(base.explanation)",
+            source: base.source,
+            lastAccessed: base.lastAccessed,
+            category: "background_item_triage",
+            tags: base.tags + signals.map { "triage_signal:\($0.replacingOccurrences(of: " ", with: "_"))" },
+            regenerates: base.regenerates,
+            regenerateCommand: base.regenerateCommand
+        )
     }
 
     private func filterButton(_ option: BackgroundItemFilter, scan: BackgroundItemScan) -> some View {
@@ -294,6 +413,15 @@ public struct BackgroundItemsView: View {
     private func explain(_ item: BackgroundItem) {
         guard let onExplain else { return }
         onExplain(item.toScanResult())
+    }
+
+    private func startScan() {
+        Task { await session.scan() }
+    }
+
+    private func clearScan() {
+        expandedID = nil
+        session.clearScan()
     }
 
     private func runAction(_ pending: PendingBackgroundItemAction) async {
@@ -410,6 +538,12 @@ public final class BackgroundItemsSession {
             scanner.scan()
         }.value
         self.scan = result
+    }
+
+    public func clearScan() {
+        scan = nil
+        busyItemIDs.removeAll()
+        sessionDisabledIDs.removeAll()
     }
 
     /// Run a `BackgroundItemAction` against `item`, marking the row busy for

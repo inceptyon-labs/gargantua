@@ -27,6 +27,16 @@ extension DeveloperToolPreviewAdapter {
         DeveloperToolPreviewOutputParser.parseDockerReclaimable(token)
     }
 
+    static func parseXcodeUnavailableDevicesJSON(
+        output: String,
+        commandPreview: [String]
+    ) -> [DeveloperToolPreviewItem] {
+        DeveloperToolPreviewOutputParser.parseXcodeUnavailableDevicesJSON(
+            output: output,
+            commandPreview: commandPreview
+        )
+    }
+
     static func parseFirstSize(in line: String) -> Int64? {
         DeveloperToolPreviewOutputParser.parseFirstSize(in: line)
     }
@@ -47,6 +57,14 @@ enum DeveloperToolPreviewOutputParser {
             parseHomebrewCleanupPreview(output: output, commandPreview: commandPreview)
         case .docker:
             parseDockerSystemDF(output: output, commandPreview: commandPreview)
+        case .xcode:
+            parseXcodeUnavailableDevicesJSON(output: output, commandPreview: commandPreview)
+        case .pnpm:
+            parsePnpmStorePath(output: output, commandPreview: commandPreview)
+        case .go:
+            parseGoEnv(output: output, commandPreview: commandPreview)
+        case .cargo:
+            []
         }
     }
 
@@ -166,6 +184,116 @@ enum DeveloperToolPreviewOutputParser {
         }
     }
 
+    static func parseXcodeUnavailableDevicesJSON(
+        output: String,
+        commandPreview: [String]
+    ) -> [DeveloperToolPreviewItem] {
+        guard let data = output.data(using: .utf8),
+              let list = try? JSONDecoder().decode(XcodeSimctlDeviceList.self, from: data) else {
+            return []
+        }
+
+        return list.devices.keys.sorted().flatMap { runtimeIdentifier in
+            let runtimeName = simRuntimeDisplayName(runtimeIdentifier)
+            return (list.devices[runtimeIdentifier] ?? []).enumerated().map { index, device in
+                let trimmedName = device.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let title = trimmedName?.isEmpty == false ? trimmedName ?? "" : "Unavailable simulator"
+                let detail = [
+                    runtimeName,
+                    device.state,
+                    device.availabilityError,
+                    device.udid,
+                ]
+                .compactMap { value -> String? in
+                    let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return trimmed?.isEmpty == false ? trimmed : nil
+                }
+                .joined(separator: " · ")
+
+                return DeveloperToolPreviewItem(
+                    id: "xcode-simulator-\(device.udid ?? "\(runtimeIdentifier)-\(index)")",
+                    tool: .xcode,
+                    title: title,
+                    detail: detail.isEmpty ? nil : detail,
+                    reclaimableBytes: device.dataPathSize,
+                    commandPreview: commandPreview
+                )
+            }
+        }
+    }
+
+    private static func parsePnpmStorePath(
+        output: String,
+        commandPreview: [String]
+    ) -> [DeveloperToolPreviewItem] {
+        guard let path = output
+            .split(separator: "\n")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !path.isEmpty else {
+            return []
+        }
+
+        return [
+            DeveloperToolPreviewItem(
+                id: "pnpm-store",
+                tool: .pnpm,
+                title: "pnpm content-addressable store",
+                detail: path,
+                reclaimableBytes: nil,
+                commandPreview: commandPreview
+            ),
+        ]
+    }
+
+    private static func parseGoEnv(
+        output: String,
+        commandPreview: [String]
+    ) -> [DeveloperToolPreviewItem] {
+        guard let data = output.data(using: .utf8),
+              let env = try? JSONDecoder().decode(GoEnvPreview.self, from: data) else {
+            return []
+        }
+
+        return [
+            env.GOCACHE.map {
+                DeveloperToolPreviewItem(
+                    id: "go-build-cache",
+                    tool: .go,
+                    title: "Go build cache",
+                    detail: $0,
+                    reclaimableBytes: nil,
+                    commandPreview: commandPreview
+                )
+            },
+            env.GOMODCACHE.map {
+                DeveloperToolPreviewItem(
+                    id: "go-module-cache",
+                    tool: .go,
+                    title: "Go module download cache",
+                    detail: $0,
+                    reclaimableBytes: nil,
+                    commandPreview: commandPreview
+                )
+            },
+        ]
+        .compactMap { item -> DeveloperToolPreviewItem? in
+            guard let item,
+                  item.detail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                return nil
+            }
+            return item
+        }
+    }
+
+    private static func simRuntimeDisplayName(_ identifier: String) -> String {
+        let prefix = "com.apple.CoreSimulator.SimRuntime."
+        let raw = identifier.hasPrefix(prefix) ? String(identifier.dropFirst(prefix.count)) : identifier
+        let parts = raw.split(separator: "-").map(String.init)
+        guard let family = parts.first, parts.count > 1 else { return raw }
+        return "\(family) \(parts.dropFirst().joined(separator: "."))"
+    }
+
     private static func dockerJSONPreviewItem(
         from row: DockerSystemDFJSONRow,
         commandPreview: [String]
@@ -218,6 +346,23 @@ private struct DockerSystemDFJSONRow: Decodable {
         }
         return nil
     }
+}
+
+private struct XcodeSimctlDeviceList: Decodable {
+    let devices: [String: [XcodeSimctlDevice]]
+}
+
+private struct XcodeSimctlDevice: Decodable {
+    let name: String?
+    let udid: String?
+    let state: String?
+    let availabilityError: String?
+    let dataPathSize: Int64?
+}
+
+private struct GoEnvPreview: Decodable {
+    let GOCACHE: String?
+    let GOMODCACHE: String?
 }
 
 private struct DynamicCodingKey: CodingKey {

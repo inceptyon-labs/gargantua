@@ -81,7 +81,11 @@ public protocol DetailedCodeSignatureVerifying: CodeSignatureVerifying {
 /// notarisation checks. The notarisation requirement check uses the local
 /// stapled ticket / cdhash cache.
 public struct DefaultCodeSignatureVerifier: DetailedCodeSignatureVerifying {
-    public init() {}
+    private let includeNotarization: Bool
+
+    public init(includeNotarization: Bool = true) {
+        self.includeNotarization = includeNotarization
+    }
 
     public func verify(bundleURL: URL) -> CodeSignatureInfo {
         guard let code = staticCode(for: bundleURL) else { return .unknown }
@@ -120,7 +124,7 @@ public struct DefaultCodeSignatureVerifier: DetailedCodeSignatureVerifying {
         // This consults the stapled ticket or local cdhash cache populated by
         // Gatekeeper — no network round-trip.
         let isNotarized: Bool?
-        if valid {
+        if includeNotarization, valid {
             isNotarized = checkRequirement("notarized", code: code)
         } else {
             isNotarized = nil

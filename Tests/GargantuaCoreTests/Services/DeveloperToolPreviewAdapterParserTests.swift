@@ -113,6 +113,34 @@ struct DeveloperToolPreviewAdapterParserTests {
         #expect(rows.map(\.reclaimableBytes) == [.some(4_000_000), .some(512_000_000)])
     }
 
+    @Test("parseXcodeUnavailableDevicesJSON decodes devices and dataPathSize")
+    func parseXcodeUnavailableDevicesJSON() {
+        let rows = DeveloperToolPreviewAdapter.parseXcodeUnavailableDevicesJSON(
+            output: """
+            {
+              "devices": {
+                "com.apple.CoreSimulator.SimRuntime.iOS-18-2": [
+                  {
+                    "name": "iPhone 16",
+                    "udid": "AAAA-BBBB",
+                    "state": "Shutdown",
+                    "availabilityError": "runtime profile not found",
+                    "dataPathSize": 42000000
+                  }
+                ]
+              }
+            }
+            """,
+            commandPreview: ["xcrun", "simctl", "list", "-j", "devices", "unavailable"]
+        )
+
+        #expect(rows.count == 1)
+        #expect(rows.first?.id == "xcode-simulator-AAAA-BBBB")
+        #expect(rows.first?.title == "iPhone 16")
+        #expect(rows.first?.detail?.contains("iOS 18.2") == true)
+        #expect(rows.first?.reclaimableBytes == 42_000_000)
+    }
+
     // MARK: - DeveloperToolPreview.reclaimableBytes saturation
 
     @Test("reclaimableBytes saturates at Int64.max instead of trapping on sum overflow")

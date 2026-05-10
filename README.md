@@ -44,7 +44,7 @@ Most cleaner apps optimize for big numbers and vague confidence. Gargantua optim
 
 - **Deep Clean** — YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, language build caches, and review-gated stale developer versions.
 - **Dev Purge** — narrow-scope view limited to developer artifacts, Docker, Homebrew, and stale developer versions so a routine cleanup can't accidentally widen into a full scan.
-- **Developer Tools** — tool-native Homebrew and Docker cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
+- **Developer Tools** — tool-native Homebrew, Docker, Xcode Simulator, pnpm, Go, and Cargo cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
 - **Smart Uninstaller** — app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state.
 - **Duplicate Finder** — duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
 - **File Health** — empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.

@@ -190,13 +190,10 @@ public struct ProcessInventoryRow: View {
 
             if isHovered, let onExplain {
                 Button(action: onExplain) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 11))
-                        Text("Explain")
-                            .font(GargantuaFonts.caption)
-                    }
-                    .foregroundStyle(GargantuaColors.accent)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12))
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(GargantuaColors.accent)
                 }
                 .buttonStyle(.plain)
                 .help("Generate an AI explanation")
@@ -225,6 +222,7 @@ public struct ProcessInventoryRow: View {
             .buttonStyle(.plain)
             .help(isExpanded ? "Collapse details" : "Show details")
         }
+        .frame(width: 132, alignment: .trailing)
     }
 
     private func actionButtonGroup(onAction: @escaping (ProcessAction) -> Void) -> some View {

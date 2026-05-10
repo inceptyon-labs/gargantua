@@ -31,6 +31,8 @@ struct MainContentView: View {
     @State private var diskExplorerState = DiskExplorerState()
     @State private var aiModelsSession = AIModelsState()
     @State private var devToolsSession = DeveloperToolsSessionState()
+    @State private var backgroundItemsSession = BackgroundItemsSession()
+    @State private var processInventorySession = ProcessInventorySession()
     @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
@@ -141,12 +143,16 @@ struct MainContentView: View {
                                 )
                             case "backgroundItems":
                                 BackgroundItemsView(
+                                    session: backgroundItemsSession,
                                     onExplain: explainHandler,
+                                    onTriage: triageHandler,
                                     preSelectedPlistPath: $pendingBackgroundItemPlistPath
                                 )
                             case "processInventory":
                                 ProcessInventoryView(
+                                    session: processInventorySession,
                                     onExplain: explainHandler,
+                                    onTriage: triageHandler,
                                     onNavigateToBackgroundItems: { plistPath in
                                         pendingBackgroundItemPlistPath = plistPath
                                         sidebarSelection = "backgroundItems"
@@ -166,7 +172,8 @@ struct MainContentView: View {
                                     staleVersionPinnedPaths: pathExclusionPatterns,
                                     onExplain: explainHandler,
                                     onResolveFilter: scanFilterHandler,
-                                    onCleanupCompleted: dashboardCleanupHandler
+                                    onCleanupCompleted: dashboardCleanupHandler,
+                                    onOpenDeveloperTools: { sidebarSelection = "devTools" }
                                 )
                             case "devTools":
                                 DeveloperToolsView(session: devToolsSession)
@@ -190,6 +197,7 @@ struct MainContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .environment(\.cleanupNarrator, narrateHandler)
                 .environment(\.activeAIEngineKind, activeAIEngineKind)
                 .environment(\.preferredAIEngineKind, preferredAIEngine)
@@ -251,6 +259,12 @@ struct MainContentView: View {
     /// button can fire a batch advisory without knowing the controller.
     private var advisoryHandler: ([ScanResult]) -> Void {
         { results in aiAdvisory.request(for: results) }
+    }
+
+    /// Closure handed to live-system panes so their triage button can analyze
+    /// a small ranked candidate set instead of every review-tier row.
+    private var triageHandler: ([ScanResult]) -> Void {
+        { results in aiAdvisory.request(for: results, includeNonReview: true) }
     }
 
     /// Closure handed to bucket-based scan views so their search field can

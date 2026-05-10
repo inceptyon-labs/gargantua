@@ -41,6 +41,12 @@ struct SidebarSectionTests {
         #expect(allIDs.contains("settings"))
     }
 
+    @Test("Developer Tools comes before Dev Artifact Purge")
+    func developerToolsPrecedesDevPurge() throws {
+        let tools = try #require(SidebarSection.defaultSections.first { $0.id == "tools" })
+        #expect(tools.items.map(\.id).prefix(2) == ["devTools", "devPurge"])
+    }
+
     @Test("All item IDs are unique across sections")
     func itemIDsUnique() {
         let allIDs = SidebarSection.defaultSections.flatMap { $0.items.map(\.id) }

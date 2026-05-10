@@ -30,6 +30,13 @@ extension MLXInferenceEngine {
     /// Builds the user-turn content for `generate`. Pulled out so tests can
     /// pin the shape without spinning up a model.
     static func buildPrompt(for result: ScanResult, rule: ScanRule) -> String {
+        if result.category == "process_triage" {
+            return buildProcessTriagePrompt(for: result, rule: rule)
+        }
+        if result.category == "background_item_triage" {
+            return buildBackgroundItemTriagePrompt(for: result, rule: rule)
+        }
+
         var lines: [String] = []
         lines.append("Item: \(result.name)")
         lines.append("Path: \(result.path)")
@@ -50,6 +57,45 @@ extension MLXInferenceEngine {
         lines.append("")
         lines.append("Explain what this item is and whether it is safe to delete.")
         return lines.joined(separator: "\n")
+    }
+
+    static func buildProcessTriagePrompt(for result: ScanResult, rule: ScanRule) -> String {
+        var lines: [String] = []
+        lines.append("Running process: \(result.name)")
+        lines.append("Executable path or command: \(result.path)")
+        lines.append("Source app/vendor: \(result.source.name)")
+        lines.append("Safety classification from Gargantua: \(result.safety.rawValue) (\(result.confidence)% confidence)")
+        lines.append("Triage signals: \(triageSignals(from: result).joined(separator: ", "))")
+        lines.append("Canonical context: \(rule.explanation)")
+        lines.append("")
+        lines.append(
+            "Decide whether this process deserves user attention. Recommend one next step: leave running, investigate, or consider stopping. Do not claim it is malware unless the metadata proves it; use suspicious or worth reviewing when evidence is limited. Mention that stopping a process can disrupt the app that owns it."
+        )
+        return lines.joined(separator: "\n")
+    }
+
+    static func buildBackgroundItemTriagePrompt(for result: ScanResult, rule: ScanRule) -> String {
+        var lines: [String] = []
+        lines.append("Background item: \(result.name)")
+        lines.append("Plist or executable path: \(result.path)")
+        lines.append("Source app/vendor: \(result.source.name)")
+        lines.append("Safety classification from Gargantua: \(result.safety.rawValue) (\(result.confidence)% confidence)")
+        lines.append("Triage signals: \(triageSignals(from: result).joined(separator: ", "))")
+        lines.append("Canonical context: \(rule.explanation)")
+        lines.append("")
+        lines.append(
+            "Decide whether this background item deserves user attention. Recommend one next step: leave enabled, investigate, disable first, or remove only after disabling. Do not claim it is malware unless the metadata proves it; use suspicious or worth reviewing when evidence is limited."
+        )
+        return lines.joined(separator: "\n")
+    }
+
+    private static func triageSignals(from result: ScanResult) -> [String] {
+        let signals = result.tags.compactMap { tag -> String? in
+            guard tag.hasPrefix("triage_signal:") else { return nil }
+            return tag.replacingOccurrences(of: "triage_signal:", with: "")
+                .replacingOccurrences(of: "_", with: " ")
+        }
+        return signals.isEmpty ? ["review candidate"] : signals
     }
 
     static func buildScanFilterPrompt(for query: String) -> String {

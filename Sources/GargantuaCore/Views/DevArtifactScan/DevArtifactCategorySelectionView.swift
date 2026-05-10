@@ -13,6 +13,7 @@ struct DevArtifactCategorySelectionView: View {
     let onInvertSelection: () -> Void
     let onToggleBucket: (String) -> Void
     let onStartScan: () -> Void
+    let onOpenDeveloperTools: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +22,10 @@ struct DevArtifactCategorySelectionView: View {
                 subtitle: "Find build artifacts the tools forgot. Caches, DerivedData, node_modules — pulled straight off the disk.",
                 subtitleStyle: .voice
             )
+
+            if let onOpenDeveloperTools {
+                DevArtifactToolNativeBridge(onOpenDeveloperTools: onOpenDeveloperTools)
+            }
 
             ZStack {
                 switch detectionState {
@@ -190,10 +195,13 @@ private extension DevArtifactCategorySelectionView {
                     .foregroundStyle(isSelected ? GargantuaColors.accent : GargantuaColors.borderEm)
                     .frame(width: 16, height: 16)
 
-                Image(systemName: bucket.icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(bucket.tier == .crossCutting ? GargantuaColors.ink : GargantuaColors.ink2)
-                    .frame(width: 20, alignment: .center)
+                DevArtifactBucketLogoBadge(
+                    bucket: bucket,
+                    size: 20,
+                    showsBackground: false,
+                    isMuted: !isSelected
+                )
+                .frame(width: 20, alignment: .center)
 
                 Text(bucket.label)
                     .font(GargantuaFonts.label)

@@ -10,6 +10,11 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
     case dockerVolumePrune
     case dockerBuilderPrune
     case dockerSystemPrune
+    case xcodeDeleteUnavailableSimulators
+    case pnpmStorePrune
+    case goCleanCache
+    case goCleanModcache
+    case cargoPurgeExtractedCaches
 
     public var id: String { rawValue }
 
@@ -19,6 +24,14 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
             .homebrew
         case .dockerImagePrune, .dockerContainerPrune, .dockerVolumePrune, .dockerBuilderPrune, .dockerSystemPrune:
             .docker
+        case .xcodeDeleteUnavailableSimulators:
+            .xcode
+        case .pnpmStorePrune:
+            .pnpm
+        case .goCleanCache, .goCleanModcache:
+            .go
+        case .cargoPurgeExtractedCaches:
+            .cargo
         }
     }
 
@@ -32,6 +45,11 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
         case .dockerVolumePrune: "Prune unused volumes"
         case .dockerBuilderPrune: "Prune build cache"
         case .dockerSystemPrune: "System prune"
+        case .xcodeDeleteUnavailableSimulators: "Delete unavailable simulators"
+        case .pnpmStorePrune: "Prune unreferenced store packages"
+        case .goCleanCache: "Clean build cache"
+        case .goCleanModcache: "Clean module download cache"
+        case .cargoPurgeExtractedCaches: "Purge extracted Cargo caches"
         }
     }
 
@@ -53,6 +71,16 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
             "Removes Docker builder cache."
         case .dockerSystemPrune:
             "Runs Docker's composite prune for unused images, containers, networks, and build cache."
+        case .xcodeDeleteUnavailableSimulators:
+            "Runs simctl's cleanup for simulator devices whose runtimes are no longer installed."
+        case .pnpmStorePrune:
+            "Asks pnpm to remove packages no current project store reference needs."
+        case .goCleanCache:
+            "Removes compiled package artifacts from Go's shared build cache."
+        case .goCleanModcache:
+            "Removes Go's shared downloaded module cache."
+        case .cargoPurgeExtractedCaches:
+            "Removes Cargo's extracted registry sources and git dependency checkouts from Cargo home."
         }
     }
 
@@ -64,6 +92,10 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
             "This broad Docker prune can remove stopped-container state, untagged images, networks, and build cache; expect rebuilds or re-pulls."
         case .homebrewPruneAll:
             "This removes all cached Homebrew downloads, including files you may want offline."
+        case .goCleanModcache:
+            "Future Go builds may need network access to re-download modules, and offline projects can fail until dependencies are fetched again."
+        case .cargoPurgeExtractedCaches:
+            "Cargo will recreate these extracted sources on demand. Rebuilds may pause to unpack crates or re-check out git dependencies."
         default:
             nil
         }
@@ -104,6 +136,16 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
             ["builder", "prune", "--force"]
         case .dockerSystemPrune:
             ["system", "prune", "--force"]
+        case .xcodeDeleteUnavailableSimulators:
+            ["simctl", "delete", "unavailable"]
+        case .pnpmStorePrune:
+            ["store", "prune"]
+        case .goCleanCache:
+            ["clean", "-cache"]
+        case .goCleanModcache:
+            ["clean", "-modcache"]
+        case .cargoPurgeExtractedCaches:
+            ["cache", "purge-extracted"]
         }
     }
 
@@ -119,6 +161,10 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
         switch tool {
         case .homebrew: "brew"
         case .docker: "docker"
+        case .xcode: "xcrun"
+        case .pnpm: "pnpm"
+        case .go: "go"
+        case .cargo: "cargo"
         }
     }
 
@@ -131,6 +177,16 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
             return true
         case .dockerImagePrune, .dockerContainerPrune, .dockerVolumePrune, .dockerBuilderPrune, .dockerSystemPrune:
             return (estimatedReclaimableBytes(in: preview) ?? 0) > 0
+        case .xcodeDeleteUnavailableSimulators:
+            return !preview.items.isEmpty
+        case .pnpmStorePrune:
+            return preview.items.contains { $0.id == "pnpm-store" }
+        case .goCleanCache:
+            return preview.items.contains { $0.id == "go-build-cache" }
+        case .goCleanModcache:
+            return preview.items.contains { $0.id == "go-module-cache" }
+        case .cargoPurgeExtractedCaches:
+            return preview.items.contains { Self.cargoPurgeTargetIDs.contains($0.id) }
         }
     }
 
@@ -155,11 +211,31 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
                 dockerBytes(in: preview, titles: ["Containers"]) ?? 0,
                 dockerBytes(in: preview, titles: ["Build Cache"]) ?? 0,
             ])
+        case .xcodeDeleteUnavailableSimulators:
+            return previewKnownBytes(preview)
+        case .pnpmStorePrune:
+            return previewBytes(in: preview, itemID: "pnpm-store")
+        case .goCleanCache:
+            return previewBytes(in: preview, itemID: "go-build-cache")
+        case .goCleanModcache:
+            return previewBytes(in: preview, itemID: "go-module-cache")
+        case .cargoPurgeExtractedCaches:
+            return previewKnownBytes(preview)
         }
     }
 
+    static let cargoPurgeTargetIDs: Set<String> = [
+        "cargo-registry-src",
+        "cargo-git-checkouts",
+    ]
+
     private func dockerBytes(in preview: DeveloperToolPreview, titles: Set<String>) -> Int64? {
         preview.items.first { titles.contains($0.title) }?.reclaimableBytes
+    }
+
+    private func previewBytes(in preview: DeveloperToolPreview, itemID: String) -> Int64? {
+        guard let item = preview.items.first(where: { $0.id == itemID }) else { return nil }
+        return item.reclaimableBytes ?? 0
     }
 
     private func sumSaturating(_ values: [Int64]) -> Int64 {
@@ -167,6 +243,12 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
             let (sum, overflow) = acc.addingReportingOverflow(value)
             return overflow ? .max : sum
         }
+    }
+
+    private func previewKnownBytes(_ preview: DeveloperToolPreview) -> Int64? {
+        let values = preview.items.compactMap(\.reclaimableBytes)
+        guard !values.isEmpty else { return nil }
+        return sumSaturating(values)
     }
 }
 
@@ -235,6 +317,14 @@ public struct DeveloperToolExecutionAdapter: Sendable {
         guard let executable = resolver.resolve(operation.tool) else {
             throw DeveloperToolExecutionError.notInstalled(operation.tool)
         }
+        if operation == .cargoPurgeExtractedCaches {
+            return try executeCargoCachePurge(
+                operation,
+                preview: preview,
+                executable: executable,
+                confirmationMethod: confirmationMethod
+            )
+        }
 
         let output = try runner.run(
             executable: executable,
@@ -269,5 +359,63 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             output: output,
             estimatedBytesFreed: estimatedBytes
         )
+    }
+
+    private func executeCargoCachePurge(
+        _ operation: DeveloperToolCleanupOperation,
+        preview: DeveloperToolPreview,
+        executable: URL,
+        confirmationMethod: ConfirmationTier
+    ) throws -> DeveloperToolExecutionResult {
+        let targets = preview.items.compactMap(Self.cargoPurgeTarget)
+        let estimatedBytes = operation.estimatedReclaimableBytes(in: preview) ?? 0
+        var removedFiles: [AuditFile] = []
+
+        for target in targets where FileManager.default.fileExists(atPath: target.path) {
+            try FileManager.default.removeItem(at: target.url)
+            removedFiles.append(AuditFile(path: target.path, size: target.bytes))
+        }
+
+        let commandPreview = operation.commandPreview(executable: executable)
+        let entry = AuditEntry(
+            tool: "developer-tools",
+            command: operation.commandName,
+            files: removedFiles,
+            safetyLevel: operation.safety,
+            confirmationMethod: confirmationMethod,
+            cleanupMethod: .toolNative,
+            bytesFreed: estimatedBytes
+        )
+        try auditRecorder.write(entry)
+
+        let stdout = removedFiles.isEmpty
+            ? "No Cargo extracted caches found.\n"
+            : removedFiles.map { "Removed \($0.path)" }.joined(separator: "\n") + "\n"
+        return DeveloperToolExecutionResult(
+            operation: operation,
+            commandPreview: commandPreview,
+            output: ProcessOutput(stdout: stdout, stderr: "", exitCode: 0),
+            estimatedBytesFreed: estimatedBytes
+        )
+    }
+
+    private struct CargoPurgeTarget {
+        let url: URL
+        let path: String
+        let bytes: Int64
+    }
+
+    private static func cargoPurgeTarget(item: DeveloperToolPreviewItem) -> CargoPurgeTarget? {
+        guard DeveloperToolCleanupOperation.cargoPurgeTargetIDs.contains(item.id),
+              let detail = item.detail,
+              detail.hasPrefix("/") else {
+            return nil
+        }
+
+        let url = URL(fileURLWithPath: detail).standardizedFileURL
+        guard url.path.hasSuffix("/registry/src") || url.path.hasSuffix("/git/checkouts") else {
+            return nil
+        }
+        return CargoPurgeTarget(url: url, path: url.path, bytes: item.reclaimableBytes ?? 0)
     }
 }

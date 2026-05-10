@@ -33,6 +33,7 @@ public final class AIAdvisoryController: ObservableObject {
     private var activeTask: Task<Void, Never>?
     private var lastRequestedResults: [ScanResult] = []
     private var lastRequestedResultsById: [String: ScanResult] = [:]
+    private var lastRequestIncludedNonReview = false
 
     /// Look up the original `ScanResult` behind a given advisory by id.
     /// Lets the sheet render the item's human name and path without the
@@ -56,14 +57,21 @@ public final class AIAdvisoryController: ObservableObject {
         service.isModelAvailable
     }
 
+    public var currentRequestIsTriage: Bool {
+        lastRequestedResults.contains {
+            $0.category == "process_triage" || $0.category == "background_item_triage"
+        }
+    }
+
     /// Kick off an advisory request for the supplied results. Non-review
     /// items are filtered out by `LocalAIService.advisory`, so callers can
     /// pass a full scan result array. Any in-flight request is cancelled
     /// and replaced; only the latest call wins.
-    public func request(for results: [ScanResult]) {
+    public func request(for results: [ScanResult], includeNonReview: Bool = false) {
         activeTask?.cancel()
         presentation = .loading
         lastRequestedResults = results
+        lastRequestIncludedNonReview = includeNonReview
         // Tolerant of duplicate ids: last-wins. ScanResult.id should be
         // unique per scan, but we don't want a UI lookup to crash if it
         // isn't — the sheet fails soft instead.
@@ -72,7 +80,11 @@ public final class AIAdvisoryController: ObservableObject {
         let service = self.service
         activeTask = Task { [weak self] in
             do {
-                let advisories = try await service.advisory(for: results, rules: rules)
+                let advisories = try await service.advisory(
+                    for: results,
+                    rules: rules,
+                    includeNonReview: includeNonReview
+                )
                 try Task.checkCancellation()
                 guard let self else { return }
                 if case .loading = self.presentation {
@@ -92,7 +104,7 @@ public final class AIAdvisoryController: ObservableObject {
     /// Re-run the last failed request.
     public func retry() {
         guard case .failed = presentation else { return }
-        request(for: lastRequestedResults)
+        request(for: lastRequestedResults, includeNonReview: lastRequestIncludedNonReview)
     }
 
     /// Clear presentation state (closes the sheet).

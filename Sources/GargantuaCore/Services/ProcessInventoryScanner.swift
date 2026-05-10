@@ -9,9 +9,9 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "ProcessI
 
 /// Result of one process-inventory scan pass.
 public struct ProcessInventoryScan: Sendable, Equatable {
-    /// Full ranked list. The view applies `topN` when rendering so that
-    /// re-sorting by another metric can pick from the complete population
-    /// instead of being trapped inside a previously-capped slice.
+    /// Ranked list returned for display. When `topN` is provided, the scanner
+    /// caps this list before expensive identity/signature resolution so the
+    /// snapshot stays quick on process-heavy machines.
     public let items: [ProcessItem]
     /// Total number of running processes the snapshot saw — useful so the
     /// footer can say "showing top 50 of 432 running" without the UI having
@@ -20,9 +20,7 @@ public struct ProcessInventoryScan: Sendable, Equatable {
     /// The metric `items` is currently sorted by. Updated by `resort` calls
     /// in the session so the UI stays in sync.
     public let sortedBy: ProcessSortMetric
-    /// Preferred display cap. The scanner does not enforce this — the view
-    /// applies `.prefix(topN)` so toggling the sort metric never strands
-    /// items outside the previously-capped slice.
+    /// Preferred display cap used by the scanner.
     public let topN: Int?
     /// When the scan completed.
     public let scannedAt: Date
@@ -80,7 +78,9 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     public init(
         snapshotProvider: any ProcessSnapshotProviding = DefaultProcessSnapshotProvider(),
         launchdIndex: any LaunchdItemIndexing = DefaultLaunchdItemIndex(),
-        resolver: any BinaryIdentityResolving = DefaultBinaryIdentityResolver(),
+        resolver: any BinaryIdentityResolving = DefaultBinaryIdentityResolver(
+            signatureVerifier: DefaultCodeSignatureVerifier(includeNotarization: false)
+        ),
         matcher: ProcessLaunchSourceMatcher = ProcessLaunchSourceMatcher(),
         classifier: ProcessSafetyClassifier = ProcessSafetyClassifier(),
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
@@ -139,6 +139,13 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         firstByPID.reserveCapacity(firstSamples.count)
         for sample in firstSamples { firstByPID[sample.pid] = sample }
 
+        let rankedSamples = rankSamples(
+            secondSamples,
+            firstByPID: firstByPID,
+            metric: metric,
+            topN: topN
+        )
+
         // Within a single scan, most processes share the same UID (the
         // logged-in user), so caching the lookup avoids ~95% of redundant
         // `getpwuid_r` calls per scan.
@@ -151,8 +158,8 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         }
 
         var items: [ProcessItem] = []
-        items.reserveCapacity(secondSamples.count)
-        for current in secondSamples {
+        items.reserveCapacity(rankedSamples.count)
+        for current in rankedSamples {
             let prior = comparablePrior(for: current, in: firstByPID)
             let item = makeItem(
                 prior: prior,
@@ -326,6 +333,57 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
             if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
             return lhs.id < rhs.id
         })
+    }
+
+    private func rankSamples(
+        _ samples: [RawProcessSample],
+        firstByPID: [Int32: RawProcessSample],
+        metric: ProcessSortMetric,
+        topN: Int?
+    ) -> [RawProcessSample] {
+        let ranked = samples.sorted { lhs, rhs in
+            let lhsPrior = comparablePrior(for: lhs, in: firstByPID)
+            let rhsPrior = comparablePrior(for: rhs, in: firstByPID)
+            let lhsPrimary = samplePrimary(lhs, prior: lhsPrior, metric: metric)
+            let rhsPrimary = samplePrimary(rhs, prior: rhsPrior, metric: metric)
+            if lhsPrimary != rhsPrimary { return lhsPrimary > rhsPrimary }
+            let lhsSecondary = sampleSecondary(lhs, prior: lhsPrior, metric: metric)
+            let rhsSecondary = sampleSecondary(rhs, prior: rhsPrior, metric: metric)
+            if lhsSecondary != rhsSecondary { return lhsSecondary > rhsSecondary }
+            let nameCmp = lhs.command.localizedCaseInsensitiveCompare(rhs.command)
+            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
+            let lhsPath = lhs.executablePath ?? ""
+            let rhsPath = rhs.executablePath ?? ""
+            if lhsPath != rhsPath { return lhsPath < rhsPath }
+            if lhs.startTimeUnixSeconds != rhs.startTimeUnixSeconds {
+                return lhs.startTimeUnixSeconds < rhs.startTimeUnixSeconds
+            }
+            return lhs.pid < rhs.pid
+        }
+        guard let topN, topN > 0 else { return ranked }
+        return Array(ranked.prefix(topN))
+    }
+
+    private func samplePrimary(
+        _ sample: RawProcessSample,
+        prior: RawProcessSample?,
+        metric: ProcessSortMetric
+    ) -> Double {
+        switch metric {
+        case .cpu: computeCPUFraction(prior: prior, current: sample)
+        case .rss: Double(sample.residentBytes)
+        }
+    }
+
+    private func sampleSecondary(
+        _ sample: RawProcessSample,
+        prior: RawProcessSample?,
+        metric: ProcessSortMetric
+    ) -> Double {
+        switch metric {
+        case .cpu: Double(sample.residentBytes)
+        case .rss: computeCPUFraction(prior: prior, current: sample)
+        }
     }
 
     static func primary(_ item: ProcessItem, metric: ProcessSortMetric) -> Double {

@@ -19,17 +19,29 @@ public struct CommandActionToolResolver: Sendable {
         // canonical front-end; on dev machines without CLT installed the
         // resolver simply reports the tool as missing.
         "xcrun": ["/usr/bin/xcrun"],
-        // pnpm ships under Homebrew or Corepack; we accept the standard
-        // locations and defer user-specific installs (XDG, asdf, etc.) to
-        // the env-var override.
+        // pnpm often lives under Node-version managers, so cover the common
+        // shims here and append discovered nvm installs at runtime.
         "pnpm": [
             "/opt/homebrew/bin/pnpm",
             "/usr/local/bin/pnpm",
+            "~/Library/pnpm/pnpm",
+            "~/.local/share/pnpm/pnpm",
+            "~/.local/bin/pnpm",
+            "~/.asdf/shims/pnpm",
+            "~/.volta/bin/pnpm",
+            "~/.local/share/mise/shims/pnpm",
         ],
         "go": [
             "/opt/homebrew/bin/go",
             "/usr/local/bin/go",
             "/usr/local/go/bin/go",
+        ],
+        "cargo": [
+            "/opt/homebrew/bin/cargo",
+            "/usr/local/bin/cargo",
+            "~/.cargo/bin/cargo",
+            "~/.asdf/shims/cargo",
+            "~/.local/share/mise/shims/cargo",
         ],
         // Re-publish brew/docker so command rules can reach them via the
         // same resolver, even though `DeveloperToolBinaryResolver` already
@@ -68,14 +80,22 @@ public struct CommandActionToolResolver: Sendable {
 
     public func resolve(tool: String) -> URL? {
         let envVar = Self.envVarName(for: tool)
-        if let override = environment[envVar], !override.isEmpty,
-           FileManager.default.isExecutableFile(atPath: override) {
-            return URL(fileURLWithPath: override)
+        if let override = environment[envVar], !override.isEmpty {
+            let expanded = (override as NSString).expandingTildeInPath
+            if FileManager.default.isExecutableFile(atPath: expanded) {
+                return URL(fileURLWithPath: expanded)
+            }
         }
 
-        guard let paths = candidates[tool] else { return nil }
-        for path in paths where FileManager.default.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
+        guard var paths = candidates[tool] else { return nil }
+        if tool == "pnpm" {
+            paths += DeveloperToolBinaryResolver.nodeManagedPnpmCandidatePaths()
+        }
+        for path in paths {
+            let expanded = (path as NSString).expandingTildeInPath
+            if FileManager.default.isExecutableFile(atPath: expanded) {
+                return URL(fileURLWithPath: expanded)
+            }
         }
         return nil
     }

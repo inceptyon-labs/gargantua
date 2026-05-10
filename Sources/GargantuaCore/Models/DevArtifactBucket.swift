@@ -22,8 +22,7 @@ public struct DevArtifactBucket: Identifiable, Sendable, Equatable, Hashable {
 
     public let id: String
     public let label: String
-    /// SF Symbol name. UI tone follows the ink palette for ecosystem and
-    /// the accent palette for cross-cutting (set in the view).
+    /// Fallback SF Symbol name. Ecosystem rows may render brand badges instead.
     public let icon: String
     public let tier: Tier
     /// Sort order within tier. Lower numbers render first.

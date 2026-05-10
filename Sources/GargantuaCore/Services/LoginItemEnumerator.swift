@@ -51,23 +51,27 @@ public protocol LoginItemEnumerating: Sendable {
     func enumerate() -> LoginItemEnumeration
 }
 
-/// Default implementation backed by `/usr/bin/sfltool dumpbtm`.
+/// Default implementation for modern login items.
 ///
-/// macOS Sonoma+ requires root for the full dump; without it `sfltool` either
-/// returns no records or refuses outright. Both cases collapse to
-/// `LoginItemEnumeration(records: [], needsPrivileges: true)` so the UI can
-/// surface the deep-link to System Settings rather than pretend the list is
-/// authoritatively empty.
+/// `sfltool dumpbtm` is still parser-supported for tests and future explicit
+/// elevated flows, but running it from a normal scan can trigger macOS auth
+/// prompts. The default path therefore does not spawn it; it reports that
+/// login-item enumeration is limited and lets the UI deep-link to System
+/// Settings instead.
 public struct DefaultLoginItemEnumerator: LoginItemEnumerating {
     public typealias Runner = @Sendable () -> (output: String, exitCode: Int32)
 
-    private let runner: Runner
+    private let runner: Runner?
 
-    public init(runner: @escaping Runner = DefaultLoginItemEnumerator.runSfltool) {
+    public init(runner: Runner? = nil) {
         self.runner = runner
     }
 
     public func enumerate() -> LoginItemEnumeration {
+        guard let runner else {
+            return LoginItemEnumeration(records: [], needsPrivileges: true)
+        }
+
         let result = runner()
         let parsed = SfltoolDumpbtmParser.parse(result.output)
 

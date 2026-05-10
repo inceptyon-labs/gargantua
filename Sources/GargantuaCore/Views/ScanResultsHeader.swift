@@ -55,6 +55,8 @@ public struct ScanResultsHeader: View {
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space3)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
 
             Rectangle()
                 .fill(GargantuaColors.border)

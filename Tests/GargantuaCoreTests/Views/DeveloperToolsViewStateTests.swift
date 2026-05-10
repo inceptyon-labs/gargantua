@@ -272,6 +272,53 @@ struct DeveloperToolsViewApplyResultTests {
 
 @Suite("DeveloperToolsView execution flow helpers")
 struct DeveloperToolsViewExecutionFlowTests {
+    enum ThreadProbeError: Error {
+        case ranOnMainThread
+    }
+
+    @Test("subprocess-backed providers run away from the main thread")
+    @MainActor
+    func subprocessProvidersRunOffMainThread() async {
+        let availabilities = await DeveloperToolsView.runAvailabilityProviderOffMain {
+            [
+                availability(.homebrew, installed: !Thread.isMainThread),
+            ]
+        }
+
+        #expect(availabilities.first?.isInstalled == true)
+
+        let previewResult = await DeveloperToolsView.runPreviewProviderOffMain({ tool in
+            if Thread.isMainThread { throw ThreadProbeError.ranOnMainThread }
+            return preview(tool: tool)
+        }, tool: .homebrew)
+
+        guard case .success(let loadedPreview) = previewResult else {
+            Issue.record("expected preview provider to run off the main thread")
+            return
+        }
+        #expect(loadedPreview.tool == .homebrew)
+
+        let executionResult = await DeveloperToolsView.runExecutionProviderOffMain(
+            { operation, preview, _ in
+                if Thread.isMainThread { throw ThreadProbeError.ranOnMainThread }
+                return DeveloperToolExecutionResult(
+                    operation: operation,
+                    commandPreview: operation.commandPreview(executable: URL(fileURLWithPath: "/usr/local/bin/brew")),
+                    output: ProcessOutput(stdout: "", stderr: "", exitCode: 0),
+                    estimatedBytesFreed: operation.estimatedReclaimableBytes(in: preview) ?? 0
+                )
+            },
+            operation: .homebrewCleanup,
+            preview: loadedPreview,
+            confirmationMethod: .summaryDialog
+        )
+
+        guard case .success(let result) = executionResult else {
+            Issue.record("expected execution provider to run off the main thread")
+            return
+        }
+        #expect(result.operation == .homebrewCleanup)
+    }
 
     @Test("operations are gated by loaded preview applicability")
     func operationsArePreviewGated() {
@@ -298,6 +345,55 @@ struct DeveloperToolsViewExecutionFlowTests {
         #expect(operations.contains(.dockerSystemPrune))
         #expect(!operations.contains(.dockerBuilderPrune))
         #expect(!operations.contains(.homebrewCleanup))
+    }
+
+    @Test("command-action tools expose their fixed operations from read-only previews")
+    func promotedCommandActionToolsExposeOperations() {
+        let xcode = preview(tool: .xcode, items: [
+            DeveloperToolPreviewItem(
+                id: "xcode-simulator-AAAA",
+                tool: .xcode,
+                title: "iPhone 14",
+                reclaimableBytes: 12_000_000,
+                commandPreview: ["xcrun", "simctl", "list", "-j", "devices", "unavailable"]
+            ),
+        ])
+        let pnpm = preview(tool: .pnpm, items: [
+            DeveloperToolPreviewItem(
+                id: "pnpm-store",
+                tool: .pnpm,
+                title: "pnpm content-addressable store",
+                commandPreview: ["pnpm", "store", "path"]
+            ),
+        ])
+        let go = preview(tool: .go, items: [
+            DeveloperToolPreviewItem(
+                id: "go-build-cache",
+                tool: .go,
+                title: "Go build cache",
+                commandPreview: ["go", "env", "-json", "GOCACHE", "GOMODCACHE"]
+            ),
+            DeveloperToolPreviewItem(
+                id: "go-module-cache",
+                tool: .go,
+                title: "Go module download cache",
+                commandPreview: ["go", "env", "-json", "GOCACHE", "GOMODCACHE"]
+            ),
+        ])
+        let cargo = preview(tool: .cargo, items: [
+            DeveloperToolPreviewItem(
+                id: "cargo-registry-src",
+                tool: .cargo,
+                title: "Cargo extracted registry sources",
+                reclaimableBytes: 12_000_000,
+                commandPreview: ["cargo", "--version"]
+            ),
+        ])
+
+        #expect(DeveloperToolsView.operations(for: xcode) == [.xcodeDeleteUnavailableSimulators])
+        #expect(DeveloperToolsView.operations(for: pnpm) == [.pnpmStorePrune])
+        #expect(DeveloperToolsView.operations(for: go) == [.goCleanCache, .goCleanModcache])
+        #expect(DeveloperToolsView.operations(for: cargo) == [.cargoPurgeExtractedCaches])
     }
 
     @Test("confirmation item tier matches operation safety")
@@ -366,6 +462,96 @@ struct DeveloperToolsViewExecutionFlowTests {
 
         #expect(item.size == 0)
         #expect(item.explanation.contains("does not report an exact reclaim estimate"))
+    }
+
+    @Test("Xcode confirmation uses simctl preview bytes when available")
+    func xcodeConfirmationUsesPreviewBytes() {
+        let xcode = preview(tool: .xcode, items: [
+            DeveloperToolPreviewItem(
+                id: "xcode-simulator-AAAA",
+                tool: .xcode,
+                title: "iPhone 14",
+                reclaimableBytes: 12_000_000,
+                commandPreview: ["xcrun", "simctl", "list", "-j", "devices", "unavailable"]
+            ),
+        ])
+
+        let item = DeveloperToolsView.confirmationItem(for: DeveloperToolsView.ExecutionRequest(
+            operation: .xcodeDeleteUnavailableSimulators,
+            preview: xcode
+        ))
+
+        #expect(item.path == "xcrun simctl delete unavailable")
+        #expect(item.size == 12_000_000)
+        #expect(item.source.name == "Xcode Simulator")
+    }
+
+    @Test("Go module cache confirmation carries offline risk copy")
+    func goModuleConfirmationCarriesRiskCopy() {
+        let go = preview(tool: .go, items: [
+            DeveloperToolPreviewItem(
+                id: "go-module-cache",
+                tool: .go,
+                title: "Go module download cache",
+                reclaimableBytes: 24_000,
+                commandPreview: ["go", "env", "-json", "GOCACHE", "GOMODCACHE"]
+            ),
+        ])
+
+        let item = DeveloperToolsView.confirmationItem(for: DeveloperToolsView.ExecutionRequest(
+            operation: .goCleanModcache,
+            preview: go
+        ))
+
+        #expect(item.path == "go clean -modcache")
+        #expect(item.size == 24_000)
+        #expect(item.explanation.contains("network access"))
+        #expect(!item.explanation.contains("exact reclaim estimate"))
+    }
+
+    @Test("pnpm zero estimate is explicit instead of unavailable")
+    func pnpmZeroEstimateIsExplicit() {
+        let pnpm = preview(tool: .pnpm, items: [
+            DeveloperToolPreviewItem(
+                id: "pnpm-store",
+                tool: .pnpm,
+                title: "pnpm content-addressable store",
+                reclaimableBytes: 0,
+                commandPreview: ["pnpm", "store", "path"]
+            ),
+        ])
+
+        let item = DeveloperToolsView.confirmationItem(for: DeveloperToolsView.ExecutionRequest(
+            operation: .pnpmStorePrune,
+            preview: pnpm
+        ))
+
+        #expect(item.path == "pnpm store prune")
+        #expect(item.size == 0)
+        #expect(!item.explanation.contains("exact reclaim estimate"))
+    }
+
+    @Test("Cargo cache confirmation uses preview bytes and review copy")
+    func cargoConfirmationUsesPreviewBytes() {
+        let cargo = preview(tool: .cargo, items: [
+            DeveloperToolPreviewItem(
+                id: "cargo-registry-src",
+                tool: .cargo,
+                title: "Cargo extracted registry sources",
+                reclaimableBytes: 12_000_000,
+                commandPreview: ["cargo", "--version"]
+            ),
+        ])
+
+        let item = DeveloperToolsView.confirmationItem(for: DeveloperToolsView.ExecutionRequest(
+            operation: .cargoPurgeExtractedCaches,
+            preview: cargo
+        ))
+
+        #expect(item.path == "cargo cache purge-extracted")
+        #expect(item.size == 12_000_000)
+        #expect(item.source.name == "Cargo")
+        #expect(item.explanation.contains("recreate"))
     }
 
     @Test("success message reports post-run preview delta")

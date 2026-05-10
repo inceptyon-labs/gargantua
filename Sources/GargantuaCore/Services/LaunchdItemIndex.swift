@@ -20,7 +20,7 @@ public protocol LaunchdItemIndexing: Sendable {
 /// key preserves them as distinct entities.
 public struct DefaultLaunchdItemIndex: LaunchdItemIndexing {
     private let parser: any LaunchdPlistParsing
-    private let fileManager: FileManager
+    nonisolated(unsafe) private let fileManager: FileManager
     private let userAgentsURL: URL
     private let systemAgentsURL: URL
     private let systemDaemonsURL: URL

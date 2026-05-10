@@ -56,6 +56,8 @@ public struct PageHeaderView<Trailing: View>: View {
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space4)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
 
             Rectangle()
                 .fill(GargantuaColors.border)

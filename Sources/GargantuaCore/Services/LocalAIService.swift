@@ -159,10 +159,13 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
     ///   if nothing qualifies.
     public func advisory(
         for results: [ScanResult],
-        rules: [String: ScanRule]
+        rules: [String: ScanRule],
+        includeNonReview: Bool = false
     ) async throws -> [ScanResultAdvisory] {
-        let reviewOnly = results.filter { $0.safety == .review }
-        guard !reviewOnly.isEmpty else { return [] }
+        let eligible = includeNonReview
+            ? results.filter { $0.safety != .protected_ }
+            : results.filter { $0.safety == .review }
+        guard !eligible.isEmpty else { return [] }
 
         func yamlFallback(for result: ScanResult) -> ScanResultAdvisory? {
             guard let rule = rules[result.id] else { return nil }
@@ -180,7 +183,7 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         // Template path: no model required.
         if engine.kind == .template {
             var advisories: [ScanResultAdvisory] = []
-            for result in reviewOnly {
+            for result in eligible {
                 guard let rule = rules[result.id] else { continue }
                 do {
                     let advisory = try await engine.advisory(for: result, rule: rule)
@@ -195,19 +198,19 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
 
         guard isModelAvailable else {
-            return reviewOnly.compactMap(yamlFallback)
+            return eligible.compactMap(yamlFallback)
         }
 
         if lifecycleState == .unloaded {
             do {
                 try await loadModel()
             } catch {
-                return reviewOnly.compactMap(yamlFallback)
+                return eligible.compactMap(yamlFallback)
             }
         }
 
         guard lifecycleState == .ready else {
-            return reviewOnly.compactMap(yamlFallback)
+            return eligible.compactMap(yamlFallback)
         }
 
         // Suspend idle timer for the whole batch so a slow engine generating
@@ -224,7 +227,7 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
 
         var advisories: [ScanResultAdvisory] = []
-        for result in reviewOnly {
+        for result in eligible {
             guard let rule = rules[result.id] else { continue }
             do {
                 let advisory = try await engine.advisory(for: result, rule: rule)

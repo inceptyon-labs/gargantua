@@ -17,6 +17,7 @@ public struct ProcessInventoryView: View {
     @State private var pendingAction: PendingProcessAction?
     @State private var lastError: String?
     private let onExplain: ((ScanResult) -> Void)?
+    private let onTriage: (([ScanResult]) -> Void)?
     private let onNavigateToBackgroundItems: ((_ plistPath: String) -> Void)?
 
     /// Default top-N cap. Snapshot views shouldn't fight Activity Monitor for
@@ -25,41 +26,44 @@ public struct ProcessInventoryView: View {
     public static let defaultTopN: Int = 50
 
     public init(
+        session: ProcessInventorySession? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
+        onTriage: (([ScanResult]) -> Void)? = nil,
         onNavigateToBackgroundItems: ((_ plistPath: String) -> Void)? = nil,
         actionExecutor: (any ProcessActionExecuting)? = nil
     ) {
         self.onExplain = onExplain
+        self.onTriage = onTriage
         self.onNavigateToBackgroundItems = onNavigateToBackgroundItems
         self._session = State(
-            initialValue: ProcessInventorySession(actionExecutor: actionExecutor ?? DefaultProcessActionExecutor())
+            initialValue: session ?? ProcessInventorySession(
+                actionExecutor: actionExecutor ?? DefaultProcessActionExecutor()
+            )
         )
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            ScanResultsHeader(
-                title: "Processes",
-                subtitle: subtitleText,
-                subtitleStyle: .voice,
-                onRescan: { Task { await session.scan(metric: sortMetric, topN: Self.defaultTopN) } },
-                isBusy: session.isScanning
-            )
-
             if session.scan == nil, !session.isScanning {
-                idleState
-            } else if session.isScanning {
-                scanningState
-            } else if let scan = session.scan {
-                resultsState(scan)
+                startView
+            } else {
+                ScanResultsHeader(
+                    title: "Processes",
+                    subtitle: subtitleText,
+                    subtitleStyle: .voice,
+                    onBack: { clearSnapshot() },
+                    onRescan: { startSnapshot() },
+                    isBusy: session.isScanning
+                )
+
+                if session.isScanning {
+                    scanningState
+                } else if let scan = session.scan {
+                    resultsState(scan)
+                }
             }
         }
         .background(GargantuaColors.void_)
-        .task {
-            if session.scan == nil {
-                await session.scan(metric: sortMetric, topN: Self.defaultTopN)
-            }
-        }
         .onChange(of: session.scan?.scannedAt) { _, _ in
             // Drop stale expansion state — a row that's no longer in the
             // visible list shouldn't keep its expanded marker.
@@ -107,34 +111,55 @@ public struct ProcessInventoryView: View {
         return "Snapshot every running process. Decide what stays."
     }
 
-    private var idleState: some View {
-        VStack(spacing: GargantuaSpacing.space3) {
-            Spacer()
-            Image(systemName: "cpu")
-                .font(.system(size: 36))
-                .foregroundStyle(GargantuaColors.ink3)
-            Text("Snapshot running processes")
-                .font(GargantuaFonts.heading)
-                .foregroundStyle(GargantuaColors.ink)
-            Text("Read-only. Two samples 500 ms apart for CPU.")
-                .font(GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink2)
-            Button {
-                Task { await session.scan(metric: sortMetric, topN: Self.defaultTopN) }
-            } label: {
-                Text("Take Snapshot")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(GargantuaColors.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+    private var startView: some View {
+        VStack(spacing: 0) {
+            PageHeaderView(
+                title: "Processes",
+                subtitle: "Snapshot running work before deciding what stays.",
+                subtitleStyle: .voice
+            )
+
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: GargantuaSpacing.space3) {
+                        Spacer(minLength: 0)
+
+                        GargantuaBrandIcon(
+                            resourceName: "process-inventory-gargantua-gpt2",
+                            fallbackSystemName: "cpu",
+                            fallbackColor: GargantuaColors.ink4
+                        )
+
+                        Text("Snapshot running processes")
+                            .font(GargantuaFonts.heading)
+                            .foregroundStyle(GargantuaColors.ink)
+
+                        Text("Takes two samples 500 ms apart. Stop actions require confirmation after the snapshot.")
+                            .font(GargantuaFonts.body)
+                            .foregroundStyle(GargantuaColors.ink2)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 380)
+
+                        Button(action: startSnapshot) {
+                            Text("Take Snapshot")
+                                .font(GargantuaFonts.label)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, GargantuaSpacing.space4)
+                                .padding(.vertical, GargantuaSpacing.space2)
+                                .background(GargantuaColors.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, GargantuaSpacing.space2)
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: proxy.size.height)
+                }
             }
-            .buttonStyle(.plain)
-            .padding(.top, GargantuaSpacing.space2)
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var scanningState: some View {
@@ -149,10 +174,9 @@ public struct ProcessInventoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Filter first, then apply the top-N cap. The scanner returns the full
-    /// ranked population so the UI can re-rank between CPU and Memory
-    /// without losing items that fall outside one ranking but would have
-    /// been near the top of the other.
+    /// Filter the captured snapshot. The scanner already applies the top-N
+    /// cap before expensive identity/signature resolution, but this keeps the
+    /// view correct if a custom scanner returns an uncapped list.
     private func visibleItems(_ scan: ProcessInventoryScan) -> [ProcessItem] {
         let filtered = safetyFilter.apply(scan.items)
         if let topN = scan.topN, topN > 0 {
@@ -206,7 +230,8 @@ public struct ProcessInventoryView: View {
     }
 
     private func controlBar(scan: ProcessInventoryScan, visibleCount: Int) -> some View {
-        HStack(spacing: GargantuaSpacing.space3) {
+        let triageResults = suspiciousTriageResults(scan)
+        return HStack(spacing: GargantuaSpacing.space3) {
             sortToggle
             Divider()
                 .frame(height: 14)
@@ -215,12 +240,112 @@ public struct ProcessInventoryView: View {
                 filterButton(option, scan: scan)
             }
             Spacer()
+            if let onTriage, !triageResults.isEmpty {
+                aiTriageButton {
+                    onTriage(triageResults)
+                }
+            }
             Text("\(visibleCount) shown")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
+    }
+
+    private func aiTriageButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .font(.system(size: 11, weight: .medium))
+                Text("Suspicious Triage")
+                    .font(GargantuaFonts.caption)
+            }
+            .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+        .help("Analyze the top suspicious process candidates with the active AI engine")
+    }
+
+    private func suspiciousTriageResults(_ scan: ProcessInventoryScan) -> [ScanResult] {
+        scan.items.compactMap { item -> (score: Int, result: ScanResult)? in
+            let triage = processTriageSignals(for: item)
+            guard triage.score >= 40 else { return nil }
+            return (triage.score, processTriageResult(for: item, signals: triage.signals))
+        }
+        .sorted { lhs, rhs in
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            return lhs.result.name.localizedCaseInsensitiveCompare(rhs.result.name) == .orderedAscending
+        }
+        .prefix(6)
+        .map(\.result)
+    }
+
+    private func processTriageSignals(for item: ProcessItem) -> (score: Int, signals: [String]) {
+        guard item.safety != .protected_ else { return (0, []) }
+        var score = 0
+        var signals: [String] = []
+
+        func add(_ points: Int, _ signal: String) {
+            score += points
+            signals.append(signal)
+        }
+
+        if item.reasons.contains(.unsigned) { add(90, "unsigned binary") }
+        if item.reasons.contains(.orphaned) { add(80, "orphaned launch source") }
+        if item.reasons.contains(.rootProcess) { add(55, "runs as root") }
+
+        switch item.launchSource {
+        case .unknown:
+            add(45, "unknown launch source")
+        case .childProcess:
+            add(20, "child process")
+        case .userSession:
+            add(15, "user-session process")
+        case .foregroundApp, .launchd:
+            break
+        }
+
+        switch item.launchConfidence {
+        case .heuristic: add(35, "weak launchd match")
+        case .unknown: add(25, "unmatched launch source")
+        case .exact, .path: break
+        }
+
+        if let path = item.executablePath {
+            let lower = path.lowercased()
+            if lower.hasPrefix("/tmp/") || lower.hasPrefix("/private/tmp/") || lower.contains("/var/folders/") {
+                add(35, "temporary-path executable")
+            }
+            if lower.contains("/downloads/") {
+                add(20, "runs from downloads")
+            }
+        }
+
+        if item.cpuFraction >= 0.4 { add(12, "high CPU") }
+        if item.residentBytes >= 512 * 1_024 * 1_024 { add(8, "high memory") }
+
+        return (score, signals)
+    }
+
+    private func processTriageResult(for item: ProcessItem, signals: [String]) -> ScanResult {
+        let base = item.toScanResult()
+        let readableSignals = signals.joined(separator: ", ")
+        return ScanResult(
+            id: "triage:\(base.id)",
+            name: base.name,
+            path: base.path,
+            size: base.size,
+            safety: base.safety,
+            confidence: base.confidence,
+            explanation: "Triage signals: \(readableSignals). \(base.explanation)",
+            source: base.source,
+            lastAccessed: base.lastAccessed,
+            category: "process_triage",
+            tags: base.tags + signals.map { "triage_signal:\($0.replacingOccurrences(of: " ", with: "_"))" },
+            regenerates: base.regenerates,
+            regenerateCommand: base.regenerateCommand
+        )
     }
 
     private var sortToggle: some View {
@@ -230,11 +355,9 @@ public struct ProcessInventoryView: View {
                 .foregroundStyle(GargantuaColors.ink3)
             ForEach(ProcessSortMetric.allCases, id: \.self) { metric in
                 Button {
-                    // Re-sort the existing snapshot in place rather than
-                    // re-running a 500 ms scan — toggling between CPU and
-                    // Memory should feel instant.
+                    guard sortMetric != metric else { return }
                     sortMetric = metric
-                    session.resort(by: metric)
+                    startSnapshot()
                 } label: {
                     Text(metric.displayLabel)
                         .font(GargantuaFonts.caption)
@@ -247,6 +370,7 @@ public struct ProcessInventoryView: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .disabled(session.isScanning)
             }
         }
     }
@@ -323,6 +447,15 @@ public struct ProcessInventoryView: View {
     private func explain(_ item: ProcessItem) {
         guard let onExplain else { return }
         onExplain(item.toScanResult())
+    }
+
+    private func startSnapshot() {
+        Task { await session.scan(metric: sortMetric, topN: Self.defaultTopN) }
+    }
+
+    private func clearSnapshot() {
+        expandedID = nil
+        session.clearSnapshot()
     }
 
     private func runAction(_ pending: PendingProcessAction) async {

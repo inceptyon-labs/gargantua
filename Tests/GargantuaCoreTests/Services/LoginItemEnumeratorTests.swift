@@ -90,6 +90,13 @@ struct LoginItemEnumeratorTests {
 
     // MARK: - Enumerator
 
+    @Test("Default enumerator does not spawn sfltool")
+    func defaultEnumeratorIsPromptFree() {
+        let result = DefaultLoginItemEnumerator().enumerate()
+        #expect(result.records.isEmpty)
+        #expect(result.needsPrivileges)
+    }
+
     @Test("Enumerator collapses empty parse to needsPrivileges = true")
     func emptyParseFlagsPrivileges() {
         let enumerator = DefaultLoginItemEnumerator(runner: { ("", 1) })

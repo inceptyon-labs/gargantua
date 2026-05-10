@@ -58,6 +58,7 @@ public struct DevArtifactScanView: View {
     private let onExplain: ((ScanResult) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
     private let onCleanupCompleted: ((CleanupResult) -> Void)?
+    private let onOpenDeveloperTools: (() -> Void)?
 
     public init(
         profile: CleanupProfile = .developer,
@@ -66,7 +67,8 @@ public struct DevArtifactScanView: View {
         staleVersionPinnedPaths: Set<String> = [],
         onExplain: ((ScanResult) -> Void)? = nil,
         onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
-        onCleanupCompleted: ((CleanupResult) -> Void)? = nil
+        onCleanupCompleted: ((CleanupResult) -> Void)? = nil,
+        onOpenDeveloperTools: (() -> Void)? = nil
     ) {
         self.profile = profile
         self.scanRoots = scanRoots
@@ -75,6 +77,7 @@ public struct DevArtifactScanView: View {
         self.onExplain = onExplain
         self.onResolveFilter = onResolveFilter
         self.onCleanupCompleted = onCleanupCompleted
+        self.onOpenDeveloperTools = onOpenDeveloperTools
     }
 
     public var body: some View {
@@ -97,7 +100,8 @@ public struct DevArtifactScanView: View {
                         onDeselectAll: deselectAllBuckets,
                         onInvertSelection: invertBucketSelection,
                         onToggleBucket: toggleBucket,
-                        onStartScan: startScan
+                        onStartScan: startScan,
+                        onOpenDeveloperTools: onOpenDeveloperTools
                     )
                     .task(id: profile.id) {
                         await detectEcosystemsIfNeeded()

@@ -72,6 +72,42 @@ extension DeveloperToolsView {
         return "\(operation.label) completed, but the preview refresh failed: \(message)"
     }
 
+    static func runAvailabilityProviderOffMain(
+        _ provider: @escaping AvailabilityProvider
+    ) async -> [DeveloperToolAvailability] {
+        await Task.detached(priority: .userInitiated) {
+            provider()
+        }.value
+    }
+
+    static func runPreviewProviderOffMain(
+        _ provider: @escaping PreviewProvider,
+        tool: DeveloperTool
+    ) async -> Result<DeveloperToolPreview, Error> {
+        await Task.detached(priority: .userInitiated) {
+            do {
+                return .success(try provider(tool))
+            } catch {
+                return .failure(error)
+            }
+        }.value
+    }
+
+    static func runExecutionProviderOffMain(
+        _ provider: @escaping ExecutionProvider,
+        operation: DeveloperToolCleanupOperation,
+        preview: DeveloperToolPreview,
+        confirmationMethod: ConfirmationTier
+    ) async -> Result<DeveloperToolExecutionResult, Error> {
+        await Task.detached(priority: .userInitiated) {
+            do {
+                return .success(try provider(operation, preview, confirmationMethod))
+            } catch {
+                return .failure(error)
+            }
+        }.value
+    }
+
     /// Fold a new per-tool preview result into the phase.
     static func applyPreviewResult(
         tool: DeveloperTool,
@@ -113,7 +149,7 @@ extension DeveloperToolsView {
     }
 
     func load(generation: Int) async {
-        let availabilities = availabilityProvider()
+        let availabilities = await Self.runAvailabilityProviderOffMain(availabilityProvider)
         if Task.isCancelled { return }
         let initial = Self.deriveInitialPhase(availabilities: availabilities)
         let stillCurrent: Bool = await MainActor.run {
@@ -134,13 +170,9 @@ extension DeveloperToolsView {
     }
 
     func loadPreview(for tool: DeveloperTool, generation: Int? = nil) async {
-        let result: Result<DeveloperToolPreview, Error>
-        do {
-            let preview = try previewProvider(tool)
-            result = .success(preview)
-        } catch {
+        let result = await Self.runPreviewProviderOffMain(previewProvider, tool: tool)
+        if case .failure(let error) = result {
             executionLogger.error("Preview for \(tool.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .private)")
-            result = .failure(error)
         }
         await MainActor.run {
             // If a generation was passed (in-flight scan), skip the update
@@ -169,12 +201,25 @@ extension DeveloperToolsView {
         session.dockerLifecycleActivity = .starting
         let control = dockerControl
         Task {
-            _ = control.start()
-            let succeeded = await control.pollUntilRunning()
+            let launched = control.start()
+            let succeeded: Bool
+            if launched {
+                succeeded = await control.pollUntilRunning()
+            } else {
+                succeeded = false
+            }
             if succeeded {
                 await reloadPreview(for: .docker)
             }
             await MainActor.run {
+                if !succeeded, case .ready(let availabilities, var previews) = session.phase {
+                    previews[.docker] = .failed(
+                        launched
+                            ? "Docker Desktop was nudged, but the daemon still did not respond. Open Docker Desktop once, or use Restart Docker and try again."
+                            : "Docker Desktop could not be opened from Gargantua."
+                    )
+                    session.phase = .ready(availabilities: availabilities, previews: previews)
+                }
                 session.dockerLifecycleActivity = nil
             }
         }
@@ -223,9 +268,13 @@ extension DeveloperToolsView {
         let beforeBytes = operation.estimatedReclaimableBytes(in: request.preview)
         let tier = confirmationTier(for: [Self.confirmationItem(for: request)])
 
-        do {
-            _ = try executionProvider(operation, request.preview, tier)
-        } catch {
+        let executionResult = await Self.runExecutionProviderOffMain(
+            executionProvider,
+            operation: operation,
+            preview: request.preview,
+            confirmationMethod: tier
+        )
+        if case .failure(let error) = executionResult {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             executionLogger.error("Execution for \(operation.id, privacy: .public) failed: \(message, privacy: .private)")
             await MainActor.run {
@@ -235,8 +284,9 @@ extension DeveloperToolsView {
             return
         }
 
-        do {
-            let refreshed = try previewProvider(operation.tool)
+        let refreshedResult = await Self.runPreviewProviderOffMain(previewProvider, tool: operation.tool)
+        switch refreshedResult {
+        case .success(let refreshed):
             let afterBytes = operation.estimatedReclaimableBytes(in: refreshed)
             await MainActor.run {
                 session.phase = Self.applyPreviewResult(tool: operation.tool, result: .success(refreshed), to: session.phase)
@@ -247,7 +297,7 @@ extension DeveloperToolsView {
                 ))
                 session.executingOperationID = nil
             }
-        } catch {
+        case .failure(let error):
             executionLogger.error("Preview refresh after \(operation.id, privacy: .public) failed: \(error.localizedDescription, privacy: .private)")
             await MainActor.run {
                 session.executionNotices[operation.id] = .success(Self.refreshFailureMessage(

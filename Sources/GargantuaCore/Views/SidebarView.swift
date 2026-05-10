@@ -69,8 +69,8 @@ extension SidebarSection {
             id: "tools",
             label: "TOOLS",
             items: [
-                SidebarItem(id: "devPurge", label: "Dev Artifact Purge", icon: "hammer"),
                 SidebarItem(id: "devTools", label: "Developer Tools", icon: "wrench.and.screwdriver"),
+                SidebarItem(id: "devPurge", label: "Dev Artifact Purge", icon: "hammer"),
                 SidebarItem(id: "agentSessions", label: "Agent Run", icon: "brain.head.profile"),
             ]
         ),
@@ -149,20 +149,24 @@ public struct SidebarView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            GargantuaSidebarBrandHeader(isCollapsed: isCollapsed)
-                .padding(.horizontal, GargantuaSpacing.space4)
-                .padding(.bottom, GargantuaSpacing.space4)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    GargantuaSidebarBrandHeader(isCollapsed: isCollapsed)
+                        .padding(.horizontal, GargantuaSpacing.space4)
 
-            ForEach(sections) { section in
-                SidebarSectionView(
-                    section: section,
-                    selection: $selection,
-                    isCollapsed: isCollapsed
-                )
-                .padding(.top, GargantuaSpacing.space3)
+                    ForEach(sections) { section in
+                        SidebarSectionView(
+                            section: section,
+                            selection: $selection,
+                            isCollapsed: isCollapsed
+                        )
+                        .padding(.top, GargantuaSpacing.space3)
+                    }
+                }
+                .padding(.bottom, GargantuaSpacing.space3)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            Spacer()
+            .scrollIndicators(.never)
 
             SidebarFooter(
                 mcpStatusModel: mcpStatusModel,
@@ -170,9 +174,8 @@ public struct SidebarView: View {
                 onToggleCollapse: toggleCollapsed
             )
         }
-        .padding(.top, GargantuaSpacing.space4)
         .frame(width: isCollapsed ? Self.collapsedWidth : Self.expandedWidth)
-        .frame(maxHeight: .infinity)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(GargantuaColors.void_)
         .overlay(alignment: .trailing) {
             Rectangle()
@@ -211,9 +214,11 @@ private struct GargantuaSidebarBrandHeader: View {
 
     var body: some View {
         let size: CGFloat = isCollapsed ? 32 : 66
+        let height: CGFloat = isCollapsed ? 88 : 132
         GargantuaBrandMark()
             .frame(width: size, height: size)
             .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: height)
             .accessibilityLabel("Gargantua")
     }
 }
