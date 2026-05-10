@@ -122,7 +122,34 @@ public struct MCPCleanToolHandler: Sendable {
     /// unit tests that want to bypass the dispatcher.
     public func handle(_ arguments: MCPToolArguments) throws -> MCPToolCallResult {
         let input = try arguments.decode(MCPCleanInput.self)
+        let (method, found) = try resolveAndValidate(input)
+        let auditUUID = auditIDGenerator()
 
+        if input.dryRun {
+            // Dry-run is a preview: no disk writes, no rate-limit budget,
+            // no audit entry. `auditID` in the output uses the generator's
+            // UUID as a placeholder so the wire shape stays stable.
+            return try Self.makeDryRunResult(
+                items: found,
+                method: method,
+                auditID: auditUUID.uuidString
+            )
+        }
+
+        let clientID = clientIDProvider() ?? Self.unknownClientSentinel
+        try enforceRateLimit(clientID: clientID)
+        return try executeAndAudit(
+            found: found,
+            method: method,
+            auditUUID: auditUUID,
+            clientID: clientID
+        )
+    }
+
+    /// Validates the decoded input and returns the resolved method plus the
+    /// scan-session items it targets. Throws `MCPToolError.invalidParams` on
+    /// any duplicate, unknown, or protected ID, or an unrecognized method.
+    private func resolveAndValidate(_ input: MCPCleanInput) throws -> (CleanupMethod, [ScanResult]) {
         // Reject duplicate ids up front. A duplicate would cause the cleaner
         // to act on the same path twice — the first call moves the file, the
         // second fails with "file not found", which surfaces to the caller
@@ -163,38 +190,33 @@ public struct MCPCleanToolHandler: Sendable {
             throw MCPToolError.invalidParams(Self.protectedRejectMessage(protected))
         }
 
-        let auditUUID = auditIDGenerator()
+        return (method, found)
+    }
 
-        if input.dryRun {
-            // Dry-run is a preview: no disk writes, no rate-limit budget,
-            // no audit entry. `auditID` in the output uses the generator's
-            // UUID as a placeholder so the wire shape stays stable.
-            return try Self.makeDryRunResult(
-                items: found,
-                method: method,
-                auditID: auditUUID.uuidString
-            )
+    private func enforceRateLimit(clientID: String) throws {
+        guard let limiter = rateLimiter else { return }
+        switch limiter.recordAndCheck(clientID: clientID, tool: MCPToolName.clean.rawValue) {
+        case .allowed:
+            return
+        case .rejected(let retryAfter):
+            // Failed rate-limit attempts are not audited — they never
+            // reached the cleaner. Auditing rejected attempts would
+            // let a client with a stuck loop spam the log; the limiter
+            // itself is the forensic signal.
+            throw MCPToolError.invalidParams(Self.rateLimitMessage(
+                window: limiter.window,
+                maxOps: limiter.maxOps,
+                retryAfter: retryAfter
+            ))
         }
+    }
 
-        let clientID = clientIDProvider() ?? Self.unknownClientSentinel
-
-        if let limiter = rateLimiter {
-            switch limiter.recordAndCheck(clientID: clientID, tool: MCPToolName.clean.rawValue) {
-            case .allowed:
-                break
-            case .rejected(let retryAfter):
-                // Failed rate-limit attempts are not audited — they never
-                // reached the cleaner. Auditing rejected attempts would
-                // let a client with a stuck loop spam the log; the limiter
-                // itself is the forensic signal.
-                throw MCPToolError.invalidParams(Self.rateLimitMessage(
-                    window: limiter.window,
-                    maxOps: limiter.maxOps,
-                    retryAfter: retryAfter
-                ))
-            }
-        }
-
+    private func executeAndAudit(
+        found: [ScanResult],
+        method: CleanupMethod,
+        auditUUID: UUID,
+        clientID: String
+    ) throws -> MCPToolCallResult {
         do {
             let result = try cleaner(found, method)
             // Success path: audit is MANDATORY. A successful destructive op

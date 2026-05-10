@@ -146,61 +146,70 @@ public struct EcosystemProbe: Sendable {
         visited: inout Int,
         target: Set<RuleEcosystem>
     ) {
-        if found == target { return }
-        if visited >= limits.maxDirectories { return }
-        if depth > limits.maxDepth { return }
-
+        guard !descendShouldStop(found: found, visited: visited, depth: depth, target: target) else { return }
         visited += 1
 
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(
+        guard let entries = try? FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
             options: []
-        ) else {
-            return
-        }
+        ) else { return }
 
         var subdirs: [URL] = []
         subdirs.reserveCapacity(entries.count)
 
-        for entry in entries {
-            let name = entry.lastPathComponent
-
-            if let ecosystem = Self.ecosystemSignal(forFileName: name) {
-                found.insert(ecosystem)
-                if found == target { return }
-            }
-
-            // Don't follow symlinks — they often point outside the scan root and
-            // would inflate visit counts, especially in dependency caches.
-            let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-            if values?.isSymbolicLink == true { continue }
-            guard values?.isDirectory == true else { continue }
-
-            // Treat dependency / artifact dir names as ecosystem signals themselves
-            // (a `node_modules` dir alone is enough to know Node is in use), then
-            // skip descending into them — there's nothing we want to find inside.
-            if let ecosystem = Self.ecosystemSignal(forDirName: name) {
-                found.insert(ecosystem)
-                if found == target { return }
-                continue
-            }
-
-            if Self.shouldSkipDescent(into: name) { continue }
-            subdirs.append(entry)
+        for entry in entries where classifyEntry(entry, found: &found, target: target, subdirs: &subdirs) {
+            return
         }
 
         for sub in subdirs {
             if found == target { return }
-            descend(
-                url: sub,
-                depth: depth + 1,
-                found: &found,
-                visited: &visited,
-                target: target
-            )
+            descend(url: sub, depth: depth + 1, found: &found, visited: &visited, target: target)
         }
+    }
+
+    private func descendShouldStop(
+        found: Set<RuleEcosystem>,
+        visited: Int,
+        depth: Int,
+        target: Set<RuleEcosystem>
+    ) -> Bool {
+        found == target || visited >= limits.maxDirectories || depth > limits.maxDepth
+    }
+
+    /// Classifies a directory entry and updates `found` / `subdirs` accordingly.
+    /// Returns `true` when the caller should stop descending entirely (target reached).
+    private func classifyEntry(
+        _ entry: URL,
+        found: inout Set<RuleEcosystem>,
+        target: Set<RuleEcosystem>,
+        subdirs: inout [URL]
+    ) -> Bool {
+        let name = entry.lastPathComponent
+
+        if let ecosystem = Self.ecosystemSignal(forFileName: name) {
+            found.insert(ecosystem)
+            if found == target { return true }
+        }
+
+        // Don't follow symlinks — they often point outside the scan root and
+        // would inflate visit counts, especially in dependency caches.
+        let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        if values?.isSymbolicLink == true { return false }
+        guard values?.isDirectory == true else { return false }
+
+        // Treat dependency / artifact dir names as ecosystem signals themselves
+        // (a `node_modules` dir alone is enough to know Node is in use), then
+        // skip descending into them — there's nothing we want to find inside.
+        if let ecosystem = Self.ecosystemSignal(forDirName: name) {
+            found.insert(ecosystem)
+            return found == target
+        }
+
+        if !Self.shouldSkipDescent(into: name) {
+            subdirs.append(entry)
+        }
+        return false
     }
 
     // MARK: - Signal tables

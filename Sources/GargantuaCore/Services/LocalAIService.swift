@@ -167,50 +167,20 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             : results.filter { $0.safety == .review }
         guard !eligible.isEmpty else { return [] }
 
-        func yamlFallback(for result: ScanResult) -> ScanResultAdvisory? {
-            guard let rule = rules[result.id] else { return nil }
-            return ScanResultAdvisory(
-                resultId: result.id,
-                rationale: rule.explanation,
-                suggestedSafety: result.safety,
-                source: .rule
-            )
-        }
-
         let engine = self.engine
         let stampingSource = sourceForKind(engine.kind)
 
-        // Template path: no model required.
         if engine.kind == .template {
-            var advisories: [ScanResultAdvisory] = []
-            for result in eligible {
-                guard let rule = rules[result.id] else { continue }
-                do {
-                    let advisory = try await engine.advisory(for: result, rule: rule)
-                    advisories.append(stampSource(stampingSource, on: advisory))
-                } catch {
-                    if let fallback = yamlFallback(for: result) {
-                        advisories.append(fallback)
-                    }
-                }
-            }
-            return advisories
+            return try await templateAdvisories(
+                for: eligible,
+                rules: rules,
+                engine: engine,
+                stampingSource: stampingSource
+            )
         }
 
-        guard isModelAvailable else {
-            return eligible.compactMap(yamlFallback)
-        }
-
-        if lifecycleState == .unloaded {
-            do {
-                try await loadModel()
-            } catch {
-                return eligible.compactMap(yamlFallback)
-            }
-        }
-
-        guard lifecycleState == .ready else {
-            return eligible.compactMap(yamlFallback)
+        guard isModelAvailable, await ensureLifecycleReady() else {
+            return eligible.compactMap { Self.yamlFallback(for: $0, rules: rules) }
         }
 
         // Suspend idle timer for the whole batch so a slow engine generating
@@ -226,6 +196,65 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
             }
         }
 
+        return await modelAdvisories(
+            for: eligible,
+            rules: rules,
+            engine: engine,
+            stampingSource: stampingSource
+        )
+    }
+
+    private static func yamlFallback(
+        for result: ScanResult,
+        rules: [String: ScanRule]
+    ) -> ScanResultAdvisory? {
+        guard let rule = rules[result.id] else { return nil }
+        return ScanResultAdvisory(
+            resultId: result.id,
+            rationale: rule.explanation,
+            suggestedSafety: result.safety,
+            source: .rule
+        )
+    }
+
+    private func ensureLifecycleReady() async -> Bool {
+        if lifecycleState == .unloaded {
+            do {
+                try await loadModel()
+            } catch {
+                return false
+            }
+        }
+        return lifecycleState == .ready
+    }
+
+    private func templateAdvisories(
+        for eligible: [ScanResult],
+        rules: [String: ScanRule],
+        engine: AIInferenceEngine,
+        stampingSource: ExplanationSource
+    ) async throws -> [ScanResultAdvisory] {
+        var advisories: [ScanResultAdvisory] = []
+        for result in eligible {
+            guard let rule = rules[result.id] else { continue }
+            do {
+                let advisory = try await engine.advisory(for: result, rule: rule)
+                advisories.append(stampSource(stampingSource, on: advisory))
+            } catch {
+                if let fallback = Self.yamlFallback(for: result, rules: rules) {
+                    advisories.append(fallback)
+                }
+            }
+        }
+        return advisories
+    }
+
+    private func modelAdvisories(
+        for eligible: [ScanResult],
+        rules: [String: ScanRule],
+        engine: AIInferenceEngine,
+        stampingSource: ExplanationSource
+    ) async -> [ScanResultAdvisory] {
         var advisories: [ScanResultAdvisory] = []
         for result in eligible {
             guard let rule = rules[result.id] else { continue }
@@ -234,7 +263,7 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
                 markFirstInferenceComplete(for: engine.kind)
                 advisories.append(stampSource(stampingSource, on: advisory))
             } catch {
-                if let fallback = yamlFallback(for: result) {
+                if let fallback = Self.yamlFallback(for: result, rules: rules) {
                     advisories.append(fallback)
                 }
             }

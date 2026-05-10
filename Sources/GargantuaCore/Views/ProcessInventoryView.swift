@@ -283,49 +283,55 @@ public struct ProcessInventoryView: View {
 
     private func processTriageSignals(for item: ProcessItem) -> (score: Int, signals: [String]) {
         guard item.safety != .protected_ else { return (0, []) }
-        var score = 0
-        var signals: [String] = []
+        let contributions = Self.triageReasonContributions(for: item)
+            + Self.triageLaunchContributions(for: item)
+            + Self.triagePathContributions(for: item)
+            + Self.triageUsageContributions(for: item)
+        return (contributions.reduce(0) { $0 + $1.points }, contributions.map(\.signal))
+    }
 
-        func add(_ points: Int, _ signal: String) {
-            score += points
-            signals.append(signal)
-        }
+    private static func triageReasonContributions(for item: ProcessItem) -> [(points: Int, signal: String)] {
+        var out: [(Int, String)] = []
+        if item.reasons.contains(.unsigned) { out.append((90, "unsigned binary")) }
+        if item.reasons.contains(.orphaned) { out.append((80, "orphaned launch source")) }
+        if item.reasons.contains(.rootProcess) { out.append((55, "runs as root")) }
+        return out
+    }
 
-        if item.reasons.contains(.unsigned) { add(90, "unsigned binary") }
-        if item.reasons.contains(.orphaned) { add(80, "orphaned launch source") }
-        if item.reasons.contains(.rootProcess) { add(55, "runs as root") }
-
+    private static func triageLaunchContributions(for item: ProcessItem) -> [(points: Int, signal: String)] {
+        var out: [(Int, String)] = []
         switch item.launchSource {
-        case .unknown:
-            add(45, "unknown launch source")
-        case .childProcess:
-            add(20, "child process")
-        case .userSession:
-            add(15, "user-session process")
-        case .foregroundApp, .launchd:
-            break
+        case .unknown: out.append((45, "unknown launch source"))
+        case .childProcess: out.append((20, "child process"))
+        case .userSession: out.append((15, "user-session process"))
+        case .foregroundApp, .launchd: break
         }
-
         switch item.launchConfidence {
-        case .heuristic: add(35, "weak launchd match")
-        case .unknown: add(25, "unmatched launch source")
+        case .heuristic: out.append((35, "weak launchd match"))
+        case .unknown: out.append((25, "unmatched launch source"))
         case .exact, .path: break
         }
+        return out
+    }
 
-        if let path = item.executablePath {
-            let lower = path.lowercased()
-            if lower.hasPrefix("/tmp/") || lower.hasPrefix("/private/tmp/") || lower.contains("/var/folders/") {
-                add(35, "temporary-path executable")
-            }
-            if lower.contains("/downloads/") {
-                add(20, "runs from downloads")
-            }
+    private static func triagePathContributions(for item: ProcessItem) -> [(points: Int, signal: String)] {
+        guard let path = item.executablePath else { return [] }
+        var out: [(Int, String)] = []
+        let lower = path.lowercased()
+        if lower.hasPrefix("/tmp/") || lower.hasPrefix("/private/tmp/") || lower.contains("/var/folders/") {
+            out.append((35, "temporary-path executable"))
         }
+        if lower.contains("/downloads/") {
+            out.append((20, "runs from downloads"))
+        }
+        return out
+    }
 
-        if item.cpuFraction >= 0.4 { add(12, "high CPU") }
-        if item.residentBytes >= 512 * 1_024 * 1_024 { add(8, "high memory") }
-
-        return (score, signals)
+    private static func triageUsageContributions(for item: ProcessItem) -> [(points: Int, signal: String)] {
+        var out: [(Int, String)] = []
+        if item.cpuFraction >= 0.4 { out.append((12, "high CPU")) }
+        if item.residentBytes >= 512 * 1_024 * 1_024 { out.append((8, "high memory")) }
+        return out
     }
 
     private func processTriageResult(for item: ProcessItem, signals: [String]) -> ScanResult {

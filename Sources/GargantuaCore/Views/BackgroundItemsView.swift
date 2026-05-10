@@ -275,34 +275,46 @@ public struct BackgroundItemsView: View {
 
     private func backgroundItemTriageSignals(for item: BackgroundItem) -> (score: Int, signals: [String]) {
         guard item.safety != .protected_ else { return (0, []) }
-        var score = 0
-        var signals: [String] = []
+        let contributions = Self.bgTriageReasonContributions(for: item)
+            + Self.bgTriageSourceContributions(for: item)
+            + Self.bgTriageIdentityContributions(for: item)
+            + Self.bgTriagePathContributions(for: item)
+        return (contributions.reduce(0) { $0 + $1.points }, contributions.map(\.signal))
+    }
 
-        func add(_ points: Int, _ signal: String) {
-            score += points
-            signals.append(signal)
+    private static func bgTriageReasonContributions(for item: BackgroundItem) -> [(points: Int, signal: String)] {
+        var out: [(Int, String)] = []
+        if item.reasons.contains(.unsigned) { out.append((90, "unsigned binary")) }
+        if item.reasons.contains(.orphaned) { out.append((80, "orphaned executable")) }
+        if item.reasons.contains(.orphanedVendor) { out.append((70, "orphaned vendor")) }
+        if item.reasons.contains(.listensForRequests) { out.append((25, "listens for requests")) }
+        if item.reasons.contains(.persistentlyRunning) { out.append((20, "persistent at boot or login")) }
+        return out
+    }
+
+    private static func bgTriageSourceContributions(for item: BackgroundItem) -> [(points: Int, signal: String)] {
+        switch item.source {
+        case .startupItem: return [(45, "legacy startup item")]
+        case .launchDaemon: return [(30, "runs as launch daemon")]
+        default: return []
         }
+    }
 
-        if item.reasons.contains(.unsigned) { add(90, "unsigned binary") }
-        if item.reasons.contains(.orphaned) { add(80, "orphaned executable") }
-        if item.reasons.contains(.orphanedVendor) { add(70, "orphaned vendor") }
-        if item.source == .startupItem { add(45, "legacy startup item") }
-        if item.source == .launchDaemon { add(30, "runs as launch daemon") }
-        if item.reasons.contains(.listensForRequests) { add(25, "listens for requests") }
-        if item.reasons.contains(.persistentlyRunning) { add(20, "persistent at boot or login") }
-        if item.identity == nil { add(20, "no resolved identity") }
+    private static func bgTriageIdentityContributions(for item: BackgroundItem) -> [(points: Int, signal: String)] {
+        item.identity == nil ? [(20, "no resolved identity")] : []
+    }
 
-        if let path = item.executablePath ?? item.plistPath {
-            let lower = path.lowercased()
-            if lower.hasPrefix("/tmp/") || lower.hasPrefix("/private/tmp/") || lower.contains("/var/folders/") {
-                add(35, "temporary-path item")
-            }
-            if lower.contains("/downloads/") {
-                add(20, "runs from downloads")
-            }
+    private static func bgTriagePathContributions(for item: BackgroundItem) -> [(points: Int, signal: String)] {
+        guard let path = item.executablePath ?? item.plistPath else { return [] }
+        var out: [(Int, String)] = []
+        let lower = path.lowercased()
+        if lower.hasPrefix("/tmp/") || lower.hasPrefix("/private/tmp/") || lower.contains("/var/folders/") {
+            out.append((35, "temporary-path item"))
         }
-
-        return (score, signals)
+        if lower.contains("/downloads/") {
+            out.append((20, "runs from downloads"))
+        }
+        return out
     }
 
     private func backgroundItemTriageResult(for item: BackgroundItem, signals: [String]) -> ScanResult {

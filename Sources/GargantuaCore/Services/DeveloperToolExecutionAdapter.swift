@@ -193,10 +193,31 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
     public func estimatedReclaimableBytes(in preview: DeveloperToolPreview) -> Int64? {
         guard preview.tool == tool else { return nil }
         switch self {
+        case .homebrewCleanup, .homebrewPruneAll, .homebrewAutoremove:
+            return homebrewReclaimableBytes(in: preview)
+        case .dockerImagePrune, .dockerContainerPrune, .dockerVolumePrune,
+             .dockerBuilderPrune, .dockerSystemPrune:
+            return dockerReclaimableBytes(in: preview)
+        case .xcodeDeleteUnavailableSimulators, .cargoPurgeExtractedCaches:
+            return previewKnownBytes(preview)
+        case .pnpmStorePrune, .goCleanCache, .goCleanModcache:
+            return packageManagerReclaimableBytes(in: preview)
+        }
+    }
+
+    private func homebrewReclaimableBytes(in preview: DeveloperToolPreview) -> Int64? {
+        switch self {
         case .homebrewCleanup, .homebrewPruneAll:
             return preview.reclaimableBytes
         case .homebrewAutoremove:
             return nil
+        default:
+            return nil
+        }
+    }
+
+    private func dockerReclaimableBytes(in preview: DeveloperToolPreview) -> Int64? {
+        switch self {
         case .dockerImagePrune:
             return dockerBytes(in: preview, titles: ["Images"])
         case .dockerContainerPrune:
@@ -211,16 +232,21 @@ public enum DeveloperToolCleanupOperation: String, CaseIterable, Codable, Sendab
                 dockerBytes(in: preview, titles: ["Containers"]) ?? 0,
                 dockerBytes(in: preview, titles: ["Build Cache"]) ?? 0,
             ])
-        case .xcodeDeleteUnavailableSimulators:
-            return previewKnownBytes(preview)
+        default:
+            return nil
+        }
+    }
+
+    private func packageManagerReclaimableBytes(in preview: DeveloperToolPreview) -> Int64? {
+        switch self {
         case .pnpmStorePrune:
             return previewBytes(in: preview, itemID: "pnpm-store")
         case .goCleanCache:
             return previewBytes(in: preview, itemID: "go-build-cache")
         case .goCleanModcache:
             return previewBytes(in: preview, itemID: "go-module-cache")
-        case .cargoPurgeExtractedCaches:
-            return previewKnownBytes(preview)
+        default:
+            return nil
         }
     }
 

@@ -171,6 +171,19 @@ extension EventHorizonContext {
     }
 
     private static func uninstallPhaseKey(for phase: SmartUninstallerPhase) -> String {
+        uninstallBatchPhaseKey(for: phase) ?? uninstallSinglePhaseKey(for: phase)
+    }
+
+    private static func uninstallBatchPhaseKey(for phase: SmartUninstallerPhase) -> String? {
+        switch phase {
+        case .batchScanning: "batchScanning"
+        case .batchExecuting: "batchExecuting"
+        case .batchSummary: "batchSummary"
+        default: nil
+        }
+    }
+
+    private static func uninstallSinglePhaseKey(for phase: SmartUninstallerPhase) -> String {
         switch phase {
         case .idle: "idle"
         case .loadingApps: "loadingApps"
@@ -179,10 +192,8 @@ extension EventHorizonContext {
         case .reviewingPlan: "reviewingPlan"
         case .executing: "executing"
         case .summary: "summary"
-        case .batchScanning: "batchScanning"
-        case .batchExecuting: "batchExecuting"
-        case .batchSummary: "batchSummary"
         case .failed: "failed"
+        default: "unknown"
         }
     }
 
