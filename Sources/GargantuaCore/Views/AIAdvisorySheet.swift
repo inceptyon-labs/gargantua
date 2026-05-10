@@ -326,7 +326,7 @@ public struct AIAdvisorySheet: View {
                 .focusable(false)
                 .help("Open Settings → AI Model")
             }
-        } else if (hasTemplate || hasRule),
+        } else if hasTemplate || hasRule,
                   !controller.isModelAvailable,
                   onOpenSettings != nil {
             Button("Download Model") {

@@ -33,7 +33,7 @@ struct BuildMetallibPlugin: BuildToolPlugin {
                 executable: Path("/bin/bash"),
                 arguments: [script.string, "--output", metallib.string],
                 outputFilesDirectory: outputDir
-            )
+            ),
         ]
     }
 }

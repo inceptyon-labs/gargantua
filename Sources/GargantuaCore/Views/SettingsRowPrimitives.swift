@@ -153,7 +153,7 @@ struct SettingsValueRow: View {
     let label: String
     let value: String
     var monoValue: Bool = true
-    var background: Color? = nil
+    var background: Color?
 
     var body: some View {
         HStack(spacing: GargantuaSpacing.space3) {

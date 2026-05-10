@@ -258,6 +258,33 @@ struct PersistenceControllerTests {
         #expect(remaining.count == 2)
     }
 
+    @Test("fetchAuditEntries respects a row limit")
+    @MainActor
+    func fetchAuditEntriesRespectsLimit() throws {
+        let ctrl = try makeController()
+        let now = Date()
+        for offset in 0 ..< 20 {
+            let entry = AuditEntry(
+                id: UUID(),
+                timestamp: now.addingTimeInterval(-Double(offset) * 60),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/row-\(offset)", size: 1)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 1
+            )
+            try ctrl.recordAuditEntry(entry)
+        }
+
+        let capped = try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 5)
+        #expect(capped.count == 5)
+
+        let paged = try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 5, offset: 5)
+        #expect(paged.count == 5)
+        #expect(paged.first?.files[0].path == "/row-5")
+    }
+
     // MARK: - Scan History
 
     @Test("Record and fetch scan history")

@@ -81,20 +81,38 @@ public final class AppUpdateSettingsViewModel: ObservableObject {
         self.channel = AppUpdateChannel.stored(in: defaults)
     }
 
-    public func refresh(
-        automaticallyChecksForUpdates: Bool,
-        automaticallyDownloadsUpdates: Bool,
-        allowsAutomaticUpdates: Bool,
-        canCheckForUpdates: Bool,
-        lastUpdateCheckDate: Date?,
-        feedURL: URL?
-    ) {
-        self.automaticallyChecksForUpdates = automaticallyChecksForUpdates
-        self.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
-        self.allowsAutomaticUpdates = allowsAutomaticUpdates
-        self.canCheckForUpdates = canCheckForUpdates
-        self.lastUpdateCheckDate = lastUpdateCheckDate
-        self.feedURL = feedURL
+    public struct Snapshot: Sendable {
+        public let automaticallyChecksForUpdates: Bool
+        public let automaticallyDownloadsUpdates: Bool
+        public let allowsAutomaticUpdates: Bool
+        public let canCheckForUpdates: Bool
+        public let lastUpdateCheckDate: Date?
+        public let feedURL: URL?
+
+        public init(
+            automaticallyChecksForUpdates: Bool,
+            automaticallyDownloadsUpdates: Bool,
+            allowsAutomaticUpdates: Bool,
+            canCheckForUpdates: Bool,
+            lastUpdateCheckDate: Date?,
+            feedURL: URL?
+        ) {
+            self.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+            self.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
+            self.allowsAutomaticUpdates = allowsAutomaticUpdates
+            self.canCheckForUpdates = canCheckForUpdates
+            self.lastUpdateCheckDate = lastUpdateCheckDate
+            self.feedURL = feedURL
+        }
+    }
+
+    public func refresh(_ snapshot: Snapshot) {
+        automaticallyChecksForUpdates = snapshot.automaticallyChecksForUpdates
+        automaticallyDownloadsUpdates = snapshot.automaticallyDownloadsUpdates
+        allowsAutomaticUpdates = snapshot.allowsAutomaticUpdates
+        canCheckForUpdates = snapshot.canCheckForUpdates
+        lastUpdateCheckDate = snapshot.lastUpdateCheckDate
+        feedURL = snapshot.feedURL
     }
 
     public func userCheckForUpdates() {

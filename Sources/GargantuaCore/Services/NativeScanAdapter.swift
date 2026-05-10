@@ -155,21 +155,16 @@ public struct NativeScanAdapter: ScanAdapter {
                 reclaimableBytes: reclaimableBytes
             )
 
-            let expander = expander
-            let roots = scanRoots
-            let processChecker = processChecker
-            let ecosystems = availableEcosystems
+            let context = EvaluationContext(
+                classifier: classifier,
+                profile: profile,
+                expander: expander,
+                scanRoots: scanRoots,
+                processChecker: processChecker,
+                availableEcosystems: availableEcosystems
+            )
             let evaluation = await Task.detached {
-                Self.evaluate(
-                    rule: rule,
-                    classifier: classifier,
-                    profile: profile,
-                    expander: expander,
-                    scanRoots: roots,
-                    processChecker: processChecker,
-                    availableEcosystems: ecosystems,
-                    onSizing: onSizing
-                )
+                Self.evaluate(rule: rule, context: context, onSizing: onSizing)
             }.value
 
             for warning in evaluation.warnings {
@@ -204,17 +199,24 @@ public struct NativeScanAdapter: ScanAdapter {
         var warnings: [String]
     }
 
+    /// Per-scan evaluation context. Threaded through `evaluate` so it can be
+    /// passed in a single argument instead of six positional parameters; the
+    /// constituent fields are read-only for the duration of one rule pass.
+    struct EvaluationContext: Sendable {
+        let classifier: SafetyClassifier
+        let profile: CleanupProfile
+        let expander: PathExpander
+        let scanRoots: [URL]
+        let processChecker: any RunningProcessChecking
+        let availableEcosystems: Set<RuleEcosystem>
+    }
+
     private static func evaluate(
         rule: ScanRule,
-        classifier: SafetyClassifier,
-        profile: CleanupProfile,
-        expander: PathExpander,
-        scanRoots: [URL],
-        processChecker: any RunningProcessChecking,
-        availableEcosystems: Set<RuleEcosystem>,
+        context: EvaluationContext,
         onSizing: @Sendable (String) -> Void = { _ in }
     ) -> RuleEvaluation {
-        if NativeRuleGuardEvaluator.shouldSkipRule(rule: rule, processChecker: processChecker) {
+        if NativeRuleGuardEvaluator.shouldSkipRule(rule: rule, processChecker: context.processChecker) {
             return RuleEvaluation(results: [], warnings: [])
         }
 
@@ -233,11 +235,11 @@ public struct NativeScanAdapter: ScanAdapter {
                 // "0 partial results" warning. Patterns with concrete prefixes or that
                 // map to no specific ecosystem still run unchanged.
                 if let required = RulePatternEcosystem.required(for: pattern),
-                   !availableEcosystems.contains(required) {
+                   !context.availableEcosystems.contains(required) {
                     continue
                 }
 
-                let expansion = expander.expand(pattern: pattern, roots: scanRoots)
+                let expansion = context.expander.expand(pattern: pattern, roots: context.scanRoots)
                 resolvedPaths = expansion.paths
                 // Only warn for global resource caps (entries / time). Depth cap is
                 // branch-local after pruning — it just means some unrelated sub-tree
@@ -264,8 +266,8 @@ public struct NativeScanAdapter: ScanAdapter {
                     enumerateChildren(
                         at: path,
                         rule: rule,
-                        classifier: classifier,
-                        profile: profile,
+                        classifier: context.classifier,
+                        profile: context.profile,
                         counter: &counter,
                         fileManager: fileManager,
                         onSizing: onSizing,
@@ -281,8 +283,8 @@ public struct NativeScanAdapter: ScanAdapter {
                         rule: rule,
                         path: path,
                         counter: &counter,
-                        classifier: classifier,
-                        profile: profile
+                        classifier: context.classifier,
+                        profile: context.profile
                     ) {
                         out.append(result)
                     }

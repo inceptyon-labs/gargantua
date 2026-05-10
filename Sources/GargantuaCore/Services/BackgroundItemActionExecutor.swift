@@ -97,9 +97,11 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 action: .disable,
                 succeeded: succeeded,
                 error: succeeded ? nil : (primary.stderr.isEmpty ? "launchctl exited \(primary.exitCode)" : primary.stderr),
-                tool: "launchctl",
-                arguments: primary.arguments,
-                exitCode: primary.exitCode
+                command: AuditedCommand(
+                    tool: "launchctl",
+                    arguments: primary.arguments,
+                    exitCode: primary.exitCode
+                )
             )
         case .system:
             let bootout = await helper.perform(
@@ -127,13 +129,15 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 action: .disable,
                 succeeded: succeeded,
                 error: succeeded ? nil : (primary?.error ?? primary?.stderr ?? "launchctl rejected"),
-                tool: "launchctl",
-                arguments: PrivilegedBackgroundItemValidator.launchctlArguments(
-                    for: primaryOp,
-                    label: item.label,
-                    plistPath: item.plistPath
-                ) ?? [],
-                exitCode: primary?.exitCode ?? -1
+                command: AuditedCommand(
+                    tool: "launchctl",
+                    arguments: PrivilegedBackgroundItemValidator.launchctlArguments(
+                        for: primaryOp,
+                        label: item.label,
+                        plistPath: item.plistPath
+                    ) ?? [],
+                    exitCode: primary?.exitCode ?? -1
+                )
             )
         }
     }
@@ -174,9 +178,11 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 action: .enable,
                 succeeded: succeeded,
                 error: succeeded ? nil : (primary.stderr.isEmpty ? "launchctl exited \(primary.exitCode)" : primary.stderr),
-                tool: "launchctl",
-                arguments: primary.arguments,
-                exitCode: primary.exitCode
+                command: AuditedCommand(
+                    tool: "launchctl",
+                    arguments: primary.arguments,
+                    exitCode: primary.exitCode
+                )
             )
         case .system:
             let enable = await helper.perform(
@@ -205,13 +211,15 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 action: .enable,
                 succeeded: succeeded,
                 error: succeeded ? nil : (primary.error ?? primary.stderr ?? "launchctl rejected"),
-                tool: "launchctl",
-                arguments: PrivilegedBackgroundItemValidator.launchctlArguments(
-                    for: primaryOp,
-                    label: item.label,
-                    plistPath: item.plistPath
-                ) ?? [],
-                exitCode: primary.exitCode ?? -1
+                command: AuditedCommand(
+                    tool: "launchctl",
+                    arguments: PrivilegedBackgroundItemValidator.launchctlArguments(
+                        for: primaryOp,
+                        label: item.label,
+                        plistPath: item.plistPath
+                    ) ?? [],
+                    exitCode: primary.exitCode ?? -1
+                )
             )
         }
     }
@@ -257,9 +265,11 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                     item: item,
                     plistPath: plistPath,
                     confirmation: confirmation,
-                    succeeded: response.succeeded,
-                    error: response.succeeded ? nil : (response.error ?? response.stderr),
-                    trashPath: response.trashPath
+                    outcome: DeleteOutcome(
+                        succeeded: response.succeeded,
+                        error: response.succeeded ? nil : (response.error ?? response.stderr),
+                        trashPath: response.trashPath
+                    )
                 )
             } else {
                 let trashPath = try trasher.trash(plistPath)
@@ -267,9 +277,7 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                     item: item,
                     plistPath: plistPath,
                     confirmation: confirmation,
-                    succeeded: true,
-                    error: nil,
-                    trashPath: trashPath
+                    outcome: DeleteOutcome(succeeded: true, error: nil, trashPath: trashPath)
                 )
             }
         } catch {
@@ -277,9 +285,7 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
                 item: item,
                 plistPath: plistPath,
                 confirmation: confirmation,
-                succeeded: false,
-                error: error.localizedDescription,
-                trashPath: nil
+                outcome: DeleteOutcome(succeeded: false, error: error.localizedDescription, trashPath: nil)
             )
         }
     }
@@ -316,19 +322,35 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
 
     // MARK: - Audit
 
+    /// Snapshot of the launchctl invocation that produced an audit entry.
+    /// Bundles the three command-detail fields so callers don't need to
+    /// thread them through `record(...)` individually.
+    struct AuditedCommand {
+        let tool: String
+        let arguments: [String]
+        let exitCode: Int32
+    }
+
+    /// Outcome bundle for `recordDelete`; groups the post-action fields so
+    /// the recorder can be called with a parameter object instead of a
+    /// 6-arg call.
+    struct DeleteOutcome {
+        let succeeded: Bool
+        let error: String?
+        let trashPath: String?
+    }
+
     private func record(
         item: BackgroundItem,
         action: BackgroundItemAction,
         succeeded: Bool,
         error: String?,
-        tool: String,
-        arguments: [String],
-        exitCode: Int32
+        command: AuditedCommand
     ) -> BackgroundItemActionOutcome {
         let entry = AuditEntry(
             id: UUID(),
             timestamp: now(),
-            tool: tool,
+            tool: command.tool,
             command: action.verb,
             files: [AuditFile(path: item.plistPath ?? "", size: 0)],
             safetyLevel: item.safety,
@@ -337,8 +359,8 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
             bytesFreed: 0,
             kind: .command,
             commandToolVersion: nil,
-            commandExitCode: exitCode,
-            commandArguments: arguments
+            commandExitCode: command.exitCode,
+            commandArguments: command.arguments
         )
         try? audit.write(entry)
         return BackgroundItemActionOutcome(
@@ -354,9 +376,7 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
         item: BackgroundItem,
         plistPath: String,
         confirmation: ConfirmationTier,
-        succeeded: Bool,
-        error: String?,
-        trashPath: String?
+        outcome: DeleteOutcome
     ) -> BackgroundItemActionOutcome {
         let entry = AuditEntry(
             id: UUID(),
@@ -375,12 +395,12 @@ public struct DefaultBackgroundItemActionExecutor: BackgroundItemActionExecuting
         // can look the entry up from the JSONL log if they need the trash
         // path (we don't expose it on the in-memory outcome to keep the API
         // surface tight; trash recovery flows go through the audit reader).
-        _ = trashPath
+        _ = outcome.trashPath
         return BackgroundItemActionOutcome(
             itemID: item.id,
             action: .delete,
-            succeeded: succeeded,
-            error: error,
+            succeeded: outcome.succeeded,
+            error: outcome.error,
             auditID: entry.id
         )
     }

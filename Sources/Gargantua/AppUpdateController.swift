@@ -71,12 +71,14 @@ final class AppUpdateController: NSObject, ObservableObject {
     private func refreshSettingsState() {
         let updater = updaterController.updater
         settingsViewModel.refresh(
-            automaticallyChecksForUpdates: updater.automaticallyChecksForUpdates,
-            automaticallyDownloadsUpdates: updater.automaticallyDownloadsUpdates,
-            allowsAutomaticUpdates: updater.allowsAutomaticUpdates,
-            canCheckForUpdates: updater.canCheckForUpdates && Self.hasUsableSparkleConfiguration,
-            lastUpdateCheckDate: updater.lastUpdateCheckDate,
-            feedURL: updater.feedURL
+            AppUpdateSettingsViewModel.Snapshot(
+                automaticallyChecksForUpdates: updater.automaticallyChecksForUpdates,
+                automaticallyDownloadsUpdates: updater.automaticallyDownloadsUpdates,
+                allowsAutomaticUpdates: updater.allowsAutomaticUpdates,
+                canCheckForUpdates: updater.canCheckForUpdates && Self.hasUsableSparkleConfiguration,
+                lastUpdateCheckDate: updater.lastUpdateCheckDate,
+                feedURL: updater.feedURL
+            )
         )
     }
 

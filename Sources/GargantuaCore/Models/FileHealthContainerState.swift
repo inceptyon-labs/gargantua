@@ -22,11 +22,11 @@ public final class FileHealthContainerState {
     public var scanProgress: ScanProgress = ScanProgress()
     public var scanResults: [ScanResult] = []
     public var scanWarnings: [String] = []
-    public var errorMessage: String? = nil
+    public var errorMessage: String?
     public var session: FileHealthSessionState = FileHealthSessionState()
     public var showConfirmation: Bool = false
     /// Set when a cleanup finishes; cleared on dismiss.
-    public var cleanupResult: CleanupResult? = nil
+    public var cleanupResult: CleanupResult?
     /// Results that survived the last cleanup (returned to after dismiss).
     public var cleanupRemainingResults: [ScanResult] = []
     public var cleanupRemainingWarnings: [String] = []

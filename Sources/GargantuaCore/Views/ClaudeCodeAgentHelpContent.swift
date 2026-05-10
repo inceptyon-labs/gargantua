@@ -64,7 +64,7 @@ public enum ClaudeCodeAgentHelpContent {
             useCase: "Project archaeology",
             chipLabel: "Stale dev projects",
             prompt: "What is the biggest potential cleanup in my ~/Development folder? Are there any project repositories I haven\u{2019}t opened in 6+ months that I could archive?"
-        )
+        ),
     ]
 
     // MARK: Per-preset chip mapping
@@ -114,7 +114,7 @@ public enum ClaudeCodeAgentHelpContent {
     public static let whenToUseDeepScan: [String] = [
         "Just clean the obvious safe stuff (Deep Scan + Clean All is faster).",
         "\u{201C}What\u{2019}s taking the most space?\u{201D} (Deep Scan sorted by size answers this in 5 seconds).",
-        "Routine weekly cleanup (Deep Scan with the developer profile)."
+        "Routine weekly cleanup (Deep Scan with the developer profile).",
     ]
 }
 

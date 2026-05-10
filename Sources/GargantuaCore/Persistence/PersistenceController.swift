@@ -173,11 +173,26 @@ public final class PersistenceController {
     }
 
     /// Fetch audit entries within a date range.
-    public func fetchAuditEntries(from startDate: Date, to endDate: Date = Date()) throws -> [AuditEntry] {
+    ///
+    /// `limit` caps the number of rows returned (default 1000) so a wide
+    /// date window on a populated audit log can't stall an interactive
+    /// query. `offset` lets callers paginate when they need a sliding view
+    /// instead of the most-recent batch.
+    public func fetchAuditEntries(
+        from startDate: Date,
+        to endDate: Date = Date(),
+        limit: Int = 1000,
+        offset: Int = 0
+    ) throws -> [AuditEntry] {
         let predicate = #Predicate<PersistedAuditEntry> {
             $0.timestamp >= startDate && $0.timestamp <= endDate
         }
-        let descriptor = FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        var descriptor = FetchDescriptor(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        descriptor.fetchOffset = offset
         return try context.fetch(descriptor).compactMap { $0.toDomain() }
     }
 

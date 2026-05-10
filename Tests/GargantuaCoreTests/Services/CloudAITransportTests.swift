@@ -30,8 +30,7 @@ struct CloudAITransportTests {
     }
 
     private func makeTransport(statusCode: Int, body: String, headers: [String: String] = [:])
-        -> (transport: AnthropicMessagesTransport, teardown: () -> Void)
-    {
+        -> (transport: AnthropicMessagesTransport, teardown: () -> Void) {
         makeTransport { request in
             let response = HTTPURLResponse(
                 url: request.url!,

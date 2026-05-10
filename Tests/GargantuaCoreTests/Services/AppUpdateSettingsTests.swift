@@ -32,12 +32,14 @@ struct AppUpdateSettingsTests {
         #expect(checkCount == 0)
 
         model.refresh(
-            automaticallyChecksForUpdates: true,
-            automaticallyDownloadsUpdates: false,
-            allowsAutomaticUpdates: true,
-            canCheckForUpdates: true,
-            lastUpdateCheckDate: nil,
-            feedURL: URL(string: "https://gargantua.dev/appcast.xml")
+            AppUpdateSettingsViewModel.Snapshot(
+                automaticallyChecksForUpdates: true,
+                automaticallyDownloadsUpdates: false,
+                allowsAutomaticUpdates: true,
+                canCheckForUpdates: true,
+                lastUpdateCheckDate: nil,
+                feedURL: URL(string: "https://gargantua.dev/appcast.xml")
+            )
         )
 
         model.userCheckForUpdates()

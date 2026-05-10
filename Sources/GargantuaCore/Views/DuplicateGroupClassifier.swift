@@ -85,7 +85,7 @@ private let patterns: [PathPattern] = [
             joined(components).contains("Adobe")
                 && (joined(components).contains("Auto-Save") || joined(components).lowercased().contains("autosave"))
         },
-        build: { components, sample, crumb in
+        build: { _, sample, crumb in
             let isMasks = sample.contains("Masks") || sample.lowercased().hasSuffix(".prmf")
             return DuplicateGroupClassification(
                 title: isMasks
@@ -121,7 +121,7 @@ private let patterns: [PathPattern] = [
     // node_modules — directory-marker pattern; each duplicate is a vendored package file.
     PathPattern(
         matches: { _, sample in sample.contains("/node_modules/") },
-        build: { components, sample, crumb in
+        build: { _, sample, crumb in
             // Try to surface the package name (the directory after node_modules)
             let pkg = packageNameAfter(marker: "/node_modules/", in: sample)
             let title = pkg.map { "node_modules · \($0)" } ?? "node_modules · Vendored packages"
@@ -166,7 +166,7 @@ private let patterns: [PathPattern] = [
     // ~/Library/Caches/<bundleID>/...
     PathPattern(
         matches: { _, sample in sample.range(of: "/Library/Caches/") != nil },
-        build: { components, sample, crumb in
+        build: { _, sample, crumb in
             let bundleID = bundleIDAfter(marker: "/Library/Caches/", in: sample)
             let app = bundleID.map { humanizedAppName(fromBundleID: $0) }
             return DuplicateGroupClassification(
@@ -233,9 +233,7 @@ private let patterns: [PathPattern] = [
         build: { _, sample, crumb in
             let bucket: String
             let icon: String
-            if sample.contains("/Movies/") { bucket = "Movies"; icon = "film" }
-            else if sample.contains("/Music/") { bucket = "Music"; icon = "music.note" }
-            else { bucket = "Pictures"; icon = "photo.stack" }
+            if sample.contains("/Movies/") { bucket = "Movies"; icon = "film" } else if sample.contains("/Music/") { bucket = "Music"; icon = "music.note" } else { bucket = "Pictures"; icon = "photo.stack" }
             return DuplicateGroupClassification(
                 title: "\(bucket) · Personal media",
                 icon: icon,

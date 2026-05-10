@@ -144,12 +144,10 @@ public struct CzkawkaOutputParser: Sendable {
     /// Try the czkawka 11 form first, then the legacy form.
     private func parseBigFilesLine(_ line: String) -> CzkawkaFinding? {
         if let parenStart = line.firstIndex(of: "("),
-           let parenEnd = line[parenStart...].firstIndex(of: ")")
-        {
+           let parenEnd = line[parenStart...].firstIndex(of: ")") {
             let inside = line[line.index(after: parenStart) ..< parenEnd]
             if let bytes = Int64(inside),
-               let dashRange = line.range(of: " - ", range: parenEnd ..< line.endIndex)
-            {
+               let dashRange = line.range(of: " - ", range: parenEnd ..< line.endIndex) {
                 let after = String(line[dashRange.upperBound...])
                 let unquoted = unquoteLeadingPath(after)
                 let path = stripPathAnnotations(unquoted)
