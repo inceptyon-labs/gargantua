@@ -8,7 +8,6 @@ import SwiftUI
 // Trailing slot carries vendor + reason chips and the Reveal button. The
 // expanded section pulls in the full identity / signature detail; both
 // halves share state so SwiftUI keeps the toggle animation smooth.
-// swiftlint:disable:next type_body_length
 public struct BackgroundItemRow: View {
     public let item: BackgroundItem
     public let isExpanded: Bool
@@ -46,7 +45,7 @@ public struct BackgroundItemRow: View {
 
     /// Whether the user can disable / enable / delete this item. Login items
     /// and startup items are out of scope; protected items are read-only.
-    private var supportsActions: Bool {
+    var supportsActions: Bool {
         switch item.source {
         case .userLaunchAgent, .systemLaunchAgent, .launchDaemon: true
         case .startupItem, .loginItem: false
@@ -56,20 +55,20 @@ public struct BackgroundItemRow: View {
     /// Treat the row as disabled if either the plist's `Disabled` key is set
     /// or the user just ran disable in this session (runtime state lives in
     /// launchd's disabled DB, not the plist).
-    private var isDisabled: Bool {
+    var isDisabled: Bool {
         item.reasons.contains(.disabledFlag) || isSessionDisabled
     }
 
-    private var canDelete: Bool {
+    var canDelete: Bool {
         guard supportsActions, item.plistPath != nil else { return false }
         return item.safety != .protected_ && isDisabled
     }
 
-    private var canDisable: Bool {
+    var canDisable: Bool {
         supportsActions && item.safety != .protected_ && !isDisabled
     }
 
-    private var canEnable: Bool {
+    var canEnable: Bool {
         supportsActions && item.safety != .protected_ && isDisabled
     }
 
@@ -280,168 +279,6 @@ public struct BackgroundItemRow: View {
                             .fill(chipBackground(for: reason))
                     }
             }
-        }
-    }
-
-    // MARK: - Expanded detail
-
-    private var expandedDetail: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            Rectangle()
-                .fill(GargantuaColors.borderSoft)
-                .frame(height: 1)
-                .padding(.horizontal, GargantuaSpacing.space3)
-
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-                detailRow(label: "Label", value: item.label)
-                if let exe = item.executablePath {
-                    detailRow(label: "Executable", value: exe, mono: true)
-                }
-                if let identity = item.identity {
-                    if let team = identity.teamIdentifier {
-                        detailRow(label: "Team ID", value: team, mono: true)
-                    }
-                    if let signing = identity.signingIdentity {
-                        detailRow(label: "Signed by", value: signing)
-                    }
-                    if let bundle = identity.bundleIdentifier {
-                        detailRow(label: "Bundle ID", value: bundle, mono: true)
-                    }
-                    if let version = identity.bundleShortVersion {
-                        detailRow(label: "Version", value: version)
-                    }
-                    detailRow(label: "Vendor", value: vendorLabel(identity.vendor))
-                    if let valid = identity.signatureValid {
-                        detailRow(
-                            label: "Signature",
-                            value: valid ? "Valid" : "Invalid"
-                        )
-                    }
-                    if let notarized = identity.isNotarized {
-                        detailRow(
-                            label: "Notarized",
-                            value: notarized ? "Yes" : "No"
-                        )
-                    }
-                }
-            }
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .padding(.leading, GargantuaSpacing.space1)
-        }
-    }
-
-    private func detailRow(label: String, value: String, mono: Bool = false) -> some View {
-        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            Text(label)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .frame(width: 92, alignment: .leading)
-
-            Text(value)
-                .font(mono ? GargantuaFonts.monoData : GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-        }
-    }
-
-    // MARK: - Context menu
-
-    @ViewBuilder
-    private var contextMenu: some View {
-        if item.source == .loginItem, let onOpenLoginSettings {
-            Button("Open Login Items in System Settings") { onOpenLoginSettings() }
-        }
-        if item.plistPath != nil {
-            Button("Reveal plist in Finder") { onReveal() }
-        }
-        if let exe = item.executablePath, !exe.isEmpty {
-            Button("Reveal executable in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: exe)])
-            }
-        }
-        if let onExplain {
-            Button("Explain with AI") { onExplain() }
-        }
-        if let onAction, supportsActions {
-            Divider()
-            if canDisable {
-                Button("Disable") { onAction(.disable) }
-            }
-            if canEnable {
-                Button("Re-enable") { onAction(.enable) }
-            }
-            if canDelete {
-                Button("Move plist to Trash") { onAction(.delete) }
-            }
-        }
-        Button("Copy label") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.label, forType: .string)
-        }
-    }
-
-    // MARK: - Tokens
-
-    private var safetyColor: Color {
-        switch item.safety {
-        case .safe: GargantuaColors.safe
-        case .review: GargantuaColors.review
-        case .protected_: GargantuaColors.protected_
-        }
-    }
-
-    private var safetyTint: Color {
-        switch item.safety {
-        case .safe: GargantuaColors.safeDim
-        case .review: GargantuaColors.reviewDim
-        case .protected_: GargantuaColors.protectedDim
-        }
-    }
-
-    private var safetySFSymbol: String {
-        switch item.safety {
-        case .safe: "checkmark.shield.fill"
-        case .review: "questionmark.diamond.fill"
-        case .protected_: "lock.fill"
-        }
-    }
-
-    private func chipBackground(for reason: BackgroundItemReason) -> Color {
-        switch reason {
-        case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor:
-            GargantuaColors.review.opacity(0.18)
-        case .system:
-            GargantuaColors.protected_.opacity(0.18)
-        case .disabledFlag:
-            GargantuaColors.ink4.opacity(0.18)
-        case .listensForRequests, .persistentlyRunning, .scheduled:
-            GargantuaColors.accent.opacity(0.14)
-        }
-    }
-
-    private func chipForeground(for reason: BackgroundItemReason) -> Color {
-        switch reason {
-        case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor:
-            GargantuaColors.review
-        case .system:
-            GargantuaColors.protected_
-        case .disabledFlag:
-            GargantuaColors.ink2
-        case .listensForRequests, .persistentlyRunning, .scheduled:
-            GargantuaColors.accent
-        }
-    }
-
-    private func vendorLabel(_ vendor: VendorClassification) -> String {
-        switch vendor {
-        case .apple: "Apple"
-        case .thirdPartyKnown: "Third-party (known)"
-        case .thirdPartyUnknown: "Third-party (unknown)"
-        case .unsigned: "Unsigned / unverifiable"
         }
     }
 
