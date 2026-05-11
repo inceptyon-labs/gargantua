@@ -6,7 +6,7 @@ extension RemnantScanner {
         let reservedPaths: [String]
     }
 
-    struct RuleContext {
+    fileprivate struct RuleContext {
         let rule: RemnantRule
         let app: AppInfo
         let excludes: [String]
@@ -65,7 +65,7 @@ extension RemnantScanner {
         return RuleEvaluation(items: out, reservedPaths: reservedPaths)
     }
 
-    func enumerateChildren(
+    fileprivate func enumerateChildren(
         at path: String,
         context: RuleContext,
         counter: inout Int,
@@ -106,7 +106,7 @@ extension RemnantScanner {
         rule.tags.contains("app_pack") ? 0 : 1
     }
 
-    static func isExcluded(_ url: URL, excludes: [String]) -> Bool {
+    fileprivate static func isExcluded(_ url: URL, excludes: [String]) -> Bool {
         let path = url.path
         let name = url.lastPathComponent
         for pattern in excludes {
@@ -122,7 +122,7 @@ extension RemnantScanner {
         return false
     }
 
-    static func existingFilesystemPath(for path: String) -> String? {
+    fileprivate static func existingFilesystemPath(for path: String) -> String? {
         let expanded = (path as NSString).expandingTildeInPath
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: expanded) else { return nil }

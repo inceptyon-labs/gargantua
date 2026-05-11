@@ -70,7 +70,7 @@ public extension RemnantScanner {
 }
 
 extension RemnantScanner {
-    static func bundleDerivedVariants(for app: AppInfo) -> [String] {
+    private static func bundleDerivedVariants(for app: AppInfo) -> [String] {
         let parts = app.bundleID
             .split(separator: ".")
             .map(String.init)
@@ -79,7 +79,7 @@ extension RemnantScanner {
         return unique([last, last.lowercased()])
     }
 
-    static func baseChannelName(_ name: String) -> String {
+    private static func baseChannelName(_ name: String) -> String {
         let suffixes = [
             "Alpha", "Beta", "Canary", "Dev", "Developer", "Nightly",
             "Preview", "Release", "Stable", "Insider", "Insiders",
@@ -92,17 +92,17 @@ extension RemnantScanner {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func removeSpaces(_ name: String) -> String {
+    private static func removeSpaces(_ name: String) -> String {
         name.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    static func joinWords(_ name: String, separator: String) -> String {
+    private static func joinWords(_ name: String, separator: String) -> String {
         name.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: separator)
     }
 
-    static func safeVariant(_ variant: String) -> String? {
+    private static func safeVariant(_ variant: String) -> String? {
         let trimmed = variant.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               trimmed != ".",

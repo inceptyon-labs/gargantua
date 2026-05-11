@@ -59,7 +59,7 @@ extension RemnantScanner {
         )
     }
 
-    static func metadata(at path: String) -> (size: Int64, lastAccessed: Date?)? {
+    private static func metadata(at path: String) -> (size: Int64, lastAccessed: Date?)? {
         let fileManager = FileManager.default
         let url = URL(fileURLWithPath: path)
         let values = try? url.resourceValues(forKeys: [
@@ -79,7 +79,7 @@ extension RemnantScanner {
         return (size, values?.contentAccessDate ?? values?.contentModificationDate)
     }
 
-    static func resolve(source: SourceAttribution, app: AppInfo) -> SourceAttribution {
+    private static func resolve(source: SourceAttribution, app: AppInfo) -> SourceAttribution {
         SourceAttribution(
             name: source.name.replacingOccurrences(of: "{appName}", with: app.name),
             bundleID: source.bundleID?.replacingOccurrences(of: "{bundleID}", with: app.bundleID) ?? app.bundleID,
