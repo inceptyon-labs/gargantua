@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension ScanBucketListView {
-    var filterField: some View {
+    private var filterField: some View {
         HStack(spacing: GargantuaSpacing.space1) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11, weight: .semibold))

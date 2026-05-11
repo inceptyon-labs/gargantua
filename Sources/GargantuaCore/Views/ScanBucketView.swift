@@ -79,15 +79,15 @@ public struct ScanBucketListView: View {
         displayedResults.filter { selectedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
     }
 
-    var hasReviewItems: Bool {
+    private var hasReviewItems: Bool {
         displayedResults.contains(where: { $0.safety == .review })
     }
 
-    var reviewItemCount: Int {
+    private var reviewItemCount: Int {
         displayedResults.filter { $0.safety == .review }.count
     }
 
-    var reviewReclaimableBytes: Int64 {
+    private var reviewReclaimableBytes: Int64 {
         displayedResults
             .filter { $0.safety == .review }
             .reduce(0) { $0 + $1.size }
@@ -97,7 +97,7 @@ public struct ScanBucketListView: View {
         onResolveNaturalLanguageFilter != nil
     }
 
-    var shouldShowRefineDetails: Bool {
+    private var shouldShowRefineDetails: Bool {
         hasRefinementTools && (
             showsRefineControls ||
                 activeFilter != nil ||
