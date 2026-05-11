@@ -7,55 +7,6 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.gargantua.core", category: "ProcessInventoryScanner")
 
-/// Result of one process-inventory scan pass.
-public struct ProcessInventoryScan: Sendable, Equatable {
-    /// Ranked list returned for display. When `topN` is provided, the scanner
-    /// caps this list before expensive identity/signature resolution so the
-    /// snapshot stays quick on process-heavy machines.
-    public let items: [ProcessItem]
-    /// Total number of running processes the snapshot saw — useful so the
-    /// footer can say "showing top 50 of 432 running" without the UI having
-    /// to re-query.
-    public let totalProcessCount: Int
-    /// The metric `items` is currently sorted by. Updated by `resort` calls
-    /// in the session so the UI stays in sync.
-    public let sortedBy: ProcessSortMetric
-    /// Preferred display cap used by the scanner.
-    public let topN: Int?
-    /// When the scan completed.
-    public let scannedAt: Date
-
-    public init(
-        items: [ProcessItem],
-        totalProcessCount: Int,
-        sortedBy: ProcessSortMetric,
-        topN: Int?,
-        scannedAt: Date
-    ) {
-        self.items = items
-        self.totalProcessCount = totalProcessCount
-        self.sortedBy = sortedBy
-        self.topN = topN
-        self.scannedAt = scannedAt
-    }
-
-    public static let empty = ProcessInventoryScan(
-        items: [],
-        totalProcessCount: 0,
-        sortedBy: .cpu,
-        topN: nil,
-        scannedAt: .distantPast
-    )
-}
-
-/// Orchestrates `ProcessSnapshotProvider` + `LaunchdItemIndex` +
-/// `BinaryIdentityResolver` + `ProcessLaunchSourceMatcher` +
-/// `ProcessSafetyClassifier` into a single `[ProcessItem]` list.
-public protocol ProcessInventoryScanning: Sendable {
-    /// Run a scan, ranking by `metric` and capping at `topN` items.
-    func scan(metric: ProcessSortMetric, topN: Int?) async -> ProcessInventoryScan
-}
-
 public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     /// Wall-clock interval between the two snapshots used to derive CPU
     /// deltas. 500 ms is short enough that the scan feels instant and long
@@ -63,17 +14,17 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     /// blip during the window.
     public static let defaultSampleIntervalNanoseconds: UInt64 = 500_000_000
 
-    private let snapshotProvider: any ProcessSnapshotProviding
-    private let launchdIndex: any LaunchdItemIndexing
-    private let resolver: any BinaryIdentityResolving
-    private let matcher: ProcessLaunchSourceMatcher
-    private let classifier: ProcessSafetyClassifier
-    private let fileExists: @Sendable (String) -> Bool
-    private let userNameForUID: @Sendable (UInt32) -> String?
-    private let foregroundPIDs: @Sendable () -> Set<Int32>
-    private let sampleIntervalNanoseconds: UInt64
-    private let now: @Sendable () -> Date
-    private let sleep: @Sendable (UInt64) async -> Void
+    let snapshotProvider: any ProcessSnapshotProviding
+    let launchdIndex: any LaunchdItemIndexing
+    let resolver: any BinaryIdentityResolving
+    let matcher: ProcessLaunchSourceMatcher
+    let classifier: ProcessSafetyClassifier
+    let fileExists: @Sendable (String) -> Bool
+    let userNameForUID: @Sendable (UInt32) -> String?
+    let foregroundPIDs: @Sendable () -> Set<Int32>
+    let sampleIntervalNanoseconds: UInt64
+    let now: @Sendable () -> Date
+    let sleep: @Sendable (UInt64) async -> Void
 
     public init(
         snapshotProvider: any ProcessSnapshotProviding = DefaultProcessSnapshotProvider(),
@@ -188,7 +139,7 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     ///      binary was respawned within the sample window (e.g. a daemon
     ///      managed by `KeepAlive`); without this, the new instance would
     ///      inherit a CPU baseline that predates its birth.
-    private func comparablePrior(
+    func comparablePrior(
         for current: RawProcessSample,
         in firstByPID: [Int32: RawProcessSample]
     ) -> RawProcessSample? {
@@ -196,207 +147,5 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         if prior.executablePath != current.executablePath { return nil }
         if prior.startTimeUnixSeconds != current.startTimeUnixSeconds { return nil }
         return prior
-    }
-
-    // MARK: - Item construction
-
-    private func makeItem(
-        prior: RawProcessSample?,
-        current: RawProcessSample,
-        launchdItems: [LaunchdItem],
-        foregroundPIDs: Set<Int32>,
-        resolveUser: (UInt32) -> String?
-    ) -> ProcessItem {
-        let cpuFraction = computeCPUFraction(prior: prior, current: current)
-        let identity = current.executablePath.map(resolver.resolve)
-        let (rawSource, confidence) = matcher.match(
-            executablePath: current.executablePath,
-            command: current.command,
-            parentPID: current.parentPID,
-            launchdItems: launchdItems
-        )
-
-        // Promote .userSession matches to .foregroundApp when the PID is
-        // visible to NSWorkspace — the matcher can't see the workspace and
-        // would otherwise leave every GUI app misclassified.
-        let launchSource: ProcessLaunchSource = {
-            if case .userSession = rawSource, foregroundPIDs.contains(current.pid) {
-                return .foregroundApp
-            }
-            return rawSource
-        }()
-
-        // "Orphaned launchd source": the matcher tied the running process
-        // to a launchd plist, and that plist's executable is gone from disk.
-        // Counter-intuitive on its face — if the plist's binary were really
-        // missing, the process couldn't be running it — but it fires when
-        // launchd has a stale plist that points at a deleted helper while
-        // the still-running process holds an open file handle on the
-        // deleted inode (typical after an in-place app update or a
-        // half-finished uninstall). Restricting to exact/path confidence
-        // prevents a label-only heuristic match from falsely flagging an
-        // unrelated stale plist as the source of this process.
-        let launchSourceOrphaned: Bool = {
-            guard confidence == .exact || confidence == .path else { return false }
-            if case let .launchd(_, _, plistPath) = launchSource {
-                return launchdItemBinaryMissing(plistPath: plistPath, in: launchdItems)
-            }
-            return false
-        }()
-
-        let classifierInput = ProcessClassifierInput(
-            command: current.command,
-            executablePath: current.executablePath,
-            uid: current.uid,
-            identity: identity,
-            launchSource: launchSource,
-            launchConfidence: confidence,
-            launchSourceOrphaned: launchSourceOrphaned
-        )
-        let classification = classifier.classify(classifierInput)
-
-        return ProcessItem(
-            id: makeID(
-                pid: current.pid,
-                executablePath: current.executablePath,
-                command: current.command,
-                startTimeUnixSeconds: current.startTimeUnixSeconds
-            ),
-            pid: current.pid,
-            parentPID: current.parentPID,
-            startTimeUnixSeconds: current.startTimeUnixSeconds,
-            command: current.command,
-            uid: current.uid,
-            owningUser: resolveUser(current.uid) ?? String(current.uid),
-            executablePath: current.executablePath,
-            cpuFraction: cpuFraction,
-            residentBytes: current.residentBytes,
-            identity: identity,
-            launchSource: launchSource,
-            launchConfidence: confidence,
-            safety: classification.safety,
-            reasons: classification.reasons,
-            explanation: classification.explanation
-        )
-    }
-
-    private func computeCPUFraction(prior: RawProcessSample?, current: RawProcessSample) -> Double {
-        guard let prior else { return 0 }
-        let elapsedNanos = current.sampledAt.timeIntervalSince(prior.sampledAt) * 1_000_000_000
-        guard elapsedNanos > 0 else { return 0 }
-        // Guard against unsigned wrap when a process has been replaced
-        // mid-window or when libproc returns a non-monotonic reading.
-        guard current.cpuTimeNanoseconds >= prior.cpuTimeNanoseconds else { return 0 }
-        let deltaNanos = Double(current.cpuTimeNanoseconds - prior.cpuTimeNanoseconds)
-        return deltaNanos / elapsedNanos
-    }
-
-    private func launchdItemBinaryMissing(plistPath: String, in items: [LaunchdItem]) -> Bool {
-        guard let item = items.first(where: { $0.plistPath == plistPath }),
-              let plist = item.plist,
-              let exePath = plist.executablePath else {
-            return false
-        }
-        // launchd resolves bare program names through `_PATH_STDPATH`; only
-        // an absolute path that's missing on disk qualifies as orphaned.
-        guard exePath.hasPrefix("/") else { return false }
-        return !fileExists(exePath)
-    }
-
-    private func makeID(
-        pid: Int32,
-        executablePath: String?,
-        command: String,
-        startTimeUnixSeconds: UInt64
-    ) -> String {
-        // Include start time so a recycled PID (and even one with the same
-        // binary path) gets a distinct id and SwiftUI doesn't carry over
-        // expansion / selection state from the previous instance.
-        let key = executablePath ?? command
-        return "\(pid)|\(startTimeUnixSeconds)|\(key)"
-    }
-
-    // MARK: - Ranking
-
-    /// Single-source-of-truth ordering used by both the scanner and the
-    /// session's in-place `resort`. Mirrored in `ProcessInventorySession.rank`
-    /// — keep them in sync if the comparators change.
-    private func rank(_ items: [ProcessItem], by metric: ProcessSortMetric) -> [ProcessItem] {
-        items.sorted(by: { lhs, rhs in
-            let lhsPrimary = Self.primary(lhs, metric: metric)
-            let rhsPrimary = Self.primary(rhs, metric: metric)
-            if lhsPrimary != rhsPrimary { return lhsPrimary > rhsPrimary }
-            let lhsSecondary = Self.secondary(lhs, metric: metric)
-            let rhsSecondary = Self.secondary(rhs, metric: metric)
-            if lhsSecondary != rhsSecondary { return lhsSecondary > rhsSecondary }
-            let nameCmp = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
-            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
-            return lhs.id < rhs.id
-        })
-    }
-
-    private func rankSamples(
-        _ samples: [RawProcessSample],
-        firstByPID: [Int32: RawProcessSample],
-        metric: ProcessSortMetric,
-        topN: Int?
-    ) -> [RawProcessSample] {
-        let ranked = samples.sorted { lhs, rhs in
-            let lhsPrior = comparablePrior(for: lhs, in: firstByPID)
-            let rhsPrior = comparablePrior(for: rhs, in: firstByPID)
-            let lhsPrimary = samplePrimary(lhs, prior: lhsPrior, metric: metric)
-            let rhsPrimary = samplePrimary(rhs, prior: rhsPrior, metric: metric)
-            if lhsPrimary != rhsPrimary { return lhsPrimary > rhsPrimary }
-            let lhsSecondary = sampleSecondary(lhs, prior: lhsPrior, metric: metric)
-            let rhsSecondary = sampleSecondary(rhs, prior: rhsPrior, metric: metric)
-            if lhsSecondary != rhsSecondary { return lhsSecondary > rhsSecondary }
-            let nameCmp = lhs.command.localizedCaseInsensitiveCompare(rhs.command)
-            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
-            let lhsPath = lhs.executablePath ?? ""
-            let rhsPath = rhs.executablePath ?? ""
-            if lhsPath != rhsPath { return lhsPath < rhsPath }
-            if lhs.startTimeUnixSeconds != rhs.startTimeUnixSeconds {
-                return lhs.startTimeUnixSeconds < rhs.startTimeUnixSeconds
-            }
-            return lhs.pid < rhs.pid
-        }
-        guard let topN, topN > 0 else { return ranked }
-        return Array(ranked.prefix(topN))
-    }
-
-    private func samplePrimary(
-        _ sample: RawProcessSample,
-        prior: RawProcessSample?,
-        metric: ProcessSortMetric
-    ) -> Double {
-        switch metric {
-        case .cpu: computeCPUFraction(prior: prior, current: sample)
-        case .rss: Double(sample.residentBytes)
-        }
-    }
-
-    private func sampleSecondary(
-        _ sample: RawProcessSample,
-        prior: RawProcessSample?,
-        metric: ProcessSortMetric
-    ) -> Double {
-        switch metric {
-        case .cpu: Double(sample.residentBytes)
-        case .rss: computeCPUFraction(prior: prior, current: sample)
-        }
-    }
-
-    static func primary(_ item: ProcessItem, metric: ProcessSortMetric) -> Double {
-        switch metric {
-        case .cpu: item.cpuFraction
-        case .rss: Double(item.residentBytes)
-        }
-    }
-
-    static func secondary(_ item: ProcessItem, metric: ProcessSortMetric) -> Double {
-        switch metric {
-        case .cpu: Double(item.residentBytes)
-        case .rss: item.cpuFraction
-        }
     }
 }
