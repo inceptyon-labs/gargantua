@@ -20,9 +20,9 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         return appSupport.appendingPathComponent("Gargantua/models", isDirectory: true)
     }()
 
-    // Internal (not private) so URLSession peer file can read/mutate them.
-    var session: URLSession?
-    var activeTask: URLSessionDownloadTask?
+    private var session: URLSession?
+    private var activeTask: URLSessionDownloadTask?
+    // Internal so URLSession peer file can read/mutate them.
     var currentFileIndex: Int = 0
     var completedBytes: Int64 = 0
     var didCancel: Bool = false
@@ -118,7 +118,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         )
     }
 
-    func removeModelDirectory() {
+    private func removeModelDirectory() {
         try? FileManager.default.removeItem(at: modelDirectory)
     }
 

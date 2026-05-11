@@ -10,7 +10,7 @@ extension ModelDownloadManager {
     /// of silently loading unverified bytes.
     static let verifiedMarkerName = ".gargantua-verified"
 
-    enum PathComponentKind { case id, fileName }
+    private enum PathComponentKind { case id, fileName }
 
     /// Validates that `modelInfo.id` and every `files[i].name` is a single
     /// path component (no slashes, no '..', non-empty, no leading dot-dot).
@@ -26,7 +26,7 @@ extension ModelDownloadManager {
         }
     }
 
-    static func validatePathComponent(_ component: String, kind: PathComponentKind) throws {
+    private static func validatePathComponent(_ component: String, kind: PathComponentKind) throws {
         let invalid: Bool = {
             if component.isEmpty { return true }
             if component == "." || component == ".." { return true }

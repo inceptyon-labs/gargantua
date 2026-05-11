@@ -59,14 +59,14 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
 
     // MARK: Main-actor handlers
 
-    func handleProgress(currentFileBytes: Int64) {
+    private func handleProgress(currentFileBytes: Int64) {
         let total = modelInfo.expectedSize
         let bytesReceived = completedBytes + max(0, currentFileBytes)
         let progress = total > 0 ? Double(bytesReceived) / Double(total) : 0
         state = .downloading(progress: min(progress, 1.0), bytesReceived: bytesReceived)
     }
 
-    func handleDownloadedFile(at scratch: URL) {
+    private func handleDownloadedFile(at scratch: URL) {
         guard !didCancel else {
             try? FileManager.default.removeItem(at: scratch)
             return
@@ -94,7 +94,7 @@ extension ModelDownloadManager: URLSessionDownloadDelegate {
         }
     }
 
-    func completeFileVerification(
+    private func completeFileVerification(
         scratch: URL,
         dispatchedIndex: Int,
         expectedFile: ModelFile,
