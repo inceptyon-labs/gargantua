@@ -1,17 +1,17 @@
 import SwiftUI
 
 struct ClaudeCodeAgentSettingsSection: View {
-    @State private var configuration = ClaudeCodeAgentConfiguration()
+    @State var configuration = ClaudeCodeAgentConfiguration()
     @State private var cliPathInput = ""
     @State private var statusMessage = "Not configured"
     @State private var statusTone = GargantuaColors.ink4
-    @State private var availableModels: [AnthropicModel] = AnthropicModelCatalog.bakedInModels
-    @State private var modelCatalogSource: AnthropicModelCatalogSource = .bakedIn
-    @State private var isRefreshingModels = false
+    @State var availableModels: [AnthropicModel] = AnthropicModelCatalog.bakedInModels
+    @State var modelCatalogSource: AnthropicModelCatalogSource = .bakedIn
+    @State var isRefreshingModels = false
 
     private let store = ClaudeCodeAgentConfigurationStore()
     private let resolver = ClaudeCodeCLIResolver()
-    private let modelCatalog = AnthropicModelCatalog()
+    let modelCatalog = AnthropicModelCatalog()
 
     var body: some View {
         SettingsSectionContainer(
@@ -51,78 +51,11 @@ struct ClaudeCodeAgentSettingsSection: View {
         }
     }
 
-    private var modelPickerRow: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            HStack {
-                Text("Model")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Spacer()
-
-                Picker("Model", selection: Binding(
-                    get: { configuration.selectedModel },
-                    set: {
-                        configuration.selectedModel = $0
-                        saveConfiguration()
-                    }
-                )) {
-                    ForEach(modelOptions) { option in
-                        Text(option.label).tag(option.id)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 280)
-
-                GargantuaIconButton(
-                    icon: isRefreshingModels ? "arrow.triangle.2.circlepath" : "arrow.clockwise",
-                    help: "Refresh from Anthropic /v1/models",
-                    color: GargantuaColors.accent,
-                    isDisabled: isRefreshingModels,
-                    action: { Task { await loadModels(forceRefresh: true) } }
-                )
-            }
-
-            Text(modelStatusLine)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// Combine the live/cached/baked list with the currently selected model
-    /// so a user-chosen identifier the API doesn't return (custom alias,
-    /// retired ID, model not yet rolled out to their account) doesn't vanish
-    /// from the picker.
-    private var modelOptions: [ModelOption] {
-        var byID: [String: ModelOption] = [:]
-        for model in availableModels {
-            byID[model.id] = ModelOption(id: model.id, label: model.displayName ?? model.id)
-        }
-        let current = configuration.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !current.isEmpty, byID[current] == nil {
-            byID[current] = ModelOption(id: current, label: "\(current) (custom)")
-        }
-        return byID.values.sorted { $0.label < $1.label }
-    }
-
-    private var modelStatusLine: String {
-        switch modelCatalogSource {
-        case .live:
-            "Showing the latest list from Anthropic /v1/models."
-        case .cacheFresh(let writtenAt):
-            "Cached \(relativeTime(writtenAt)) ago. Refresh to fetch the latest."
-        case .cacheStale(let writtenAt):
-            "Live fetch failed; showing cached list from \(relativeTime(writtenAt)) ago."
-        case .bakedIn:
-            "No API key configured. Showing built-in fallback list."
-        }
-    }
-
     private var toolGrantNotice: some View {
         SettingsNoticeRow(
             icon: "checkmark.shield",
-            message: "Read-only by default. The agent can preview cleanups via the dry-run propose flow; nothing is deleted unless you confirm in the same review modal Deep Scan uses.",
+            message: "Read-only by default. The agent can preview cleanups via the dry-run propose flow; "
+                + "nothing is deleted unless you confirm in the same review modal Deep Scan uses.",
             tone: .info
         )
     }
@@ -141,27 +74,6 @@ struct ClaudeCodeAgentSettingsSection: View {
         if statusTone == GargantuaColors.protected_ { return .protected }
         if statusTone == GargantuaColors.review { return .review }
         return .info
-    }
-
-    private func loadModels(forceRefresh: Bool) async {
-        isRefreshingModels = true
-        let result = await modelCatalog.loadModels(forceRefresh: forceRefresh)
-        availableModels = result.models
-        modelCatalogSource = result.source
-        isRefreshingModels = false
-    }
-
-    private struct ModelOption: Identifiable, Equatable {
-        let id: String
-        let label: String
-    }
-
-    private func relativeTime(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
-            .replacingOccurrences(of: "in ", with: "")
-            .replacingOccurrences(of: " ago", with: "")
     }
 
     private var statusHeader: some View {
@@ -281,7 +193,7 @@ struct ClaudeCodeAgentSettingsSection: View {
         detectCLI()
     }
 
-    private func saveConfiguration() {
+    func saveConfiguration() {
         store.save(configuration)
     }
 
