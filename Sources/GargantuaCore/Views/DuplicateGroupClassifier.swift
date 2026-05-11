@@ -262,46 +262,9 @@ private let patterns: [PathPattern] = [
     ),
 ]
 
-// MARK: - Path Differentiator
-
-/// For a group of paths, returns each path's "differentiating" segment — the
-/// component-level slice that varies between siblings. Lets the UI show
-/// "01fba-2025-12-10_15-43-02 Masks" instead of an identical UUID filename.
-public enum DuplicatePathDifferentiator {
-    /// Map of path → differentiator string. If two paths share everything but
-    /// the filename, the differentiator is the filename. If they differ in a
-    /// folder mid-path but share the filename, the differentiator is the
-    /// folder name(s). For a single-path group the differentiator is the
-    /// filename (so the UI never shows an empty primary label).
-    public static func compute(paths: [String]) -> [String: String] {
-        guard paths.count > 1 else {
-            return paths.reduce(into: [:]) { acc, path in
-                acc[path] = (path as NSString).lastPathComponent
-            }
-        }
-
-        let split = paths.map(pathComponents)
-        let prefixLen = longestCommonPrefixLength(of: split)
-        let suffixLen = longestCommonSuffixLength(of: split, skippingFirst: prefixLen)
-
-        var result: [String: String] = [:]
-        for (idx, components) in split.enumerated() {
-            let upper = max(prefixLen, components.count - suffixLen)
-            let slice = components[prefixLen ..< upper]
-            // Empty differentiator (path is exactly the common prefix) shouldn't
-            // happen for a real duplicate group, but fall back to the filename.
-            let label = slice.isEmpty
-                ? components.last ?? paths[idx]
-                : slice.joined(separator: "/")
-            result[paths[idx]] = label
-        }
-        return result
-    }
-}
-
 // MARK: - Helpers
 
-private func pathComponents(_ path: String) -> [String] {
+func pathComponents(_ path: String) -> [String] {
     // Strip leading slash so the empty leading component doesn't perturb the
     // common-prefix length count.
     path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
@@ -313,30 +276,13 @@ private func longestCommonPrefixComponents(paths: [String]) -> [String] {
     return Array(split[0].prefix(len))
 }
 
-private func longestCommonPrefixLength(of arrays: [[String]]) -> Int {
+func longestCommonPrefixLength(of arrays: [[String]]) -> Int {
     guard let first = arrays.first else { return 0 }
     var len = first.count
     for other in arrays.dropFirst() {
         len = min(len, other.count)
         var i = 0
         while i < len, first[i] == other[i] { i += 1 }
-        len = i
-        if len == 0 { return 0 }
-    }
-    return len
-}
-
-/// Common suffix length, ignoring the segment already counted as the prefix
-/// (so paths like `[A,B]` and `[A,B,B]` don't double-count `B`).
-private func longestCommonSuffixLength(of arrays: [[String]], skippingFirst prefixLen: Int) -> Int {
-    guard let first = arrays.first else { return 0 }
-    let firstAvailable = first.count - prefixLen
-    var len = firstAvailable
-    for other in arrays.dropFirst() {
-        let availableHere = other.count - prefixLen
-        len = min(len, availableHere)
-        var i = 0
-        while i < len, first[first.count - 1 - i] == other[other.count - 1 - i] { i += 1 }
         len = i
         if len == 0 { return 0 }
     }
@@ -399,37 +345,4 @@ private func humanize(_ raw: String) -> String {
         return raw
     }
     return raw.prefix(1).uppercased() + raw.dropFirst()
-}
-
-/// Tiny lookup for the most common bundle IDs so users see "Google Chrome"
-/// rather than "Chrome" or "google.Chrome". Fall through to humanizing the
-/// last segment for anything not listed.
-private let knownAppNames: [String: String] = [
-    "com.google.Chrome": "Google Chrome",
-    "com.google.Chrome.canary": "Google Chrome Canary",
-    "com.apple.Safari": "Safari",
-    "com.apple.dt.Xcode": "Xcode",
-    "com.apple.iTunes": "iTunes",
-    "com.apple.Music": "Music",
-    "com.apple.Photos": "Photos",
-    "com.apple.mail": "Mail",
-    "com.microsoft.VSCode": "VS Code",
-    "com.microsoft.teams2": "Microsoft Teams",
-    "com.spotify.client": "Spotify",
-    "com.tinyspeck.slackmacgap": "Slack",
-    "com.hnc.Discord": "Discord",
-    "com.figma.Desktop": "Figma",
-    "com.adobe.Photoshop": "Adobe Photoshop",
-    "com.adobe.PremierePro": "Adobe Premiere Pro",
-    "com.adobe.AfterEffects": "Adobe After Effects",
-    "com.adobe.LightroomClassicCC7": "Adobe Lightroom Classic",
-    "com.docker.docker": "Docker",
-    "company.thebrowser.Browser": "Arc",
-    "org.mozilla.firefox": "Firefox",
-    "com.brave.Browser": "Brave",
-    "com.todesktop.230313mzl4w4u92": "Cursor",
-]
-
-private func knownAppName(forBundleID bundleID: String) -> String? {
-    knownAppNames[bundleID]
 }
