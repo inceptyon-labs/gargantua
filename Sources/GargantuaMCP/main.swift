@@ -41,7 +41,7 @@ private let stderrLog: @Sendable (String) -> Void = { message in
     FileHandle.standardError.write(Data("[mcp] \(message)\n".utf8))
 }
 
-private let runtimeOptions = parseRuntimeOptions()
+private let runtimeOptions = parseRuntimeOptions(log: stderrLog)
 private let storedSSEConfiguration = MCPSSEConfigurationStore().load()
 private let effectiveTransportMode = runtimeOptions.transportMode
     ?? (storedSSEConfiguration.isEnabled ? .both : .stdio)
@@ -329,147 +329,6 @@ if effectiveTransportMode.includesStdio {
     }
 }
 
-// MARK: - Async-to-sync bridge
-
-/// Runs an async operation from a synchronous context, blocking the caller
-/// until the operation completes. Uses a detached Task so the operation
-/// executes on the cooperative thread pool, not the waiting thread.
-///
-/// Only intended for the transport's request-handling thread, which already
-/// serialises requests one at a time. Do NOT call from the main thread: the
-/// detached Task may hop to MainActor internally, and parking the main
-/// thread on the semaphore would deadlock.
-private func runBlocking<T: Sendable>(
-    _ operation: @escaping @Sendable () async throws -> T
-) throws -> T {
-    let holder = ResultHolder<T>()
-    let semaphore = DispatchSemaphore(value: 0)
-    Task.detached {
-        do {
-            let value = try await operation()
-            holder.set(.success(value))
-        } catch {
-            holder.set(.failure(error))
-        }
-        semaphore.signal()
-    }
-    semaphore.wait()
-    return try holder.get().get()
-}
-
-// MARK: - Runtime options
-
-private enum MCPRuntimeTransportMode: String {
-    case stdio
-    case sse
-    case both
-
-    var includesStdio: Bool { self == .stdio || self == .both }
-    var includesSSE: Bool { self == .sse || self == .both }
-
-    var statusMode: MCPServerTransportMode {
-        switch self {
-        case .stdio: return .stdio
-        case .sse: return .sse
-        case .both: return .stdioAndSSE
-        }
-    }
-}
-
-private struct MCPRuntimeOptions {
-    var transportMode: MCPRuntimeTransportMode?
-    var ssePort: Int?
-    var bindScope: MCPServerBindScope?
-    var bearerToken: String?
-}
-
-private func parseRuntimeOptions() -> MCPRuntimeOptions {
-    var options = MCPRuntimeOptions()
-    var iterator = CommandLine.arguments.dropFirst().makeIterator()
-    while let argument = iterator.next() {
-        switch argument {
-        case "--stdio":
-            options.transportMode = .stdio
-        case "--sse":
-            options.transportMode = .sse
-        case "--both":
-            options.transportMode = .both
-        case "--transport":
-            options.transportMode = parseTransportArgument(iterator.next())
-        case "--port":
-            options.ssePort = parsePortArgument(iterator.next())
-        case "--bind":
-            options.bindScope = parseBindArgument(iterator.next())
-        case "--token":
-            options.bearerToken = parseTokenArgument(iterator.next())
-        case "--help", "-h":
-            printRuntimeHelp()
-            exit(0)
-        default:
-            stderrLog("unknown argument \(argument)")
-            printRuntimeHelp()
-            exit(64)
-        }
-    }
-    return options
-}
-
-private func parseTransportArgument(_ value: String?) -> MCPRuntimeTransportMode {
-    guard let value,
-          let mode = MCPRuntimeTransportMode(rawValue: value.lowercased())
-    else {
-        stderrLog("invalid --transport value; expected stdio, sse, or both")
-        exit(64)
-    }
-    return mode
-}
-
-private func parsePortArgument(_ value: String?) -> Int {
-    guard let value, let port = Int(value) else {
-        stderrLog("invalid --port value")
-        exit(64)
-    }
-    return port
-}
-
-private func parseBindArgument(_ value: String?) -> MCPServerBindScope {
-    guard let value,
-          let scope = MCPServerBindScope(rawValue: value.lowercased())
-    else {
-        stderrLog("invalid --bind value; expected localhost or lan")
-        exit(64)
-    }
-    return scope
-}
-
-private func parseTokenArgument(_ value: String?) -> String {
-    guard let value, MCPBearerTokenValidator.isPlausible(value) else {
-        stderrLog("invalid --token value")
-        exit(64)
-    }
-    return MCPBearerTokenValidator.normalized(value)
-}
-
-private func printRuntimeHelp() {
-    let help = """
-    GargantuaMCP options:
-      --transport stdio|sse|both   Select MCP transport. Defaults to stdio, or both when SSE is enabled in Settings.
-      --stdio                      Shortcut for --transport stdio.
-      --sse                        Shortcut for --transport sse.
-      --both                       Shortcut for --transport both.
-      --port 7493                  Override the SSE port.
-      --bind localhost|lan         Bind SSE to 127.0.0.1 or all interfaces.
-      --token TOKEN                Bearer token override for LAN SSE.
-
-    Security:
-      GargantuaMCP serves plain HTTP. For network clients, keep --bind localhost
-      and terminate HTTPS in a reverse proxy that forwards to 127.0.0.1:7493.
-      Use --bind lan only on trusted networks, with a bearer token and a TLS
-      proxy in front of the port.
-    """
-    FileHandle.standardError.write(Data("\(help)\n".utf8))
-}
-
 private func clientFacingMessage(for error: Error) -> String {
     if let localized = error as? LocalizedError,
        let description = localized.errorDescription,
@@ -477,31 +336,6 @@ private func clientFacingMessage(for error: Error) -> String {
         return description
     }
     return "MCP transport failed."
-}
-
-/// Lock-guarded storage for the result of `runBlocking`'s detached Task.
-/// Needed because Swift's strict concurrency forbids capturing a mutable
-/// local from a `@Sendable` closure.
-private final class ResultHolder<T: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: Result<T, Error>?
-
-    func set(_ v: Result<T, Error>) {
-        lock.lock()
-        value = v
-        lock.unlock()
-    }
-
-    /// Precondition: caller has already waited on the signalling semaphore,
-    /// so `value` is guaranteed to be set.
-    func get() -> Result<T, Error> {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let value else {
-            preconditionFailure("ResultHolder accessed before the detached Task signalled completion")
-        }
-        return value
-    }
 }
 
 // MARK: - Graceful shutdown
