@@ -29,7 +29,7 @@ extension RuleViewerView {
         .background(GargantuaColors.void_)
     }
 
-    func ruleDetailHeader(_ rule: ScanRule) -> some View {
+    private func ruleDetailHeader(_ rule: ScanRule) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             Text(rule.name)
                 .font(GargantuaFonts.heading)
@@ -41,7 +41,7 @@ extension RuleViewerView {
         }
     }
 
-    func ruleMetadata(_ rule: ScanRule) -> some View {
+    private func ruleMetadata(_ rule: ScanRule) -> some View {
         HStack(spacing: GargantuaSpacing.space4) {
             metadataBadge(
                 label: rule.safety.rawValue.uppercased(),
@@ -58,7 +58,7 @@ extension RuleViewerView {
         }
     }
 
-    func rulePaths(_ rule: ScanRule) -> some View {
+    private func rulePaths(_ rule: ScanRule) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             Text("Paths")
                 .font(GargantuaFonts.label)
@@ -93,7 +93,7 @@ extension RuleViewerView {
         }
     }
 
-    func ruleYAML(_ rule: ScanRule) -> some View {
+    private func ruleYAML(_ rule: ScanRule) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             Text("YAML Definition")
                 .font(GargantuaFonts.label)
@@ -109,7 +109,7 @@ extension RuleViewerView {
         }
     }
 
-    var pathExclusionSection: some View {
+    private var pathExclusionSection: some View {
         PathExclusionSettingsSection(
             persistence: persistence,
             title: "Exclusions",

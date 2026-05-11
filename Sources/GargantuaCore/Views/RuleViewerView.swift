@@ -13,7 +13,7 @@ public struct RuleViewerView: View {
     @State var categories: [RuleCategory] = []
     @State var selectedCategory: String?
     @State var selectedRuleID: String?
-    @State var isLoading = true
+    @State private var isLoading = true
 
     public init(persistence: PersistenceController) {
         self.persistence = persistence
