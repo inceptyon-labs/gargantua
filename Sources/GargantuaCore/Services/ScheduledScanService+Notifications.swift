@@ -50,11 +50,3 @@ public struct NoopScheduledScanNotifier: ScheduledScanNotificationDelivering {
         }
     }
 #endif
-
-private func defaultScheduledScanNotifier() -> any ScheduledScanNotificationDelivering {
-    #if os(macOS)
-        return UserNotificationScheduledScanNotifier()
-    #else
-        return NoopScheduledScanNotifier()
-    #endif
-}
