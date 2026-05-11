@@ -14,17 +14,18 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     /// blip during the window.
     public static let defaultSampleIntervalNanoseconds: UInt64 = 500_000_000
 
-    let snapshotProvider: any ProcessSnapshotProviding
-    let launchdIndex: any LaunchdItemIndexing
+    private let snapshotProvider: any ProcessSnapshotProviding
+    private let launchdIndex: any LaunchdItemIndexing
+    // Internal (not private) so peer-file extensions can read them.
     let resolver: any BinaryIdentityResolving
     let matcher: ProcessLaunchSourceMatcher
     let classifier: ProcessSafetyClassifier
     let fileExists: @Sendable (String) -> Bool
-    let userNameForUID: @Sendable (UInt32) -> String?
-    let foregroundPIDs: @Sendable () -> Set<Int32>
-    let sampleIntervalNanoseconds: UInt64
-    let now: @Sendable () -> Date
-    let sleep: @Sendable (UInt64) async -> Void
+    private let userNameForUID: @Sendable (UInt32) -> String?
+    private let foregroundPIDs: @Sendable () -> Set<Int32>
+    private let sampleIntervalNanoseconds: UInt64
+    private let now: @Sendable () -> Date
+    private let sleep: @Sendable (UInt64) async -> Void
 
     public init(
         snapshotProvider: any ProcessSnapshotProviding = DefaultProcessSnapshotProvider(),
