@@ -77,7 +77,10 @@ extension SettingsView {
                 if shouldShowMLXDownloadNotice {
                     SettingsNoticeRow(
                         icon: "arrow.down.circle",
-                        message: "MLX needs the local model before it can be used. The app will use template explanations until the download is ready.",
+                        message: """
+                        MLX needs the local model before it can be used. The app will use \
+                        template explanations until the download is ready.
+                        """,
                         tone: .info
                     )
                 }
