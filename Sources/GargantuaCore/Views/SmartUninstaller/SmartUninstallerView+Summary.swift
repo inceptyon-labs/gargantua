@@ -63,7 +63,7 @@ extension SmartUninstallerView {
 
     // MARK: - Accent Helper
 
-    func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {
+    private func outcomeAccentColor(_ accent: SingularityCloseMessage.OutcomeAccent) -> Color {
         switch accent {
         case .safe: return GargantuaColors.safe
         case .accretion: return GargantuaColors.accretion
