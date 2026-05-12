@@ -169,7 +169,7 @@ struct UninstallAppPickerView: View {
         .help("Re-enumerate every installed app from scratch (⌘R)")
     }
 
-    func accessibilityLabel(for app: AppInfo, categoryCount: Int?) -> String {
+    private func accessibilityLabel(for app: AppInfo, categoryCount: Int?) -> String {
         var parts: [String] = [app.displayName ?? app.name]
         if let size = app.sizeOnDisk {
             parts.append(AlertItem.formatBytes(size))
