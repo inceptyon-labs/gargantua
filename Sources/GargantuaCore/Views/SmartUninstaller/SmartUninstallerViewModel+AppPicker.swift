@@ -144,7 +144,7 @@ extension SmartUninstallerViewModel {
     /// show "X categories" without users having to drill in. Throttled to
     /// 4 concurrent plans so a couple hundred installed apps don't peg the
     /// CPU during routine picker browsing.
-    func startBackgroundCategoryCountScan() {
+    private func startBackgroundCategoryCountScan() {
         categoryCountTask?.cancel()
         categoryCountTask = nil
         // Snapshot the apps list and planner so the detached task doesn't
@@ -169,7 +169,7 @@ extension SmartUninstallerViewModel {
     /// Walk `apps` and emit `(bundleID, distinctCategoryCount)` per app via
     /// `report`. Limits in-flight planner calls to `concurrency` so heavy
     /// picker scans don't overwhelm the system.
-    static func scanCategoryCounts(
+    private static func scanCategoryCounts(
         apps: [AppInfo],
         planner: any UninstallPlanning,
         concurrency: Int,
