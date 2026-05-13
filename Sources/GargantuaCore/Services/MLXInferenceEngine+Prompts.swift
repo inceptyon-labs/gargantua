@@ -69,7 +69,11 @@ extension MLXInferenceEngine {
         lines.append("Canonical context: \(rule.explanation)")
         lines.append("")
         lines.append(
-            "Decide whether this process deserves user attention. Recommend one next step: leave running, investigate, or consider stopping. Do not claim it is malware unless the metadata proves it; use suspicious or worth reviewing when evidence is limited. Mention that stopping a process can disrupt the app that owns it."
+            "Decide whether this process deserves user attention. "
+            + "Recommend one next step: leave running, investigate, or consider stopping. "
+            + "Do not claim it is malware unless the metadata proves it; "
+            + "use suspicious or worth reviewing when evidence is limited. "
+            + "Mention that stopping a process can disrupt the app that owns it."
         )
         return lines.joined(separator: "\n")
     }
@@ -84,7 +88,11 @@ extension MLXInferenceEngine {
         lines.append("Canonical context: \(rule.explanation)")
         lines.append("")
         lines.append(
-            "Decide whether this background item deserves user attention. Recommend one next step: leave enabled, investigate, disable first, or remove only after disabling. Do not claim it is malware unless the metadata proves it; use suspicious or worth reviewing when evidence is limited."
+            "Decide whether this background item deserves user attention. "
+            + "Recommend one next step: leave enabled, investigate, disable first, "
+            + "or remove only after disabling. "
+            + "Do not claim it is malware unless the metadata proves it; "
+            + "use suspicious or worth reviewing when evidence is limited."
         )
         return lines.joined(separator: "\n")
     }

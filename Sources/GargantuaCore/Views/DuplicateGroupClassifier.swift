@@ -233,7 +233,16 @@ private let patterns: [PathPattern] = [
         build: { _, sample, crumb in
             let bucket: String
             let icon: String
-            if sample.contains("/Movies/") { bucket = "Movies"; icon = "film" } else if sample.contains("/Music/") { bucket = "Music"; icon = "music.note" } else { bucket = "Pictures"; icon = "photo.stack" }
+            if sample.contains("/Movies/") {
+                bucket = "Movies"
+                icon = "film"
+            } else if sample.contains("/Music/") {
+                bucket = "Music"
+                icon = "music.note"
+            } else {
+                bucket = "Pictures"
+                icon = "photo.stack"
+            }
             return DuplicateGroupClassification(
                 title: "\(bucket) · Personal media",
                 icon: icon,
