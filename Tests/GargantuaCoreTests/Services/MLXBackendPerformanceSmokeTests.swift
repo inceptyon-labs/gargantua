@@ -43,6 +43,7 @@ private func resolveSmokeModelDirectory() throws -> URL {
     return URL(fileURLWithPath: path, isDirectory: true)
 }
 
+@MainActor
 private func measureSeconds<T>(
     _ operation: () async throws -> T
 ) async throws -> (T, Double) {
