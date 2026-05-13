@@ -2,38 +2,6 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
-private func makeRule() -> ScanRule {
-    ScanRule(
-        id: "chrome_cache",
-        name: "Chrome Browser Cache",
-        paths: ["~/Library/Caches/Google/Chrome"],
-        safety: .safe,
-        confidence: 98,
-        explanation: "Cache files regenerated automatically.",
-        source: SourceAttribution(name: "Google Chrome", bundleID: "com.google.Chrome"),
-        regenerates: true,
-        regenerateCommand: nil,
-        category: "browser_cache",
-        tags: ["browser", "cache"]
-    )
-}
-
-private func makeResult() -> ScanResult {
-    ScanResult(
-        id: "chrome_cache_001",
-        name: "Chrome Browser Cache",
-        path: "/Users/test/Library/Caches/Google/Chrome",
-        size: 500_000_000,
-        safety: .safe,
-        confidence: 98,
-        explanation: "Cache files regenerated automatically.",
-        source: SourceAttribution(name: "Google Chrome", bundleID: "com.google.Chrome"),
-        category: "browser_cache",
-        tags: ["browser", "cache"],
-        regenerates: true
-    )
-}
-
 @MainActor
 private func makeNeverDownloadedManager() -> ModelDownloadManager {
     let info = ModelInfo(
