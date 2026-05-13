@@ -107,76 +107,51 @@ extension ClaudeCodeAgentSessionControllerTests {
 
     @Test("Cache is cleared between sessions so old IDs don't leak into a new run's approve()")
     func sessionStartClearsScanCache() async throws {
-        // First session populates the cache with one item.
+        // Drives ONE long-lived controller through two `start()` calls. The
+        // cache-clear in `start()` is only observable when both sessions
+        // share the same controller (and therefore the same per-instance
+        // `scanCache`).
+        //
+        // Session 1 emits a scan that puts `stale-1` into the cache.
+        // Session 2 emits NO scan but does emit a clean call referencing
+        // `stale-1`. If `start()` clears the cache, the second session's
+        // `approve()` lands `stale-1` in `unresolvedItemIDs`; if the
+        // cache-clear is removed, `stale-1` would still resolve from
+        // session 1's data and this test would fail on `pending.items.isEmpty`.
         let firstScanLine = #"""
         {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_first","type":"tool_result","content":"summary"}]},"tool_use_result":{"content":"summary","structuredContent":{"items":[{"id":"stale-1","name":"Stale","path":"/tmp/stale-1","size":"1 KB","safety":"safe","confidence":90,"explanation":"old","source":"X","category":"browser_cache"}],"summary":{"safe_count":1,"safe_size":"1 KB","review_count":0,"review_size":"0 bytes","protected_count":0},"total_reclaimable":"1 KB"}}}
         """#
-        let firstRunner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
-            .stdout(firstScanLine + "\n"),
-        ]))
-        let controller = ClaudeCodeAgentSessionController(runner: firstRunner)
-        controller.start(template: .investigateSpace, userContext: "first")
-        _ = await waitForTerminalStatus(controller)
-
-        // Second session: fresh runner, NO scan emitted, then a clean call
-        // referencing the previous session's ID. Pre-fix the cache would
-        // still hold `stale-1` from session 1 and `lookupAll` would
-        // resolve it; post-fix `start()` clears the cache so the ID is
-        // unresolved as expected.
         let cleanCall = #"""
         {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_stale_clean","name":"mcp__gargantua__clean","input":{"item_ids":["stale-1"],"method":"trash","confirm":true,"dry_run":true}}]}}
         """#
-        // Reuse the same controller — exercises start()'s cache reset.
-        // Inject a new runner via the existing test seam by constructing
-        // a fresh controller with the appropriate executor.
-        let secondRunner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
-            .stdout(cleanCall + "\n"),
-        ]))
-        let secondController = ClaudeCodeAgentSessionController(runner: secondRunner)
-        // Mimic prior cache contamination by warming up the cache via a
-        // first run on this fresh controller, then starting a second
-        // session that should reset.
-        let warmup = #"""
-        {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_warm","type":"tool_result","content":"summary"}]},"tool_use_result":{"content":"summary","structuredContent":{"items":[{"id":"stale-1","name":"Stale","path":"/tmp/stale-1","size":"1 KB","safety":"safe","confidence":90,"explanation":"old","source":"X","category":"browser_cache"}],"summary":{"safe_count":1,"safe_size":"1 KB","review_count":0,"review_size":"0 bytes","protected_count":0},"total_reclaimable":"1 KB"}}}
-        """#
-        let combinedRunner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
-            .stdout(warmup + "\n"),
-        ]))
-        let combinedController = ClaudeCodeAgentSessionController(runner: combinedRunner)
-        combinedController.start(template: .investigateSpace, userContext: "warmup")
-        _ = await waitForTerminalStatus(combinedController)
-        // Now start a new session that emits no scan but does emit a
-        // clean call referencing stale-1. With the cache cleared at
-        // start(), the ID lands in unresolvedItemIDs.
-        let restartRunner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
-            .stdout(cleanCall + "\n"),
-        ]))
-        let restartedSecond = ClaudeCodeAgentSessionController(runner: restartRunner)
-        // We can't share controllers across runners, so this test asserts
-        // the cleanest property: a fresh controller with no scan stream
-        // but a clean-call stream produces an all-unresolved gate. (If
-        // start() failed to clear cache from a previous controller's
-        // singleton-shared cache, this would still pass because the cache
-        // is per-instance — but on the actual product the controller is
-        // a long-lived ObservableObject and the equivalent invariant is
-        // 'start() clears'. The combinedController + restartedSecond
-        // pair below exercises that path directly.)
-        restartedSecond.start(template: .investigateSpace, userContext: "fresh")
-        _ = await waitForTerminalStatus(restartedSecond)
+        let executor = ControllerFakeProcessExecutor(outputScripts: [
+            [.stdout(firstScanLine + "\n")],
+            [.stdout(cleanCall + "\n")],
+        ])
+        let runner = try makeRunner(executor: executor)
+        let controller = ClaudeCodeAgentSessionController(runner: runner)
 
-        let restartedGate = try #require(restartedSecond.approvalGates.first)
-        restartedSecond.approve(restartedGate)
-        // Cache was cleared on start() — even if the gate references
-        // stale-1, lookupAll comes back with unresolvedItemIDs.
-        let pending = try #require(restartedSecond.pendingApproval)
+        // Session 1: scan populates the cache with `stale-1`.
+        controller.start(template: .investigateSpace, userContext: "first")
+        _ = await waitForTerminalStatus(controller)
+
+        // Session 2 on the SAME controller. `start()` must clear the cache
+        // before this session's stream is processed; otherwise the agent's
+        // clean call would resolve `stale-1` against session 1's data.
+        controller.start(template: .investigateSpace, userContext: "second")
+        _ = await waitForTerminalStatus(controller)
+
+        let gate = try #require(controller.approvalGates.first { $0.proposedItemIDs == ["stale-1"] })
+        controller.approve(gate)
+
+        let pending = try #require(controller.pendingApproval)
+        #expect(pending.gateID == gate.id)
+        // Cache was cleared on session 2's start() — the gate's ID
+        // resolves to nothing, and `stale-1` falls into the unresolved
+        // bucket. If the cache-clear is removed, `pending.items` would
+        // contain the session-1 ScanResult and this assertion fails.
         #expect(pending.items.isEmpty)
         #expect(pending.unresolvedItemIDs == ["stale-1"])
-
-        // Sanity: the restartedFirst controller still has stale-1 if we
-        // were to query it (no API exists; this just documents the
-        // boundary).
-        _ = controller
-        _ = secondController
     }
 }
 // swiftlint:enable line_length

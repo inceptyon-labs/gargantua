@@ -70,6 +70,7 @@ struct ControllerExecutorFailure: Error, LocalizedError {
 final class ControllerFakeProcessExecutor: ClaudeCodeAgentProcessExecuting, @unchecked Sendable {
     private let lock = NSLock()
     private let outputs: [ClaudeCodeProcessOutput]
+    private var pendingScripts: [[ClaudeCodeProcessOutput]]?
     private let exitCode: Int32
     private let error: Error?
     private var didCancelStorage = false
@@ -80,6 +81,22 @@ final class ControllerFakeProcessExecutor: ClaudeCodeAgentProcessExecuting, @unc
         error: Error? = nil
     ) {
         self.outputs = outputs
+        self.pendingScripts = nil
+        self.exitCode = exitCode
+        self.error = error
+    }
+
+    /// Each call to `start(...)` consumes one script from `outputScripts`.
+    /// Use this when a single controller drives multiple `start()` calls and
+    /// each session needs its own output stream. Once the script queue is
+    /// exhausted, further calls emit nothing.
+    init(
+        outputScripts: [[ClaudeCodeProcessOutput]],
+        exitCode: Int32 = 0,
+        error: Error? = nil
+    ) {
+        self.outputs = []
+        self.pendingScripts = outputScripts
         self.exitCode = exitCode
         self.error = error
     }
@@ -100,7 +117,7 @@ final class ControllerFakeProcessExecutor: ClaudeCodeAgentProcessExecuting, @unc
         if let error {
             throw error
         }
-        for output in outputs {
+        for output in nextOutputs() {
             onOutput(output)
         }
         return exitCode
@@ -110,5 +127,15 @@ final class ControllerFakeProcessExecutor: ClaudeCodeAgentProcessExecuting, @unc
         lock.lock()
         didCancelStorage = true
         lock.unlock()
+    }
+
+    private func nextOutputs() -> [ClaudeCodeProcessOutput] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard var scripts = pendingScripts else { return outputs }
+        guard !scripts.isEmpty else { return [] }
+        let next = scripts.removeFirst()
+        pendingScripts = scripts
+        return next
     }
 }
