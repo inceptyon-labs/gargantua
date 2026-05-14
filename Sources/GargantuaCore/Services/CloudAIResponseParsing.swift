@@ -43,14 +43,14 @@ struct OrganizerProposalPayload: Decodable {
 }
 
 struct OrganizerProposalPlanPayload: Decodable {
+    let clusterID: String
     let name: String
     let reasoning: String
-    let itemIDs: [String]
 
     enum CodingKeys: String, CodingKey {
+        case clusterID = "cluster_id"
         case name
         case reasoning
-        case itemIDs = "item_ids"
     }
 }
 

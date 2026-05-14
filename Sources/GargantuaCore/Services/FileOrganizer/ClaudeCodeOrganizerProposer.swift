@@ -47,9 +47,10 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
         let executable = try cliResolver.resolve(configuration: configuration)
 
         let listing = try CloudOrganizerProposer.listFolder(at: sourceFolder, fileManager: fileManager)
-        let prompt = try CloudOrganizerProposer.buildPrompt(
+        let clusters = OrganizerClusterer.cluster(listing)
+        let prompt = CloudOrganizerProposer.buildPrompt(
             folderName: sourceFolder.lastPathComponent,
-            items: listing
+            clusters: clusters
         )
 
         let output = try await runOneShot(
@@ -61,7 +62,8 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
         return try CloudOrganizerProposer.parseResponse(
             text: output,
             sourceFolder: sourceFolder,
-            listing: listing,
+            clusters: clusters,
+            backend: .cloud,
             generatedAt: now()
         )
     }

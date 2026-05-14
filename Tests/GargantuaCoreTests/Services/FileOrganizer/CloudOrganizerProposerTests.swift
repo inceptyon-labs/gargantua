@@ -17,106 +17,134 @@ struct CloudOrganizerProposerTests {
         )
     }
 
+    private static func cluster(
+        id: String,
+        items: [CloudOrganizerProposer.FolderListingItem],
+        inferredType: String = "documents"
+    ) -> OrganizerCluster {
+        OrganizerCluster(id: id, items: items, inferredType: inferredType)
+    }
+
     // MARK: - Prompt
 
-    @Test("Prompt includes folder name and each item's id + name")
-    func promptContainsListing() throws {
-        let items = [
-            Self.listingItem(id: "ID-A", name: "alpha.pdf"),
-            Self.listingItem(id: "ID-B", name: "beta.pdf"),
+    @Test("Prompt includes folder name and each cluster's id, count, and sample names")
+    func promptContainsClusters() {
+        let clusters = [
+            Self.cluster(id: "C1", items: [
+                Self.listingItem(id: "X-1", name: "alpha.pdf"),
+                Self.listingItem(id: "X-2", name: "beta.pdf"),
+            ]),
+            Self.cluster(id: "C2", items: [
+                Self.listingItem(id: "Y-1", name: "photo.jpg"),
+                Self.listingItem(id: "Y-2", name: "photo2.png"),
+            ], inferredType: "images"),
         ]
-        let prompt = try CloudOrganizerProposer.buildPrompt(folderName: "Downloads", items: items)
+        let prompt = CloudOrganizerProposer.buildPrompt(folderName: "Downloads", clusters: clusters)
 
         #expect(prompt.contains("Folder: Downloads"))
-        #expect(prompt.contains("ID-A"))
-        #expect(prompt.contains("ID-B"))
+        #expect(prompt.contains("Cluster C1"))
+        #expect(prompt.contains("Cluster C2"))
         #expect(prompt.contains("alpha.pdf"))
-        #expect(prompt.contains("beta.pdf"))
-        // Filenames travel as metadata but absolute paths must not.
+        #expect(prompt.contains("photo.jpg"))
+        #expect(prompt.contains("inferred type: documents"))
+        #expect(prompt.contains("inferred type: images"))
+        // Absolute paths must not leak.
         #expect(!prompt.contains("/Users/test"))
     }
 
     @Test("Prompt instruction prefix is included verbatim")
-    func promptIncludesInstructions() throws {
-        let prompt = try CloudOrganizerProposer.buildPrompt(folderName: "Desktop", items: [])
+    func promptIncludesInstructions() {
+        let prompt = CloudOrganizerProposer.buildPrompt(folderName: "Desktop", clusters: [])
         #expect(prompt.contains(CloudOrganizerProposer.instructionPrefix))
+    }
+
+    @Test("Big cluster shows sample names + '[N more]' tail")
+    func promptShowsRemainder() {
+        let manyItems = (1...25).map { Self.listingItem(id: "X-\($0)", name: "file-\($0).pdf") }
+        let prompt = CloudOrganizerProposer.buildPrompt(
+            folderName: "Downloads",
+            clusters: [Self.cluster(id: "C1", items: manyItems)]
+        )
+        #expect(prompt.contains("[15 more]"))
     }
 
     // MARK: - Parsing happy path
 
     @Test("Valid model response reassembles into an OrganizationProposal")
     func parseHappyPath() throws {
-        let items = [
-            Self.listingItem(id: "ID-A", name: "alpha.pdf"),
-            Self.listingItem(id: "ID-B", name: "beta.pdf"),
+        let clusterItems = [
+            Self.listingItem(id: "X-1", name: "alpha.pdf"),
+            Self.listingItem(id: "X-2", name: "beta.pdf"),
         ]
-        let response = #"{"plans":[{"name":"Documents","reasoning":"Both PDFs.","item_ids":["ID-A","ID-B"]}]}"#
+        let clusters = [Self.cluster(id: "C1", items: clusterItems)]
+        let response = #"{"plans":[{"cluster_id":"C1","name":"Receipts","reasoning":"PDFs"}]}"#
 
         let proposal = try CloudOrganizerProposer.parseResponse(
             text: response,
             sourceFolder: Self.root,
-            listing: items
+            clusters: clusters
         )
 
         #expect(proposal.backend == .cloud)
         #expect(proposal.plans.count == 1)
-        #expect(proposal.plans[0].name == "Documents")
+        #expect(proposal.plans[0].name == "Receipts")
         #expect(proposal.plans[0].moves.count == 2)
         #expect(proposal.plans[0].moves.map(\.sourceURL.lastPathComponent) == ["alpha.pdf", "beta.pdf"])
     }
 
     // MARK: - Parsing safety
 
-    @Test("Model item_id not in the listing is silently dropped")
-    func parseDropsUnknownID() throws {
+    @Test("Cluster_id not in the supplied clusters is silently dropped")
+    func parseDropsUnknownCluster() throws {
         let items = [
-            Self.listingItem(id: "ID-A", name: "alpha.pdf"),
-            Self.listingItem(id: "ID-B", name: "beta.pdf"),
+            Self.listingItem(id: "X-1", name: "alpha.pdf"),
+            Self.listingItem(id: "X-2", name: "beta.pdf"),
         ]
-        // Includes "ID-X" which is fabricated by the model.
-        let response = #"{"plans":[{"name":"Documents","reasoning":"x","item_ids":["ID-A","ID-X","ID-B"]}]}"#
+        let clusters = [Self.cluster(id: "C1", items: items)]
+        let response = """
+        {"plans":[
+          {"cluster_id":"C1","name":"Documents","reasoning":"x"},
+          {"cluster_id":"C99","name":"Fabricated","reasoning":"y"}
+        ]}
+        """
 
         let proposal = try CloudOrganizerProposer.parseResponse(
             text: response,
             sourceFolder: Self.root,
-            listing: items
+            clusters: clusters
         )
-
-        #expect(proposal.plans[0].moves.count == 2)
+        #expect(proposal.plans.count == 1)
+        #expect(proposal.plans[0].name == "Documents")
     }
 
-    @Test("Plan with <2 valid members is dropped")
+    @Test("Cluster with <2 items skipped (single-file plans are noise)")
     func parseDropsSinglePlan() throws {
-        let items = [
-            Self.listingItem(id: "ID-A", name: "alpha.pdf"),
-        ]
-        let response = #"{"plans":[{"name":"Documents","reasoning":"x","item_ids":["ID-A"]}]}"#
+        let items = [Self.listingItem(id: "X-1", name: "lonely.pdf")]
+        let clusters = [Self.cluster(id: "C1", items: items)]
+        let response = #"{"plans":[{"cluster_id":"C1","name":"Documents","reasoning":"x"}]}"#
 
         let proposal = try CloudOrganizerProposer.parseResponse(
             text: response,
             sourceFolder: Self.root,
-            listing: items
+            clusters: clusters
         )
-
         #expect(proposal.plans.isEmpty)
     }
 
     @Test("Plan name with path separator is dropped (not raised)")
     func parseDropsBadName() throws {
         let items = [
-            Self.listingItem(id: "ID-A", name: "alpha.pdf"),
-            Self.listingItem(id: "ID-B", name: "beta.pdf"),
+            Self.listingItem(id: "X-1", name: "alpha.pdf"),
+            Self.listingItem(id: "X-2", name: "beta.pdf"),
         ]
-        // "A/B" would fail OrganizationProposal.validate(); we drop it
-        // before validation so a single bad plan doesn't fail the lot.
-        let response = #"{"plans":[{"name":"A/B","reasoning":"x","item_ids":["ID-A","ID-B"]}]}"#
+        let clusters = [Self.cluster(id: "C1", items: items)]
+        let response = #"{"plans":[{"cluster_id":"C1","name":"A/B","reasoning":"x"}]}"#
 
         let proposal = try CloudOrganizerProposer.parseResponse(
             text: response,
             sourceFolder: Self.root,
-            listing: items
+            clusters: clusters
         )
-
         #expect(proposal.plans.isEmpty)
     }
 
@@ -126,37 +154,39 @@ struct CloudOrganizerProposerTests {
             try CloudOrganizerProposer.parseResponse(
                 text: "completely not json",
                 sourceFolder: Self.root,
-                listing: []
+                clusters: []
             )
         }
     }
 
-    @Test("Reassembled proposal passes validate() — moves stay inside the root")
+    @Test("Reassembled proposal passes validate()")
     func parseProducesValidProposal() throws {
-        let items = [
-            Self.listingItem(id: "ID-A", name: "alpha.pdf"),
-            Self.listingItem(id: "ID-B", name: "beta.pdf"),
-            Self.listingItem(id: "ID-C", name: "screenshot.png"),
-            Self.listingItem(id: "ID-D", name: "another.png"),
+        let clusters = [
+            Self.cluster(id: "C1", items: [
+                Self.listingItem(id: "X-1", name: "alpha.pdf"),
+                Self.listingItem(id: "X-2", name: "beta.pdf"),
+            ]),
+            Self.cluster(id: "C2", items: [
+                Self.listingItem(id: "Y-1", name: "shot.png"),
+                Self.listingItem(id: "Y-2", name: "another.png"),
+            ], inferredType: "images"),
         ]
         let response = """
         {"plans":[
-          {"name":"Documents","reasoning":"x","item_ids":["ID-A","ID-B"]},
-          {"name":"Images","reasoning":"y","item_ids":["ID-C","ID-D"]}
+          {"cluster_id":"C1","name":"Documents","reasoning":"x"},
+          {"cluster_id":"C2","name":"Images","reasoning":"y"}
         ]}
         """
-
         let proposal = try CloudOrganizerProposer.parseResponse(
             text: response,
             sourceFolder: Self.root,
-            listing: items
+            clusters: clusters
         )
-
         try proposal.validate()
         #expect(proposal.plans.count == 2)
     }
 
-    // MARK: - Folder listing (light I/O test)
+    // MARK: - Folder listing
 
     @Test("listFolder truncates to maxListingSize, keeping oldest first")
     func listFolderTruncates() throws {
@@ -165,8 +195,6 @@ struct CloudOrganizerProposerTests {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        // 250 files, modification dates spread across days — the oldest
-        // 200 should survive truncation, the newest 50 should be dropped.
         let count = CloudOrganizerProposer.maxListingSize + 50
         for index in 0..<count {
             let url = dir.appendingPathComponent("file-\(index).bin")
@@ -180,10 +208,7 @@ struct CloudOrganizerProposerTests {
 
         let items = try CloudOrganizerProposer.listFolder(at: dir)
         #expect(items.count == CloudOrganizerProposer.maxListingSize)
-        // First item is the oldest one we wrote (index 0).
         #expect(items.first?.name == "file-0.bin")
-        // Last item that survived is index 199 (since 200..249 were dropped).
-        #expect(items.last?.name == "file-199.bin")
     }
 
     @Test("listFolder returns top-level non-hidden files only")

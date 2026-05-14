@@ -75,32 +75,34 @@ struct MLXOrganizerProposerTests {
 
     // MARK: - prompt builder
 
-    @Test("Prompt includes the worked example and the user's listing")
-    func promptHasExampleAndItems() {
+    @Test("Prompt includes the worked example and the user's clusters")
+    func promptHasExampleAndClusters() {
         let items = [
             CloudOrganizerProposer.FolderListingItem(
                 id: "X-1",
                 url: URL(fileURLWithPath: "/tmp/alpha.pdf"),
                 name: "alpha.pdf",
                 sizeBytes: 100,
-                modifiedAt: Date()
+                modifiedAt: Date(timeIntervalSince1970: 1)
             ),
             CloudOrganizerProposer.FolderListingItem(
                 id: "X-2",
                 url: URL(fileURLWithPath: "/tmp/beta.pdf"),
                 name: "beta.pdf",
                 sizeBytes: 200,
-                modifiedAt: Date()
+                modifiedAt: Date(timeIntervalSince1970: 2)
             ),
         ]
+        let clusters = [OrganizerCluster(id: "C1", items: items, inferredType: "documents")]
         let prompt = MLXOrganizerProposer.buildSmallModelPrompt(
             folderName: "Downloads",
-            items: items
+            clusters: clusters
         )
         #expect(prompt.contains("ExampleFolder"))
         #expect(prompt.contains("receipt-jan.pdf"))
         #expect(prompt.contains("Folder: Downloads"))
-        #expect(prompt.contains("X-1: alpha.pdf"))
-        #expect(prompt.contains("X-2: beta.pdf"))
+        #expect(prompt.contains("Cluster C1"))
+        #expect(prompt.contains("alpha.pdf"))
+        #expect(prompt.contains("beta.pdf"))
     }
 }

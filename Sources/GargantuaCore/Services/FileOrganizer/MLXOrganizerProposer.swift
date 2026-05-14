@@ -39,9 +39,10 @@ public final class MLXOrganizerProposer {
 
     public func propose(sourceFolder: URL) async throws -> OrganizationProposal {
         let listing = try CloudOrganizerProposer.listFolder(at: sourceFolder, fileManager: fileManager)
+        let clusters = OrganizerClusterer.cluster(listing)
         let prompt = Self.buildSmallModelPrompt(
             folderName: sourceFolder.lastPathComponent,
-            items: listing
+            clusters: clusters
         )
         guard let raw = await aiService.organize(prompt: prompt) else {
             throw MLXOrganizerError.modelNotLoaded
@@ -58,7 +59,8 @@ public final class MLXOrganizerProposer {
             return try CloudOrganizerProposer.parseResponse(
                 text: extracted,
                 sourceFolder: sourceFolder,
-                listing: listing,
+                clusters: clusters,
+                backend: .local,
                 generatedAt: now()
             )
         } catch {
@@ -72,33 +74,36 @@ public final class MLXOrganizerProposer {
 
     // MARK: - Small-model prompt
 
-    /// One-shot prompt tuned for Llama-3.2-1B-class quants. Includes a
-    /// worked example so the model stays on the JSON-out rails — without
-    /// the example, 1B models drift into prose or YAML 80%+ of the time.
+    /// One-shot cluster-labeling prompt tuned for Llama-3.2-1B-class
+    /// quants. Includes a worked example so the model stays on the
+    /// JSON-out rails — without one, 1B models drift into prose or
+    /// YAML 80%+ of the time.
     static func buildSmallModelPrompt(
         folderName: String,
-        items: [CloudOrganizerProposer.FolderListingItem]
+        clusters: [OrganizerCluster]
     ) -> String {
         let examplePrompt = """
         Folder: ExampleFolder
-        Files:
-        - a1: receipt-jan.pdf
-        - a2: receipt-feb.pdf
-        - b1: photo1.jpg
-        - b2: photo2.jpg
+
+        Cluster C1 (4 files, documents): receipt-jan.pdf, receipt-feb.pdf, invoice-acme.pdf, contract.pdf
+        Cluster C2 (3 files, images): IMG_0001.jpg, IMG_0002.jpg, photo.png
         """
         let exampleAnswer = """
         {"plans":[\
-        {"name":"Receipts","reasoning":"PDFs that look like receipts","item_ids":["a1","a2"]},\
-        {"name":"Photos","reasoning":"Image files","item_ids":["b1","b2"]}\
+        {"cluster_id":"C1","name":"Receipts","reasoning":"PDFs that look like financial documents"},\
+        {"cluster_id":"C2","name":"Photos","reasoning":"Camera and image files"}\
         ]}
         """
 
-        let lines = items.map { "- \($0.id): \($0.name)" }.joined(separator: "\n")
+        let body = clusters.map { cluster -> String in
+            let samples = cluster.sampleNames(limit: 8).joined(separator: ", ")
+            return "Cluster \(cluster.id) (\(cluster.items.count) files, \(cluster.inferredType)): \(samples)"
+        }.joined(separator: "\n")
+
         return """
-        Group these files into subfolders. Return JSON only — no prose, \
-        no markdown, no code fences. Every item_id you return must appear \
-        in the input.
+        Label each cluster of files. Return JSON only — no prose, \
+        no markdown, no code fences. Every cluster_id you return must \
+        appear in the input.
 
         Example input:
         \(examplePrompt)
@@ -106,11 +111,11 @@ public final class MLXOrganizerProposer {
         Example output:
         \(exampleAnswer)
 
-        Now do the same for these files.
+        Now do the same.
 
         Folder: \(folderName)
-        Files:
-        \(lines)
+
+        \(body)
 
         JSON:
         """

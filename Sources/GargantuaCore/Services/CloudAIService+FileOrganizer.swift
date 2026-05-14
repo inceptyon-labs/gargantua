@@ -16,16 +16,18 @@ extension CloudAIService {
         sourceFolder: URL
     ) async throws -> CloudOrganizerResult {
         let listing = try CloudOrganizerProposer.listFolder(at: sourceFolder, fileManager: fileManager)
+        let clusters = OrganizerClusterer.cluster(listing)
         let configuration = configurationStore.load()
-        let prompt = try CloudOrganizerProposer.buildPrompt(
+        let prompt = CloudOrganizerProposer.buildPrompt(
             folderName: sourceFolder.lastPathComponent,
-            items: listing
+            clusters: clusters
         )
         let completion = try await perform(
             feature: .fileOrganization,
             prompt: prompt,
             metadata: [
                 "item_count": "\(listing.count)",
+                "cluster_count": "\(clusters.count)",
                 "folder": sourceFolder.lastPathComponent,
             ],
             configuration: configuration
@@ -33,7 +35,8 @@ extension CloudAIService {
         let proposal = try CloudOrganizerProposer.parseResponse(
             text: completion.response.text,
             sourceFolder: sourceFolder,
-            listing: listing
+            clusters: clusters,
+            backend: .cloud
         )
         return CloudOrganizerResult(
             proposal: proposal,

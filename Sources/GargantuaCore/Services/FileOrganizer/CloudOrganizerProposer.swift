@@ -31,12 +31,11 @@ public enum CloudOrganizerProposer {
         }
     }
 
-    /// Max files to send to the model in a single proposal. Sonnet's
-    /// throughput on a JSON-organize task is roughly 5–10 files/sec; at
-    /// 200 we stay within a ~4-minute timeout budget. Folders larger
-    /// than this get truncated; the user can re-run after applying the
-    /// first batch.
-    public static let maxListingSize = 200
+    /// Max files included in the local listing. The cluster-summary
+    /// prompt compresses 100s of files into ~10 clusters in the actual
+    /// AI request, so this cap is now a safety belt against truly
+    /// pathological folders rather than a latency dial.
+    public static let maxListingSize = 2_000
 
     /// Top-level files in `folder`, skipping hidden entries and
     /// subdirectories. Mirrors `LocalOrganizerProposer.listEntries`.
@@ -79,35 +78,44 @@ public enum CloudOrganizerProposer {
     /// hasn't drifted, and so the prompt is reviewable from outside the
     /// type without round-tripping a full build.
     public static let instructionPrefix = """
-    You are organizing a single folder on a user's Mac. Group the files \
-    below into subfolders by topic, type, or theme — propose names a \
-    human would use ("Receipts", "Photos 2024", "Installers"). \
-    Skip files that are clearly active work or that don't fit a group. \
-    Return strict JSON only — no prose, no markdown fences. \
-    Every item_id you return MUST appear in the input. \
-    Schema: {"plans":[{"name":"Folder Name","reasoning":"why these belong together","item_ids":["id1","id2"]}]}.
+    You are labeling clusters of files I've already grouped for you. \
+    For each cluster, propose a folder name a human would use \
+    ("Receipts", "Photos 2024", "Installers") and one short reasoning \
+    line. Use the sample filenames as evidence — for example, a \
+    "documents" cluster whose samples all look like invoices should be \
+    named "Invoices", not the generic "Documents". Skip a cluster \
+    (omit it from your reply) if its samples don't suggest a coherent \
+    name. Return strict JSON only — no prose, no markdown fences. \
+    Schema: {"plans":[{"cluster_id":"C1","name":"Folder Name","reasoning":"..."}]}.
     """
 
     /// Build the prompt sent to the model. Pure — no I/O.
-    public static func buildPrompt(folderName: String, items: [FolderListingItem]) throws -> String {
-        let payload = items.map { item -> [String: Any] in
-            [
-                "id": item.id,
-                "name": item.name,
-                "size_bytes": item.sizeBytes,
-                "modified_at": ISO8601DateFormatter().string(from: item.modifiedAt),
-            ]
-        }
-        let json = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
-        guard let jsonString = String(data: json, encoding: .utf8) else {
-            throw CloudOrganizerProposerError.encodingFailed
-        }
+    ///
+    /// Sends cluster summaries (id, count, total bytes, sample names)
+    /// instead of every file's full record. Shrinks a 400-file folder
+    /// from ~47 KB down to ~2 KB and lets the AI focus on naming,
+    /// which is what it's actually good at.
+    public static func buildPrompt(folderName: String, clusters: [OrganizerCluster]) -> String {
+        let body = clusters.map(Self.render(cluster:)).joined(separator: "\n\n")
         return """
         \(instructionPrefix)
 
         Folder: \(folderName)
-        Files:
-        \(jsonString)
+
+        \(body)
+        """
+    }
+
+    private static func render(cluster: OrganizerCluster) -> String {
+        let totalSize = ByteCountFormatter.string(fromByteCount: cluster.totalBytes, countStyle: .file)
+        let samples = cluster.sampleNames(limit: 10)
+            .map { "  - \($0)" }
+            .joined(separator: "\n")
+        let remaining = cluster.items.count - min(10, cluster.items.count)
+        let remainingLine = remaining > 0 ? "\n  [\(remaining) more]" : ""
+        return """
+        Cluster \(cluster.id) (\(cluster.items.count) files, \(totalSize), inferred type: \(cluster.inferredType)):
+        \(samples)\(remainingLine)
         """
     }
 
@@ -119,20 +127,24 @@ public enum CloudOrganizerProposer {
     ///   - text: Raw model output. Extracted via `CloudAIJSONExtractor`.
     ///   - sourceFolder: Folder the listing came from. All produced
     ///     `MoveAction` destinations live under this folder.
-    ///   - listing: The listing the model was given. IDs the model
-    ///     returns that don't appear here are dropped silently — we'd
-    ///     rather under-organize than fabricate a move.
+    ///   - clusters: The clusters the model was given. The AI returns a
+    ///     name + reasoning per cluster_id and this method reassembles
+    ///     MoveActions from each matched cluster's full file list. A
+    ///     cluster_id the AI returns that doesn't appear here is dropped
+    ///     silently — we'd rather under-organize than fabricate a move.
+    ///   - backend: Which engine produced this proposal (.cloud or .local).
     ///   - generatedAt: Stamp on the proposal (injectable for tests).
     public static func parseResponse(
         text: String,
         sourceFolder: URL,
-        listing: [FolderListingItem],
+        clusters: [OrganizerCluster],
+        backend: ProposalBackend = .cloud,
         generatedAt: Date = Date()
     ) throws -> OrganizationProposal {
         guard let payload = CloudAIJSONExtractor.decode(OrganizerProposalPayload.self, from: text) else {
             throw CloudOrganizerProposerError.unparseableResponse
         }
-        let byID = Dictionary(uniqueKeysWithValues: listing.map { ($0.id, $0) })
+        let byID = Dictionary(uniqueKeysWithValues: clusters.map { ($0.id, $0) })
 
         let plans = payload.plans.compactMap { rawPlan -> OrganizationPlan? in
             // Empty / path-bearing names will be rejected by validate()
@@ -140,9 +152,9 @@ public enum CloudOrganizerProposer {
             // whole proposal.
             let trimmed = rawPlan.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.contains("\\") else { return nil }
+            guard let cluster = byID[rawPlan.clusterID] else { return nil }
 
-            let moves: [MoveAction] = rawPlan.itemIDs.compactMap { id in
-                guard let item = byID[id] else { return nil }
+            let moves: [MoveAction] = cluster.items.map { item in
                 let destination = sourceFolder
                     .appendingPathComponent(trimmed, isDirectory: true)
                     .appendingPathComponent(item.name)
@@ -161,7 +173,7 @@ public enum CloudOrganizerProposer {
         let proposal = OrganizationProposal(
             sourceFolder: sourceFolder,
             generatedAt: generatedAt,
-            backend: .cloud,
+            backend: backend,
             plans: plans
         )
         try proposal.validate()
@@ -170,12 +182,10 @@ public enum CloudOrganizerProposer {
 }
 
 public enum CloudOrganizerProposerError: Error, LocalizedError, Equatable {
-    case encodingFailed
     case unparseableResponse
 
     public var errorDescription: String? {
         switch self {
-        case .encodingFailed: "Failed to encode folder listing as JSON."
         case .unparseableResponse: "Cloud AI did not return parseable JSON."
         }
     }
