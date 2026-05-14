@@ -21,19 +21,22 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
     private let processFactory: @Sendable () -> Process
     private let now: @Sendable () -> Date
     private let fileManager: FileManager
+    private let timeoutSeconds: Int
 
     public init(
         configurationStore: ClaudeCodeAgentConfigurationStore = ClaudeCodeAgentConfigurationStore(),
         cliResolver: ClaudeCodeCLIResolver = ClaudeCodeCLIResolver(),
         processFactory: @Sendable @escaping () -> Process = { Process() },
         now: @Sendable @escaping () -> Date = Date.init,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        timeoutSeconds: Int = 90
     ) {
         self.configurationStore = configurationStore
         self.cliResolver = cliResolver
         self.processFactory = processFactory
         self.now = now
         self.fileManager = fileManager
+        self.timeoutSeconds = timeoutSeconds
     }
 
     public func propose(sourceFolder: URL) async throws -> OrganizationProposal {
@@ -64,6 +67,12 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
     }
 
     private func runOneShot(executable: URL, prompt: String, model: String) async throws -> String {
+        // Stop claude from probing MCP servers, allowed tools, or any other
+        // agentic discovery — we want a one-shot completion only. A minimal
+        // empty MCP config + --strict-mcp-config short-circuits the search.
+        let emptyMCPConfig = try writeEmptyMCPConfig()
+        defer { try? fileManager.removeItem(at: emptyMCPConfig) }
+
         var arguments = [
             "-p",
             prompt,
@@ -71,48 +80,117 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
             "text",
             "--max-turns",
             "1",
+            "--mcp-config",
+            emptyMCPConfig.path,
+            "--strict-mcp-config",
         ]
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedModel.isEmpty {
             arguments += ["--model", trimmedModel]
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = processFactory()
-            process.executableURL = executable
-            process.arguments = arguments
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
+        claudeCodeOrganizerLogger.info(
+            "claude one-shot start: \(executable.path, privacy: .public) prompt-len=\(prompt.count) model=\(trimmedModel, privacy: .public)"
+        )
 
-            process.terminationHandler = { proc in
-                let stdout = (try? stdoutPipe.fileHandleForReading.readToEnd()) ?? Data()
-                let stderr = (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data()
-                if proc.terminationStatus == 0 {
-                    if let text = String(data: stdout, encoding: .utf8), !text.isEmpty {
-                        continuation.resume(returning: text)
+        let processBox = ProcessBox()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let process = processFactory()
+                processBox.process = process
+                process.executableURL = executable
+                process.arguments = arguments
+                // Close stdin so claude doesn't sit waiting for an
+                // interactive turn that will never come.
+                process.standardInput = FileHandle.nullDevice
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+
+                let resumed = AtomicFlag()
+
+                process.terminationHandler = { proc in
+                    guard resumed.takeIfFalse() else { return }
+                    let stdout = (try? stdoutPipe.fileHandleForReading.readToEnd()) ?? Data()
+                    let stderr = (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data()
+                    let reason = proc.terminationReason
+                    if proc.terminationStatus == 0, reason == .exit {
+                        if let text = String(data: stdout, encoding: .utf8), !text.isEmpty {
+                            continuation.resume(returning: text)
+                        } else {
+                            continuation.resume(throwing: ClaudeCodeOrganizerError.emptyResponse)
+                        }
                     } else {
-                        continuation.resume(throwing: ClaudeCodeOrganizerError.emptyResponse)
+                        let stderrString = String(data: stderr, encoding: .utf8) ?? ""
+                        claudeCodeOrganizerLogger.error(
+                            "claude CLI exited \(proc.terminationStatus) reason=\(reason.rawValue): \(stderrString.prefix(600), privacy: .public)"
+                        )
+                        continuation.resume(throwing: ClaudeCodeOrganizerError.cliFailed(
+                            exitCode: Int(proc.terminationStatus),
+                            stderr: stderrString
+                        ))
                     }
-                } else {
-                    let stderrString = String(data: stderr, encoding: .utf8) ?? ""
-                    claudeCodeOrganizerLogger.error(
-                        "claude CLI exited \(proc.terminationStatus): \(stderrString.prefix(400), privacy: .public)"
-                    )
-                    continuation.resume(throwing: ClaudeCodeOrganizerError.cliFailed(
-                        exitCode: Int(proc.terminationStatus),
-                        stderr: stderrString
-                    ))
+                }
+
+                // Hard timeout — without this, a hung subprocess hangs
+                // the SwiftUI view forever.
+                let timeoutSecondsSnapshot = self.timeoutSeconds
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(timeoutSecondsSnapshot) * 1_000_000_000)
+                    if process.isRunning, resumed.takeIfFalse() {
+                        claudeCodeOrganizerLogger.error(
+                            "claude CLI timed out after \(timeoutSecondsSnapshot)s — terminating subprocess"
+                        )
+                        process.terminate()
+                        continuation.resume(throwing: ClaudeCodeOrganizerError.timedOut(seconds: timeoutSecondsSnapshot))
+                    }
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    if resumed.takeIfFalse() {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
-
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: error)
-            }
+        } onCancel: {
+            // Task was cancelled (user hit Cancel, view went away, etc.)
+            // — kill the subprocess so it doesn't leak.
+            processBox.process?.terminate()
         }
+    }
+
+    private func writeEmptyMCPConfig() throws -> URL {
+        let url = fileManager.temporaryDirectory
+            .appendingPathComponent("gargantua-organizer-mcp-\(UUID().uuidString).json")
+        try Data(#"{"mcpServers":{}}"#.utf8).write(to: url)
+        return url
+    }
+}
+
+/// Shared mutable handle to the in-flight subprocess so the cancel
+/// callback can reach it from outside the continuation closure.
+private final class ProcessBox: @unchecked Sendable {
+    var process: Process?
+}
+
+/// One-shot flag used to make sure exactly one path (success, error,
+/// timeout, cancel) resumes the continuation. Without this, racing the
+/// terminationHandler against the timeout Task can crash.
+private final class AtomicFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flipped = false
+
+    /// Atomically flip the flag from false → true. Returns true if THIS
+    /// caller did the flip; false if someone got there first.
+    func takeIfFalse() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if flipped { return false }
+        flipped = true
+        return true
     }
 }
 
@@ -120,6 +198,7 @@ public enum ClaudeCodeOrganizerError: Error, LocalizedError, Equatable {
     case agentNotEnabled
     case cliFailed(exitCode: Int, stderr: String)
     case emptyResponse
+    case timedOut(seconds: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -133,6 +212,8 @@ public enum ClaudeCodeOrganizerError: Error, LocalizedError, Equatable {
             return "claude CLI failed: \(trimmed)"
         case .emptyResponse:
             return "claude CLI returned no output."
+        case .timedOut(let seconds):
+            return "claude CLI didn't respond within \(seconds)s. Try Cloud or On-device rules, or check that the CLI is logged in."
         }
     }
 }

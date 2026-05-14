@@ -208,6 +208,15 @@ public final class OrganizerSessionState: ObservableObject {
         phase = .idle
     }
 
+    /// User-initiated cancel from the in-progress spinner. Kills the
+    /// active proposer task and returns the surface to idle so the user
+    /// can pick a different engine or folder without navigating away.
+    public func cancelInProgress() {
+        cancelActiveTask()
+        proposal = nil
+        phase = .idle
+    }
+
     // MARK: - Internal
 
     private func cancelActiveTask() {

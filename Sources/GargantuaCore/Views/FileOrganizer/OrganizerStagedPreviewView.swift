@@ -57,6 +57,15 @@ public struct OrganizerStagedPreviewView: View {
             Text(message)
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
+            Button("Cancel") { session.cancelInProgress() }
+                .buttonStyle(.plain)
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink2)
+                .padding(.horizontal, GargantuaSpacing.space3)
+                .padding(.vertical, GargantuaSpacing.space2)
+                .background(GargantuaColors.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                .padding(.top, GargantuaSpacing.space2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
