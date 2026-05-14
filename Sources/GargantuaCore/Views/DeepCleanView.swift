@@ -45,6 +45,8 @@ public struct DeepCleanView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var resultsTab: DeepCleanResultsTab = .clean
+    @StateObject private var organizerSession = OrganizerSessionState()
 
     public var body: some View {
         ZStack {
@@ -206,20 +208,26 @@ public struct DeepCleanView: View {
                 isBusy: session.isScanning
             )
 
-            // Three-bucket scan results
-            ScanBucketListView(
-                results: results,
-                scanDuration: session.scanDuration,
-                selectedIDs: Binding(
-                    get: { session.selectedResultIDs },
-                    set: { session.selectedResultIDs = $0 }
-                ),
-                onExplain: onExplain,
-                onClean: { session.showConfirmation = true },
-                onCancel: { session.clearResults() },
-                onAdvisoryForReview: onAdvisory,
-                onResolveNaturalLanguageFilter: onResolveFilter
-            )
+            DeepCleanResultsTabBar(selection: $resultsTab)
+
+            switch resultsTab {
+            case .clean:
+                ScanBucketListView(
+                    results: results,
+                    scanDuration: session.scanDuration,
+                    selectedIDs: Binding(
+                        get: { session.selectedResultIDs },
+                        set: { session.selectedResultIDs = $0 }
+                    ),
+                    onExplain: onExplain,
+                    onClean: { session.showConfirmation = true },
+                    onCancel: { session.clearResults() },
+                    onAdvisoryForReview: onAdvisory,
+                    onResolveNaturalLanguageFilter: onResolveFilter
+                )
+            case .organize:
+                OrganizerStagedPreviewView(session: organizerSession)
+            }
         }
     }
 
