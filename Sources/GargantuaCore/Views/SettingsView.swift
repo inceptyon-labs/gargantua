@@ -139,6 +139,7 @@ public struct SettingsView: View {
             aiTabIntro
             modelSection
             CloudAISettingsSection()
+            FileOrganizerSettingsSection()
             ClaudeCodeAgentSettingsSection()
         case .automation:
             schedulingSection
