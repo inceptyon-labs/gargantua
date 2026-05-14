@@ -59,10 +59,10 @@ struct OrganizerEngineSelector: View {
                 isSelected: currentBackend == .mlx,
                 isEnabled: mlxReady,
                 icon: "brain",
-                title: "On-device · MLX (your model)",
+                title: "On-device · MLX (Llama 3.2 1B)",
                 detail: mlxReady
-                    ? "Real on-device AI, no network. May produce no groupings if the model is small."
-                    : "Download a local model in AI Models to enable.",
+                    ? "Tiny local model — may fail on busy folders. Cloud or Claude Code is more reliable."
+                    : "Download the local model in AI Models to enable.",
                 tap: selectMLX
             ))
 

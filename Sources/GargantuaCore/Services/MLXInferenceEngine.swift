@@ -167,9 +167,9 @@ public final class MLXInferenceEngine: AIInferenceEngine {
     /// Run a generic prompt through the loaded model and return its raw
     /// text response. Provides a low-level entry point for callers that
     /// need to build their own prompt + parser stack on top of MLX (e.g.
-    /// the file organizer's MLXOrganizerProposer). Token budget is
-    /// generous (768) because structured-JSON responses are typically
-    /// longer than the 180-token advisory ceiling.
+    /// the file organizer's MLXOrganizerProposer). Token budget is 1024
+    /// — generous for structured JSON output without blowing memory on
+    /// 1B-class models.
     public func organize(prompt: String) async throws -> String {
         guard let modelContainer = lifecycle.modelContainer else {
             throw MLXInferenceError.notLoaded
@@ -178,8 +178,8 @@ public final class MLXInferenceEngine: AIInferenceEngine {
             modelContainer,
             instructions: Self.organizerInstructions,
             generateParameters: GenerateParameters(
-                maxTokens: 768,
-                temperature: 0.2
+                maxTokens: 1_024,
+                temperature: 0.1
             )
         )
         return try await session.respond(to: prompt)
