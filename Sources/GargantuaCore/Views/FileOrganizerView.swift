@@ -7,9 +7,14 @@ import SwiftUI
 /// so the page survives sidebar navigation.
 public struct FileOrganizerView: View {
     @ObservedObject private var session: OrganizerSessionState
+    private let mlxAvailabilityProvider: @MainActor () -> Bool
 
-    public init(session: OrganizerSessionState) {
+    public init(
+        session: OrganizerSessionState,
+        mlxAvailabilityProvider: @escaping @MainActor () -> Bool = { false }
+    ) {
         self.session = session
+        self.mlxAvailabilityProvider = mlxAvailabilityProvider
     }
 
     public var body: some View {
@@ -23,7 +28,10 @@ public struct FileOrganizerView: View {
                     subtitleStyle: .voice
                 )
 
-                OrganizerStagedPreviewView(session: session)
+                OrganizerStagedPreviewView(
+                    session: session,
+                    mlxAvailabilityProvider: mlxAvailabilityProvider
+                )
             }
         }
     }

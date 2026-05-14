@@ -9,7 +9,9 @@ import Foundation
 /// still has a working organizer.
 public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifiable, Sendable {
     case local
+    case mlx
     case cloud
+    case claudeCode
 
     public static let userDefaultsKey = "organizer.backendPreference"
 
@@ -17,8 +19,10 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
 
     public var label: String {
         switch self {
-        case .local: "On-device"
+        case .local: "On-device rules"
+        case .mlx: "On-device · MLX"
         case .cloud: "Cloud AI (Anthropic)"
+        case .claudeCode: "Claude Code agent"
         }
     }
 
@@ -26,15 +30,21 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
         switch self {
         case .local:
             return "Filename heuristics and date binning. Never leaves your Mac."
+        case .mlx:
+            return "Local MLX model — real AI, no network. Requires a downloaded model."
         case .cloud:
             return "Smarter groupings via Anthropic. Sends filenames + sizes only — no contents."
+        case .claudeCode:
+            return "Routes through your claude CLI. Uses whatever model and auth the agent has."
         }
     }
 
     public var systemImage: String {
         switch self {
         case .local: "cpu"
+        case .mlx: "brain"
         case .cloud: "cloud"
+        case .claudeCode: "terminal"
         }
     }
 

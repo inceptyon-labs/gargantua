@@ -9,7 +9,7 @@ extension OrganizerStagedPreviewView {
         ScrollView {
             VStack(spacing: GargantuaSpacing.space5) {
                 idleHeader
-                OrganizerEngineSelector()
+                OrganizerEngineSelector(mlxAvailabilityProvider: mlxAvailabilityProvider)
                 folderPicker
                 proposeButton
                 trustReassurance

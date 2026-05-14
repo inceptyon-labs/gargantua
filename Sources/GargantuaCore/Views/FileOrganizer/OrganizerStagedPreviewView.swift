@@ -11,13 +11,16 @@ public struct OrganizerStagedPreviewView: View {
     @State var customFolders: [URL] = []
 
     let folderStore: OrganizerCustomFolderStore
+    let mlxAvailabilityProvider: @MainActor () -> Bool
 
     public init(
         session: OrganizerSessionState,
-        folderStore: OrganizerCustomFolderStore = OrganizerCustomFolderStore()
+        folderStore: OrganizerCustomFolderStore = OrganizerCustomFolderStore(),
+        mlxAvailabilityProvider: @escaping @MainActor () -> Bool = { false }
     ) {
         self.session = session
         self.folderStore = folderStore
+        self.mlxAvailabilityProvider = mlxAvailabilityProvider
     }
 
     public var body: some View {
@@ -201,7 +204,9 @@ public struct OrganizerStagedPreviewView: View {
     private var proposingStatusMessage: String {
         switch OrganizerBackendPreference.stored() {
         case .local: return "Scanning folder…"
-        case .cloud: return "Asking the AI for groupings…"
+        case .mlx: return "Asking your local model for groupings…"
+        case .cloud: return "Asking Cloud AI for groupings…"
+        case .claudeCode: return "Asking the Claude Code agent for groupings…"
         }
     }
 

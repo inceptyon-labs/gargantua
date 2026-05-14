@@ -33,7 +33,8 @@ struct MainContentView: View {
     @State private var devToolsSession = DeveloperToolsSessionState()
     @State private var backgroundItemsSession = BackgroundItemsSession()
     @State private var processInventorySession = ProcessInventorySession()
-    @StateObject private var organizerSession = OrganizerSessionState()
+    @StateObject private var organizerSession: OrganizerSessionState
+    @StateObject private var cloudAIService: CloudAIService
     @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
@@ -63,6 +64,14 @@ struct MainContentView: View {
         _aiExplanation = StateObject(wrappedValue: AIExplanationController(service: service))
         _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(service: service))
         _mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
+
+        let cloudAI = CloudAIService()
+        let mlxProposer = MLXOrganizerProposer(aiService: service)
+        _cloudAIService = StateObject(wrappedValue: cloudAI)
+        _organizerSession = StateObject(wrappedValue: OrganizerSessionState(
+            cloudService: cloudAI,
+            mlxProposer: mlxProposer
+        ))
     }
 
     var body: some View {
@@ -123,7 +132,10 @@ struct MainContentView: View {
                                     persistence: persistence
                                 )
                             case "fileOrganizer":
-                                FileOrganizerView(session: organizerSession)
+                                FileOrganizerView(
+                                    session: organizerSession,
+                                    mlxAvailabilityProvider: { isMLXOrganizerReady }
+                                )
                             case "fileHealth":
                                 FileHealthContainerView(
                                     state: fileHealthState,
@@ -250,6 +262,16 @@ struct MainContentView: View {
     /// model isn't downloaded). Used for honest CTA labeling.
     private var preferredAIEngine: AIEnginePreference {
         AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
+    }
+
+    /// True when the user has selected MLX as their local AI engine AND
+    /// the model is on disk. Drives the File Organizer's MLX row's
+    /// enabled state. Loading the model on demand is handled by
+    /// `LocalAIService` when the organizer actually calls in.
+    private var isMLXOrganizerReady: Bool {
+        guard preferredAIEngine == .mlx else { return false }
+        if case .downloaded = downloadManager.state { return true }
+        return false
     }
 
     /// Closure handed to scan views so their per-row Explain button can kick

@@ -123,6 +123,49 @@ extension LocalAIService {
         }
     }
 
+    /// Run a generic prompt through the active engine for the file
+    /// organizer's MLX path. Returns nil when the engine is template-only
+    /// (no real model loaded) or when the model isn't available — the
+    /// organizer's session state surfaces that as a `.failed` phase with
+    /// a guided message. Otherwise loads the model on demand and routes
+    /// through `engine.organize`.
+    public func organize(prompt: String) async -> String? {
+        let engine = self.engine
+        let engineKind = engine.kind
+
+        if engineKind == .template || !isModelAvailable {
+            return nil
+        }
+
+        if lifecycleState == .unloaded {
+            do {
+                try await loadModel()
+            } catch {
+                return nil
+            }
+        }
+
+        guard lifecycleState == .ready else { return nil }
+
+        idleTask?.cancel()
+        idleTask = nil
+        activeInferenceCount += 1
+        defer {
+            activeInferenceCount -= 1
+            if activeInferenceCount == 0 && lifecycleState == .ready {
+                resetIdleTimer()
+            }
+        }
+
+        do {
+            let text = try await engine.organize(prompt: prompt)
+            markFirstInferenceComplete(for: engineKind)
+            return text
+        } catch {
+            return nil
+        }
+    }
+
     /// Label and classify File Health clusters via the active engine. Returns
     /// an empty array when the engine is template-only, when the model isn't
     /// available, or when the engine response can't be parsed. Mirrors the

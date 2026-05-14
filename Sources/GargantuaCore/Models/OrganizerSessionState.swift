@@ -100,6 +100,8 @@ public final class OrganizerSessionState: ObservableObject {
     private let executor: OrganizerExecutor
     private let cloudService: CloudAIService?
     private let localProposer: LocalOrganizerProposer
+    private let mlxProposer: MLXOrganizerProposer?
+    private let claudeCodeProposer: ClaudeCodeOrganizerProposer
     private let preferenceProvider: @MainActor () -> OrganizerBackendPreference
 
     private var activeTask: Task<Void, Never>?
@@ -108,6 +110,8 @@ public final class OrganizerSessionState: ObservableObject {
         executor: OrganizerExecutor = OrganizerExecutor(),
         cloudService: CloudAIService? = nil,
         localProposer: LocalOrganizerProposer = LocalOrganizerProposer(),
+        mlxProposer: MLXOrganizerProposer? = nil,
+        claudeCodeProposer: ClaudeCodeOrganizerProposer = ClaudeCodeOrganizerProposer(),
         preferenceProvider: @escaping @MainActor () -> OrganizerBackendPreference = {
             OrganizerBackendPreference.stored()
         }
@@ -115,6 +119,8 @@ public final class OrganizerSessionState: ObservableObject {
         self.executor = executor
         self.cloudService = cloudService
         self.localProposer = localProposer
+        self.mlxProposer = mlxProposer
+        self.claudeCodeProposer = claudeCodeProposer
         self.preferenceProvider = preferenceProvider
     }
 
@@ -127,6 +133,8 @@ public final class OrganizerSessionState: ObservableObject {
         let preference = preferenceProvider()
         let service = cloudService
         let local = localProposer
+        let mlx = mlxProposer
+        let claudeCode = claudeCodeProposer
 
         activeTask = Task { [weak self] in
             do {
@@ -140,6 +148,13 @@ public final class OrganizerSessionState: ObservableObject {
                     result = cloudResult.proposal
                 case .local:
                     result = try local.propose(sourceFolder: folder)
+                case .mlx:
+                    guard let mlx else {
+                        throw OrganizerSessionError.mlxUnavailable
+                    }
+                    result = try await mlx.propose(sourceFolder: folder)
+                case .claudeCode:
+                    result = try await claudeCode.propose(sourceFolder: folder)
                 }
                 guard !Task.isCancelled else { return }
                 self?.proposal = result
@@ -217,11 +232,14 @@ public final class OrganizerSessionState: ObservableObject {
 
 public enum OrganizerSessionError: Error, LocalizedError, Equatable {
     case cloudUnavailable
+    case mlxUnavailable
 
     public var errorDescription: String? {
         switch self {
         case .cloudUnavailable:
             return "Cloud AI is not configured. Switch to On-device in Settings or add an Anthropic key."
+        case .mlxUnavailable:
+            return "Local MLX model isn't available. Open AI Models to download it, then try again."
         }
     }
 }

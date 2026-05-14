@@ -163,4 +163,32 @@ public final class MLXInferenceEngine: AIInferenceEngine {
         let response = try await session.respond(to: Self.buildScanFilterPrompt(for: query))
         return ScanFilterSet.decodeAllowListed(from: response)
     }
+
+    /// Run a generic prompt through the loaded model and return its raw
+    /// text response. Provides a low-level entry point for callers that
+    /// need to build their own prompt + parser stack on top of MLX (e.g.
+    /// the file organizer's MLXOrganizerProposer). Token budget is
+    /// generous (768) because structured-JSON responses are typically
+    /// longer than the 180-token advisory ceiling.
+    public func organize(prompt: String) async throws -> String {
+        guard let modelContainer = lifecycle.modelContainer else {
+            throw MLXInferenceError.notLoaded
+        }
+        let session = ChatSession(
+            modelContainer,
+            instructions: Self.organizerInstructions,
+            generateParameters: GenerateParameters(
+                maxTokens: 768,
+                temperature: 0.2
+            )
+        )
+        return try await session.respond(to: prompt)
+    }
+
+    private static let organizerInstructions = """
+    You are a file organization assistant. Read a folder listing the user provides \
+    and return strict JSON describing how to group the files into subfolders. \
+    Never include prose, never wrap the JSON in markdown fences, and never \
+    invent file ids that were not in the input.
+    """
 }

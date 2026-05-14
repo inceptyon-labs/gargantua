@@ -18,16 +18,25 @@ struct OrganizerEngineSelector: View {
 
     @State private var cloudConfig = CloudAIConfiguration()
     @State private var cloudReady = false
+    @State private var mlxReady = false
+    @State private var claudeCodeReady = false
+    @State private var claudeCodeModel = ""
 
     let configStore: CloudAIConfigurationStore
     let keyStore: any CloudAPIKeyStore
+    let agentConfigStore: ClaudeCodeAgentConfigurationStore
+    let mlxAvailabilityProvider: @MainActor () -> Bool
 
     init(
         configStore: CloudAIConfigurationStore = CloudAIConfigurationStore(),
-        keyStore: any CloudAPIKeyStore = KeychainCloudAPIKeyStore()
+        keyStore: any CloudAPIKeyStore = KeychainCloudAPIKeyStore(),
+        agentConfigStore: ClaudeCodeAgentConfigurationStore = ClaudeCodeAgentConfigurationStore(),
+        mlxAvailabilityProvider: @escaping @MainActor () -> Bool = { false }
     ) {
         self.configStore = configStore
         self.keyStore = keyStore
+        self.agentConfigStore = agentConfigStore
+        self.mlxAvailabilityProvider = mlxAvailabilityProvider
     }
 
     var body: some View {
@@ -44,6 +53,30 @@ struct OrganizerEngineSelector: View {
                 title: "On-device rules",
                 detail: "Default · Filename heuristics, never leaves your Mac",
                 tap: selectLocal
+            ))
+
+            engineRow(EngineRow(
+                isSelected: currentBackend == .mlx,
+                isEnabled: mlxReady,
+                icon: "brain",
+                title: "On-device · MLX (your model)",
+                detail: mlxReady
+                    ? "Real on-device AI, no network. May produce no groupings if the model is small."
+                    : "Download a local model in AI Models to enable.",
+                tap: selectMLX
+            ))
+
+            engineRow(EngineRow(
+                isSelected: currentBackend == .claudeCode,
+                isEnabled: claudeCodeReady,
+                icon: "terminal",
+                title: claudeCodeReady && !claudeCodeModel.isEmpty
+                    ? "Claude Code agent (\(claudeCodeModel))"
+                    : "Claude Code agent",
+                detail: claudeCodeReady
+                    ? "Routes through your claude CLI — uses whatever auth + model the agent has."
+                    : "Enable the Claude Code agent in Settings → AI to use this.",
+                tap: selectClaudeCode
             ))
 
             ForEach(Self.cloudModels) { model in
@@ -79,6 +112,16 @@ struct OrganizerEngineSelector: View {
         rawBackend = OrganizerBackendPreference.local.rawValue
     }
 
+    private func selectMLX() {
+        guard mlxReady else { return }
+        rawBackend = OrganizerBackendPreference.mlx.rawValue
+    }
+
+    private func selectClaudeCode() {
+        guard claudeCodeReady else { return }
+        rawBackend = OrganizerBackendPreference.claudeCode.rawValue
+    }
+
     private func selectCloud(model: AnthropicModel) {
         guard cloudReady else { return }
         rawBackend = OrganizerBackendPreference.cloud.rawValue
@@ -92,6 +135,12 @@ struct OrganizerEngineSelector: View {
         cloudConfig = configStore.load()
         let hasKey = (try? keyStore.hasKey()) ?? false
         cloudReady = cloudConfig.isEnabled && hasKey
+
+        let agentConfig = agentConfigStore.load()
+        claudeCodeReady = agentConfig.isEnabled
+        claudeCodeModel = agentConfig.selectedModel
+
+        mlxReady = mlxAvailabilityProvider()
     }
 
     // MARK: - Catalog

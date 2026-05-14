@@ -83,6 +83,11 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
     func suggestClusters(
         _ summaries: [FileHealthClusterSummary]
     ) async throws -> [FileHealthClusterSuggestion]
+
+    /// Run a generic prompt through the loaded model and return its raw
+    /// text response. The file organizer's MLX path uses this; engines
+    /// without arbitrary-prompt support throw `notImplemented`.
+    func organize(prompt: String) async throws -> String
 }
 
 public extension AIInferenceEngine {
@@ -111,6 +116,13 @@ public extension AIInferenceEngine {
     ) async throws -> [FileHealthClusterSuggestion] {
         _ = summaries
         return []
+    }
+
+    /// Default: no organizer support. The MLX engine overrides this; the
+    /// template engine doesn't make sense for free-form prompting.
+    func organize(prompt: String) async throws -> String {
+        _ = prompt
+        throw AIInferenceEngineError.notImplemented(engine: "organize")
     }
 }
 
