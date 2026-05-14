@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// AI file organizer's staged-preview surface. Switches between phases
@@ -6,10 +7,17 @@ import SwiftUI
 /// signature spinner (AccretionDiskView, not ProgressView).
 public struct OrganizerStagedPreviewView: View {
     @ObservedObject var session: OrganizerSessionState
-    @State private var expandedPlanIDs: Set<UUID> = []
+    @State var expandedPlanIDs: Set<UUID> = []
+    @State var customFolders: [URL] = []
 
-    public init(session: OrganizerSessionState) {
+    let folderStore: OrganizerCustomFolderStore
+
+    public init(
+        session: OrganizerSessionState,
+        folderStore: OrganizerCustomFolderStore = OrganizerCustomFolderStore()
+    ) {
         self.session = session
+        self.folderStore = folderStore
     }
 
     public var body: some View {
@@ -20,11 +28,11 @@ public struct OrganizerStagedPreviewView: View {
             case .idle:
                 idleState
             case .proposing:
-                statusState(message: "Reading folder…")
+                statusState(message: "Asking the AI for groupings…")
             case .preview:
                 previewState
             case .applying:
-                statusState(message: "Applying moves…")
+                statusState(message: "Moving files…")
             case .applied(let summary):
                 appliedState(summary: summary)
             case .undoing:
@@ -35,79 +43,12 @@ public struct OrganizerStagedPreviewView: View {
                 failedState(message: message)
             }
         }
-    }
-
-    // MARK: - Idle (folder picker)
-
-    private var idleState: some View {
-        VStack(spacing: GargantuaSpacing.space5) {
-            VStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: "folder.badge.gearshape")
-                    .font(.system(size: 44))
-                    .foregroundStyle(GargantuaColors.accent)
-                Text("Organize a cluttered folder")
-                    .font(GargantuaFonts.heading)
-                    .foregroundStyle(GargantuaColors.ink)
-                Text("AI proposes folder groupings. Review them before any file moves.")
-                    .font(GargantuaFonts.body)
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
-            }
-
-            folderPicker
-
-            Button("Propose groupings for \(session.selectedFolder.displayName)") {
-                session.startScan()
-            }
-            .font(GargantuaFonts.label)
-            .foregroundStyle(.white)
-            .padding(.horizontal, GargantuaSpacing.space4)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(GargantuaColors.accent)
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-            .buttonStyle(.plain)
-        }
-        .padding(GargantuaSpacing.space6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var folderPicker: some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            ForEach(OrganizerFolder.allCases) { folder in
-                folderChip(folder)
-            }
-        }
-    }
-
-    private func folderChip(_ folder: OrganizerFolder) -> some View {
-        let isSelected = session.selectedFolder == folder
-        return Button { session.selectedFolder = folder } label: {
-            HStack(spacing: GargantuaSpacing.space1) {
-                Image(systemName: folder.systemImage)
-                    .font(.system(size: 12))
-                Text(folder.displayName)
-                    .font(GargantuaFonts.label)
-            }
-            .padding(.horizontal, GargantuaSpacing.space3)
-            .padding(.vertical, GargantuaSpacing.space2)
-            .background(isSelected ? GargantuaColors.accent.opacity(0.18) : GargantuaColors.surface2)
-            .foregroundStyle(isSelected ? GargantuaColors.accent : GargantuaColors.ink2)
-            .overlay(
-                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                    .stroke(
-                        isSelected ? GargantuaColors.accent : GargantuaColors.borderSoft,
-                        lineWidth: 1
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        }
-        .buttonStyle(.plain)
+        .onAppear { customFolders = folderStore.load() }
     }
 
     // MARK: - Working states
 
-    private func statusState(message: String) -> some View {
+    func statusState(message: String) -> some View {
         VStack(spacing: GargantuaSpacing.space3) {
             AccretionDiskView(activityRate: 2, size: 56)
             Text(message)
@@ -122,6 +63,7 @@ public struct OrganizerStagedPreviewView: View {
     private var previewState: some View {
         VStack(spacing: 0) {
             previewHeader
+            previewTrustStrip
             Divider().overlay(GargantuaColors.border)
 
             ScrollView {
@@ -160,7 +102,7 @@ public struct OrganizerStagedPreviewView: View {
     private var previewHeader: some View {
         HStack(spacing: GargantuaSpacing.space3) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Proposed groupings")
+                Text("AI-proposed groupings")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
                 Text(previewSummary)
@@ -168,7 +110,7 @@ public struct OrganizerStagedPreviewView: View {
                     .foregroundStyle(GargantuaColors.ink3)
             }
             Spacer()
-            backendBadge
+            prominentBackendBadge
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
@@ -183,16 +125,36 @@ public struct OrganizerStagedPreviewView: View {
     }
 
     @ViewBuilder
-    private var backendBadge: some View {
+    private var prominentBackendBadge: some View {
         if let proposal = session.proposal {
-            Text(proposal.backend == .cloud ? "Cloud AI" : "On-device")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .padding(.horizontal, GargantuaSpacing.space2)
-                .padding(.vertical, 2)
-                .background(GargantuaColors.surface3)
-                .clipShape(Capsule())
+            HStack(spacing: GargantuaSpacing.space1) {
+                Image(systemName: proposal.backend == .cloud ? "cloud.fill" : "cpu")
+                    .font(.system(size: 11))
+                Text(proposal.backend == .cloud ? "Cloud AI" : "On-device AI")
+                    .font(GargantuaFonts.caption)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(GargantuaColors.accent)
+            .padding(.horizontal, GargantuaSpacing.space2)
+            .padding(.vertical, 4)
+            .background(GargantuaColors.accent.opacity(0.12))
+            .clipShape(Capsule())
         }
+    }
+
+    private var previewTrustStrip: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: "checkmark.shield")
+                .font(.system(size: 11))
+                .foregroundStyle(GargantuaColors.safe)
+            Text("Nothing moves until you click Apply. Every move is recorded and reversible.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+            Spacer()
+        }
+        .padding(.horizontal, GargantuaSpacing.space4)
+        .padding(.vertical, GargantuaSpacing.space2)
+        .background(GargantuaColors.surface1)
     }
 
     private var previewActionBar: some View {
@@ -216,8 +178,8 @@ public struct OrganizerStagedPreviewView: View {
                 .background(GargantuaColors.accent)
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .buttonStyle(.plain)
-            .disabled(session.proposal?.plans.isEmpty ?? true)
-            .opacity((session.proposal?.plans.isEmpty ?? true) ? 0.5 : 1)
+                .disabled(session.proposal?.plans.isEmpty ?? true)
+                .opacity((session.proposal?.plans.isEmpty ?? true) ? 0.5 : 1)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)

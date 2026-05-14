@@ -1,21 +1,31 @@
 import Foundation
 import SwiftUI
 
-/// One of the three folders the Organize tab can scan. Each maps to a
-/// concrete `URL` on disk; the view picks one and hands it off to the
-/// active proposer.
-public enum OrganizerFolder: String, CaseIterable, Identifiable, Sendable {
+/// One folder the organizer can scan. Built-in cases resolve to
+/// `~/Downloads`, `~/Desktop`, and the user's screenshot destination
+/// (`~/Pictures/Screenshots` or `~/Desktop`). The `custom(URL)` case
+/// carries a user-picked path persisted via `OrganizerCustomFolderStore`.
+public enum OrganizerTarget: Identifiable, Hashable, Sendable {
     case downloads
     case desktop
     case screenshots
+    case custom(URL)
 
-    public var id: String { rawValue }
+    public var id: String {
+        switch self {
+        case .downloads: "builtin:downloads"
+        case .desktop: "builtin:desktop"
+        case .screenshots: "builtin:screenshots"
+        case .custom(let url): "custom:\(url.standardizedFileURL.path)"
+        }
+    }
 
     public var displayName: String {
         switch self {
         case .downloads: "Downloads"
         case .desktop: "Desktop"
         case .screenshots: "Screenshots"
+        case .custom(let url): url.lastPathComponent
         }
     }
 
@@ -24,13 +34,17 @@ public enum OrganizerFolder: String, CaseIterable, Identifiable, Sendable {
         case .downloads: "arrow.down.circle"
         case .desktop: "menubar.dock.rectangle"
         case .screenshots: "camera.viewfinder"
+        case .custom: "folder"
         }
     }
 
-    /// Resolve the folder's URL on this machine. Screenshots falls
-    /// back to Desktop when `~/Pictures/Screenshots` doesn't exist —
-    /// the default macOS screenshot destination is Desktop and most
-    /// users who haven't customized it want that behavior.
+    public var isBuiltIn: Bool {
+        if case .custom = self { return false }
+        return true
+    }
+
+    public static let builtIns: [OrganizerTarget] = [.downloads, .desktop, .screenshots]
+
     public func url(fileManager: FileManager = .default) -> URL {
         let home = fileManager.homeDirectoryForCurrentUser
         switch self {
@@ -39,11 +53,11 @@ public enum OrganizerFolder: String, CaseIterable, Identifiable, Sendable {
         case .desktop:
             return home.appendingPathComponent("Desktop", isDirectory: true)
         case .screenshots:
-            let custom = home.appendingPathComponent("Pictures/Screenshots", isDirectory: true)
-            if fileManager.fileExists(atPath: custom.path) {
-                return custom
-            }
+            let screenshots = home.appendingPathComponent("Pictures/Screenshots", isDirectory: true)
+            if fileManager.fileExists(atPath: screenshots.path) { return screenshots }
             return home.appendingPathComponent("Desktop", isDirectory: true)
+        case .custom(let url):
+            return url
         }
     }
 }
@@ -79,7 +93,7 @@ public enum OrganizerPhase: Equatable, Sendable {
 /// blocks the state owns so callers don't have to manage cancellation.
 @MainActor
 public final class OrganizerSessionState: ObservableObject {
-    @Published public var selectedFolder: OrganizerFolder = .downloads
+    @Published public var selectedTarget: OrganizerTarget = .downloads
     @Published public private(set) var phase: OrganizerPhase = .idle
     @Published public private(set) var proposal: OrganizationProposal?
 
@@ -109,7 +123,7 @@ public final class OrganizerSessionState: ObservableObject {
     public func startScan() {
         cancelActiveTask()
         phase = .proposing
-        let folder = selectedFolder.url()
+        let folder = selectedTarget.url()
         let preference = preferenceProvider()
         let service = cloudService
         let local = localProposer

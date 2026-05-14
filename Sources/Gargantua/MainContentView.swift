@@ -33,6 +33,7 @@ struct MainContentView: View {
     @State private var devToolsSession = DeveloperToolsSessionState()
     @State private var backgroundItemsSession = BackgroundItemsSession()
     @State private var processInventorySession = ProcessInventorySession()
+    @StateObject private var organizerSession = OrganizerSessionState()
     @State private var activeAIEngineKind: AIEnginePreference
 
     // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
@@ -121,6 +122,8 @@ struct MainContentView: View {
                                     onExplain: explainHandler,
                                     persistence: persistence
                                 )
+                            case "fileOrganizer":
+                                FileOrganizerView(session: organizerSession)
                             case "fileHealth":
                                 FileHealthContainerView(
                                     state: fileHealthState,

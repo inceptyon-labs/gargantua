@@ -9,7 +9,7 @@ struct OrganizerSessionStateTests {
     // MARK: helpers
 
     /// Build a self-contained scratch root + state with a local proposer
-    /// pointed at it. The state's `selectedFolder` resolves URLs from
+    /// pointed at it. The state's `selectedTarget` resolves URLs from
     /// `~`, which we override by passing a custom proposer + executor;
     /// to drive a real Apply we trigger it directly with a hand-built
     /// proposal that already points at our scratch tree.
@@ -71,7 +71,7 @@ struct OrganizerSessionStateTests {
         let state = OrganizerSessionState()
         #expect(state.phase == .idle)
         #expect(state.proposal == nil)
-        #expect(state.selectedFolder == .downloads)
+        #expect(state.selectedTarget == .downloads)
     }
 
     // MARK: - Apply happy path
@@ -160,7 +160,7 @@ struct OrganizerSessionStateTests {
             cloudService: nil,
             preferenceProvider: { .cloud }
         )
-        // selectedFolder defaults to .downloads which resolves to ~/Downloads;
+        // selectedTarget defaults to .downloads which resolves to ~/Downloads;
         // we don't care which folder we point at because the failure is the
         // missing cloud service, not folder access. But to avoid touching
         // ~/Downloads in tests, swap in a scratch downloads via injection
