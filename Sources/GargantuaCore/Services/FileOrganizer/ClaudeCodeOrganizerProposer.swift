@@ -89,7 +89,7 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
             arguments += ["--model", trimmedModel]
         }
 
-        claudeCodeOrganizerLogger.info(
+        claudeCodeOrganizerLogger.error(
             "claude one-shot start: \(executable.path, privacy: .public) prompt-len=\(prompt.count) model=\(trimmedModel, privacy: .public)"
         )
 
@@ -98,54 +98,28 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
             try await withCheckedThrowingContinuation { continuation in
                 let process = processFactory()
                 processBox.process = process
-                process.executableURL = executable
-                process.arguments = arguments
-                // Close stdin so claude doesn't sit waiting for an
-                // interactive turn that will never come.
-                process.standardInput = FileHandle.nullDevice
                 let stdoutPipe = Pipe()
                 let stderrPipe = Pipe()
-                process.standardOutput = stdoutPipe
-                process.standardError = stderrPipe
-
+                let stdoutBuffer = DataBuffer()
+                let stderrBuffer = DataBuffer()
                 let resumed = AtomicFlag()
 
-                process.terminationHandler = { proc in
-                    guard resumed.takeIfFalse() else { return }
-                    let stdout = (try? stdoutPipe.fileHandleForReading.readToEnd()) ?? Data()
-                    let stderr = (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data()
-                    let reason = proc.terminationReason
-                    if proc.terminationStatus == 0, reason == .exit {
-                        if let text = String(data: stdout, encoding: .utf8), !text.isEmpty {
-                            continuation.resume(returning: text)
-                        } else {
-                            continuation.resume(throwing: ClaudeCodeOrganizerError.emptyResponse)
-                        }
-                    } else {
-                        let stderrString = String(data: stderr, encoding: .utf8) ?? ""
-                        claudeCodeOrganizerLogger.error(
-                            "claude CLI exited \(proc.terminationStatus) reason=\(reason.rawValue): \(stderrString.prefix(600), privacy: .public)"
-                        )
-                        continuation.resume(throwing: ClaudeCodeOrganizerError.cliFailed(
-                            exitCode: Int(proc.terminationStatus),
-                            stderr: stderrString
-                        ))
-                    }
-                }
-
-                // Hard timeout — without this, a hung subprocess hangs
-                // the SwiftUI view forever.
-                let timeoutSecondsSnapshot = self.timeoutSeconds
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(timeoutSecondsSnapshot) * 1_000_000_000)
-                    if process.isRunning, resumed.takeIfFalse() {
-                        claudeCodeOrganizerLogger.error(
-                            "claude CLI timed out after \(timeoutSecondsSnapshot)s — terminating subprocess"
-                        )
-                        process.terminate()
-                        continuation.resume(throwing: ClaudeCodeOrganizerError.timedOut(seconds: timeoutSecondsSnapshot))
-                    }
-                }
+                let pipes = SubprocessPipes(stdout: stdoutPipe, stderr: stderrPipe)
+                let buffers = SubprocessBuffers(stdout: stdoutBuffer, stderr: stderrBuffer)
+                configure(
+                    process: process,
+                    executable: executable,
+                    arguments: arguments,
+                    pipes: pipes
+                )
+                attachReadabilityHandlers(pipes: pipes, buffers: buffers)
+                process.terminationHandler = makeTerminationHandler(
+                    pipes: pipes,
+                    buffers: buffers,
+                    resumed: resumed,
+                    continuation: continuation
+                )
+                spawnTimeoutWatcher(process: process, resumed: resumed, continuation: continuation)
 
                 do {
                     try process.run()
@@ -156,9 +130,108 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
                 }
             }
         } onCancel: {
-            // Task was cancelled (user hit Cancel, view went away, etc.)
-            // — kill the subprocess so it doesn't leak.
             processBox.process?.terminate()
+        }
+    }
+
+    // MARK: - Subprocess helpers
+
+    private func configure(
+        process: Process,
+        executable: URL,
+        arguments: [String],
+        pipes: SubprocessPipes
+    ) {
+        process.executableURL = executable
+        process.arguments = arguments
+        // Close stdin so claude doesn't sit waiting for an interactive
+        // turn that will never come.
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = pipes.stdout
+        process.standardError = pipes.stderr
+    }
+
+    /// Drain the pipes asynchronously while the process runs. Otherwise
+    /// a >16KB response (Sonnet on a busy folder hits this fast) fills
+    /// the pipe buffer, the CLI blocks on write, and the process never
+    /// exits.
+    private func attachReadabilityHandlers(pipes: SubprocessPipes, buffers: SubprocessBuffers) {
+        pipes.stdout.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                buffers.stdout.append(chunk)
+            }
+        }
+        pipes.stderr.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                buffers.stderr.append(chunk)
+            }
+        }
+    }
+
+    private func makeTerminationHandler(
+        pipes: SubprocessPipes,
+        buffers: SubprocessBuffers,
+        resumed: AtomicFlag,
+        continuation: CheckedContinuation<String, Error>
+    ) -> @Sendable (Process) -> Void {
+        return { proc in
+            pipes.stdout.fileHandleForReading.readabilityHandler = nil
+            pipes.stderr.fileHandleForReading.readabilityHandler = nil
+            if let remaining = try? pipes.stdout.fileHandleForReading.readToEnd() {
+                buffers.stdout.append(remaining)
+            }
+            if let remaining = try? pipes.stderr.fileHandleForReading.readToEnd() {
+                buffers.stderr.append(remaining)
+            }
+
+            guard resumed.takeIfFalse() else { return }
+            let stdout = buffers.stdout.snapshot()
+            let stderr = buffers.stderr.snapshot()
+            let status = proc.terminationStatus
+            let reason = proc.terminationReason
+            claudeCodeOrganizerLogger.error(
+                "claude one-shot exit: status=\(status) reason=\(reason.rawValue) stdout-bytes=\(stdout.count) stderr-bytes=\(stderr.count)"
+            )
+            if status == 0, reason == .exit {
+                if let text = String(data: stdout, encoding: .utf8), !text.isEmpty {
+                    continuation.resume(returning: text)
+                } else {
+                    continuation.resume(throwing: ClaudeCodeOrganizerError.emptyResponse)
+                }
+            } else {
+                let stderrString = String(data: stderr, encoding: .utf8) ?? ""
+                claudeCodeOrganizerLogger.error(
+                    "claude CLI stderr: \(stderrString.prefix(600), privacy: .public)"
+                )
+                continuation.resume(throwing: ClaudeCodeOrganizerError.cliFailed(
+                    exitCode: Int(status),
+                    stderr: stderrString
+                ))
+            }
+        }
+    }
+
+    private func spawnTimeoutWatcher(
+        process: Process,
+        resumed: AtomicFlag,
+        continuation: CheckedContinuation<String, Error>
+    ) {
+        let seconds = timeoutSeconds
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            if process.isRunning, resumed.takeIfFalse() {
+                claudeCodeOrganizerLogger.error(
+                    "claude CLI timed out after \(seconds)s — terminating subprocess"
+                )
+                process.terminate()
+                continuation.resume(throwing: ClaudeCodeOrganizerError.timedOut(seconds: seconds))
+            }
         }
     }
 
@@ -176,6 +249,16 @@ private final class ProcessBox: @unchecked Sendable {
     var process: Process?
 }
 
+private struct SubprocessPipes {
+    let stdout: Pipe
+    let stderr: Pipe
+}
+
+private struct SubprocessBuffers {
+    let stdout: DataBuffer
+    let stderr: DataBuffer
+}
+
 /// One-shot flag used to make sure exactly one path (success, error,
 /// timeout, cancel) resumes the continuation. Without this, racing the
 /// terminationHandler against the timeout Task can crash.
@@ -191,6 +274,25 @@ private final class AtomicFlag: @unchecked Sendable {
         if flipped { return false }
         flipped = true
         return true
+    }
+}
+
+/// Lock-guarded `Data` buffer for accumulating subprocess output from
+/// `FileHandle.readabilityHandler` (which fires on a background queue).
+private final class DataBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        data.append(chunk)
+        lock.unlock()
+    }
+
+    func snapshot() -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
     }
 }
 
