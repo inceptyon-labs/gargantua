@@ -10,6 +10,8 @@ public enum CloudAIFeature: String, Codable, Sendable, CaseIterable {
     case duplicateResolution = "duplicate_resolution"
     /// Suggestions for new or improved cleanup rules.
     case scanRuleSuggestion = "scan_rule_suggestion"
+    /// File-organization proposals for cluttered user folders.
+    case fileOrganization = "file_organization"
 
     /// User-facing feature name.
     public var displayName: String {
@@ -18,6 +20,7 @@ public enum CloudAIFeature: String, Codable, Sendable, CaseIterable {
         case .targetCleanup: "Target cleanup"
         case .duplicateResolution: "Duplicate resolution"
         case .scanRuleSuggestion: "Scan-rule suggestions"
+        case .fileOrganization: "File organization"
         }
     }
 }

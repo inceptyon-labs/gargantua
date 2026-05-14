@@ -38,6 +38,22 @@ struct ScanRuleSuggestionPayload: Decodable {
     let rationale: String
 }
 
+struct OrganizerProposalPayload: Decodable {
+    let plans: [OrganizerProposalPlanPayload]
+}
+
+struct OrganizerProposalPlanPayload: Decodable {
+    let name: String
+    let reasoning: String
+    let itemIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case reasoning
+        case itemIDs = "item_ids"
+    }
+}
+
 enum CloudAIJSONExtractor {
     static func decode<T: Decodable>(_ type: T.Type, from text: String) -> T? {
         guard let data = firstJSONObjectData(in: text) else { return nil }
