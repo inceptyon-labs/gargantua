@@ -9,6 +9,7 @@ extension OrganizerStagedPreviewView {
         ScrollView {
             VStack(spacing: GargantuaSpacing.space5) {
                 idleHeader
+                OrganizerEngineSelector()
                 folderPicker
                 proposeButton
                 trustReassurance
@@ -23,19 +24,17 @@ extension OrganizerStagedPreviewView {
             Image(systemName: "folder.badge.gearshape")
                 .font(.system(size: 44))
                 .foregroundStyle(GargantuaColors.accent)
-            Text("AI File Organizer")
+            Text("File Organizer")
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink)
             Text(
-                "AI proposes folder groupings for the chosen folder. " +
-                "Review every move before anything happens — nothing is touched until you click Apply."
+                "Pick an engine and a folder. The proposal is reviewed before anything moves — " +
+                "nothing is touched until you click Apply."
             )
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
-
-            activeBackendBadge
         }
     }
 
@@ -155,26 +154,7 @@ extension OrganizerStagedPreviewView {
         session.selectedTarget = .custom(url)
     }
 
-    // MARK: - Trust + AI signals
-
-    @ViewBuilder
-    private var activeBackendBadge: some View {
-        let preference = OrganizerBackendPreference.stored()
-        let label = preference == .cloud ? "Cloud AI" : "On-device AI"
-        HStack(spacing: GargantuaSpacing.space1) {
-            Image(systemName: preference == .cloud ? "cloud.fill" : "cpu")
-                .font(.system(size: 11))
-            Text("Using ")
-                .foregroundStyle(GargantuaColors.ink3)
-                + Text(label).foregroundStyle(GargantuaColors.accent)
-        }
-        .font(GargantuaFonts.caption)
-        .padding(.horizontal, GargantuaSpacing.space2)
-        .padding(.vertical, 4)
-        .background(GargantuaColors.surface2)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(GargantuaColors.borderSoft, lineWidth: 1))
-    }
+    // MARK: - Trust signals
 
     var trustReassurance: some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space2) {

@@ -28,7 +28,7 @@ public struct OrganizerStagedPreviewView: View {
             case .idle:
                 idleState
             case .proposing:
-                statusState(message: "Asking the AI for groupings…")
+                statusState(message: proposingStatusMessage)
             case .preview:
                 previewState
             case .applying:
@@ -130,7 +130,7 @@ public struct OrganizerStagedPreviewView: View {
             HStack(spacing: GargantuaSpacing.space1) {
                 Image(systemName: proposal.backend == .cloud ? "cloud.fill" : "cpu")
                     .font(.system(size: 11))
-                Text(proposal.backend == .cloud ? "Cloud AI" : "On-device AI")
+                Text(badgeLabel(for: proposal.backend))
                     .font(GargantuaFonts.caption)
                     .fontWeight(.medium)
             }
@@ -139,6 +139,18 @@ public struct OrganizerStagedPreviewView: View {
             .padding(.vertical, 4)
             .background(GargantuaColors.accent.opacity(0.12))
             .clipShape(Capsule())
+        }
+    }
+
+    private func badgeLabel(for backend: ProposalBackend) -> String {
+        switch backend {
+        case .local:
+            return "On-device rules"
+        case .cloud:
+            let modelID = CloudAIConfigurationStore().load().model
+            return AnthropicModelCatalog.bakedInModels
+                .first(where: { $0.id == modelID })?
+                .displayName ?? "Cloud AI"
         }
     }
 
@@ -184,6 +196,13 @@ public struct OrganizerStagedPreviewView: View {
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
         .background(GargantuaColors.surface2)
+    }
+
+    private var proposingStatusMessage: String {
+        switch OrganizerBackendPreference.stored() {
+        case .local: return "Scanning folder…"
+        case .cloud: return "Asking the AI for groupings…"
+        }
     }
 
     private var applyButtonLabel: String {
