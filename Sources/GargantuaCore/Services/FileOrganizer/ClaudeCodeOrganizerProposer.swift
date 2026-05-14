@@ -29,7 +29,7 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
         processFactory: @Sendable @escaping () -> Process = { Process() },
         now: @Sendable @escaping () -> Date = Date.init,
         fileManager: FileManager = .default,
-        timeoutSeconds: Int = 90
+        timeoutSeconds: Int = 240
     ) {
         self.configurationStore = configurationStore
         self.cliResolver = cliResolver

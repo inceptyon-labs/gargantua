@@ -158,6 +158,34 @@ struct CloudOrganizerProposerTests {
 
     // MARK: - Folder listing (light I/O test)
 
+    @Test("listFolder truncates to maxListingSize, keeping oldest first")
+    func listFolderTruncates() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("cloud-trunc-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // 250 files, modification dates spread across days — the oldest
+        // 200 should survive truncation, the newest 50 should be dropped.
+        let count = CloudOrganizerProposer.maxListingSize + 50
+        for index in 0..<count {
+            let url = dir.appendingPathComponent("file-\(index).bin")
+            try Data("x".utf8).write(to: url)
+            let modified = Date(timeIntervalSince1970: TimeInterval(1_000_000_000 + index * 86_400))
+            try FileManager.default.setAttributes(
+                [.modificationDate: modified],
+                ofItemAtPath: url.path
+            )
+        }
+
+        let items = try CloudOrganizerProposer.listFolder(at: dir)
+        #expect(items.count == CloudOrganizerProposer.maxListingSize)
+        // First item is the oldest one we wrote (index 0).
+        #expect(items.first?.name == "file-0.bin")
+        // Last item that survived is index 199 (since 200..249 were dropped).
+        #expect(items.last?.name == "file-199.bin")
+    }
+
     @Test("listFolder returns top-level non-hidden files only")
     func listFolderSkipsHiddenAndDirs() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())

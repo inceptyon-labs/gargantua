@@ -31,8 +31,17 @@ public enum CloudOrganizerProposer {
         }
     }
 
+    /// Max files to send to the model in a single proposal. Sonnet's
+    /// throughput on a JSON-organize task is roughly 5–10 files/sec; at
+    /// 200 we stay within a ~4-minute timeout budget. Folders larger
+    /// than this get truncated; the user can re-run after applying the
+    /// first batch.
+    public static let maxListingSize = 200
+
     /// Top-level files in `folder`, skipping hidden entries and
     /// subdirectories. Mirrors `LocalOrganizerProposer.listEntries`.
+    /// Truncates at `maxListingSize`, sorted oldest-first so the
+    /// staler clutter gets organized before the user's active work.
     public static func listFolder(
         at folder: URL,
         fileManager: FileManager = .default
@@ -43,7 +52,7 @@ public enum CloudOrganizerProposer {
             includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
         )
-        return urls.compactMap { url -> FolderListingItem? in
+        let unsorted: [FolderListingItem] = urls.compactMap { url -> FolderListingItem? in
             let values = try? url.resourceValues(forKeys: Set(keys))
             guard values?.isDirectory == false else { return nil }
             let size = Int64(values?.fileSize ?? 0)
@@ -56,6 +65,12 @@ public enum CloudOrganizerProposer {
                 modifiedAt: modified
             )
         }
+        // Oldest-first: stale clutter is what users actually want
+        // organized; if we have to truncate, drop the newest items
+        // (which are most likely active work the user wouldn't want
+        // moved anyway).
+        let sorted = unsorted.sorted { $0.modifiedAt < $1.modifiedAt }
+        return Array(sorted.prefix(maxListingSize))
     }
 
     // MARK: - Prompt
