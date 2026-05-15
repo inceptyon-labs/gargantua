@@ -12,6 +12,7 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
     case mlx
     case cloud
     case claudeCode
+    case codex
 
     public static let userDefaultsKey = "organizer.backendPreference"
 
@@ -23,6 +24,7 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
         case .mlx: "On-device · MLX"
         case .cloud: "Cloud AI (Anthropic)"
         case .claudeCode: "Claude Code agent"
+        case .codex: "Codex agent"
         }
     }
 
@@ -36,6 +38,8 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
             return "Smarter groupings via Anthropic. Sends filenames + sizes only — no contents."
         case .claudeCode:
             return "Routes through your claude CLI. Uses whatever model and auth the agent has."
+        case .codex:
+            return "Routes through your codex CLI. Uses whatever model and auth Codex has."
         }
     }
 
@@ -45,6 +49,7 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
         case .mlx: "brain"
         case .cloud: "cloud"
         case .claudeCode: "terminal"
+        case .codex: "terminal"
         }
     }
 

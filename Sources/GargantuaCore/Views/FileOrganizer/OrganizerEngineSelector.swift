@@ -21,21 +21,26 @@ struct OrganizerEngineSelector: View {
     @State private var mlxReady = false
     @State private var claudeCodeReady = false
     @State private var claudeCodeModel = ""
+    @State private var codexReady = false
+    @State private var codexModel = ""
 
     let configStore: CloudAIConfigurationStore
     let keyStore: any CloudAPIKeyStore
     let agentConfigStore: ClaudeCodeAgentConfigurationStore
+    let codexConfigStore: CodexAgentConfigurationStore
     let mlxAvailabilityProvider: @MainActor () -> Bool
 
     init(
         configStore: CloudAIConfigurationStore = CloudAIConfigurationStore(),
         keyStore: any CloudAPIKeyStore = KeychainCloudAPIKeyStore(),
         agentConfigStore: ClaudeCodeAgentConfigurationStore = ClaudeCodeAgentConfigurationStore(),
+        codexConfigStore: CodexAgentConfigurationStore = CodexAgentConfigurationStore(),
         mlxAvailabilityProvider: @escaping @MainActor () -> Bool = { false }
     ) {
         self.configStore = configStore
         self.keyStore = keyStore
         self.agentConfigStore = agentConfigStore
+        self.codexConfigStore = codexConfigStore
         self.mlxAvailabilityProvider = mlxAvailabilityProvider
     }
 
@@ -77,6 +82,19 @@ struct OrganizerEngineSelector: View {
                     ? "Routes through your claude CLI — uses whatever auth + model the agent has."
                     : "Enable the Claude Code agent in Settings → AI to use this.",
                 tap: selectClaudeCode
+            ))
+
+            engineRow(EngineRow(
+                isSelected: currentBackend == .codex,
+                isEnabled: codexReady,
+                icon: "terminal",
+                title: codexReady && !codexModel.isEmpty
+                    ? "Codex agent (\(codexModel))"
+                    : "Codex agent",
+                detail: codexReady
+                    ? "Routes through your codex CLI — uses whatever auth + model Codex has."
+                    : "Enable the Codex agent in Settings → AI to use this.",
+                tap: selectCodex
             ))
 
             ForEach(Self.cloudModels) { model in
@@ -122,6 +140,11 @@ struct OrganizerEngineSelector: View {
         rawBackend = OrganizerBackendPreference.claudeCode.rawValue
     }
 
+    private func selectCodex() {
+        guard codexReady else { return }
+        rawBackend = OrganizerBackendPreference.codex.rawValue
+    }
+
     private func selectCloud(model: AnthropicModel) {
         guard cloudReady else { return }
         rawBackend = OrganizerBackendPreference.cloud.rawValue
@@ -139,6 +162,10 @@ struct OrganizerEngineSelector: View {
         let agentConfig = agentConfigStore.load()
         claudeCodeReady = agentConfig.isEnabled
         claudeCodeModel = agentConfig.selectedModel
+
+        let codexConfig = codexConfigStore.load()
+        codexReady = codexConfig.isEnabled
+        codexModel = codexConfig.selectedModel
 
         mlxReady = mlxAvailabilityProvider()
     }

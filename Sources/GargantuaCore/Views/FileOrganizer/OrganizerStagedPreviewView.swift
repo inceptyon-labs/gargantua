@@ -201,6 +201,7 @@ public struct OrganizerStagedPreviewView: View {
         case .mlx: return "Asking your local model for groupings…"
         case .cloud: return "Asking Cloud AI for groupings…"
         case .claudeCode: return "Asking the Claude Code agent for groupings…"
+        case .codex: return "Asking the Codex agent for groupings…"
         }
     }
 

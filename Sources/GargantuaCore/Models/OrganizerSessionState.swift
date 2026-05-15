@@ -109,6 +109,7 @@ public final class OrganizerSessionState: ObservableObject {
     private let localProposer: LocalOrganizerProposer
     private let mlxProposer: MLXOrganizerProposer?
     private let claudeCodeProposer: ClaudeCodeOrganizerProposer
+    private let codexProposer: CodexOrganizerProposer
     private let preferenceProvider: @MainActor () -> OrganizerBackendPreference
 
     private var activeTask: Task<Void, Never>?
@@ -119,6 +120,7 @@ public final class OrganizerSessionState: ObservableObject {
         localProposer: LocalOrganizerProposer = LocalOrganizerProposer(),
         mlxProposer: MLXOrganizerProposer? = nil,
         claudeCodeProposer: ClaudeCodeOrganizerProposer = ClaudeCodeOrganizerProposer(),
+        codexProposer: CodexOrganizerProposer = CodexOrganizerProposer(),
         preferenceProvider: @escaping @MainActor () -> OrganizerBackendPreference = {
             OrganizerBackendPreference.stored()
         }
@@ -128,6 +130,7 @@ public final class OrganizerSessionState: ObservableObject {
         self.localProposer = localProposer
         self.mlxProposer = mlxProposer
         self.claudeCodeProposer = claudeCodeProposer
+        self.codexProposer = codexProposer
         self.preferenceProvider = preferenceProvider
     }
 
@@ -142,6 +145,7 @@ public final class OrganizerSessionState: ObservableObject {
         let local = localProposer
         let mlx = mlxProposer
         let claudeCode = claudeCodeProposer
+        let codex = codexProposer
 
         activeTask = Task { [weak self] in
             do {
@@ -162,6 +166,8 @@ public final class OrganizerSessionState: ObservableObject {
                     result = try await mlx.propose(sourceFolder: folder)
                 case .claudeCode:
                     result = try await claudeCode.propose(sourceFolder: folder)
+                case .codex:
+                    result = try await codex.propose(sourceFolder: folder)
                 }
                 guard !Task.isCancelled else { return }
                 self?.proposal = result
