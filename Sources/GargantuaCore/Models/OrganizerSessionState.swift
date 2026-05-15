@@ -96,6 +96,13 @@ public final class OrganizerSessionState: ObservableObject {
     @Published public var selectedTarget: OrganizerTarget = .downloads
     @Published public private(set) var phase: OrganizerPhase = .idle
     @Published public private(set) var proposal: OrganizationProposal?
+    /// Subfolder URLs the user has moved to Trash from the post-apply
+    /// surface. Keyed by `path` so view binding stays stable across URL
+    /// equality quirks (isDirectory flag, trailing slash, etc.).
+    @Published public private(set) var trashedFolderPaths: Set<String> = []
+    /// Last error message per subfolder path. Used by the post-apply
+    /// view to render an inline failure note next to the row.
+    @Published public private(set) var folderTrashErrors: [String: String] = [:]
 
     private let executor: OrganizerExecutor
     private let cloudService: CloudAIService?
@@ -205,7 +212,33 @@ public final class OrganizerSessionState: ObservableObject {
     public func reset() {
         cancelActiveTask()
         proposal = nil
+        trashedFolderPaths = []
+        folderTrashErrors = [:]
         phase = .idle
+    }
+
+    /// Move one of the just-created subfolders to the Trash. Called by
+    /// the post-apply structure view. Best-effort: a path that's
+    /// already gone is reported as success (file already gone is the
+    /// state the user wanted); other errors land in `folderTrashErrors`
+    /// so the row can render an inline failure note.
+    public func trashSubfolder(at url: URL, fileManager: FileManager = .default) {
+        let key = url.standardizedFileURL.path
+
+        guard fileManager.fileExists(atPath: url.path) else {
+            trashedFolderPaths.insert(key)
+            folderTrashErrors.removeValue(forKey: key)
+            return
+        }
+
+        do {
+            var resulting: NSURL?
+            try fileManager.trashItem(at: url, resultingItemURL: &resulting)
+            trashedFolderPaths.insert(key)
+            folderTrashErrors.removeValue(forKey: key)
+        } catch {
+            folderTrashErrors[key] = error.localizedDescription
+        }
     }
 
     /// User-initiated cancel from the in-progress spinner. Kills the

@@ -134,6 +134,53 @@ struct OrganizerSessionStateTests {
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("b.pdf").path))
     }
 
+    // MARK: - Trash subfolder
+
+    @Test("trashSubfolder moves a real folder to the Trash and records its path")
+    func trashSubfolderHappyPath() throws {
+        let s = try Self.scratchRoot()
+        defer { try? FileManager.default.removeItem(at: s) }
+        let sub = s.appendingPathComponent("Receipts", isDirectory: true)
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: sub.appendingPathComponent("a.pdf"))
+
+        let state = OrganizerSessionState()
+        state.trashSubfolder(at: sub)
+
+        #expect(state.trashedFolderPaths.contains(sub.standardizedFileURL.path))
+        #expect(state.folderTrashErrors[sub.standardizedFileURL.path] == nil)
+        #expect(!FileManager.default.fileExists(atPath: sub.path))
+    }
+
+    @Test("trashSubfolder on a missing folder records success (file already gone)")
+    func trashSubfolderMissing() throws {
+        let s = try Self.scratchRoot()
+        defer { try? FileManager.default.removeItem(at: s) }
+        let missing = s.appendingPathComponent("Never-Existed", isDirectory: true)
+
+        let state = OrganizerSessionState()
+        state.trashSubfolder(at: missing)
+
+        #expect(state.trashedFolderPaths.contains(missing.standardizedFileURL.path))
+        #expect(state.folderTrashErrors[missing.standardizedFileURL.path] == nil)
+    }
+
+    @Test("Reset clears trashed folder state alongside proposal")
+    func resetClearsTrashedState() throws {
+        let s = try Self.scratchRoot()
+        defer { try? FileManager.default.removeItem(at: s) }
+        let sub = s.appendingPathComponent("Receipts", isDirectory: true)
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+
+        let state = OrganizerSessionState()
+        state.trashSubfolder(at: sub)
+        #expect(!state.trashedFolderPaths.isEmpty)
+
+        state.reset()
+        #expect(state.trashedFolderPaths.isEmpty)
+        #expect(state.folderTrashErrors.isEmpty)
+    }
+
     // MARK: - Reset
 
     @Test("Reset clears proposal and returns to idle")
