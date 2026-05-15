@@ -5,13 +5,12 @@ import SwiftUI
 /// `codex exec`, so there's no MCP config, no allowed-tools matrix, no
 /// max-turn budget. Just a toggle, CLI path, and optional model.
 struct CodexAgentSettingsSection: View {
-    @State private var configuration = CodexAgentConfiguration()
+    @State var configuration = CodexAgentConfiguration()
     @State private var cliPathInput = ""
-    @State private var modelInput = ""
     @State private var statusMessage = "Not configured"
     @State private var statusTone = GargantuaColors.ink4
 
-    private let store = CodexAgentConfigurationStore()
+    let store = CodexAgentConfigurationStore()
     private let resolver = CodexCLIResolver()
 
     var body: some View {
@@ -32,7 +31,7 @@ struct CodexAgentSettingsSection: View {
                         tone: statusNoticeTone
                     )
                 }
-                modelRow
+                modelPickerRow
             } else {
                 Text("Enable to set the CLI path and model.")
                     .font(GargantuaFonts.caption)
@@ -42,7 +41,6 @@ struct CodexAgentSettingsSection: View {
         .task {
             configuration = store.load()
             cliPathInput = configuration.cliPath
-            modelInput = configuration.selectedModel
             detectCLI()
         }
     }
@@ -127,32 +125,6 @@ struct CodexAgentSettingsSection: View {
         }
     }
 
-    // MARK: - Model row
-
-    private var modelRow: some View {
-        HStack(spacing: GargantuaSpacing.space3) {
-            SettingsRowIcon(systemName: "brain", size: 14)
-
-            TextField("Default (let codex pick)", text: $modelInput)
-                .textFieldStyle(.plain)
-                .font(GargantuaFonts.monoData)
-                .foregroundStyle(GargantuaColors.ink)
-                .padding(.horizontal, GargantuaSpacing.space3)
-                .padding(.vertical, GargantuaSpacing.space2)
-                .background(GargantuaColors.surface3)
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                .onSubmit(saveModel)
-
-            GargantuaButton(
-                "Save",
-                icon: "checkmark.circle.fill",
-                tone: .ghost(GargantuaColors.safe),
-                action: saveModel
-            )
-            .help("Save model override (e.g. gpt-5-codex)")
-        }
-    }
-
     // MARK: - Actions
 
     private func saveCLIPath() {
@@ -161,12 +133,7 @@ struct CodexAgentSettingsSection: View {
         detectCLI()
     }
 
-    private func saveModel() {
-        configuration.selectedModel = modelInput
-        saveConfiguration()
-    }
-
-    private func saveConfiguration() {
+    func saveConfiguration() {
         store.save(configuration)
     }
 
