@@ -29,7 +29,7 @@ public final class MLXOrganizerProposer {
 
     public init(
         aiService: LocalAIService,
-        now: @MainActor @escaping () -> Date = Date.init,
+        now: @MainActor @escaping () -> Date = { Date() },
         fileManager: FileManager = .default
     ) {
         self.aiService = aiService

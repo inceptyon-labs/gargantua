@@ -11,7 +11,7 @@ private let codexOrganizerLogger = Logger(
 /// prompt, same response schema, same reassembly + validate() pipeline.
 /// Uses `--output-last-message` so we read only the assistant's final
 /// reply from a temp file rather than parsing the JSONL event stream.
-public struct CodexOrganizerProposer: Sendable {
+public struct CodexOrganizerProposer: @unchecked Sendable {
     private let configurationStore: CodexAgentConfigurationStore
     private let cliResolver: CodexCLIResolver
     private let processFactory: @Sendable () -> Process
@@ -23,7 +23,7 @@ public struct CodexOrganizerProposer: Sendable {
         configurationStore: CodexAgentConfigurationStore = CodexAgentConfigurationStore(),
         cliResolver: CodexCLIResolver = CodexCLIResolver(),
         processFactory: @Sendable @escaping () -> Process = { Process() },
-        now: @Sendable @escaping () -> Date = Date.init,
+        now: @Sendable @escaping () -> Date = { Date() },
         fileManager: FileManager = .default,
         timeoutSeconds: Int = 240
     ) {

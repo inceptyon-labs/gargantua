@@ -5,7 +5,7 @@ import Foundation
 /// `organizer.customFolders` in `UserDefaults`. Kept independent of
 /// `OrganizerBackendPreference` so the two settings don't share a
 /// failure mode.
-public struct OrganizerCustomFolderStore: Sendable {
+public struct OrganizerCustomFolderStore: @unchecked Sendable {
     public static let userDefaultsKey = "organizer.customFolders"
 
     private let defaults: UserDefaults

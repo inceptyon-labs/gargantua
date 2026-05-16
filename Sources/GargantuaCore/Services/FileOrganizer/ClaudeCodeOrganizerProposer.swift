@@ -15,7 +15,7 @@ private let claudeCodeOrganizerLogger = Logger(
 /// Reuses the agent's configuration (CLI path + selectedModel) so a
 /// user who has Claude Code set up doesn't need a separate Anthropic
 /// API key for the organizer.
-public struct ClaudeCodeOrganizerProposer: Sendable {
+public struct ClaudeCodeOrganizerProposer: @unchecked Sendable {
     private let configurationStore: ClaudeCodeAgentConfigurationStore
     private let cliResolver: ClaudeCodeCLIResolver
     private let processFactory: @Sendable () -> Process
@@ -27,7 +27,7 @@ public struct ClaudeCodeOrganizerProposer: Sendable {
         configurationStore: ClaudeCodeAgentConfigurationStore = ClaudeCodeAgentConfigurationStore(),
         cliResolver: ClaudeCodeCLIResolver = ClaudeCodeCLIResolver(),
         processFactory: @Sendable @escaping () -> Process = { Process() },
-        now: @Sendable @escaping () -> Date = Date.init,
+        now: @Sendable @escaping () -> Date = { Date() },
         fileManager: FileManager = .default,
         timeoutSeconds: Int = 240
     ) {

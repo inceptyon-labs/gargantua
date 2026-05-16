@@ -8,7 +8,7 @@ import Foundation
 /// as already-organized and left alone. Hidden entries are skipped. The
 /// proposal it returns is run through `OrganizationProposal.validate()`
 /// before being handed back, so callers can move directly to apply.
-public struct LocalOrganizerProposer: Sendable {
+public struct LocalOrganizerProposer: @unchecked Sendable {
     private let fileManager: FileManager
     private let now: @Sendable () -> Date
     /// Files newer than this never appear in a plan — they're presumed
@@ -18,7 +18,7 @@ public struct LocalOrganizerProposer: Sendable {
 
     public init(
         fileManager: FileManager = .default,
-        now: @Sendable @escaping () -> Date = Date.init,
+        now: @Sendable @escaping () -> Date = { Date() },
         recentSkipInterval: TimeInterval = 7 * 24 * 60 * 60
     ) {
         self.fileManager = fileManager

@@ -5,7 +5,7 @@ import os
 /// `UndoLedger` trail so the user can reverse the operation. Apply +
 /// Undo are the only two state-changing entry points; the executor
 /// itself is a value-type façade over `FileManager` and the ledger.
-public struct OrganizerExecutor: Sendable {
+public struct OrganizerExecutor: @unchecked Sendable {
     private let fileManager: FileManager
     private let ledger: UndoLedger
     private let now: @Sendable () -> Date
@@ -13,7 +13,7 @@ public struct OrganizerExecutor: Sendable {
     public init(
         fileManager: FileManager = .default,
         ledger: UndoLedger = UndoLedger(),
-        now: @Sendable @escaping () -> Date = Date.init
+        now: @Sendable @escaping () -> Date = { Date() }
     ) {
         self.fileManager = fileManager
         self.ledger = ledger
