@@ -3,6 +3,17 @@ import SwiftUI
 extension SmartUninstallerView {
     // MARK: - Idle / Landing State
 
+    private func uninstallerPreviewItem(icon: String, label: String) -> some View {
+        VStack(spacing: GargantuaSpacing.space1) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(GargantuaColors.ink3)
+            Text(label)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+        }
+    }
+
     var idleView: some View {
         VStack(spacing: 0) {
             PageHeaderView(
@@ -25,18 +36,16 @@ extension SmartUninstallerView {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
 
-                Button {
-                    viewModel.runTracked { await viewModel.loadApps() }
-                } label: {
-                    Text("Scan Installed Apps")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                HStack(spacing: GargantuaSpacing.space4) {
+                    uninstallerPreviewItem(icon: "doc.badge.gearshape", label: "Support Files")
+                    uninstallerPreviewItem(icon: "internaldrive", label: "Caches")
+                    uninstallerPreviewItem(icon: "person.badge.clock", label: "Login Items")
+                    uninstallerPreviewItem(icon: "slider.horizontal.3", label: "Preferences")
                 }
-                .buttonStyle(.plain)
+
+                GargantuaButton("Scan Installed Apps", tone: .primary) {
+                    viewModel.runTracked { await viewModel.loadApps() }
+                }
                 .padding(.top, GargantuaSpacing.space2)
 
                 Spacer()

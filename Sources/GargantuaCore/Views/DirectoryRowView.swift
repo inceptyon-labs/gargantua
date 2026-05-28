@@ -7,10 +7,12 @@ struct DirectoryRowView: View {
     let isExpanded: Bool
     let onExpand: (() async -> Void)?
     let onDrillDown: () -> Void
+    let onItemTrashed: (() -> Void)?
     var indentLevel: Int = 0
 
     @State private var isHovered = false
     @State private var isLoadingChildren = false
+    @State private var showTrashConfirm = false
     @Environment(\.openURL) private var openURL
 
     private static let fullDiskAccessURL = URL(
@@ -71,8 +73,7 @@ struct DirectoryRowView: View {
                         grantAccessAffordance
                     } else if item.isSizing {
                         Color.clear.frame(width: 100, height: 6)
-                        ProgressView()
-                            .controlSize(.mini)
+                        AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
                             .frame(width: 70, alignment: .trailing)
                     } else if item.isOthersAggregate {
                         sizeLabelView
@@ -96,6 +97,16 @@ struct DirectoryRowView: View {
             if canRevealInFinder {
                 Button("Reveal in Finder") { revealInFinder() }
             }
+            if canTrash {
+                Divider()
+                Button("Move to Trash", role: .destructive) { showTrashConfirm = true }
+            }
+        }
+        .alert("Move to Trash?", isPresented: $showTrashConfirm) {
+            Button("Move to Trash", role: .destructive) { moveToTrash() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
         }
     }
 
@@ -127,10 +138,21 @@ struct DirectoryRowView: View {
             && !item.isOthersAggregate
     }
 
+    private var canTrash: Bool {
+        canRevealInFinder && onItemTrashed != nil
+    }
+
     private func revealInFinder() {
         NSWorkspace.shared.activateFileViewerSelecting(
             [URL(fileURLWithPath: item.path)]
         )
+    }
+
+    private func moveToTrash() {
+        let url = URL(fileURLWithPath: item.path)
+        NSWorkspace.shared.recycle([url]) { _, _ in
+            DispatchQueue.main.async { onItemTrashed?() }
+        }
     }
 
     private var expandButton: some View {
@@ -144,8 +166,7 @@ struct DirectoryRowView: View {
         } label: {
             Group {
                 if isLoadingChildren {
-                    ProgressView()
-                        .controlSize(.mini)
+                    AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
                 } else {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .medium))

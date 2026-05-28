@@ -129,8 +129,9 @@ struct ModalChrome<Content: View>: View {
 
     var body: some View {
         ZStack {
-            // Scrim — click to cancel
-            Color.black.opacity(0.6)
+            // Scrim — click to cancel. High opacity so the EventHorizon
+            // console doesn't bleed through on the void background.
+            GargantuaColors.void_.opacity(0.92)
                 .ignoresSafeArea()
                 .onTapGesture(perform: onCancel)
 

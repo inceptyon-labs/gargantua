@@ -160,11 +160,23 @@ public struct DeepCleanView: View {
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text("Scans for browser caches, app caches, system logs, temp files, old installers, and other reclaimable space.")
+                Text("Scans for reclaimable space across your system using the active cleanup profile.")
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink2)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 320)
+
+                HStack(spacing: GargantuaSpacing.space2) {
+                    ForEach(["Browser Caches", "App Caches", "System Logs", "Temp Files", "Installers"], id: \.self) { label in
+                        Text(label)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                            .padding(.horizontal, GargantuaSpacing.space2)
+                            .padding(.vertical, 3)
+                            .background(GargantuaColors.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    }
+                }
 
                 if session.scanProgress.errors.isEmpty == false {
                     HStack(spacing: GargantuaSpacing.space1) {
@@ -178,17 +190,8 @@ public struct DeepCleanView: View {
                     }
                 }
 
-                Button(action: startScan) {
-                    Text("Start Deep Clean Scan")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, GargantuaSpacing.space2)
+                GargantuaButton("Start Deep Clean Scan", tone: .primary, action: startScan)
+                    .padding(.top, GargantuaSpacing.space2)
             }
 
             Spacer()

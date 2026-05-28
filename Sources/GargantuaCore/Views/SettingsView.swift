@@ -56,13 +56,15 @@ public struct SettingsView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
-                headerView
-                SettingsTabBar(selection: $selectedTab)
-            }
-            .padding(.horizontal, GargantuaSpacing.space6)
-            .padding(.top, GargantuaSpacing.space6)
-            .padding(.bottom, GargantuaSpacing.space4)
+            PageHeaderView(
+                title: "Settings",
+                subtitle: headerSubtitle,
+                subtitleStyle: .voice
+            )
+
+            SettingsTabBar(selection: $selectedTab)
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.vertical, GargantuaSpacing.space3)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space5) {
@@ -107,18 +109,6 @@ public struct SettingsView: View {
                     downloadManager.deleteModel()
                 }
             )
-        }
-    }
-
-    private var headerView: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            Text("Settings")
-                .font(GargantuaFonts.display)
-                .foregroundStyle(GargantuaColors.ink)
-
-            Text(headerSubtitle)
-                .font(GargantuaFonts.body.italic())
-                .foregroundStyle(GargantuaColors.ink2)
         }
     }
 

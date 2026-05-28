@@ -42,8 +42,7 @@ struct FileHealthIdleView: View {
                         .foregroundStyle(GargantuaColors.ink)
 
                     Text(
-                        "Runs czkawka across your scan roots to surface empty, broken, temporary, oversized, "
-                            + "and visually similar files. Review-by-default: nothing is selected automatically."
+                        "Runs czkawka across your scan roots. Review-by-default: nothing is selected automatically."
                     )
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink3)
@@ -51,18 +50,33 @@ struct FileHealthIdleView: View {
                     .frame(maxWidth: 420)
                 }
 
-                Button(action: onScan) {
-                    Text("Scan file health")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(
-                            RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                .fill(GargantuaColors.accent)
-                        )
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 100), spacing: GargantuaSpacing.space2)],
+                    spacing: GargantuaSpacing.space2
+                ) {
+                    ForEach([
+                        ("folder.badge.minus", "Empty Dirs"),
+                        ("link.badge.plus", "Broken Symlinks"),
+                        ("doc.badge.arrow.up", "Oversized Files"),
+                        ("photo.on.rectangle.angled", "Similar Images"),
+                        ("clock.badge.xmark", "Temp Files"),
+                        ("archivebox", "Bad Archives"),
+                    ], id: \.1) { icon, label in
+                        HStack(spacing: GargantuaSpacing.space1) {
+                            Image(systemName: icon)
+                                .font(.system(size: 11))
+                                .foregroundStyle(GargantuaColors.ink4)
+                                .frame(width: 14)
+                            Text(label)
+                                .font(GargantuaFonts.caption)
+                                .foregroundStyle(GargantuaColors.ink3)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: 320)
+
+                GargantuaButton("Scan file health", tone: .primary, action: onScan)
 
                 Spacer()
             }
@@ -232,18 +246,7 @@ struct FileHealthErrorView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
 
-            Button(action: onRetry) {
-                Text("Try again")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(GargantuaColors.surface3)
-                    )
-            }
-            .buttonStyle(.plain)
+            GargantuaButton("Try again", tone: .neutral, action: onRetry)
         }
     }
 }

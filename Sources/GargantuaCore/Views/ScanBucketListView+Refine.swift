@@ -27,8 +27,7 @@ extension ScanBucketListView {
             .frame(minWidth: 260, maxWidth: 460, minHeight: 24)
 
             if isResolvingFilter {
-                ProgressView()
-                    .controlSize(.mini)
+                AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
                     .frame(width: 16, height: 16)
             } else {
                 Button(action: resolveNaturalLanguageFilter) {

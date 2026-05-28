@@ -203,6 +203,18 @@ private struct PermissionScreen: View {
                 }
                 .buttonStyle(.plain)
 
+                if permissionGranted != true {
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GargantuaColors.ink3)
+                        Text("Click \"+\" in Settings, then add Gargantua from Applications.")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                    .frame(maxWidth: 400)
+                }
+
                 Button {
                     onContinue()
                 } label: {

@@ -17,17 +17,18 @@ let duplicateFinderContainerLogger = Logger(subsystem: "com.gargantua.core", cat
 ///   2. **Scanning** — progress indicator.
 ///   3. **Results** — `DuplicateFinderView` with the discovered groups.
 ///   4. **Error** — binary-missing or scan-failure message with retry.
-///
-/// Destructive operations (trash) are still routed through the caller-provided
-/// `onSendToTrash` closure so the Trust Layer boundary stays above this view.
 public struct DuplicateFinderContainerView: View {
     public let scanRoots: [URL]?
-    @Bindable public var state: DuplicateFinderContainerState
+    public let state: DuplicateFinderContainerState
     @Binding public var selectedIDs: Set<String>
     public let engineFactory: (_ scanRoots: [URL]) throws -> any ScanAdapter
     public let onSendToTrash: (([ScanResult]) -> Void)?
     public let onExplain: ((ScanResult) -> Void)?
     public let persistence: PersistenceController?
+    public let onCleanupCompleted: ((CleanupResult) -> Void)?
+
+    @State private var showConfirmation = false
+    @State private var pendingTrashItems: [ScanResult] = []
 
     public init(
         state: DuplicateFinderContainerState,
@@ -36,7 +37,8 @@ public struct DuplicateFinderContainerView: View {
         engine: (any ScanAdapter)? = nil,
         onSendToTrash: (([ScanResult]) -> Void)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
-        persistence: PersistenceController? = nil
+        persistence: PersistenceController? = nil,
+        onCleanupCompleted: ((CleanupResult) -> Void)? = nil
     ) {
         self.state = state
         self.scanRoots = scanRoots
@@ -44,10 +46,18 @@ public struct DuplicateFinderContainerView: View {
         self.onSendToTrash = onSendToTrash
         self.onExplain = onExplain
         self.persistence = persistence
+        self.onCleanupCompleted = onCleanupCompleted
         if let engine {
             self.engineFactory = { _ in engine }
         } else {
             self.engineFactory = Self.defaultEngine
+        }
+    }
+
+    private var trashHandler: (([ScanResult]) -> Void) {
+        onSendToTrash ?? { items in
+            pendingTrashItems = items
+            showConfirmation = true
         }
     }
 
@@ -59,14 +69,19 @@ public struct DuplicateFinderContainerView: View {
             Group {
                 switch state.scanState {
                 case .idle:
-                    idleView
+                    DuplicateFinderIdleView(
+                        subtitle: idleSubtitle,
+                        hasCachedResults: state.cachedResults != nil,
+                        onShowCachedResults: showCachedResults,
+                        onStartScan: startScan
+                    )
                 case .scanning:
-                    scanningView
+                    DuplicateFinderScanningView(progress: state.scanProgress)
                 case .results(let results):
                     DuplicateFinderView(
                         results: results,
                         selectedIDs: $selectedIDs,
-                        onSendToTrash: onSendToTrash,
+                        onSendToTrash: trashHandler,
                         onExplain: onExplain,
                         onBack: { state.returnToIdle() },
                         onRefresh: refreshResults,
@@ -74,10 +89,41 @@ public struct DuplicateFinderContainerView: View {
                         persistence: persistence
                     )
                 case .error(let message):
-                    errorView(message)
+                    DuplicateFinderErrorView(message: message, onRetry: startScan)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if showConfirmation, !pendingTrashItems.isEmpty {
+                ConfirmationModalView(
+                    items: pendingTrashItems,
+                    onConfirm: { method in
+                        showConfirmation = false
+                        let items = pendingTrashItems
+                        pendingTrashItems = []
+                        Task { await trashConfirmed(items, method: method) }
+                    },
+                    onCancel: {
+                        showConfirmation = false
+                        pendingTrashItems = []
+                    }
+                )
+                .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.15), value: showConfirmation)
+    }
+
+    private func trashConfirmed(_ items: [ScanResult], method: CleanupMethod) async {
+        let engine = CleanupEngine()
+        let result = await engine.clean(items, method: method)
+        do {
+            try AuditWriter().record(result: result)
+        } catch {
+            duplicateFinderContainerLogger.warning("Failed to write audit entry: \(error.localizedDescription)")
+        }
+        selectedIDs.subtract(result.succeededItems.map(\.item.id))
+        refreshResults()
+        onCleanupCompleted?(result)
     }
 }

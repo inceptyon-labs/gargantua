@@ -121,15 +121,13 @@ struct MainContentView: View {
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)
                             case "duplicateFinder":
-                                // Trash callback is intentionally left nil until the
-                                // Trust Layer / ConfirmationModalView flow for
-                                // destructive duplicate-removal is in place.
                                 DuplicateFinderContainerView(
                                     state: duplicateFinderState,
                                     scanRoots: resolvedScanRoots,
                                     selectedIDs: $duplicateFinderSelection,
                                     onExplain: explainHandler,
-                                    persistence: persistence
+                                    persistence: persistence,
+                                    onCleanupCompleted: dashboardCleanupHandler
                                 )
                             case "fileOrganizer":
                                 FileOrganizerView(

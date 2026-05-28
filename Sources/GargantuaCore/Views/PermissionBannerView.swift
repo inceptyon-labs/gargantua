@@ -72,7 +72,7 @@ extension PermissionBannerView {
     public static var fullDiskAccess: PermissionBannerView {
         PermissionBannerView(
             message: "Some system paths are inaccessible. "
-                + "Grant Full Disk Access in System Settings.",
+                + "Open Full Disk Access settings, click \"+\", and add Gargantua.",
             settingsURL: URL(
                 string: "x-apple.systempreferences:"
                     + "com.apple.preference.security?Privacy_AllFiles"

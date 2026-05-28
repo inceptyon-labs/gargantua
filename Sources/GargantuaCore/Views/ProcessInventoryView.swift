@@ -96,6 +96,20 @@ public struct ProcessInventoryView: View {
         }
     }
 
+    private func processPreviewMetric(icon: String, label: String, value: String) -> some View {
+        VStack(spacing: GargantuaSpacing.space1) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(GargantuaColors.ink3)
+            Text(label)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+            Text(value)
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink4)
+        }
+    }
+
     // MARK: - States
 
     private var subtitleText: String {
@@ -140,17 +154,15 @@ public struct ProcessInventoryView: View {
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: 380)
 
-                        Button(action: startSnapshot) {
-                            Text("Take Snapshot")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, GargantuaSpacing.space4)
-                                .padding(.vertical, GargantuaSpacing.space2)
-                                .background(GargantuaColors.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                        HStack(spacing: GargantuaSpacing.space5) {
+                            processPreviewMetric(icon: "cpu", label: "CPU", value: "Usage")
+                            processPreviewMetric(icon: "memorychip", label: "Memory", value: "Resident")
+                            processPreviewMetric(icon: "signature", label: "Identity", value: "Signatures")
                         }
-                        .buttonStyle(.plain)
-                        .padding(.top, GargantuaSpacing.space2)
+                        .padding(.vertical, GargantuaSpacing.space2)
+
+                        GargantuaButton("Take Snapshot", tone: .primary, action: startSnapshot)
+                            .padding(.top, GargantuaSpacing.space2)
 
                         Spacer(minLength: 0)
                     }

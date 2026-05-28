@@ -113,6 +113,20 @@ extension CleanupSummaryView {
 
     // MARK: - Failure Section
 
+    private var mostFailuresArePermissionErrors: Bool {
+        guard !result.failedItems.isEmpty else { return false }
+        let permissionCount = result.failedItems.filter { item in
+            guard let error = item.error?.lowercased() else { return false }
+            return error.contains("permission") || error.contains("not permitted")
+                || error.contains("access") || error.contains("operation not allowed")
+        }.count
+        return permissionCount * 2 >= result.failedItems.count
+    }
+
+    private static let fullDiskAccessURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+    )!
+
     var failureSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             let count = result.failedItems.count
@@ -127,30 +141,39 @@ extension CleanupSummaryView {
                 Spacer()
             }
 
-            ForEach(sorted(result.failedItems), id: \.item.id) { failed in
-                HStack(spacing: GargantuaSpacing.space2) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(failed.item.name)
-                            .font(GargantuaFonts.label)
-                            .foregroundStyle(GargantuaColors.ink)
-                            .lineLimit(1)
-
-                        if let error = failed.error {
-                            Text(error)
-                                .font(GargantuaFonts.caption)
-                                .foregroundStyle(GargantuaColors.ink3)
-                                .lineLimit(2)
-                        }
-                    }
-
-                    Spacer()
-
-                    Text(AlertItem.formatBytes(failed.item.size))
-                        .font(GargantuaFonts.monoData)
-                        .foregroundStyle(GargantuaColors.ink3)
-                }
-                .padding(.vertical, GargantuaSpacing.space1)
+            if mostFailuresArePermissionErrors {
+                PermissionFailurePrompt(settingsURL: Self.fullDiskAccessURL)
             }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(sorted(result.failedItems), id: \.item.id) { failed in
+                        HStack(spacing: GargantuaSpacing.space2) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(failed.item.name)
+                                    .font(GargantuaFonts.label)
+                                    .foregroundStyle(GargantuaColors.ink)
+                                    .lineLimit(1)
+
+                                if let error = failed.error {
+                                    Text(error)
+                                        .font(GargantuaFonts.caption)
+                                        .foregroundStyle(GargantuaColors.ink3)
+                                        .lineLimit(2)
+                                }
+                            }
+
+                            Spacer()
+
+                            Text(AlertItem.formatBytes(failed.item.size))
+                                .font(GargantuaFonts.monoData)
+                                .foregroundStyle(GargantuaColors.ink3)
+                        }
+                        .padding(.vertical, GargantuaSpacing.space1)
+                    }
+                }
+            }
+            .frame(maxHeight: 180)
         }
         .padding(GargantuaSpacing.space4)
     }
@@ -297,5 +320,52 @@ extension CleanupSummaryView {
         if FileManager.default.fileExists(atPath: logFile.path) {
             NSWorkspace.shared.activateFileViewerSelecting([logFile])
         }
+    }
+}
+
+// MARK: - Permission Failure Prompt
+
+struct PermissionFailurePrompt: View {
+    let settingsURL: URL
+
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+            HStack(spacing: GargantuaSpacing.space2) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 14))
+                    .foregroundStyle(GargantuaColors.review)
+
+                Text("These items require Full Disk Access")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+            }
+
+            Text("Open System Settings, click the \"+\" button, then add Gargantua from your Applications folder.")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                openURL(settingsURL)
+            } label: {
+                HStack(spacing: GargantuaSpacing.space1) {
+                    Image(systemName: "gear")
+                        .font(.system(size: 11))
+                    Text("Open Full Disk Access Settings")
+                        .font(GargantuaFonts.caption)
+                }
+                .foregroundStyle(GargantuaColors.accent)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(GargantuaSpacing.space3)
+        .background(GargantuaColors.review.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                .stroke(GargantuaColors.review.opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 }

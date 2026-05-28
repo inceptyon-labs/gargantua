@@ -28,7 +28,12 @@ public struct TrashRevealer: Sendable {
     @MainActor
     public func revealCleanupResult(_ result: CleanupResult) {
         let trashURLs = result.succeededItems.compactMap(\.trashURL)
-        revealInFinder(urls: trashURLs)
+        let validURLs = trashURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+        if validURLs.isEmpty {
+            openTrash()
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting(validURLs)
+        }
     }
 
     /// Open the Trash folder in Finder.

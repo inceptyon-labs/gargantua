@@ -61,11 +61,9 @@ public struct SmartUninstallerView: View {
 
             if showingConfirmation || viewModel.quickConfirmActive,
                viewModel.currentPlan != nil {
-                // Cleanup method is ignored: UninstallExecutor is Trash-only.
-                // Picking "Delete" in the modal would otherwise surface as a
-                // failed uninstall after final confirmation.
                 ConfirmationModalView(
                     items: viewModel.selectedScanResults,
+                    allowsPermanentDelete: false,
                     onConfirm: { _ in
                         showingConfirmation = false
                         viewModel.quickConfirmActive = false
@@ -91,6 +89,7 @@ public struct SmartUninstallerView: View {
                completed == total {
                 ConfirmationModalView(
                     items: viewModel.batchSelectedScanResults,
+                    allowsPermanentDelete: false,
                     onConfirm: { _ in
                         viewModel.runTracked { await viewModel.executeBatch() }
                     },

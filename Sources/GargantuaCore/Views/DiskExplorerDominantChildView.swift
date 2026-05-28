@@ -122,7 +122,8 @@ struct DiskExplorerDominantChildView: View {
                                 maxSize: maxSize,
                                 isExpanded: false,
                                 onExpand: nil,
-                                onDrillDown: { onDrillDown(item) }
+                                onDrillDown: { onDrillDown(item) },
+                                onItemTrashed: nil
                             )
                         }
                     }

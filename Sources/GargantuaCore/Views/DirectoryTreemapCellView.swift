@@ -5,9 +5,11 @@ struct DirectoryTreemapCellView: View {
     let item: DirectoryItem
     let totalSiblingSize: Int64
     let onDrillDown: () -> Void
+    let onItemTrashed: (() -> Void)?
 
     @State private var isHovered = false
     @State private var sizingPulse = false
+    @State private var showTrashConfirm = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
@@ -51,6 +53,16 @@ struct DirectoryTreemapCellView: View {
             if canRevealInFinder {
                 Button("Reveal in Finder") { revealInFinder() }
             }
+            if canTrash {
+                Divider()
+                Button("Move to Trash", role: .destructive) { showTrashConfirm = true }
+            }
+        }
+        .alert("Move to Trash?", isPresented: $showTrashConfirm) {
+            Button("Move to Trash", role: .destructive) { moveToTrash() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
         }
     }
 
@@ -61,10 +73,21 @@ struct DirectoryTreemapCellView: View {
             && !item.isOthersAggregate
     }
 
+    private var canTrash: Bool {
+        canRevealInFinder && onItemTrashed != nil
+    }
+
     private func revealInFinder() {
         NSWorkspace.shared.activateFileViewerSelecting(
             [URL(fileURLWithPath: item.path)]
         )
+    }
+
+    private func moveToTrash() {
+        let url = URL(fileURLWithPath: item.path)
+        NSWorkspace.shared.recycle([url]) { _, _ in
+            DispatchQueue.main.async { onItemTrashed?() }
+        }
     }
 
     private enum LayoutTier {
@@ -233,8 +256,7 @@ struct DirectoryTreemapCellView: View {
     @ViewBuilder
     private func spaciousStatus(fontSize: CGFloat) -> some View {
         if item.isSizing {
-            ProgressView()
-                .controlSize(.regular)
+            AccretionDiskView(activityRate: 18, size: 20, color: GargantuaColors.accretion)
         } else if item.isPermissionDenied {
             VStack(spacing: GargantuaSpacing.space1) {
                 Text("Requires Full Disk Access")
@@ -264,8 +286,7 @@ struct DirectoryTreemapCellView: View {
     @ViewBuilder
     private var statusView: some View {
         if item.isSizing {
-            ProgressView()
-                .controlSize(.small)
+            AccretionDiskView(activityRate: 18, size: 14, color: GargantuaColors.accretion)
         } else if item.isPermissionDenied {
             Text("Full Disk Access")
                 .font(GargantuaFonts.caption)

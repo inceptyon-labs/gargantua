@@ -233,7 +233,8 @@ public struct DiskExplorerView: View {
                         DirectoryTreemapCellView(
                             item: tile.item,
                             totalSiblingSize: totalSize,
-                            onDrillDown: { drillDown(into: tile.item) }
+                            onDrillDown: { drillDown(into: tile.item) },
+                            onItemTrashed: { refreshCurrent() }
                         )
                         .frame(width: max(tile.rect.width, 1), height: max(tile.rect.height, 1))
                         .offset(x: tile.rect.minX, y: tile.rect.minY)
@@ -261,7 +262,8 @@ public struct DiskExplorerView: View {
                         maxSize: state.maxSize,
                         isExpanded: state.expandedItems[item.path] != nil,
                         onExpand: { await toggleExpand(item) },
-                        onDrillDown: { drillDown(into: item) }
+                        onDrillDown: { drillDown(into: item) },
+                        onItemTrashed: { refreshCurrent() }
                     )
 
                     if let children = state.expandedItems[item.path] {
@@ -272,6 +274,7 @@ public struct DiskExplorerView: View {
                                 isExpanded: false,
                                 onExpand: nil,
                                 onDrillDown: { drillDown(into: child) },
+                                onItemTrashed: { refreshCurrent() },
                                 indentLevel: 1
                             )
                         }

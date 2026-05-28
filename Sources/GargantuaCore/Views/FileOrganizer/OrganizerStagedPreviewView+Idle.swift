@@ -39,16 +39,9 @@ extension OrganizerStagedPreviewView {
     }
 
     private var proposeButton: some View {
-        Button("Propose groupings for \(session.selectedTarget.displayName)") {
+        GargantuaButton("Propose groupings for \(session.selectedTarget.displayName)", tone: .primary) {
             session.startScan()
         }
-        .font(GargantuaFonts.label)
-        .foregroundStyle(.white)
-        .padding(.horizontal, GargantuaSpacing.space4)
-        .padding(.vertical, GargantuaSpacing.space2)
-        .background(GargantuaColors.accent)
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-        .buttonStyle(.plain)
     }
 
     // MARK: - Folder picker

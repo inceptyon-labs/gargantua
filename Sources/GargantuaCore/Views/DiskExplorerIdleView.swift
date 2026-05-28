@@ -32,17 +32,23 @@ struct DiskExplorerIdleView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
 
-                Button(action: onStart) {
-                    Text("Start Disk Scan")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Image(systemName: "house")
+                        .font(.system(size: 11))
+                        .foregroundStyle(GargantuaColors.ink4)
+                    Text("~")
+                        .font(GargantuaFonts.monoPath)
+                        .foregroundStyle(GargantuaColors.ink3)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9))
+                        .foregroundStyle(GargantuaColors.ink4)
+                    Text("treemap + list")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink4)
                 }
-                .buttonStyle(.plain)
-                .padding(.top, GargantuaSpacing.space2)
+
+                GargantuaButton("Start Disk Scan", tone: .primary, action: onStart)
+                    .padding(.top, GargantuaSpacing.space2)
             }
 
             Spacer()

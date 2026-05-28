@@ -143,17 +143,21 @@ public struct BackgroundItemsView: View {
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: 390)
 
-                        Button(action: startScan) {
-                            Text("Start Scan")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, GargantuaSpacing.space4)
-                                .padding(.vertical, GargantuaSpacing.space2)
-                                .background(GargantuaColors.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                        HStack(spacing: GargantuaSpacing.space3) {
+                            ForEach(["Launch Agents", "Launch Daemons", "Login Items"], id: \.self) { label in
+                                HStack(spacing: GargantuaSpacing.space1) {
+                                    Circle()
+                                        .fill(GargantuaColors.ink4)
+                                        .frame(width: 5, height: 5)
+                                    Text(label)
+                                        .font(GargantuaFonts.caption)
+                                        .foregroundStyle(GargantuaColors.ink3)
+                                }
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .padding(.top, GargantuaSpacing.space2)
+
+                        GargantuaButton("Start Scan", tone: .primary, action: startScan)
+                            .padding(.top, GargantuaSpacing.space2)
 
                         Spacer(minLength: 0)
                     }
@@ -439,8 +443,22 @@ public struct BackgroundItemsView: View {
     private func runAction(_ pending: PendingBackgroundItemAction) async {
         let outcome = await session.perform(pending.action, on: pending.item)
         if !outcome.succeeded, let error = outcome.error {
-            lastError = error
+            lastError = Self.humanReadableError(error)
         }
+    }
+
+    private static func humanReadableError(_ raw: String) -> String {
+        if raw.contains("odesigning failure") || raw.contains("-67028") || raw.contains("errSecCS") {
+            return "macOS blocked this action because the helper isn't signed for this build. "
+                + "This is expected in debug builds. A release build with Developer ID signing won't hit this."
+        }
+        if raw.contains("permission") || raw.contains("not permitted") || raw.contains("-60005") {
+            return "macOS denied access to this item. It may require Full Disk Access or belong to a system process that can't be modified."
+        }
+        if raw.contains("No such file") || raw.contains("does not exist") {
+            return "The plist file no longer exists on disk. It may have already been removed."
+        }
+        return raw
     }
 
     /// If the parent passed a plist path to pre-select, expand the matching

@@ -1,8 +1,15 @@
 import Foundation
 import SwiftUI
 
-extension DuplicateFinderContainerView {
-    var idleView: some View {
+// MARK: - Idle
+
+struct DuplicateFinderIdleView: View {
+    let subtitle: String
+    let hasCachedResults: Bool
+    let onShowCachedResults: () -> Void
+    let onStartScan: () -> Void
+
+    var body: some View {
         VStack(spacing: 0) {
             PageHeaderView(
                 title: "Duplicate Finder",
@@ -24,53 +31,38 @@ extension DuplicateFinderContainerView {
                         .font(GargantuaFonts.heading)
                         .foregroundStyle(GargantuaColors.ink)
 
-                    Text(idleSubtitle)
+                    Text(subtitle)
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 420)
                 }
 
-                HStack(spacing: GargantuaSpacing.space3) {
-                    if state.cachedResults != nil {
-                        Button(action: showCachedResults) {
-                            Text("View previous results")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-                                .padding(.horizontal, GargantuaSpacing.space4)
-                                .padding(.vertical, GargantuaSpacing.space2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                        .fill(GargantuaColors.accent)
-                                )
-                        }
-                        .buttonStyle(.plain)
+                HStack(spacing: GargantuaSpacing.space4) {
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "number")
+                            .font(.system(size: 11))
+                            .foregroundStyle(GargantuaColors.ink4)
+                        Text("Hash-grouped")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        Image(systemName: "arrow.triangle.branch")
+                            .font(.system(size: 11))
+                            .foregroundStyle(GargantuaColors.ink4)
+                        Text("fclones engine")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                    }
+                }
 
-                        Button(action: startScan) {
-                            Text("Scan again")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-                                .padding(.horizontal, GargantuaSpacing.space4)
-                                .padding(.vertical, GargantuaSpacing.space2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                        .fill(GargantuaColors.surface3)
-                                )
-                        }
-                        .buttonStyle(.plain)
+                HStack(spacing: GargantuaSpacing.space3) {
+                    if hasCachedResults {
+                        GargantuaButton("View previous results", tone: .primary, action: onShowCachedResults)
+                        GargantuaButton("Scan again", tone: .neutral, action: onStartScan)
                     } else {
-                        Button(action: startScan) {
-                            Text("Scan for duplicates")
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-                                .padding(.horizontal, GargantuaSpacing.space4)
-                                .padding(.vertical, GargantuaSpacing.space2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                                        .fill(GargantuaColors.accent)
-                                )
-                        }
-                        .buttonStyle(.plain)
+                        GargantuaButton("Scan for duplicates", tone: .primary, action: onStartScan)
                     }
                 }
 
@@ -79,23 +71,14 @@ extension DuplicateFinderContainerView {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
 
-    var idleSubtitle: String {
-        guard let cached = state.cachedResults, let when = state.cachedAt else {
-            return "Runs `fclones group` across your scan roots. Review-by-default — nothing is selected automatically."
-        }
-        let groups = DuplicateGrouper.group(cached).count
-        let files = cached.count
-        return "Last scan \(relativeTime(since: when)): \(groups) group\(groups == 1 ? "" : "s") · \(files) file\(files == 1 ? "" : "s")."
-    }
+// MARK: - Scanning
 
-    func relativeTime(since date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
+struct DuplicateFinderScanningView: View {
+    let progress: ScanProgress
 
-    var scanningView: some View {
+    var body: some View {
         VStack(spacing: GargantuaSpacing.space4) {
             AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
 
@@ -104,8 +87,8 @@ extension DuplicateFinderContainerView {
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                if state.scanProgress.itemsFound > 0 {
-                    Text("\(state.scanProgress.itemsFound) duplicate file\(state.scanProgress.itemsFound == 1 ? "" : "s") found so far")
+                if progress.itemsFound > 0 {
+                    Text("\(progress.itemsFound) duplicate file\(progress.itemsFound == 1 ? "" : "s") found so far")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                 } else {
@@ -116,8 +99,15 @@ extension DuplicateFinderContainerView {
             }
         }
     }
+}
 
-    func errorView(_ message: String) -> some View {
+// MARK: - Error
+
+struct DuplicateFinderErrorView: View {
+    let message: String
+    let onRetry: () -> Void
+
+    var body: some View {
         VStack(spacing: GargantuaSpacing.space3) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28))
@@ -133,18 +123,26 @@ extension DuplicateFinderContainerView {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
 
-            Button(action: startScan) {
-                Text("Try again")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space2)
-                    .background(
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(GargantuaColors.surface3)
-                    )
-            }
-            .buttonStyle(.plain)
+            GargantuaButton("Try again", tone: .neutral, action: onRetry)
         }
+    }
+}
+
+// MARK: - Helpers
+
+extension DuplicateFinderContainerView {
+    var idleSubtitle: String {
+        guard let cached = state.cachedResults, let when = state.cachedAt else {
+            return "Runs `fclones group` across your scan roots. Review-by-default — nothing is selected automatically."
+        }
+        let groups = DuplicateGrouper.group(cached).count
+        let files = cached.count
+        return "Last scan \(relativeTime(since: when)): \(groups) group\(groups == 1 ? "" : "s") · \(files) file\(files == 1 ? "" : "s")."
+    }
+
+    func relativeTime(since date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }

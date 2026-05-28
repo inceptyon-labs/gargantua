@@ -101,9 +101,7 @@ public struct AIExplanationSheet: View {
 
     private var loadingView: some View {
         VStack(spacing: GargantuaSpacing.space3) {
-            ProgressView()
-                .controlSize(.small)
-                .tint(GargantuaColors.accent)
+            AccretionDiskView(activityRate: 12, size: 20, color: GargantuaColors.accent)
             Text("Generating explanation…")
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)

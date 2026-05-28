@@ -107,8 +107,7 @@ public struct MenuBarWidgetView: View {
             Spacer(minLength: GargantuaSpacing.space3)
 
             if model.snapshot.isScanning {
-                ProgressView()
-                    .controlSize(.small)
+                AccretionDiskView(activityRate: 18, size: 14, color: GargantuaColors.accretion)
                     .accessibilityLabel("Quick scan running")
             }
         }

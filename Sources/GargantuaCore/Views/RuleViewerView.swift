@@ -32,7 +32,7 @@ public struct RuleViewerView: View {
             headerView
 
             if isLoading {
-                ProgressView()
+                AccretionDiskView(activityRate: 12, size: 36, color: GargantuaColors.accretion)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HSplitView {
@@ -72,8 +72,7 @@ public struct RuleViewerView: View {
             .help("Open the public gargantua-rules repository")
 
             if isLoading {
-                ProgressView()
-                    .controlSize(.small)
+                AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
             }
         }
         .padding(.horizontal, GargantuaSpacing.space6)
