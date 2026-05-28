@@ -237,8 +237,15 @@ printf '\n'
 
 if ask_yn "Push '${CURRENT_BRANCH}' and '${TAG_NAME}' to origin?" default-y; then
     git push origin "$CURRENT_BRANCH"
-    git push origin "$TAG_NAME"
-    ok "pushed ${CURRENT_BRANCH} and ${TAG_NAME}"
+    # `gh release create` (run inside publish.sh) auto-pushes the tag, so
+    # by the time we get here it's usually already on the remote. Only
+    # push if it's missing, to avoid a misleading "tag already exists" error.
+    if git ls-remote --tags --exit-code origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+        log "tag ${TAG_NAME} already on remote (pushed by gh release create); skipping."
+    else
+        git push origin "$TAG_NAME"
+    fi
+    ok "pushed ${CURRENT_BRANCH} (and ${TAG_NAME} if it wasn't already there)"
 else
     log "skipped push. Run when ready:"
     printf '    git push origin %s %s\n' "$CURRENT_BRANCH" "$TAG_NAME"
