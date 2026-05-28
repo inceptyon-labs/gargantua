@@ -106,6 +106,24 @@ while IFS= read -r -d '' CODE_ASSET; do
 done < <(find "$APP_BUNDLE/Contents/MacOS" -type f -print0 2>/dev/null || true)
 log "  signed $phase2_count code assets"
 
+# ----- Phase 3.5: loose Mach-O helpers inside frameworks --------------------
+# Sparkle.framework ships a loose Autoupdate helper at
+# Versions/<v>/Autoupdate that codesign does NOT sign when the framework
+# bundle itself is signed. Notarization rejects it as "not signed with a
+# valid Developer ID certificate" + "signature does not include a secure
+# timestamp". Sign it explicitly before the framework is sealed below.
+log "Phase 3.5/5: signing loose Mach-O helpers inside frameworks..."
+phase35_count=0
+while IFS= read -r -d '' BIN; do
+    [ -f "$BIN" ] || continue
+    log "  $BIN"
+    _sign --sign "$SIGNING_IDENTITY" "$BIN"
+    phase35_count=$((phase35_count + 1))
+done < <(
+    find "$APP_BUNDLE/Contents/Frameworks" -type f -name Autoupdate -print0 2>/dev/null || true
+)
+log "  signed $phase35_count loose framework helpers"
+
 # ----- Phase 4: nested bundles (deepest-first via -depth) -------------------
 log "Phase 4/5: signing nested code bundles (deepest first)..."
 phase3_count=0
