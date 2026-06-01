@@ -1,19 +1,18 @@
 {
-  "$comment": "Records which gargantua-rules commit the bundled rule snapshot was reconciled against. Maintained by Scripts/sync-rules.sh — do not hand-edit. localOnly = rule files authored directly in this repo, absent upstream, preserved by sync. pendingFromUpstream = files allowed to differ from upstream pending reconciliation in either direction (upstream ahead and not yet reviewed in, or bundle ahead and not yet backflowed).",
+  "$comment": "Records which gargantua-rules commit the bundled rule snapshot was reconciled against. Maintained by Scripts/sync-rules.sh \u2014 do not hand-edit. localOnly = rule files authored in this repo, absent upstream, preserved by sync. pendingFromUpstream = maintainer-managed files never auto-overwritten by sync, held divergent in either direction (upstream ahead and not yet reviewed in, or bundle ahead and not yet backflowed).",
   "upstream": "https://github.com/inceptyon-labs/gargantua-rules",
   "ref": "main",
-  "commit": "14f25ed8f17106f441572f341f16e77039a60a78",
+  "commit": "252ab513602162ca5f83279087495291f778adf4",
   "syncedAt": "2026-05-31",
   "bundledRuleCounts": {
-    "cleanup": 287,
-    "uninstall": 9,
+    "cleanup": 288,
+    "uninstall": 91,
     "command": 4
   },
   "localOnly": [
     "cleanup_rules/developer/ai_models.yaml"
   ],
   "pendingFromUpstream": [
-    "cleanup_rules/system/temp.yaml",
     "command_rules/developer/go_clean_cache.yaml",
     "uninstall_rules/app_packs/jetbrains.yaml"
   ]

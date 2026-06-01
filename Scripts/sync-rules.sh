@@ -149,20 +149,30 @@ cmd_apply() {
     [ -n "$ref" ] || ref="$(manifest_field ref)"
     [ -n "$ref" ] || ref="main"
 
-    local tmp commit today
+    local tmp commit today pending pending_json
     tmp="$(mktemp -d)"; trap "rm -rf '$tmp'" EXIT
     echo "Cloning $(manifest_field upstream) @ ${ref}..."
     clone_upstream "$ref" "$tmp"
     commit="$(git -C "$tmp" rev-parse HEAD)"
 
-    # Copy upstream rules in WITHOUT deleting — local-only files survive, and an
-    # upstream removal never silently drops a bundled rule (do that deliberately).
+    # pendingFromUpstream files are maintainer-managed: never auto-overwritten,
+    # and carried forward in the manifest. Used for files intentionally held
+    # divergent in either direction (upstream ahead, or bundle ahead).
+    pending="$(manifest_list pendingFromUpstream)"
+    pending_json="$(manifest_list pendingFromUpstream \
+        | python3 -c "import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))")"
+
+    # Copy upstream rules in WITHOUT deleting — local-only files survive, an
+    # upstream removal never silently drops a bundled rule (do that
+    # deliberately), and pendingFromUpstream files are left untouched.
     for lane in "${LANES[@]}"; do
         IFS=":" read -r _name usub bsub <<<"$lane"
         [ -d "$tmp/$usub" ] || continue
         mkdir -p "$RESOURCES/$bsub"
         (cd "$tmp/$usub" && find . -type f -name '*.yaml' -print0) \
             | while IFS= read -r -d '' rel; do
+                rel="${rel#./}"
+                grep -qxF "$bsub/$rel" <<<"$pending" && continue
                 mkdir -p "$RESOURCES/$bsub/$(dirname "$rel")"
                 cp "$tmp/$usub/$rel" "$RESOURCES/$bsub/$rel"
             done
@@ -190,12 +200,12 @@ cmd_apply() {
     UPSTREAM_URL="$(manifest_field upstream)" \
     REF="$ref" COMMIT="$commit" SYNCED="$today" \
     CLEAN="$c_clean" UNINSTALL="$c_uninstall" COMMAND="$c_command" \
-    LOCAL_ONLY="$local_only_json" \
+    LOCAL_ONLY="$local_only_json" PENDING="$pending_json" \
     python3 - "$MANIFEST" <<'PY'
 import json, os, sys
 path = sys.argv[1]
 manifest = {
-    "$comment": "Records which gargantua-rules commit the bundled rule snapshot was reconciled against. Maintained by Scripts/sync-rules.sh — do not hand-edit. localOnly = rules authored directly in this repo and intentionally preserved by sync. pendingFromUpstream = upstream rules/files not yet reviewed into the bundle (allowed to differ until a maintainer pulls them in).",
+    "$comment": "Records which gargantua-rules commit the bundled rule snapshot was reconciled against. Maintained by Scripts/sync-rules.sh — do not hand-edit. localOnly = rule files authored in this repo, absent upstream, preserved by sync. pendingFromUpstream = maintainer-managed files never auto-overwritten by sync, held divergent in either direction (upstream ahead and not yet reviewed in, or bundle ahead and not yet backflowed).",
     "upstream": os.environ["UPSTREAM_URL"],
     "ref": os.environ["REF"],
     "commit": os.environ["COMMIT"],
@@ -206,7 +216,7 @@ manifest = {
         "command": int(os.environ["COMMAND"]),
     },
     "localOnly": json.loads(os.environ["LOCAL_ONLY"]),
-    "pendingFromUpstream": [],
+    "pendingFromUpstream": json.loads(os.environ["PENDING"]),
 }
 with open(path, "w") as f:
     json.dump(manifest, f, indent=2)
