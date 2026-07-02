@@ -33,14 +33,26 @@ public extension RemnantScanner {
             guard current.contains(where: { $0.contains(replacement.token) }) else {
                 return current
             }
+            // Sanitize every substituted value, not just `{appNameVariant}`.
+            // `{appName}`, `{bundleID}`, `{bundleName}`, and `{teamID}` come
+            // straight from a bundle's Info.plist, which an attacker controls.
+            // Without this, a value like "../../.ssh" expands a template such
+            // as "~/Library/Caches/{appName}" into a path that escapes the
+            // intended cleanup root and deletes unrelated user data.
+            let safeValues = replacement.values.compactMap(safeVariant)
+            guard !safeValues.isEmpty else { return [] }
             return current.flatMap { candidate in
-                replacement.values.map {
+                safeValues.map {
                     candidate.replacingOccurrences(of: replacement.token, with: $0)
                 }
             }
         }
 
+        // Defense in depth: never emit a candidate that still contains a `..`
+        // component after tilde expansion, even if a future template or token
+        // slips one past the per-value filter above.
         return unique(expanded.map { ($0 as NSString).expandingTildeInPath })
+            .filter { !pathContainsParentTraversal($0) }
     }
 
     /// Safe app-name variants for broad Mole-style remnant path expansion.
@@ -100,6 +112,12 @@ extension RemnantScanner {
         name.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: separator)
+    }
+
+    /// True when a fully-expanded path still contains a `..` component that
+    /// could walk outside the template's intended root.
+    private static func pathContainsParentTraversal(_ path: String) -> Bool {
+        path.split(separator: "/", omittingEmptySubsequences: true).contains("..")
     }
 
     private static func safeVariant(_ variant: String) -> String? {
