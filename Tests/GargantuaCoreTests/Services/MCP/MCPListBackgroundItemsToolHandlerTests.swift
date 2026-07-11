@@ -2,19 +2,17 @@ import Testing
 import Foundation
 @testable import GargantuaCore
 
-@Suite("MCP list_background_items tool handler")
-struct MCPListBackgroundItemsToolHandlerTests {
+// MARK: - Shared Fixtures
 
-    // MARK: Fixtures
-
-    private static let userAgentRuntime = LaunchdRuntimeState(
+enum MCPListBackgroundItemsTestFixtures {
+    static let userAgentRuntime = LaunchdRuntimeState(
         isLoaded: true,
         pid: 42,
         lastExitStatus: 0,
         disabledOverride: false
     )
 
-    private static let userAgentItem = BackgroundItem(
+    static let userAgentItem = BackgroundItem(
         id: "user-agent-1",
         label: "com.example.agent",
         source: .userLaunchAgent,
@@ -28,7 +26,7 @@ struct MCPListBackgroundItemsToolHandlerTests {
         runtime: userAgentRuntime
     )
 
-    private static let loginItem = BackgroundItem(
+    static let loginItem = BackgroundItem(
         id: "login-item-1",
         label: "com.example.LoginHelper",
         source: .loginItem,
@@ -42,7 +40,7 @@ struct MCPListBackgroundItemsToolHandlerTests {
         runtime: nil
     )
 
-    private static let protectedDaemon = BackgroundItem(
+    static let protectedDaemon = BackgroundItem(
         id: "daemon-1",
         label: "com.apple.protecteddaemon",
         source: .launchDaemon,
@@ -56,33 +54,40 @@ struct MCPListBackgroundItemsToolHandlerTests {
         runtime: nil
     )
 
-    private static let sampleScan = BackgroundItemScan(
+    static let sampleScan = BackgroundItemScan(
         items: [userAgentItem, loginItem, protectedDaemon],
         loginItemsNeedPrivileges: true,
         unparseableCount: 3,
         scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
     )
 
-    private func handler(
-        provider: @escaping @Sendable () throws -> BackgroundItemScan
-    ) -> MCPListBackgroundItemsToolHandler {
-        MCPListBackgroundItemsToolHandler(scanProvider: provider)
-    }
+    static let emptyArguments = MCPToolArguments([:])
 
-    private static let emptyArguments = MCPToolArguments([:])
-
-    private static func decodeOutput(_ result: MCPToolCallResult) throws -> MCPListBackgroundItemsOutput {
+    static func decodeOutput(_ result: MCPToolCallResult) throws -> MCPListBackgroundItemsOutput {
         let payload = try #require(result.structuredContent, "structured content missing")
         let data = try JSONEncoder().encode(payload)
         return try JSONDecoder().decode(MCPListBackgroundItemsOutput.self, from: data)
     }
 
+    static func makeHandler(
+        provider: @escaping @Sendable () throws -> BackgroundItemScan
+    ) -> MCPListBackgroundItemsToolHandler {
+        MCPListBackgroundItemsToolHandler(scanProvider: provider)
+    }
+}
+
+// MARK: - Full List & Summary Tests
+
+@Suite("MCP list_background_items tool handler")
+struct MCPListBackgroundItemsToolHandlerTests {
+    private let fixtures = MCPListBackgroundItemsTestFixtures.self
+
     // MARK: Full list
 
     @Test("maps all scanned items into the output payload")
     func mapsAllItems() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let output = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
         #expect(output.items.count == 3)
         #expect(output.loginItemsNeedPrivileges == true)
         #expect(output.unparseableCount == 3)
@@ -90,8 +95,8 @@ struct MCPListBackgroundItemsToolHandlerTests {
 
     @Test("safety is the SafetyLevel raw value")
     func safetyRawValues() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let output = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
         let userAgent = try #require(output.items.first { $0.label == "com.example.agent" })
         let login = try #require(output.items.first { $0.label == "com.example.LoginHelper" })
         let daemon = try #require(output.items.first { $0.label == "com.apple.protecteddaemon" })
@@ -102,16 +107,16 @@ struct MCPListBackgroundItemsToolHandlerTests {
 
     @Test("reasons are sorted, not Set iteration order")
     func reasonsSorted() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let output = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
         let userAgent = try #require(output.items.first { $0.label == "com.example.agent" })
         #expect(userAgent.reasons == ["suspicious_executable_path", "unsigned"])
     }
 
     @Test("runtime maps field-for-field, including pid")
     func runtimeMapped() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let output = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
         let userAgent = try #require(output.items.first { $0.label == "com.example.agent" })
         let runtime = try #require(userAgent.runtime)
         #expect(runtime.isLoaded == true)
@@ -122,16 +127,16 @@ struct MCPListBackgroundItemsToolHandlerTests {
 
     @Test("runtime is nil for items with no runtime facts")
     func runtimeNilForLoginItem() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let output = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
         let login = try #require(output.items.first { $0.label == "com.example.LoginHelper" })
         #expect(login.runtime == nil)
     }
 
     @Test("source maps to snake_case wire values")
     func sourceSnakeCase() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let output = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let output = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
         let userAgent = try #require(output.items.first { $0.label == "com.example.agent" })
         let login = try #require(output.items.first { $0.label == "com.example.LoginHelper" })
         let daemon = try #require(output.items.first { $0.label == "com.apple.protecteddaemon" })
@@ -140,26 +145,69 @@ struct MCPListBackgroundItemsToolHandlerTests {
         #expect(daemon.source == "launch_daemon")
     }
 
-    // MARK: Label filter
+    // MARK: Summary
+
+    @Test("unfiltered summary counts by safety level")
+    func unfilteredSummary() throws {
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let result = try subject.handle(fixtures.emptyArguments)
+        guard case .text(let summary) = result.content.first else {
+            Issue.record("content[0] should be text")
+            return
+        }
+        #expect(summary.contains("3 background items"))
+        #expect(summary.contains("1 safe"))
+        #expect(summary.contains("1 review"))
+        #expect(summary.contains("1 protected"))
+    }
+
+    // MARK: Determinism
+
+    @Test("two calls produce identical reasons arrays")
+    func deterministicReasonsAcrossCalls() throws {
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
+        let first = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
+        let second = try fixtures.decodeOutput(try subject.handle(fixtures.emptyArguments))
+        let firstReasons = try #require(first.items.first { $0.label == "com.example.agent" }).reasons
+        let secondReasons = try #require(second.items.first { $0.label == "com.example.agent" }).reasons
+        #expect(firstReasons == secondReasons)
+    }
+
+    @Test("MCPPhase2Tools.all advertises list_background_items")
+    func phase2AdvertisesTool() {
+        #expect(MCPPhase2Tools.all.contains { $0.name == .listBackgroundItems })
+    }
+
+    @Test("MCPPhase3Tools.all does not advertise list_background_items")
+    func phase3DoesNotAdvertiseTool() {
+        #expect(!MCPPhase3Tools.all.contains { $0.name == .listBackgroundItems })
+    }
+}
+
+// MARK: - Label Filter Tests
+
+@Suite("MCP list_background_items — label filter")
+struct MCPListBackgroundItemsLabelFilterTests {
+    private let fixtures = MCPListBackgroundItemsTestFixtures.self
 
     @Test("label filter hit returns exactly one matching item")
     func labelFilterHit() throws {
-        let subject = handler(provider: { Self.sampleScan })
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
         let arguments = MCPToolArguments(["label": .string("com.example.agent")])
         let result = try subject.handle(arguments)
         #expect(result.isError == false)
-        let output = try Self.decodeOutput(result)
+        let output = try fixtures.decodeOutput(result)
         #expect(output.items.count == 1)
         #expect(output.items[0].label == "com.example.agent")
     }
 
     @Test("label filter miss is a successful empty result, not a failure")
     func labelFilterMiss() throws {
-        let subject = handler(provider: { Self.sampleScan })
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
         let arguments = MCPToolArguments(["label": .string("com.nonexistent.item")])
         let result = try subject.handle(arguments)
         #expect(result.isError == false)
-        let output = try Self.decodeOutput(result)
+        let output = try fixtures.decodeOutput(result)
         #expect(output.items.isEmpty)
         guard case .text(let summary) = result.content.first else {
             Issue.record("content[0] should be text")
@@ -193,7 +241,7 @@ struct MCPListBackgroundItemsToolHandlerTests {
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
         let arguments = MCPToolArguments(["label": .string("com.example.agent115")])
-        let output = try Self.decodeOutput(try handler(provider: { scan }).handle(arguments))
+        let output = try fixtures.decodeOutput(try fixtures.makeHandler(provider: { scan }).handle(arguments))
         #expect(output.items.count == 1)
         #expect(output.items.first?.label == "com.example.agent115")
     }
@@ -233,14 +281,14 @@ struct MCPListBackgroundItemsToolHandlerTests {
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
         let arguments = MCPToolArguments(["label": .string("com.example.dup")])
-        let output = try Self.decodeOutput(try handler(provider: { scan }).handle(arguments))
+        let output = try fixtures.decodeOutput(try fixtures.makeHandler(provider: { scan }).handle(arguments))
         #expect(output.items.count == 2)
         #expect(Set(output.items.map(\.source)) == ["user_launch_agent", "launch_daemon"])
     }
 
     @Test("single-item result summarizes with the item's label, singular")
     func singleItemSummaryNamesTheItem() throws {
-        let subject = handler(provider: { Self.sampleScan })
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
         let arguments = MCPToolArguments(["label": .string("com.example.agent")])
         let result = try subject.handle(arguments)
         guard case .text(let summary) = result.content.first else {
@@ -253,22 +301,27 @@ struct MCPListBackgroundItemsToolHandlerTests {
 
     @Test("non-string label fails decoding instead of being silently ignored")
     func nonStringLabelThrows() {
-        let subject = handler(provider: { Self.sampleScan })
+        let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })
         let arguments = MCPToolArguments(["label": .int(5)])
         #expect(throws: (any Error).self) {
             _ = try subject.handle(arguments)
         }
     }
+}
 
-    // MARK: Provider errors
+// MARK: - Provider Error Tests
+
+@Suite("MCP list_background_items — provider errors")
+struct MCPListBackgroundItemsProviderErrorTests {
+    private let fixtures = MCPListBackgroundItemsTestFixtures.self
 
     @Test("provider throwing a plain error surfaces as .failure")
     func providerGenericErrorFails() throws {
         struct Boom: Error, LocalizedError {
             var errorDescription: String? { "scan failed" }
         }
-        let subject = handler(provider: { throw Boom() })
-        let result = try subject.handle(Self.emptyArguments)
+        let subject = fixtures.makeHandler(provider: { throw Boom() })
+        let result = try subject.handle(fixtures.emptyArguments)
         #expect(result.isError == true)
         guard case .text(let message) = result.content.first else {
             Issue.record("expected text content")
@@ -280,43 +333,20 @@ struct MCPListBackgroundItemsToolHandlerTests {
 
     @Test("provider throwing MCPToolError.internalError rethrows for dispatcher")
     func providerInternalErrorRethrown() throws {
-        let subject = handler(provider: {
+        let subject = fixtures.makeHandler(provider: {
             throw MCPToolError.internalError("scanner misconfigured")
         })
         #expect(throws: MCPToolError.internalError("scanner misconfigured")) {
-            try subject.handle(Self.emptyArguments)
+            try subject.handle(fixtures.emptyArguments)
         }
     }
+}
 
-    // MARK: Determinism
+// MARK: - Wire Output & Registry Tests
 
-    @Test("two calls produce identical reasons arrays")
-    func deterministicReasonsAcrossCalls() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let first = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
-        let second = try Self.decodeOutput(try subject.handle(Self.emptyArguments))
-        let firstReasons = try #require(first.items.first { $0.label == "com.example.agent" }).reasons
-        let secondReasons = try #require(second.items.first { $0.label == "com.example.agent" }).reasons
-        #expect(firstReasons == secondReasons)
-    }
-
-    // MARK: Summary
-
-    @Test("unfiltered summary counts by safety level")
-    func unfilteredSummary() throws {
-        let subject = handler(provider: { Self.sampleScan })
-        let result = try subject.handle(Self.emptyArguments)
-        guard case .text(let summary) = result.content.first else {
-            Issue.record("content[0] should be text")
-            return
-        }
-        #expect(summary.contains("3 background items"))
-        #expect(summary.contains("1 safe"))
-        #expect(summary.contains("1 review"))
-        #expect(summary.contains("1 protected"))
-    }
-
-    // MARK: Registry
+@Suite("MCP list_background_items — wire output")
+struct MCPListBackgroundItemsWireOutputTests {
+    private let fixtures = MCPListBackgroundItemsTestFixtures.self
 
     @Test("wire output caps items and reports the real total")
     func wireOutputCapsItems() throws {
@@ -341,8 +371,8 @@ struct MCPListBackgroundItemsToolHandlerTests {
             unparseableCount: 0,
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
-        let result = try handler(provider: { scan }).handle(Self.emptyArguments)
-        let output = try Self.decodeOutput(result)
+        let result = try fixtures.makeHandler(provider: { scan }).handle(fixtures.emptyArguments)
+        let output = try fixtures.decodeOutput(result)
         #expect(output.items.count == MCPListBackgroundItemsToolHandler.maxItemsInWireOutput)
         #expect(output.totalItems == 120)
         guard case .text(let summary) = result.content.first else {
@@ -375,20 +405,10 @@ struct MCPListBackgroundItemsToolHandlerTests {
             unparseableCount: 0,
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
-        let result = try handler(provider: { scan }).handle(Self.emptyArguments)
-        let output = try Self.decodeOutput(result)
+        let result = try fixtures.makeHandler(provider: { scan }).handle(fixtures.emptyArguments)
+        let output = try fixtures.decodeOutput(result)
         let wire = try #require(output.items.first?.explanation)
         #expect(wire.count == MCPListBackgroundItemsToolHandler.maxExplanationCharsInWireOutput + 1)
         #expect(wire.hasSuffix("\u{2026}"))
-    }
-
-    @Test("MCPPhase2Tools.all advertises list_background_items")
-    func phase2AdvertisesTool() {
-        #expect(MCPPhase2Tools.all.contains { $0.name == .listBackgroundItems })
-    }
-
-    @Test("MCPPhase3Tools.all does not advertise list_background_items")
-    func phase3DoesNotAdvertiseTool() {
-        #expect(!MCPPhase3Tools.all.contains { $0.name == .listBackgroundItems })
     }
 }
