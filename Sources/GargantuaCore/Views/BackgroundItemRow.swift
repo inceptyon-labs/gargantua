@@ -287,6 +287,9 @@ public struct BackgroundItemRow: View {
                     if reason.isSuspicious {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 9))
+                            // Decorative — the chip label already carries the
+                            // warning; don't make VoiceOver read the symbol name.
+                            .accessibilityHidden(true)
                     }
                     Text(reason.displayLabel)
                         .font(.system(size: 10, weight: .medium))

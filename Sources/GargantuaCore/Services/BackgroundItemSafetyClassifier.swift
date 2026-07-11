@@ -106,7 +106,7 @@ public struct BackgroundItemSafetyClassifier: Sendable {
         //      auto-selected via a safe rule below, but the chips still show on
         //      every tier. No 4th SafetyLevel tier; suspicion is evidence.
         if reasons.contains(where: { $0.isSuspicious }) {
-            return BackgroundItemClassification(safety: .review, reasons: reasons)
+            return suspiciousClassification(for: input, reasons: reasons)
         }
 
         // 3.5 Owning app uninstalled (strong bundle evidence) — the executable may
@@ -180,13 +180,32 @@ public struct BackgroundItemSafetyClassifier: Sendable {
         return reasons
     }
 
+    /// Rule 3.25's early return, carrying the evidence chips the later rules
+    /// would have added — going suspicious must not make the row LESS
+    /// informative.
+    private func suspiciousClassification(
+        for input: BackgroundItemClassifierInput,
+        reasons: Set<BackgroundItemReason>
+    ) -> BackgroundItemClassification {
+        var reasons = reasons
+        if input.identity?.vendor == .unsigned {
+            reasons.insert(.unsigned)
+        }
+        if input.knownVendorAppMissing {
+            reasons.insert(.parentAppLikelyMissing)
+        }
+        return BackgroundItemClassification(safety: .review, reasons: reasons)
+    }
+
     /// Deterministic suspicion signals. Advisory chips at every tier; rule 3.25
     /// forces `.review` so a suspicious item is never auto-selected as safe.
     private func suspiciousReasons(for input: BackgroundItemClassifierInput) -> Set<BackgroundItemReason> {
         var reasons: Set<BackgroundItemReason> = []
-        if let exe = input.executablePath {
+        if let exe = input.executablePath?.lowercased() {
+            // Case-folded: the default APFS volume is case-insensitive, so
+            // /TMP/evil is a loadable path that must not slip the signal.
             let tmpRoots = ["/tmp/", "/private/tmp/", "/var/tmp/", "/private/var/tmp/"]
-            if tmpRoots.contains(where: exe.hasPrefix) || exe.contains("/Downloads/") {
+            if tmpRoots.contains(where: exe.hasPrefix) || exe.contains("/downloads/") {
                 reasons.insert(.suspiciousExecutablePath)
             }
         }
@@ -199,10 +218,20 @@ public struct BackgroundItemSafetyClassifier: Sendable {
         if let args = input.plist?.programArguments, args.count >= 2 {
             let shells: Set<String> = ["sh", "bash", "zsh", "dash"]
             let interpreter = URL(fileURLWithPath: args[0]).lastPathComponent
-            if shells.contains(interpreter), let cIndex = args.firstIndex(of: "-c") {
+            // `-c` also arrives in combined short-flag clusters (`bash -lc …`,
+            // `zsh -ic …`) — match any single-dash cluster containing `c`.
+            let cIndex = args.firstIndex { arg in
+                arg.hasPrefix("-") && !arg.hasPrefix("--") && arg.dropFirst().contains("c")
+            }
+            if shells.contains(interpreter), let cIndex {
                 let payload = args[(cIndex + 1)...].joined(separator: " ").lowercased()
-                let patterns = ["curl", "wget", "| sh", "| bash", "|sh", "|bash", "eval "]
-                if patterns.contains(where: payload.contains) {
+                // Whole tokens for command names (a benign "retrieval" must
+                // not match "eval"); substring is fine for pipe targets.
+                let tokens = payload.split(whereSeparator: { $0 == " " || $0 == ";" || $0 == "\t" })
+                let commandTokens: Set<Substring> = ["curl", "wget", "eval"]
+                let pipePatterns = ["| sh", "| bash", "|sh", "|bash"]
+                if tokens.contains(where: commandTokens.contains)
+                    || pipePatterns.contains(where: payload.contains) {
                     reasons.insert(.shellInvocation)
                 }
             }
