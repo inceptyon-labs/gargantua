@@ -82,8 +82,8 @@ struct BackgroundItemScannerTests {
         let plist1 = LaunchdPlist(label: "com.apple.thing", program: "/usr/libexec/thing")
         let plist2 = LaunchdPlist(label: "com.acme.tool", program: "/Applications/Tool.app/Contents/MacOS/tool")
         let launchd = [
-            LaunchdItem(domain: .systemDaemon, plistPath: "/Library/LaunchDaemons/apple.plist", plist: plist1),
-            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/acme.plist", plist: plist2),
+            LaunchdItem(domain: .systemDaemon, plistPath: "/Library/LaunchDaemons/com.apple.thing.plist", plist: plist1),
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.acme.tool.plist", plist: plist2),
         ]
         let scanner = makeScanner(
             launchd: launchd,

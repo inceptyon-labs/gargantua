@@ -181,7 +181,7 @@ struct BackgroundItemSafetyClassifierTests {
         let input = makeInput(
             label: "com.suspicious.thing",
             source: .userLaunchAgent,
-            executablePath: "/tmp/foo",
+            executablePath: "/usr/local/bin/foo",
             identity: identity
         )
         let result = classifier.classify(input)

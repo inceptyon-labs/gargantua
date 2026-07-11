@@ -64,6 +64,12 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
     case parentAppMissing = "parent_app_missing"
     /// Label matches a well-known vendor but no app from that vendor is installed.
     case parentAppLikelyMissing = "parent_app_likely_missing"
+    /// Executable lives in a world-writable temp dir or Downloads.
+    case suspiciousExecutablePath = "suspicious_executable_path"
+    /// The plist's internal Label doesn't match its filename stem.
+    case labelFilenameMismatch = "label_filename_mismatch"
+    /// ProgramArguments pipes downloaded content through a shell (`sh -c` + curl/wget/pipe/eval).
+    case shellInvocation = "shell_invocation"
 
     /// Human-readable label for tag chips.
     public var displayLabel: String {
@@ -79,6 +85,18 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
         case .orphanedVendor: "Orphaned Vendor"
         case .parentAppMissing: "App Uninstalled"
         case .parentAppLikelyMissing: "App Not Found"
+        case .suspiciousExecutablePath: "Suspicious Path"
+        case .labelFilenameMismatch: "Name Mismatch"
+        case .shellInvocation: "Piped Shell"
+        }
+    }
+
+    /// `true` for the deterministic suspicion signals — the row prefixes these
+    /// chips with a warning icon.
+    public var isSuspicious: Bool {
+        switch self {
+        case .suspiciousExecutablePath, .labelFilenameMismatch, .shellInvocation: true
+        default: false
         }
     }
 }

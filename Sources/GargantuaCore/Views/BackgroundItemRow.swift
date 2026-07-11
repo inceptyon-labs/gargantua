@@ -283,15 +283,21 @@ public struct BackgroundItemRow: View {
     private var reasonChips: some View {
         HStack(spacing: GargantuaSpacing.space1) {
             ForEach(Array(item.reasons).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { reason in
-                Text(reason.displayLabel)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(chipForeground(for: reason))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background {
-                        RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                            .fill(chipBackground(for: reason))
+                HStack(spacing: 3) {
+                    if reason.isSuspicious {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9))
                     }
+                    Text(reason.displayLabel)
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(chipForeground(for: reason))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background {
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                        .fill(chipBackground(for: reason))
+                }
             }
         }
     }

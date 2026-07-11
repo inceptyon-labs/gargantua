@@ -18,7 +18,7 @@ struct BackgroundItemScannerOwningAppTests {
     func bundleIDMissingIsSafe() {
         let plist = LaunchdPlist(label: "com.acme.helper", program: "/Applications/Acme.app/Contents/MacOS/helper")
         let launchd = [
-            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/acme.plist", plist: plist),
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.acme.helper.plist", plist: plist),
         ]
         let resolver = CountingOwningAppResolver(installedResult: false)
         let scanner = makeScanner(
@@ -44,7 +44,7 @@ struct BackgroundItemScannerOwningAppTests {
     func bundleIDMissUnknownWhenAbsenceUnconfirmable() {
         let plist = LaunchdPlist(label: "com.acme.helper", program: "/Applications/Acme.app/Contents/MacOS/helper")
         let launchd = [
-            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/acme.plist", plist: plist),
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.acme.helper.plist", plist: plist),
         ]
         // Spotlight-off shape: isInstalled misses, but the probe says a miss
         // cannot be trusted as absence.
@@ -139,7 +139,7 @@ struct BackgroundItemScannerOwningAppTests {
             program: "/usr/local/bin/steamclean"
         )
         let launchd = [
-            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/steam.plist", plist: plist),
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.valvesoftware.steamclean.plist", plist: plist),
         ]
         let resolver = CountingOwningAppResolver(prefixResult: false, absenceConfirmable: false)
         let scanner = makeScanner(
@@ -227,7 +227,7 @@ struct BackgroundItemScannerHeuristicsTests {
             program: "/usr/local/bin/steamclean"
         )
         let launchd = [
-            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/steam.plist", plist: plist),
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.valvesoftware.steamclean.plist", plist: plist),
         ]
         let resolver = CountingOwningAppResolver(prefixResult: false)
         let scanner = makeScanner(

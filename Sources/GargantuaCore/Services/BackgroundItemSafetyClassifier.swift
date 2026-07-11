@@ -63,6 +63,8 @@ public struct BackgroundItemClassifierInput: Sendable {
 ///   - `com.apple.*` label → protected
 ///   - Sensitive vendor (VPN/PM/MDM/etc.) → review
 ///   - Orphaned vendor binary → safe (with `orphaned` reason)
+///   - Deterministic suspicion signal (temp/Downloads exe, label/filename
+///     mismatch, piped shell invocation) → review, chips always attached
 ///   - Owning app uninstalled (bundle resolved, confirmed absent) → safe
 ///   - Well-known vendor label, no app from that vendor installed (heuristic) → review
 ///   - Known non-critical vendor helper, parent app installed → safe
@@ -76,7 +78,7 @@ public struct BackgroundItemSafetyClassifier: Sendable {
     public init() {}
 
     public func classify(_ input: BackgroundItemClassifierInput) -> BackgroundItemClassification {
-        var reasons = derivedReasons(for: input)
+        var reasons = derivedReasons(for: input).union(suspiciousReasons(for: input))
 
         // 1. Apple system rules — protected.
         if isAppleSystem(input) {
@@ -98,6 +100,13 @@ public struct BackgroundItemSafetyClassifier: Sendable {
                 reasons.insert(.orphanedVendor)
             }
             return BackgroundItemClassification(safety: .safe, reasons: reasons)
+        }
+
+        // 3.25 Suspicious signals force review — a suspicious item must never be
+        //      auto-selected via a safe rule below, but the chips still show on
+        //      every tier. No 4th SafetyLevel tier; suspicion is evidence.
+        if reasons.contains(where: { $0.isSuspicious }) {
+            return BackgroundItemClassification(safety: .review, reasons: reasons)
         }
 
         // 3.5 Owning app uninstalled (strong bundle evidence) — the executable may
@@ -167,6 +176,36 @@ public struct BackgroundItemSafetyClassifier: Sendable {
         if plist.startInterval != nil || !plist.startCalendarInterval.isEmpty
             || !plist.watchPaths.isEmpty || !plist.queueDirectories.isEmpty {
             reasons.insert(.scheduled)
+        }
+        return reasons
+    }
+
+    /// Deterministic suspicion signals. Advisory chips at every tier; rule 3.25
+    /// forces `.review` so a suspicious item is never auto-selected as safe.
+    private func suspiciousReasons(for input: BackgroundItemClassifierInput) -> Set<BackgroundItemReason> {
+        var reasons: Set<BackgroundItemReason> = []
+        if let exe = input.executablePath {
+            let tmpRoots = ["/tmp/", "/private/tmp/", "/var/tmp/", "/private/var/tmp/"]
+            if tmpRoots.contains(where: exe.hasPrefix) || exe.contains("/Downloads/") {
+                reasons.insert(.suspiciousExecutablePath)
+            }
+        }
+        if let plistPath = input.plistPath {
+            let stem = URL(fileURLWithPath: plistPath).deletingPathExtension().lastPathComponent
+            if stem.caseInsensitiveCompare(input.label) != .orderedSame {
+                reasons.insert(.labelFilenameMismatch)
+            }
+        }
+        if let args = input.plist?.programArguments, args.count >= 2 {
+            let shells: Set<String> = ["sh", "bash", "zsh", "dash"]
+            let interpreter = URL(fileURLWithPath: args[0]).lastPathComponent
+            if shells.contains(interpreter), let cIndex = args.firstIndex(of: "-c") {
+                let payload = args[(cIndex + 1)...].joined(separator: " ").lowercased()
+                let patterns = ["curl", "wget", "| sh", "| bash", "|sh", "|bash", "eval "]
+                if patterns.contains(where: payload.contains) {
+                    reasons.insert(.shellInvocation)
+                }
+            }
         }
         return reasons
     }
