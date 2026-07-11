@@ -238,7 +238,8 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             source: source,
             plist: plist,
             identity: identity,
-            executableExists: exists
+            executableExists: exists,
+            reasons: classification.reasons
         )
 
         let runtime = runtimeProvider.state(label: plist.label, source: source, snapshot: runtimeSnapshot)
@@ -284,7 +285,8 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             source: .loginItem,
             plist: nil,
             identity: identity,
-            executableExists: exists
+            executableExists: exists,
+            reasons: classification.reasons
         )
 
         return BackgroundItem(

@@ -27,7 +27,7 @@ struct BackgroundItemExplainerTests {
         )
         #expect(result.contains("LaunchDaemon (root)"))
         #expect(result.contains("signed by Apple"))
-        #expect(result.contains("runs at load"))
+        #expect(result.contains("starts at boot"))
     }
 
     @Test("Known-vendor agent mentions vendor display name")
@@ -107,7 +107,7 @@ struct BackgroundItemExplainerTests {
         #expect(result.contains("target binary missing"))
     }
 
-    @Test("Mach service trigger appears in explanation")
+    @Test("Mach service trigger appears in explanation and surfaces disable-impact")
     func machServiceTrigger() {
         let plist = LaunchdPlist(
             label: "com.example.svc",
@@ -120,7 +120,8 @@ struct BackgroundItemExplainerTests {
             identity: nil,
             executableExists: true
         )
-        #expect(result.contains("on Mach service request"))
+        #expect(result.contains("started on demand by other processes"))
+        #expect(result.contains("other apps may fail to reach it if disabled"))
     }
 
     @Test("Watch path trigger appears in explanation")
@@ -136,7 +137,7 @@ struct BackgroundItemExplainerTests {
             identity: nil,
             executableExists: true
         )
-        #expect(result.contains("on path change"))
+        #expect(result.contains("runs when watched paths change"))
     }
 
     @Test("Login item without plist still produces a coherent explanation")
@@ -180,5 +181,173 @@ struct BackgroundItemExplainerTests {
             executableExists: true
         )
         #expect(result.contains("every 45s"))
+    }
+}
+
+/// Split from `BackgroundItemExplainerTests` to keep the type body under the
+/// SwiftLint 300-line limit — covers calendar narration, trigger phrasing,
+/// and the disable-impact segment.
+@Suite("BackgroundItemExplainer narration & impact")
+struct BackgroundItemExplainerNarrationTests {
+
+    private let explainer = BackgroundItemExplainer()
+
+    @Test("Real com.jason.tm-exclusions shape narrates monthly-on-day with time")
+    func calendarMonthlyViaExplain() {
+        let plist = LaunchdPlist(
+            label: "com.jason.tm-exclusions",
+            program: "/usr/local/bin/tm-exclusions",
+            startCalendarInterval: [LaunchdCalendarInterval(minute: 15, hour: 12, day: 1)]
+        )
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true
+        )
+        #expect(result.contains("monthly on day 1 at 12:15"))
+    }
+
+    @Test("calendarPart formats a daily interval")
+    func calendarPartDaily() {
+        let interval = LaunchdCalendarInterval(minute: 0, hour: 2)
+        #expect(BackgroundItemExplainer.calendarPart([interval]) == "daily at 02:00")
+    }
+
+    @Test("calendarPart formats a weekly interval")
+    func calendarPartWeekly() {
+        let interval = LaunchdCalendarInterval(hour: 9, weekday: 1)
+        #expect(BackgroundItemExplainer.calendarPart([interval]) == "weekly on Monday at 09:00")
+    }
+
+    @Test("calendarPart formats an hourly, minute-only interval without a leading '00:'")
+    func calendarPartHourly() {
+        let interval = LaunchdCalendarInterval(minute: 30)
+        #expect(BackgroundItemExplainer.calendarPart([interval]) == "hourly at :30")
+    }
+
+    @Test("calendarPart falls back to 'on schedule' for an all-nil interval")
+    func calendarPartFallback() {
+        let interval = LaunchdCalendarInterval()
+        #expect(BackgroundItemExplainer.calendarPart([interval]) == "on schedule")
+    }
+
+    @Test("calendarPart appends a count suffix for multiple intervals")
+    func calendarPartMultiple() {
+        let intervals = [
+            LaunchdCalendarInterval(minute: 15, hour: 12, day: 1),
+            LaunchdCalendarInterval(minute: 15, hour: 12, day: 15),
+        ]
+        let result = BackgroundItemExplainer.calendarPart(intervals)
+        #expect(result?.contains("(+1 more)") == true)
+    }
+
+    @Test("KeepAlive trigger narrates as restart-on-exit")
+    func keepAliveTrigger() {
+        let plist = LaunchdPlist(label: "com.example.alive", program: "/usr/local/bin/alive", keepAlive: true)
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true
+        )
+        #expect(result.contains("restarts whenever it exits"))
+    }
+
+    @Test("RunAtLoad on a user launch agent narrates as starts-at-login")
+    func runAtLoadUserAgent() {
+        let plist = LaunchdPlist(label: "com.example.login", program: "/usr/local/bin/login", runAtLoad: true)
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true
+        )
+        #expect(result.contains("starts at login"))
+    }
+
+    @Test("Sensitive VPN vendor surfaces the VPN disable-impact phrase")
+    func vpnImpact() {
+        let identity = BinaryIdentity(
+            binaryPath: "/Applications/VPNClient.app/Contents/MacOS/vpn",
+            bundleName: "VPN Client",
+            vendor: .thirdPartyKnown,
+            vendorDisplayName: "VPN Co",
+            sensitiveCategories: [.vpn]
+        )
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: nil,
+            identity: identity,
+            executableExists: true
+        )
+        #expect(result.contains("disabling may break VPN connectivity"))
+    }
+
+    @Test("parentAppMissing reason surfaces the safe-to-disable impact phrase")
+    func parentAppMissingImpact() {
+        let plist = LaunchdPlist(label: "com.example.orphan", program: "/usr/local/bin/orphan")
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true,
+            reasons: [.parentAppMissing]
+        )
+        #expect(result.contains("its app is gone — disabling should be safe"))
+    }
+
+    @Test("Suspicious reason surfaces the review-before-trusting impact phrase")
+    func suspiciousImpact() {
+        let plist = LaunchdPlist(label: "com.example.sus", program: "/tmp/sus")
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true,
+            reasons: [.suspiciousExecutablePath]
+        )
+        #expect(result.contains("review before trusting"))
+    }
+
+    @Test("No impact signals produce no impact segment")
+    func noImpactSignals() {
+        let plist = LaunchdPlist(label: "com.example.plain", program: "/usr/local/bin/plain", runAtLoad: true)
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true
+        )
+        #expect(!result.contains("disabling"))
+        #expect(!result.contains("its app"))
+        #expect(!result.contains("review before trusting"))
+        #expect(!result.contains("other apps may fail to reach it"))
+        #expect(!result.contains("part of device management"))
+    }
+
+    @Test("Impact phrase is deterministic across repeated calls with two sensitive categories")
+    func impactDeterminism() {
+        let identity = BinaryIdentity(
+            binaryPath: "/Applications/Backup.app/Contents/MacOS/backup",
+            bundleName: "Backup Tool",
+            vendor: .thirdPartyKnown,
+            vendorDisplayName: "Backup Co",
+            sensitiveCategories: [.backup, .security]
+        )
+        let first = explainer.explain(
+            source: .userLaunchAgent,
+            plist: nil,
+            identity: identity,
+            executableExists: true
+        )
+        let second = explainer.explain(
+            source: .userLaunchAgent,
+            plist: nil,
+            identity: identity,
+            executableExists: true
+        )
+        #expect(first == second)
+        #expect(first.contains("disabling stops scheduled backups"))
     }
 }

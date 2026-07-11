@@ -3,7 +3,7 @@ import Foundation
 /// Generates the one-line deterministic explanation for a `BackgroundItem`.
 ///
 /// Composition:
-///   `<source kind> · signed by <vendor> · ships with <bundle> · <trigger>`
+///   `<source kind> · signed by <vendor> · ships with <bundle> · <trigger> · <impact>`
 ///
 /// Pieces are dropped when their input is unavailable so the line never reads
 /// "signed by Unknown" or "triggered by nothing." AI fallback runs on top of
@@ -16,7 +16,8 @@ public struct BackgroundItemExplainer: Sendable {
         source: BackgroundItemSource,
         plist: LaunchdPlist?,
         identity: BinaryIdentity?,
-        executableExists: Bool
+        executableExists: Bool,
+        reasons: Set<BackgroundItemReason> = []
     ) -> String {
         var parts: [String] = []
 
@@ -34,8 +35,12 @@ public struct BackgroundItemExplainer: Sendable {
             parts.append("target binary missing")
         }
 
-        if let trigger = triggerPart(plist: plist) {
+        if let trigger = triggerPart(plist: plist, source: source) {
             parts.append(trigger)
+        }
+
+        if let impact = impactPart(identity: identity, plist: plist, reasons: reasons) {
+            parts.append(impact)
         }
 
         return parts.joined(separator: " · ")
@@ -89,37 +94,46 @@ public struct BackgroundItemExplainer: Sendable {
         return nil
     }
 
-    private func triggerPart(plist: LaunchdPlist?) -> String? {
+    private func triggerPart(plist: LaunchdPlist?, source: BackgroundItemSource) -> String? {
         guard let plist else { return nil }
 
         var triggers: [String] = []
 
         if plist.runAtLoad {
-            triggers.append("runs at load")
+            triggers.append(runAtLoadPhrase(for: source))
         }
         if plist.keepAlive {
-            triggers.append("kept alive")
+            triggers.append("restarts whenever it exits")
         }
         if let interval = plist.startInterval {
             triggers.append("every \(formatInterval(interval))")
         }
-        if !plist.startCalendarInterval.isEmpty {
-            triggers.append("on schedule")
+        if let calendar = Self.calendarPart(plist.startCalendarInterval) {
+            triggers.append(calendar)
         }
         if !plist.watchPaths.isEmpty {
-            triggers.append("on path change")
+            triggers.append("runs when watched paths change")
         }
         if !plist.queueDirectories.isEmpty {
             triggers.append("on queue")
         }
-        if !plist.machServices.isEmpty {
-            triggers.append("on Mach service request")
-        } else if !plist.sockets.isEmpty {
-            triggers.append("on socket activity")
+        if listensForOtherProcesses(plist) {
+            triggers.append("started on demand by other processes")
         }
 
         if triggers.isEmpty { return nil }
         return triggers.joined(separator: ", ")
+    }
+
+    private func runAtLoadPhrase(for source: BackgroundItemSource) -> String {
+        switch source {
+        case .userLaunchAgent, .systemLaunchAgent:
+            return "starts at login"
+        case .launchDaemon:
+            return "starts at boot"
+        case .startupItem, .loginItem:
+            return "runs at load"
+        }
     }
 
     private func formatInterval(_ seconds: Int) -> String {
@@ -136,5 +150,105 @@ public struct BackgroundItemExplainer: Sendable {
             return "\(m) min"
         }
         return "\(seconds)s"
+    }
+
+    // MARK: - Calendar formatting
+
+    /// "daily at 02:00" / "weekly on Monday at 12:15" / "monthly on day 1 at 12:15" /
+    /// "hourly at :30" / fallback "on schedule". Multiple intervals: first + " (+N more)".
+    static func calendarPart(_ intervals: [LaunchdCalendarInterval]) -> String? {
+        guard let first = intervals.first else { return nil }
+        let text = calendarBase(first) + calendarTimeSuffix(first)
+        return appendIntervalCount(text, count: intervals.count)
+    }
+
+    private static func calendarBase(_ interval: LaunchdCalendarInterval) -> String {
+        if let weekday = interval.weekday {
+            return "weekly on \(weekdayName(weekday))"
+        }
+        if let day = interval.day {
+            return "monthly on day \(day)"
+        }
+        if interval.hour != nil {
+            return "daily"
+        }
+        if interval.minute != nil {
+            return "hourly"
+        }
+        return "on schedule"
+    }
+
+    private static func calendarTimeSuffix(_ interval: LaunchdCalendarInterval) -> String {
+        switch (interval.hour, interval.minute) {
+        case let (.some(hour), .some(minute)):
+            return String(format: " at %02d:%02d", hour, minute)
+        case let (.some(hour), .none):
+            return String(format: " at %02d:00", hour)
+        case let (.none, .some(minute)):
+            return String(format: " at :%02d", minute)
+        case (.none, .none):
+            return ""
+        }
+    }
+
+    private static func weekdayName(_ weekday: Int) -> String {
+        switch weekday {
+        case 0, 7: return "Sunday"
+        case 1: return "Monday"
+        case 2: return "Tuesday"
+        case 3: return "Wednesday"
+        case 4: return "Thursday"
+        case 5: return "Friday"
+        case 6: return "Saturday"
+        default: return "weekday \(weekday)"
+        }
+    }
+
+    private static func appendIntervalCount(_ text: String, count: Int) -> String {
+        guard count > 1 else { return text }
+        return "\(text) (+\(count - 1) more)"
+    }
+
+    // MARK: - Impact
+
+    /// What likely breaks if the user disables this item — first matching
+    /// signal only, so the line stays one calm sentence fragment.
+    private func impactPart(
+        identity: BinaryIdentity?,
+        plist: LaunchdPlist?,
+        reasons: Set<BackgroundItemReason>
+    ) -> String? {
+        if let category = identity?.sensitiveCategories.min(by: { $0.rawValue < $1.rawValue }) {
+            return impactPhrase(for: category)
+        }
+        if listensForOtherProcesses(plist) {
+            return "other apps may fail to reach it if disabled"
+        }
+        if reasons.contains(.parentAppMissing) {
+            return "its app is gone — disabling should be safe"
+        }
+        if reasons.contains(.parentAppLikelyMissing) {
+            return "its app appears uninstalled"
+        }
+        if reasons.contains(where: { $0.isSuspicious }) {
+            return "review before trusting"
+        }
+        return nil
+    }
+
+    private func impactPhrase(for category: SensitiveVendorCategory) -> String {
+        switch category {
+        case .vpn: return "disabling may break VPN connectivity"
+        case .passwordManager: return "disabling may break password autofill"
+        case .mdm: return "part of device management — your org may require it"
+        case .accessibility: return "disabling may break accessibility features"
+        case .backup: return "disabling stops scheduled backups"
+        case .security: return "disabling reduces security protection"
+        }
+    }
+
+    private func listensForOtherProcesses(_ plist: LaunchdPlist?) -> Bool {
+        guard let plist else { return false }
+        return !plist.machServices.isEmpty || !plist.sockets.isEmpty
     }
 }
