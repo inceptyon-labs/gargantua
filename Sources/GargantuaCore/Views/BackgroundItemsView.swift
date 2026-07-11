@@ -213,6 +213,7 @@ public struct BackgroundItemsView: View {
                                 isExpanded: expandedID == item.id,
                                 isBusy: session.busyItemIDs.contains(item.id),
                                 isSessionDisabled: session.sessionDisabledIDs.contains(item.id),
+                                runtimeDetail: session.runtimeDetails[item.id],
                                 onToggleExpand: {
                                     withAnimation(.easeOut(duration: 0.15)) {
                                         expandedID = expandedID == item.id ? nil : item.id
@@ -226,7 +227,8 @@ public struct BackgroundItemsView: View {
                                         item: item,
                                         action: action
                                     )
-                                }
+                                },
+                                onExpandDetail: { Task { await session.loadRuntimeDetail(for: item) } }
                             )
                         }
                     }

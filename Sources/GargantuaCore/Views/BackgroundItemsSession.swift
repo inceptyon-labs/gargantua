@@ -25,16 +25,26 @@ public final class BackgroundItemsSession {
     /// lifetime matches the scan cache it qualifies — navigating away
     /// mid-rescan and back must not grant the same handoff a second rescan.
     public var preSelectionRescanPath: String?
+    /// Deep `launchctl print` detail fetched lazily on row expand, keyed by
+    /// item id. Cached per scan generation — cleared whenever a new scan
+    /// result lands.
+    public private(set) var runtimeDetails: [String: LaunchdRuntimeDetail] = [:]
+    /// IDs currently fetching deep runtime detail. Dedupes concurrent
+    /// `loadRuntimeDetail` calls for the same item.
+    public private(set) var loadingDetailIDs: Set<String> = []
 
     private let scanner: any BackgroundItemScanning
     private let actionExecutor: (any BackgroundItemActionExecuting)?
+    private let runtimeProvider: any LaunchdRuntimeStateProviding
 
     public init(
         scanner: any BackgroundItemScanning = DefaultBackgroundItemScanner(),
-        actionExecutor: (any BackgroundItemActionExecuting)? = DefaultBackgroundItemActionExecutor()
+        actionExecutor: (any BackgroundItemActionExecuting)? = DefaultBackgroundItemActionExecutor(),
+        runtimeProvider: any LaunchdRuntimeStateProviding = DefaultLaunchdRuntimeStateProvider()
     ) {
         self.scanner = scanner
         self.actionExecutor = actionExecutor
+        self.runtimeProvider = runtimeProvider
     }
 
     public func scan() async {
@@ -47,12 +57,33 @@ public final class BackgroundItemsSession {
             scanner.scan()
         }.value
         self.scan = result
+        runtimeDetails.removeAll()
+        loadingDetailIDs.removeAll()
     }
 
     public func clearScan() {
         scan = nil
         busyItemIDs.removeAll()
         sessionDisabledIDs.removeAll()
+        runtimeDetails.removeAll()
+        loadingDetailIDs.removeAll()
+    }
+
+    /// Fetch deep runtime detail for an expanded row. Cached per scan
+    /// generation; concurrent calls for the same id dedupe via
+    /// `loadingDetailIDs`.
+    public func loadRuntimeDetail(for item: BackgroundItem) async {
+        guard item.plistPath != nil else { return }
+        guard runtimeDetails[item.id] == nil, !loadingDetailIDs.contains(item.id) else { return }
+        loadingDetailIDs.insert(item.id)
+        defer { loadingDetailIDs.remove(item.id) }
+        let provider = runtimeProvider
+        let label = item.label
+        let source = item.source
+        let detail = await Task.detached(priority: .userInitiated) {
+            provider.printDetail(label: label, source: source)
+        }.value
+        if let detail { runtimeDetails[item.id] = detail }
     }
 
     /// Run a `BackgroundItemAction` against `item`, marking the row busy for

@@ -41,11 +41,24 @@ extension BackgroundItemRow {
                         )
                     }
                 }
+                if let runtimeText = runtimeDetail?.runtimeDisplay ?? item.runtime?.runtimeDisplay {
+                    detailRow(label: "Runtime", value: runtimeText)
+                }
+                if let lastExit = runtimeDetail?.lastExitStatus ?? item.runtime?.lastExitStatus {
+                    detailRow(label: "Last exit", value: "\(lastExit)", mono: true)
+                }
+                if let disabledOverride = item.runtime?.disabledOverride {
+                    detailRow(
+                        label: "Startup",
+                        value: disabledOverride ? "Disabled via launchctl" : "Enabled (override)"
+                    )
+                }
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space2)
             .padding(.leading, GargantuaSpacing.space1)
         }
+        .onAppear { onExpandDetail?() }
     }
 
     private func detailRow(label: String, value: String, mono: Bool = false) -> some View {

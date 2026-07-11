@@ -13,11 +13,17 @@ public struct BackgroundItemRow: View {
     public let isExpanded: Bool
     public let isBusy: Bool
     public let isSessionDisabled: Bool
+    /// Deep `launchctl print` detail for this item, fetched lazily on
+    /// expand. `nil` until `onExpandDetail` resolves (or when unavailable).
+    public let runtimeDetail: LaunchdRuntimeDetail?
     public let onToggleExpand: () -> Void
     public let onReveal: () -> Void
     public let onExplain: (() -> Void)?
     public let onOpenLoginSettings: (() -> Void)?
     public let onAction: ((BackgroundItemAction) -> Void)?
+    /// Called when the expanded detail section appears, so the caller can
+    /// kick off the lazy `launchctl print` fetch.
+    public let onExpandDetail: (() -> Void)?
 
     @State private var isHovered = false
 
@@ -26,21 +32,25 @@ public struct BackgroundItemRow: View {
         isExpanded: Bool,
         isBusy: Bool = false,
         isSessionDisabled: Bool = false,
+        runtimeDetail: LaunchdRuntimeDetail? = nil,
         onToggleExpand: @escaping () -> Void,
         onReveal: @escaping () -> Void,
         onExplain: (() -> Void)? = nil,
         onOpenLoginSettings: (() -> Void)? = nil,
-        onAction: ((BackgroundItemAction) -> Void)? = nil
+        onAction: ((BackgroundItemAction) -> Void)? = nil,
+        onExpandDetail: (() -> Void)? = nil
     ) {
         self.item = item
         self.isExpanded = isExpanded
         self.isBusy = isBusy
         self.isSessionDisabled = isSessionDisabled
+        self.runtimeDetail = runtimeDetail
         self.onToggleExpand = onToggleExpand
         self.onReveal = onReveal
         self.onExplain = onExplain
         self.onOpenLoginSettings = onOpenLoginSettings
         self.onAction = onAction
+        self.onExpandDetail = onExpandDetail
     }
 
     /// Whether the user can disable / enable / delete this item. Login items
