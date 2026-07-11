@@ -60,6 +60,10 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
     case scheduled
     /// Item was installed by an `.app` whose bundle was not found.
     case orphanedVendor = "orphaned_vendor"
+    /// The executable's enclosing bundle resolved to an app that is no longer installed.
+    case parentAppMissing = "parent_app_missing"
+    /// Label matches a well-known vendor but no app from that vendor is installed.
+    case parentAppLikelyMissing = "parent_app_likely_missing"
 
     /// Human-readable label for tag chips.
     public var displayLabel: String {
@@ -73,6 +77,8 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
         case .persistentlyRunning: "Always Running"
         case .scheduled: "Scheduled"
         case .orphanedVendor: "Orphaned Vendor"
+        case .parentAppMissing: "App Uninstalled"
+        case .parentAppLikelyMissing: "App Not Found"
         }
     }
 }

@@ -22,6 +22,15 @@ public struct BackgroundItemClassifierInput: Sendable {
     public let executablePath: String?
     public let identity: BinaryIdentity?
     public let executableExists: Bool
+    /// Whether the executable's enclosing bundle resolved to an app still
+    /// installed on disk. `nil` when no bundle evidence could be resolved
+    /// (no identity, or identity has no bundle path) — not the same as
+    /// `false`, which means the bundle was resolved and confirmed absent.
+    public let parentAppInstalled: Bool?
+    /// `true` when the label matches a well-known vendor but no app from
+    /// that vendor is installed. Heuristic evidence only — weaker than
+    /// `parentAppInstalled == false`, which is a direct bundle resolution.
+    public let knownVendorAppMissing: Bool
     public let plist: LaunchdPlist?
 
     public init(
@@ -31,6 +40,8 @@ public struct BackgroundItemClassifierInput: Sendable {
         executablePath: String?,
         identity: BinaryIdentity?,
         executableExists: Bool,
+        parentAppInstalled: Bool? = nil,
+        knownVendorAppMissing: Bool = false,
         plist: LaunchdPlist?
     ) {
         self.label = label
@@ -39,6 +50,8 @@ public struct BackgroundItemClassifierInput: Sendable {
         self.executablePath = executablePath
         self.identity = identity
         self.executableExists = executableExists
+        self.parentAppInstalled = parentAppInstalled
+        self.knownVendorAppMissing = knownVendorAppMissing
         self.plist = plist
     }
 }
@@ -50,6 +63,8 @@ public struct BackgroundItemClassifierInput: Sendable {
 ///   - `com.apple.*` label → protected
 ///   - Sensitive vendor (VPN/PM/MDM/etc.) → review
 ///   - Orphaned vendor binary → safe (with `orphaned` reason)
+///   - Owning app uninstalled (bundle resolved, confirmed absent) → safe
+///   - Well-known vendor label, no app from that vendor installed (heuristic) → review
 ///   - Known non-critical vendor helper, parent app installed → safe
 ///   - Unsigned, unknown → review
 ///   - Default → review
@@ -83,6 +98,23 @@ public struct BackgroundItemSafetyClassifier: Sendable {
                 reasons.insert(.orphanedVendor)
             }
             return BackgroundItemClassification(safety: .safe, reasons: reasons)
+        }
+
+        // 3.5 Owning app uninstalled (strong bundle evidence) — the executable may
+        //     still exist (Application Support helpers outlive their app). Safe.
+        if input.parentAppInstalled == false {
+            reasons.insert(.parentAppMissing)
+            reasons.insert(.orphaned)
+            return BackgroundItemClassification(safety: .safe, reasons: reasons)
+        }
+
+        // 3.75 Well-known vendor label with no installed app from that vendor —
+        //      heuristic evidence only. Review, NEVER safe on its own; placed
+        //      before the known-vendor-safe rule so conflicting evidence stays
+        //      conservative.
+        if input.knownVendorAppMissing {
+            reasons.insert(.parentAppLikelyMissing)
+            return BackgroundItemClassification(safety: .review, reasons: reasons)
         }
 
         // 4. Known non-sensitive vendor with parent bundle present → safe.

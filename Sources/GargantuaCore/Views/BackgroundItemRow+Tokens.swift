@@ -27,7 +27,8 @@ extension BackgroundItemRow {
 
     func chipBackground(for reason: BackgroundItemReason) -> Color {
         switch reason {
-        case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor:
+        case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor,
+             .parentAppMissing, .parentAppLikelyMissing:
             GargantuaColors.review.opacity(0.18)
         case .system:
             GargantuaColors.protected_.opacity(0.18)
@@ -40,7 +41,8 @@ extension BackgroundItemRow {
 
     func chipForeground(for reason: BackgroundItemReason) -> Color {
         switch reason {
-        case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor:
+        case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor,
+             .parentAppMissing, .parentAppLikelyMissing:
             GargantuaColors.review
         case .system:
             GargantuaColors.protected_
