@@ -209,8 +209,9 @@ public struct DefaultLaunchdRuntimeStateProvider: LaunchdRuntimeStateProviding {
             let line = String(rawLine).trimmingCharacters(in: .whitespaces)
             guard line.hasPrefix("\"") else { continue }
             let remainder = String(line.dropFirst())
-            guard let closeQuoteIndex = remainder.firstIndex(of: "\"") else { continue }
+            guard let closeQuoteIndex = closingQuoteIndex(in: remainder) else { continue }
             let label = String(remainder[remainder.startIndex ..< closeQuoteIndex])
+                .replacingOccurrences(of: "\\\"", with: "\"")
             guard !label.isEmpty else { continue }
             let afterLabel = String(remainder[remainder.index(after: closeQuoteIndex)...])
             guard let arrowRange = afterLabel.range(of: "=>") else { continue }
@@ -228,17 +229,46 @@ public struct DefaultLaunchdRuntimeStateProvider: LaunchdRuntimeStateProviding {
         return result
     }
 
-    /// `launchctl print <domain>/<label>` — `key = value` lines. Only the
-    /// keys we care about are extracted; everything else (including the
-    /// header/braces) is ignored.
+    /// Index of the closing quote of a leading quoted label, honoring `\"`
+    /// escapes so a quote inside a label can't truncate it.
+    private static func closingQuoteIndex(in text: String) -> String.Index? {
+        var index = text.startIndex
+        var escaped = false
+        while index < text.endIndex {
+            let character = text[index]
+            if escaped {
+                escaped = false
+            } else if character == "\\" {
+                escaped = true
+            } else if character == "\"" {
+                return index
+            }
+            index = text.index(after: index)
+        }
+        return nil
+    }
+
+    /// `launchctl print <domain>/<label>` — `key = value` lines. Only keys at
+    /// the job's top level (brace depth 1) are extracted: nested sub-blocks
+    /// like `event trigger = { state = … }` carry their own `state`/`pid`
+    /// keys that must not overwrite the job's real runtime fields.
     static func parsePrint(_ stdout: String) -> LaunchdRuntimeDetail {
         var state: String?
         var pid: Int?
         var lastExitStatus: Int?
+        var depth = 0
 
         for rawLine in stdout.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = String(rawLine).trimmingCharacters(in: .whitespaces)
-            guard let equalsRange = line.range(of: "=") else { continue }
+            if line.hasSuffix("{") {
+                depth += 1
+                continue
+            }
+            if line == "}" || line.hasSuffix("}") {
+                depth = max(0, depth - 1)
+                continue
+            }
+            guard depth == 1, let equalsRange = line.range(of: "=") else { continue }
             let key = String(line[line.startIndex ..< equalsRange.lowerBound]).trimmingCharacters(in: .whitespaces)
             let value = String(line[equalsRange.upperBound...]).trimmingCharacters(in: .whitespaces)
             switch key.lowercased() {

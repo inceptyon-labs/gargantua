@@ -52,15 +52,18 @@ struct BackgroundItemsSessionTests {
 
     /// Provider whose `printDetail` blocks until the test releases it, so a
     /// test can invalidate the cache while a fetch is suspended mid-flight.
+    /// Each call gets its own release gate (indexed by call order) so tests
+    /// can resume overlapping fetches deterministically.
     final class GatedRuntimeProvider: LaunchdRuntimeStateProviding, @unchecked Sendable {
         let started = DispatchSemaphore(value: 0)
-        let release = DispatchSemaphore(value: 0)
+        let releases: [DispatchSemaphore]
         nonisolated(unsafe) private var _printCallCount = 0
         private let lock = NSLock()
         private let detail: LaunchdRuntimeDetail
 
-        init(detail: LaunchdRuntimeDetail) {
+        init(detail: LaunchdRuntimeDetail, expectedCalls: Int = 2) {
             self.detail = detail
+            self.releases = (0 ..< max(1, expectedCalls)).map { _ in DispatchSemaphore(value: 0) }
         }
 
         var printCallCount: Int { lock.withLock { _printCallCount } }
@@ -68,9 +71,12 @@ struct BackgroundItemsSessionTests {
         func snapshot() -> LaunchdRuntimeSnapshot { .empty }
 
         func printDetail(label: String, source: BackgroundItemSource) -> LaunchdRuntimeDetail? {
-            lock.withLock { _printCallCount += 1 }
+            let callIndex = lock.withLock {
+                _printCallCount += 1
+                return _printCallCount - 1
+            }
             started.signal()
-            release.wait()
+            releases[min(callIndex, releases.count - 1)].wait()
             return detail
         }
 
@@ -89,7 +95,8 @@ struct BackgroundItemsSessionTests {
         id: String = "userAgent|com.acme.tool|/Users/me/Library/LaunchAgents/com.acme.tool.plist",
         label: String = "com.acme.tool",
         source: BackgroundItemSource = .userLaunchAgent,
-        plistPath: String? = "/Users/me/Library/LaunchAgents/com.acme.tool.plist"
+        plistPath: String? = "/Users/me/Library/LaunchAgents/com.acme.tool.plist",
+        runtime: LaunchdRuntimeState? = nil
     ) -> BackgroundItem {
         BackgroundItem(
             id: id,
@@ -101,7 +108,8 @@ struct BackgroundItemsSessionTests {
             safety: .review,
             reasons: [],
             explanation: "Test item",
-            isOrphaned: false
+            isOrphaned: false,
+            runtime: runtime
         )
     }
 
@@ -135,8 +143,8 @@ struct BackgroundItemsSessionTests {
         #expect(session.runtimeDetails[item.id]?.pid == 5036)
     }
 
-    @Test("a nil-returning provider is not cached — a later call retries")
-    func nilResultIsNotCached() async {
+    @Test("a nil result is remembered as attempted — no re-fetch until the next scan generation")
+    func nilResultDoesNotRetryWithinGeneration() async {
         let item = makeItem()
         let provider = CountingRuntimeProvider(detail: nil)
         let session = BackgroundItemsSession(
@@ -146,11 +154,17 @@ struct BackgroundItemsSessionTests {
         )
         await session.scan()
 
+        // `.onAppear` re-fires on every collapse/re-expand; a persistently
+        // failing print must not shell out again within the same generation.
         await session.loadRuntimeDetail(for: item)
         await session.loadRuntimeDetail(for: item)
-
-        #expect(provider.printCallCount == 2)
+        #expect(provider.printCallCount == 1)
         #expect(session.runtimeDetails[item.id] == nil)
+
+        // A fresh scan opens a new generation and may retry.
+        await session.scan()
+        await session.loadRuntimeDetail(for: item)
+        #expect(provider.printCallCount == 2)
     }
 
     @Test("clearScan empties the cache so the next load re-fetches")
@@ -213,16 +227,84 @@ struct BackgroundItemsSessionTests {
         let load = Task { await session.loadRuntimeDetail(for: item) }
         await Task.detached { provider.started.wait() }.value
         session.clearScan()
-        provider.release.signal()
+        provider.releases[0].signal()
         await load.value
 
         #expect(session.runtimeDetails[item.id] == nil)
 
         // The fresh generation re-fetches and caches normally.
-        provider.release.signal()
+        provider.releases[1].signal()
         await session.loadRuntimeDetail(for: item)
         #expect(provider.printCallCount == 2)
         #expect(session.runtimeDetails[item.id]?.pid == 5036)
+    }
+
+    @Test("a stale fetch's cleanup does not erase the next generation's in-flight marker")
+    func staleFetchCleanupLeavesNewGenerationMarker() async {
+        let item = makeItem()
+        let detail = LaunchdRuntimeDetail(isLoaded: true, state: "running", pid: 5036, lastExitStatus: nil)
+        let provider = GatedRuntimeProvider(detail: detail, expectedCalls: 2)
+        let session = BackgroundItemsSession(
+            scanner: StubScanner(result: makeScan(items: [item])),
+            actionExecutor: nil,
+            runtimeProvider: provider
+        )
+        await session.scan()
+
+        // Fetch A (old generation) suspends; invalidate; fetch B (new
+        // generation) starts for the same id and suspends too.
+        let loadA = Task { await session.loadRuntimeDetail(for: item) }
+        await Task.detached { provider.started.wait() }.value
+        session.clearScan()
+        let loadB = Task { await session.loadRuntimeDetail(for: item) }
+        await Task.detached { provider.started.wait() }.value
+
+        // A resumes stale: it must neither write back nor remove B's marker.
+        provider.releases[0].signal()
+        await loadA.value
+        #expect(session.loadingDetailIDs.contains(item.id))
+        #expect(session.runtimeDetails[item.id] == nil)
+
+        // B resumes current and lands its detail normally.
+        provider.releases[1].signal()
+        await loadB.value
+        #expect(!session.loadingDetailIDs.contains(item.id))
+        #expect(session.runtimeDetails[item.id]?.pid == 5036)
+        #expect(provider.printCallCount == 2)
+    }
+
+    @Test("perform(.delete) synthesizes the disabled reason for an override-disabled item")
+    func performDeleteSynthesizesDisabledFromOverride() async {
+        final class RecordingExecutor: BackgroundItemActionExecuting, @unchecked Sendable {
+            nonisolated(unsafe) var deletedItem: BackgroundItem?
+            @MainActor func disable(_ item: BackgroundItem) async -> BackgroundItemActionOutcome {
+                BackgroundItemActionOutcome(itemID: item.id, action: .disable, succeeded: true, error: nil)
+            }
+            @MainActor func enable(_ item: BackgroundItem) async -> BackgroundItemActionOutcome {
+                BackgroundItemActionOutcome(itemID: item.id, action: .enable, succeeded: true, error: nil)
+            }
+            @MainActor func delete(
+                _ item: BackgroundItem,
+                confirmedAt confirmation: ConfirmationTier
+            ) async -> BackgroundItemActionOutcome {
+                deletedItem = item
+                return BackgroundItemActionOutcome(itemID: item.id, action: .delete, succeeded: true, error: nil)
+            }
+        }
+
+        let runtime = LaunchdRuntimeState(isLoaded: false, pid: nil, lastExitStatus: nil, disabledOverride: true)
+        let item = makeItem(runtime: runtime)
+        let executor = RecordingExecutor()
+        let session = BackgroundItemsSession(
+            scanner: StubScanner(result: makeScan(items: [item])),
+            actionExecutor: executor,
+            runtimeProvider: CountingRuntimeProvider(detail: nil)
+        )
+
+        let outcome = await session.perform(.delete, on: item)
+
+        #expect(outcome.succeeded)
+        #expect(executor.deletedItem?.reasons.contains(.disabledFlag) == true)
     }
 
     @Test("an item without a plist path (login item) never calls the provider")

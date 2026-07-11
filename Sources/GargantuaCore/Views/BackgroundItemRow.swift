@@ -62,11 +62,15 @@ public struct BackgroundItemRow: View {
         }
     }
 
-    /// Treat the row as disabled if either the plist's `Disabled` key is set
-    /// or the user just ran disable in this session (runtime state lives in
-    /// launchd's disabled DB, not the plist).
+    /// Treat the row as disabled if the plist's `Disabled` key is set, the
+    /// user just ran disable in this session, or launchd's override DB
+    /// already marks it disabled (e.g. disabled via `launchctl` or a prior
+    /// session) — otherwise an already-disabled item would offer Disable
+    /// and refuse Delete.
     var isDisabled: Bool {
-        item.reasons.contains(.disabledFlag) || isSessionDisabled
+        item.reasons.contains(.disabledFlag)
+            || isSessionDisabled
+            || item.runtime?.disabledOverride == true
     }
 
     var canDelete: Bool {

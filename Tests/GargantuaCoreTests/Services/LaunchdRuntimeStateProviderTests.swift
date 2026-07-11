@@ -149,10 +149,14 @@ struct LaunchdRuntimeStateProviderTests {
 
     @Test("parsePrint accepts the 'last exit status' alias and treats non-numeric values as nil")
     func parsePrintExitStatusAlias() {
-        let numeric = DefaultLaunchdRuntimeStateProvider.parsePrint("\tlast exit status = 0\n")
+        let numeric = DefaultLaunchdRuntimeStateProvider.parsePrint(
+            "gui/501/com.example.agent = {\n\tlast exit status = 0\n}\n"
+        )
         #expect(numeric.lastExitStatus == 0)
 
-        let nonNumeric = DefaultLaunchdRuntimeStateProvider.parsePrint("\tlast exit code = (never exited)\n")
+        let nonNumeric = DefaultLaunchdRuntimeStateProvider.parsePrint(
+            "gui/501/com.example.agent = {\n\tlast exit code = (never exited)\n}\n"
+        )
         #expect(nonNumeric.lastExitStatus == nil)
     }
 
@@ -321,5 +325,51 @@ struct LaunchdRuntimeStateProviderTests {
         let detail = provider.printDetail(label: "com.example.login", source: .loginItem)
         #expect(detail == nil)
         #expect(fake.callCount == 0)
+    }
+
+    @Test("parsePrint ignores state/pid keys inside nested sub-blocks")
+    func parsePrintIgnoresNestedBlocks() {
+        let stdout = """
+        gui/501/com.example.agent = {
+        \tactive count = 4
+        \tevent trigger = {
+        \t\tstate = waiting
+        \t\tpid = 99
+        \t}
+        \tstate = running
+        \tpid = 5036
+        }
+        """
+        let detail = DefaultLaunchdRuntimeStateProvider.parsePrint(stdout)
+        #expect(detail.state == "running")
+        #expect(detail.pid == 5036)
+    }
+
+    @Test("parsePrint takes no job-level values when they exist only in sub-blocks")
+    func parsePrintNestedOnlyValuesStayNil() {
+        let stdout = """
+        gui/501/com.example.agent = {
+        \tspawn constraints = {
+        \t\tstate = throttled
+        \t}
+        }
+        """
+        let detail = DefaultLaunchdRuntimeStateProvider.parsePrint(stdout)
+        #expect(detail.state == nil)
+        #expect(detail.pid == nil)
+        #expect(detail.isLoaded == true)
+    }
+
+    @Test("parsePrintDisabled honors escaped quotes inside labels")
+    func parsePrintDisabledEscapedQuotes() {
+        let stdout = """
+        \tdisabled services = {
+        \t\t"com.example.we\\"ird" => disabled
+        \t\t"com.example.plain" => enabled
+        \t}
+        """
+        let parsed = DefaultLaunchdRuntimeStateProvider.parsePrintDisabled(stdout)
+        #expect(parsed["com.example.we\"ird"] == true)
+        #expect(parsed["com.example.plain"] == false)
     }
 }

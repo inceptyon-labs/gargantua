@@ -32,6 +32,11 @@ public final class BackgroundItemsSession {
     /// IDs currently fetching deep runtime detail. Dedupes concurrent
     /// `loadRuntimeDetail` calls for the same item.
     public private(set) var loadingDetailIDs: Set<String> = []
+    /// IDs whose detail fetch already ran this scan generation — including
+    /// fetches that came back nil. `.onAppear` re-fires on every
+    /// collapse/re-expand; without this an item whose `launchctl print`
+    /// persistently fails would shell out again on each expansion.
+    private var attemptedDetailIDs: Set<String> = []
     /// Bumped whenever the detail cache is invalidated. A suspended
     /// `loadRuntimeDetail` fetch compares its captured generation before
     /// writing back so a stale result can't repopulate a fresh cache.
@@ -75,6 +80,7 @@ public final class BackgroundItemsSession {
         detailGeneration += 1
         runtimeDetails.removeAll()
         loadingDetailIDs.removeAll()
+        attemptedDetailIDs.removeAll()
     }
 
     /// Fetch deep runtime detail for an expanded row. Cached per scan
@@ -82,10 +88,15 @@ public final class BackgroundItemsSession {
     /// `loadingDetailIDs`.
     public func loadRuntimeDetail(for item: BackgroundItem) async {
         guard item.plistPath != nil else { return }
-        guard runtimeDetails[item.id] == nil, !loadingDetailIDs.contains(item.id) else { return }
+        guard !attemptedDetailIDs.contains(item.id), !loadingDetailIDs.contains(item.id) else { return }
         loadingDetailIDs.insert(item.id)
-        defer { loadingDetailIDs.remove(item.id) }
         let generation = detailGeneration
+        // Only the generation that inserted the marker may remove it: after
+        // an invalidation cleared the set, a stale fetch's cleanup must not
+        // erase a marker the NEXT generation's fetch just inserted.
+        defer {
+            if generation == detailGeneration { loadingDetailIDs.remove(item.id) }
+        }
         let provider = runtimeProvider
         let label = item.label
         let source = item.source
@@ -95,6 +106,7 @@ public final class BackgroundItemsSession {
         // A rescan may have invalidated the cache while the fetch was
         // suspended — its result describes the previous generation's world.
         guard generation == detailGeneration else { return }
+        attemptedDetailIDs.insert(item.id)
         if let detail { runtimeDetails[item.id] = detail }
     }
 
@@ -118,9 +130,10 @@ public final class BackgroundItemsSession {
 
         // The executor's delete pre-condition checks `disabledFlag` to enforce
         // "disable runs first." When the user disabled the item earlier in
-        // this session, the plist key still reads as enabled, so synthesize
-        // the reason on the fly.
-        let effectiveItem = sessionDisabledIDs.contains(item.id)
+        // this session — or launchd's override DB already marks it disabled
+        // from a prior session — the plist key still reads as enabled, so
+        // synthesize the reason on the fly.
+        let effectiveItem = sessionDisabledIDs.contains(item.id) || item.runtime?.disabledOverride == true
             ? item.withSessionDisabled()
             : item
 
