@@ -201,6 +201,44 @@ struct MCPListBackgroundItemsLabelFilterTests {
         #expect(output.items[0].label == "com.example.agent")
     }
 
+    @Test("filter matches the plist filename stem when it differs from the internal Label")
+    func filterMatchesFilenameStem() throws {
+        // Real-world shape: Adobe ships com.adobe.GC.Invoker-1.0.plist whose
+        // internal Label is com.adobe.GC.Scheduler-1.0. Agents usually know
+        // the filename; both must resolve the item.
+        let adobeShaped = BackgroundItem(
+            id: "adobe-gc",
+            label: "com.adobe.GC.Scheduler-1.0",
+            source: .userLaunchAgent,
+            plistPath: "/Users/dev/Library/LaunchAgents/com.adobe.GC.Invoker-1.0.plist",
+            executablePath: "/Library/Application Support/Adobe/AdobeGCClient/agcinvokerutility",
+            identity: nil,
+            safety: .review,
+            reasons: [.labelFilenameMismatch],
+            explanation: "Adobe GC agent.",
+            isOrphaned: false,
+            runtime: nil
+        )
+        let scan = BackgroundItemScan(
+            items: [adobeShaped],
+            loginItemsNeedPrivileges: false,
+            unparseableCount: 0,
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let subject = fixtures.makeHandler(provider: { scan })
+
+        let byStem = try fixtures.decodeOutput(
+            try subject.handle(MCPToolArguments(["label": .string("com.adobe.GC.Invoker-1.0")]))
+        )
+        #expect(byStem.items.count == 1)
+        #expect(byStem.items.first?.label == "com.adobe.GC.Scheduler-1.0")
+
+        let byLabel = try fixtures.decodeOutput(
+            try subject.handle(MCPToolArguments(["label": .string("com.adobe.GC.Scheduler-1.0")]))
+        )
+        #expect(byLabel.items.count == 1)
+    }
+
     @Test("label filter miss is a successful empty result, not a failure")
     func labelFilterMiss() throws {
         let subject = fixtures.makeHandler(provider: { MCPListBackgroundItemsTestFixtures.sampleScan })

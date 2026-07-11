@@ -275,8 +275,10 @@ public enum MCPPhase2Tools {
             properties: [
                 "label": MCPJSONSchema(
                     type: .string,
-                    description: "Exact launchd label to inspect (e.g. com.adobe.GC.Invoker-1.0). Returns every "
-                        + "item with that label — the same label can exist in both the user and system domains."
+                    description: "Item to inspect, matched against the internal launchd Label OR the plist "
+                        + "filename stem (they can differ — e.g. com.adobe.GC.Invoker-1.0.plist carries Label "
+                        + "com.adobe.GC.Scheduler-1.0). Returns every match; the same label can exist in both "
+                        + "the user and system domains."
                 ),
             ],
             required: []

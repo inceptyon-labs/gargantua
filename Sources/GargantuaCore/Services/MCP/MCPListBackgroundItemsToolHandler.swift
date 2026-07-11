@@ -57,7 +57,7 @@ public struct MCPListBackgroundItemsToolHandler: Sendable {
 
         let filtered: [BackgroundItem]
         if let label = input.label {
-            filtered = scan.items.filter { $0.label == label }
+            filtered = scan.items.filter { Self.matches($0, query: label) }
         } else {
             filtered = scan.items
         }
@@ -71,6 +71,16 @@ public struct MCPListBackgroundItemsToolHandler: Sendable {
     }
 
     // MARK: - Helpers
+
+    /// An inspect query matches the internal launchd Label OR the plist's
+    /// filename stem — the two legitimately diverge (Adobe ships
+    /// `com.adobe.GC.Invoker-1.0.plist` whose internal Label is
+    /// `com.adobe.GC.Scheduler-1.0`), and agents usually know the filename.
+    static func matches(_ item: BackgroundItem, query: String) -> Bool {
+        if item.label == query { return true }
+        guard let plistPath = item.plistPath else { return false }
+        return URL(fileURLWithPath: plistPath).deletingPathExtension().lastPathComponent == query
+    }
 
     /// Wire caps mirror `MCPScanToolHandler`: a power-user Mac can carry
     /// hundreds of launchd items, and uncapped explanations would breach the

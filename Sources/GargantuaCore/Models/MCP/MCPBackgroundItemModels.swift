@@ -2,9 +2,10 @@ import Foundation
 
 /// Input payload for the MCP `list_background_items` tool.
 public struct MCPListBackgroundItemsInput: Codable, Sendable {
-    /// Exact launchd label to inspect. When present, the handler returns
-    /// every item with that label instead of the full scan — the same label
-    /// can legitimately exist in both the user and system domains.
+    /// Item to inspect, matched against the internal launchd Label OR the
+    /// plist filename stem (they can legitimately differ). When present, the
+    /// handler returns every match instead of the full scan — the same label
+    /// can also exist in both the user and system domains.
     public let label: String?
 
     /// Creates a list-background-items input.
