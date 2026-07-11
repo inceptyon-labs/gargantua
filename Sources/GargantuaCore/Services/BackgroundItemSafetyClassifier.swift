@@ -191,6 +191,9 @@ public struct BackgroundItemSafetyClassifier: Sendable {
         if input.identity?.vendor == .unsigned {
             reasons.insert(.unsigned)
         }
+        if input.parentAppInstalled == false {
+            reasons.insert(.parentAppMissing)
+        }
         if input.knownVendorAppMissing {
             reasons.insert(.parentAppLikelyMissing)
         }
@@ -199,43 +202,65 @@ public struct BackgroundItemSafetyClassifier: Sendable {
 
     /// Deterministic suspicion signals. Advisory chips at every tier; rule 3.25
     /// forces `.review` so a suspicious item is never auto-selected as safe.
+    ///
+    /// Deliberately NOT a shell parser: signals are pattern-level (a
+    /// `sh -c 'echo curl'` literal will false-positive to review) — advisory
+    /// evidence tolerates that noise, and grammar-chasing wouldn't end.
     private func suspiciousReasons(for input: BackgroundItemClassifierInput) -> Set<BackgroundItemReason> {
         var reasons: Set<BackgroundItemReason> = []
-        if let exe = input.executablePath?.lowercased() {
-            // Case-folded: the default APFS volume is case-insensitive, so
-            // /TMP/evil is a loadable path that must not slip the signal.
-            let tmpRoots = ["/tmp/", "/private/tmp/", "/var/tmp/", "/private/var/tmp/"]
-            if tmpRoots.contains(where: exe.hasPrefix) || exe.contains("/downloads/") {
-                reasons.insert(.suspiciousExecutablePath)
-            }
+        if let exe = input.executablePath, Self.isSuspiciousExecutableLocation(exe) {
+            reasons.insert(.suspiciousExecutablePath)
         }
-        if let plistPath = input.plistPath {
+        // Scoped to user agents: writing /Library requires root (an attacker
+        // there can match filenames anyway) and vendors under /Library
+        // legitimately deviate from the filename==label convention. The
+        // deceptive-filename signal is about user-writable persistence.
+        if input.source == .userLaunchAgent, let plistPath = input.plistPath {
             let stem = URL(fileURLWithPath: plistPath).deletingPathExtension().lastPathComponent
             if stem.caseInsensitiveCompare(input.label) != .orderedSame {
                 reasons.insert(.labelFilenameMismatch)
             }
         }
-        if let args = input.plist?.programArguments, args.count >= 2 {
-            let shells: Set<String> = ["sh", "bash", "zsh", "dash"]
-            let interpreter = URL(fileURLWithPath: args[0]).lastPathComponent
-            // `-c` also arrives in combined short-flag clusters (`bash -lc …`,
-            // `zsh -ic …`) — match any single-dash cluster containing `c`.
-            let cIndex = args.firstIndex { arg in
-                arg.hasPrefix("-") && !arg.hasPrefix("--") && arg.dropFirst().contains("c")
-            }
-            if shells.contains(interpreter), let cIndex {
-                let payload = args[(cIndex + 1)...].joined(separator: " ").lowercased()
-                // Whole tokens for command names (a benign "retrieval" must
-                // not match "eval"); substring is fine for pipe targets.
-                let tokens = payload.split(whereSeparator: { $0 == " " || $0 == ";" || $0 == "\t" })
-                let commandTokens: Set<Substring> = ["curl", "wget", "eval"]
-                let pipePatterns = ["| sh", "| bash", "|sh", "|bash"]
-                if tokens.contains(where: commandTokens.contains)
-                    || pipePatterns.contains(where: payload.contains) {
-                    reasons.insert(.shellInvocation)
-                }
-            }
+        if let args = input.plist?.programArguments, Self.isPipedShellInvocation(args) {
+            reasons.insert(.shellInvocation)
         }
         return reasons
+    }
+
+    /// Lexically standardized (dot segments resolved) and case-folded before
+    /// the root checks: `/private/var/../tmp/x` must flag, `/tmp/../Apps/x`
+    /// must not, and the default APFS volume is case-insensitive.
+    static func isSuspiciousExecutableLocation(_ path: String) -> Bool {
+        let normalized = URL(fileURLWithPath: path).standardizedFileURL.path.lowercased()
+        let tmpRoots = ["/tmp/", "/private/tmp/", "/var/tmp/", "/private/var/tmp/"]
+        return tmpRoots.contains(where: normalized.hasPrefix) || normalized.contains("/downloads/")
+    }
+
+    /// `true` when argv is a shell command-string invocation whose payload
+    /// fetches or pipes into another shell (`sh -c "curl … | sh"`).
+    static func isPipedShellInvocation(_ arguments: [String]) -> Bool {
+        var args = arguments
+        // Unwrap the narrow `/usr/bin/env [NAME=value|-flag]… <shell>` form.
+        if let first = args.first, URL(fileURLWithPath: first).lastPathComponent == "env" {
+            args = Array(args.dropFirst().drop { $0.contains("=") || $0.hasPrefix("-") })
+        }
+        guard args.count >= 2 else { return false }
+        let shells: Set<String> = ["sh", "bash", "zsh", "dash"]
+        guard shells.contains(URL(fileURLWithPath: args[0]).lastPathComponent) else { return false }
+        // `-c` may hide in a combined cluster (`bash -lc …`). Only the option
+        // preamble counts — after the first non-dash argument (the script or
+        // command string), a `-c` belongs to that script, not the shell.
+        let preamble = args.dropFirst().prefix { $0.hasPrefix("-") }
+        let hasCommandFlag = preamble.contains { !$0.hasPrefix("--") && $0.dropFirst().contains("c") }
+        guard hasCommandFlag else { return false }
+        let payload = args.dropFirst(1 + preamble.count).joined(separator: " ").lowercased()
+        // Token boundaries include substitution/redirect/control characters
+        // so `$(curl …)` still yields a "curl" token; a benign "retrieval"
+        // never yields "eval".
+        let separators = CharacterSet(charactersIn: " ;\t\n|&()<>`$\"'")
+        let tokens = payload.components(separatedBy: separators)
+        let commandTokens: Set<String> = ["curl", "wget", "eval"]
+        let pipePatterns = ["| sh", "| bash", "|sh", "|bash"]
+        return tokens.contains(where: commandTokens.contains) || pipePatterns.contains(where: payload.contains)
     }
 }
