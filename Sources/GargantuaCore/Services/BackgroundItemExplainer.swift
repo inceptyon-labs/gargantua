@@ -266,6 +266,9 @@ public struct BackgroundItemExplainer: Sendable {
         if reasons.contains(where: { $0.isSuspicious }) {
             return "review before trusting"
         }
+        if reasons.contains(.reEnabledByVendor) {
+            return "re-enabled itself after you disabled it"
+        }
         if reasons.contains(.parentAppMissing) {
             return "its app is gone — disabling should be safe"
         }

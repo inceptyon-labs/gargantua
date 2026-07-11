@@ -468,3 +468,31 @@ struct BackgroundItemExplainerNarrationTests {
         #expect(first.contains("disabling stops scheduled backups"))
     }
 }
+
+/// Split from `BackgroundItemExplainerNarrationTests` — the reEnabledByVendor
+/// badge's impact phrase.
+@Suite("BackgroundItemExplainer re-enabled-by-vendor impact")
+struct BackgroundItemExplainerReEnabledTests {
+    private let explainer = BackgroundItemExplainer()
+
+    @Test("reEnabledByVendor reason narrates the vendor re-enable phrase")
+    func reEnabledByVendorImpact() {
+        let plist = LaunchdPlist(label: "com.example.reenabled", program: "/usr/local/bin/reenabled")
+        let result = explainer.explain(
+            source: .userLaunchAgent, plist: plist, identity: nil, executableExists: true,
+            reasons: [.reEnabledByVendor]
+        )
+        #expect(result.contains("re-enabled itself after you disabled it"))
+    }
+
+    @Test("Suspicion outranks reEnabledByVendor in the impact phrase")
+    func suspicionOutranksReEnabledByVendorImpact() {
+        let plist = LaunchdPlist(label: "com.example.reenabled-sus", program: "/tmp/reenabled-sus")
+        let result = explainer.explain(
+            source: .userLaunchAgent, plist: plist, identity: nil, executableExists: true,
+            reasons: [.reEnabledByVendor, .suspiciousExecutablePath]
+        )
+        #expect(result.contains("review before trusting"))
+        #expect(!result.contains("re-enabled itself"))
+    }
+}

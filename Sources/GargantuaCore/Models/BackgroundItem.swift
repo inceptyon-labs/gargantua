@@ -70,6 +70,9 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
     case labelFilenameMismatch = "label_filename_mismatch"
     /// ProgramArguments pipes downloaded content through a shell (`sh -c` + curl/wget/pipe/eval).
     case shellInvocation = "shell_invocation"
+    /// Gargantua disabled this item (audited) but launchd's override DB now
+    /// reads enabled — a vendor updater re-enabled it behind the user's back.
+    case reEnabledByVendor = "re_enabled_by_vendor"
 
     /// Human-readable label for tag chips.
     public var displayLabel: String {
@@ -88,6 +91,7 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
         case .suspiciousExecutablePath: "Suspicious Path"
         case .labelFilenameMismatch: "Name Mismatch"
         case .shellInvocation: "Piped Shell"
+        case .reEnabledByVendor: "Re-enabled"
         }
     }
 

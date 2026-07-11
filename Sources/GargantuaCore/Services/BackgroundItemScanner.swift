@@ -52,6 +52,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     private let explainer: BackgroundItemExplainer
     private let runtimeProvider: any LaunchdRuntimeStateProviding
     private let appResolver: any OwningAppResolving
+    private let auditEntries: @Sendable () -> [AuditEntry]
     private let fileExists: @Sendable (String) -> Bool
     private let now: @Sendable () -> Date
 
@@ -76,6 +77,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         explainer: BackgroundItemExplainer = BackgroundItemExplainer(),
         runtimeProvider: any LaunchdRuntimeStateProviding = DefaultLaunchdRuntimeStateProvider(),
         appResolver: any OwningAppResolving = WorkspaceInstalledAppResolver(),
+        auditEntries: @escaping @Sendable () -> [AuditEntry] = { (try? AuditWriter().readEntries()) ?? [] },
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -86,6 +88,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         self.explainer = explainer
         self.runtimeProvider = runtimeProvider
         self.appResolver = appResolver
+        self.auditEntries = auditEntries
         self.fileExists = fileExists
         self.now = now
     }
@@ -110,6 +113,22 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         return (bundlePath as NSString).deletingLastPathComponent
             .split(separator: "/")
             .contains { bundleExtensions.contains(URL(fileURLWithPath: String($0)).pathExtension.lowercased()) }
+    }
+
+    /// plist path -> whether Gargantua's LAST successful launchctl action on
+    /// it was a disable. Enable entries clear the flag; failed commands
+    /// (non-zero exit) don't count.
+    static func lastDisabledByGargantua(_ entries: [AuditEntry]) -> [String: Bool] {
+        var state: [String: Bool] = [:]
+        for entry in entries where entry.kind == .command && entry.commandExitCode == 0 {
+            guard let path = entry.files.first?.path, !path.isEmpty else { continue }
+            switch entry.command {
+            case BackgroundItemAction.disable.verb: state[path] = true
+            case BackgroundItemAction.enable.verb: state[path] = false
+            default: break
+            }
+        }
+        return state
     }
 
     /// Per-scan-pass memo for owning-app lookups, so a bundle id or vendor
@@ -154,13 +173,20 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         // One batched snapshot for the whole pass — `makeItem` merges it
         // per row instead of shelling out per-item.
         let runtimeSnapshot = runtimeProvider.snapshot()
+        let disabledByGargantua = Self.lastDisabledByGargantua(auditEntries())
         let memo = ResolutionMemo()
         var items: [BackgroundItem] = []
         var unparseable = 0
 
         for launchd in launchdItems {
             if let plist = launchd.plist {
-                items.append(makeItem(launchd: launchd, plist: plist, runtimeSnapshot: runtimeSnapshot, memo: memo))
+                items.append(makeItem(
+                    launchd: launchd,
+                    plist: plist,
+                    runtimeSnapshot: runtimeSnapshot,
+                    memo: memo,
+                    disabledByGargantua: disabledByGargantua
+                ))
             } else {
                 unparseable += 1
             }
@@ -187,7 +213,8 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         launchd: LaunchdItem,
         plist: LaunchdPlist,
         runtimeSnapshot: LaunchdRuntimeSnapshot,
-        memo: ResolutionMemo
+        memo: ResolutionMemo,
+        disabledByGargantua: [String: Bool]
     ) -> BackgroundItem {
         let source = BackgroundItemSource(domain: launchd.domain)
         let exePath = plist.executablePath
@@ -234,15 +261,23 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         )
         let classification = classifier.classify(classifierInput)
 
+        let runtime = runtimeProvider.state(label: plist.label, source: source, snapshot: runtimeSnapshot)
+
+        var reasons = classification.reasons
+        // Badge only — never a safety change. Requires POSITIVE evidence on both
+        // sides: an audited successful disable AND an override DB that now reads
+        // enabled (false). A nil override (unknown/probe-degraded) never badges.
+        if disabledByGargantua[launchd.plistPath] == true, runtime?.disabledOverride == false {
+            reasons.insert(.reEnabledByVendor)
+        }
+
         let explanation = explainer.explain(
             source: source,
             plist: plist,
             identity: identity,
             executableExists: exists,
-            reasons: classification.reasons
+            reasons: reasons
         )
-
-        let runtime = runtimeProvider.state(label: plist.label, source: source, snapshot: runtimeSnapshot)
 
         return BackgroundItem(
             id: makeID(source: source, label: plist.label, secondaryKey: launchd.plistPath),
@@ -252,7 +287,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             executablePath: exePath,
             identity: identity,
             safety: classification.safety,
-            reasons: classification.reasons,
+            reasons: reasons,
             explanation: explanation,
             isOrphaned: isAbsolute(exePath) && !exists,
             runtime: runtime

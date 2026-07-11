@@ -34,7 +34,7 @@ extension BackgroundItemRow {
             GargantuaColors.safe.opacity(0.18)
         case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor,
              .parentAppLikelyMissing, .suspiciousExecutablePath,
-             .labelFilenameMismatch, .shellInvocation:
+             .labelFilenameMismatch, .shellInvocation, .reEnabledByVendor:
             GargantuaColors.review.opacity(0.18)
         case .system:
             GargantuaColors.protected_.opacity(0.18)
@@ -51,7 +51,7 @@ extension BackgroundItemRow {
             GargantuaColors.safe
         case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor,
              .parentAppLikelyMissing, .suspiciousExecutablePath,
-             .labelFilenameMismatch, .shellInvocation:
+             .labelFilenameMismatch, .shellInvocation, .reEnabledByVendor:
             GargantuaColors.review
         case .system:
             GargantuaColors.protected_
