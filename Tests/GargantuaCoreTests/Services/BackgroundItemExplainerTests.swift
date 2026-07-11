@@ -214,6 +214,86 @@ struct BackgroundItemExplainerNarrationTests {
         #expect(BackgroundItemExplainer.calendarPart([interval]) == "daily at 02:00")
     }
 
+    @Test("calendarPart drops out-of-range fields instead of printing garbage")
+    func calendarPartValidatesRanges() {
+        // hour 25 dropped → minute-only "hourly at :30"
+        #expect(BackgroundItemExplainer.calendarPart(
+            [LaunchdCalendarInterval(minute: 30, hour: 25)]
+        ) == "hourly at :30")
+        // weekday 9 dropped, day 0 dropped, everything gone → "on schedule"
+        #expect(BackgroundItemExplainer.calendarPart(
+            [LaunchdCalendarInterval(minute: -1, hour: 99, day: 0, weekday: 9)]
+        ) == "on schedule")
+    }
+
+    @Test("calendarPart prefers weekday over day when both are set")
+    func calendarPartWeekdayWinsOverDay() {
+        let interval = LaunchdCalendarInterval(minute: 15, hour: 12, day: 1, weekday: 1)
+        #expect(BackgroundItemExplainer.calendarPart([interval]) == "weekly on Monday at 12:15")
+    }
+
+    @Test("Fully populated line composes parts in the stable order")
+    func fullLineComposition() {
+        let plist = LaunchdPlist(
+            label: "com.vendor.agent",
+            program: "/Applications/Vendor.app/Contents/MacOS/agent",
+            machServices: ["com.vendor.agent.xpc"],
+            keepAlive: true,
+            runAtLoad: true
+        )
+        let identity = BinaryIdentity(
+            binaryPath: "/Applications/Vendor.app/Contents/MacOS/agent",
+            bundlePath: "/Applications/Vendor.app",
+            bundleName: "Vendor",
+            vendor: .thirdPartyKnown,
+            vendorDisplayName: "Vendor Co"
+        )
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: identity,
+            executableExists: true
+        )
+        #expect(result == "User LaunchAgent · signed by Vendor Co · ships with Vendor"
+            + " · starts at login, restarts whenever it exits, started on demand by other processes"
+            + " · other apps may fail to reach it if disabled")
+    }
+
+    @Test("Impact priority: sensitive category beats mach-service listener")
+    func sensitiveCategoryBeatsMachImpact() {
+        let plist = LaunchdPlist(
+            label: "com.vpn.helper",
+            program: "/Applications/VPN.app/Contents/MacOS/helper",
+            machServices: ["com.vpn.helper.xpc"]
+        )
+        let identity = BinaryIdentity(
+            binaryPath: "/Applications/VPN.app/Contents/MacOS/helper",
+            vendor: .thirdPartyKnown,
+            sensitiveCategories: [.vpn]
+        )
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: identity,
+            executableExists: true
+        )
+        #expect(result.contains("disabling may break VPN connectivity"))
+        #expect(!result.contains("other apps may fail to reach it"))
+    }
+
+    @Test("parentAppLikelyMissing reason surfaces the appears-uninstalled phrase")
+    func parentAppLikelyMissingImpact() {
+        let plist = LaunchdPlist(label: "com.example.maybe", program: "/usr/local/bin/maybe")
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true,
+            reasons: [.parentAppLikelyMissing]
+        )
+        #expect(result.contains("its app appears uninstalled"))
+    }
+
     @Test("calendarPart formats a weekly interval")
     func calendarPartWeekly() {
         let interval = LaunchdCalendarInterval(hour: 9, weekday: 1)

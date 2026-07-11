@@ -157,9 +157,25 @@ public struct BackgroundItemExplainer: Sendable {
     /// "daily at 02:00" / "weekly on Monday at 12:15" / "monthly on day 1 at 12:15" /
     /// "hourly at :30" / fallback "on schedule". Multiple intervals: first + " (+N more)".
     static func calendarPart(_ intervals: [LaunchdCalendarInterval]) -> String? {
-        guard let first = intervals.first else { return nil }
+        guard let raw = intervals.first else { return nil }
+        // Clamp to launchd's valid ranges before narrating — a corrupt or
+        // hand-edited plist must degrade to the vague-but-true "on schedule",
+        // never to garbage like "daily at 25:00" on a trust surface.
+        let first = validated(raw)
         let text = calendarBase(first) + calendarTimeSuffix(first)
         return appendIntervalCount(text, count: intervals.count)
+    }
+
+    /// Drops out-of-range fields (hour 0–23, minute 0–59, weekday 0–7,
+    /// day 1–31) so narration falls back a level instead of printing garbage.
+    private static func validated(_ interval: LaunchdCalendarInterval) -> LaunchdCalendarInterval {
+        LaunchdCalendarInterval(
+            minute: interval.minute.flatMap { (0 ... 59).contains($0) ? $0 : nil },
+            hour: interval.hour.flatMap { (0 ... 23).contains($0) ? $0 : nil },
+            day: interval.day.flatMap { (1 ... 31).contains($0) ? $0 : nil },
+            weekday: interval.weekday.flatMap { (0 ... 7).contains($0) ? $0 : nil },
+            month: interval.month
+        )
     }
 
     private static func calendarBase(_ interval: LaunchdCalendarInterval) -> String {
