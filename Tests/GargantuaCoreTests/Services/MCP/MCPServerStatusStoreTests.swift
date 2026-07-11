@@ -145,9 +145,11 @@ struct MCPServerStatusStoreTests {
         model.refresh()
         #expect(model.snapshot.state == .starting)
 
-        try await waitUntil {
-            model.snapshot.state == .running
-        }
+        // Join the control task instead of polling on a deadline — the poll
+        // flakes under parallel test load when the detached start action
+        // doesn't get scheduled within the timeout.
+        await model.controlTask?.value
+        #expect(model.snapshot.state == .running)
         #expect(model.snapshot.transportMode == .sse)
     }
 
@@ -157,18 +159,4 @@ struct MCPServerStatusStoreTests {
             .appendingPathComponent("mcp-status.json")
     }
 
-    @MainActor
-    private func waitUntil(
-        timeout: TimeInterval = 1,
-        condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() {
-            if Date() >= deadline {
-                Issue.record("condition was not met before timeout")
-                return
-            }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-    }
 }

@@ -5,14 +5,15 @@ import Testing
 @Suite("ClaudeCodeAgentSessionController")
 @MainActor
 struct ClaudeCodeAgentSessionControllerTests {
+    /// Join the controller's session task instead of polling `status` on a
+    /// deadline: under parallel test load a wall-clock poll expires before
+    /// the session's MainActor hops land, reading a pre-terminal `.running`.
+    /// Awaiting the task's value is deterministic regardless of scheduler
+    /// pressure — every terminal `status` assignment happens inside the task.
     func waitForTerminalStatus(
-        _ controller: ClaudeCodeAgentSessionController,
-        timeout: TimeInterval = 2
+        _ controller: ClaudeCodeAgentSessionController
     ) async -> ClaudeCodeAgentSessionStatus {
-        let deadline = Date().addingTimeInterval(timeout)
-        while controller.status.isRunning && Date() < deadline {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
+        await controller.task?.value
         return controller.status
     }
 

@@ -62,7 +62,10 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// matching the MCP server's own cache semantics — the agent's most
     /// recent scan is what the host can hydrate against.
     let scanCache = MCPScanSessionCache()
-    private var task: Task<Void, Never>?
+    /// Internal (not private) so tests can join the session deterministically
+    /// via `await task?.value` instead of polling `status` on a wall-clock
+    /// deadline — deadline polls flake under parallel test load.
+    private(set) var task: Task<Void, Never>?
     private var lastStartTemplate: ClaudeCodeAgentPromptTemplate?
     private var lastStartUserContext: String?
     private var lastStartWorkingDirectory: URL?

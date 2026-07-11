@@ -14,7 +14,10 @@ public final class MCPServerStatusViewModel: ObservableObject {
     private let startAction: ControlAction
     private let stopAction: ControlAction
     private let auditReader: AuditReader
-    private var controlTask: Task<Void, Never>?
+    /// Internal (not private) so tests can join the in-flight control action
+    /// deterministically via `await controlTask?.value` instead of polling
+    /// `snapshot` on a wall-clock deadline.
+    private(set) var controlTask: Task<Void, Never>?
 
     public init(
         initialSnapshot: MCPServerStatusSnapshot = .stopped(),
