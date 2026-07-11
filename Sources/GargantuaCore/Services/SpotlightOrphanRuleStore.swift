@@ -159,11 +159,13 @@ public struct WorkspaceInstalledAppResolver: OwningAppResolving {
     }
 
     private func mdfindHasPrefixMatch(_ bundleIDPrefix: String) -> Bool {
-        // `[c]` = case-insensitive: the prefix is derived from a lowercased
-        // launchd label, but vendors mix case in bundle ids (com.Microsoft…).
+        // Case-insensitivity uses mdfind's RAW query syntax — a `c` suffix
+        // AFTER the quoted value. NSPredicate-style `==[c]` is silently
+        // invalid here and returns nothing for every query (verified live),
+        // which false-flagged nested vendors like Adobe as uninstalled.
         let output = try? processRunner.run(
             executable: URL(fileURLWithPath: "/usr/bin/mdfind"),
-            arguments: ["kMDItemCFBundleIdentifier ==[c] '\(bundleIDPrefix)*'"],
+            arguments: ["kMDItemCFBundleIdentifier == \"\(bundleIDPrefix)*\"c"],
             timeout: 2,
             maxCapturedBytes: 64 * 1024
         )
