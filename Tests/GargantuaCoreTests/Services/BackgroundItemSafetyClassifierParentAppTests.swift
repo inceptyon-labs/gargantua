@@ -12,7 +12,7 @@ struct BackgroundItemSafetyClassifierParentAppTests {
 
     // MARK: - Owning app orphan evidence
 
-    @Test("Bundle evidence resolved absent is safe with parentAppMissing and orphaned")
+    @Test("Bundle evidence resolved absent is safe with parentAppMissing, not orphaned")
     func parentAppMissingIsSafe() {
         let identity = makeIdentity(vendor: .thirdPartyKnown, bundlePath: "/Applications/Ghost.app")
         let input = BackgroundItemClassifierInput(
@@ -28,7 +28,27 @@ struct BackgroundItemSafetyClassifierParentAppTests {
         let result = classifier.classify(input)
         #expect(result.safety == .safe)
         #expect(result.reasons.contains(.parentAppMissing))
-        #expect(result.reasons.contains(.orphaned))
+        // The executable exists — the "orphaned executable" chip would lie.
+        #expect(!result.reasons.contains(.orphaned))
+    }
+
+    @Test("Owning app present adds no evidence reason and keeps the known-vendor safe path")
+    func parentAppInstalledTrueKeepsVendorSafePath() {
+        let identity = makeIdentity(vendor: .thirdPartyKnown, bundlePath: "/Applications/Present.app")
+        let input = BackgroundItemClassifierInput(
+            label: "com.present.helper",
+            source: .userLaunchAgent,
+            plistPath: "/tmp/com.present.helper.plist",
+            executablePath: "/Applications/Present.app/Contents/MacOS/helper",
+            identity: identity,
+            executableExists: true,
+            parentAppInstalled: true,
+            plist: nil
+        )
+        let result = classifier.classify(input)
+        #expect(result.safety == .safe)
+        #expect(!result.reasons.contains(.parentAppMissing))
+        #expect(!result.reasons.contains(.parentAppLikelyMissing))
     }
 
     @Test("Well-known vendor label with no installed app is review with parentAppLikelyMissing")

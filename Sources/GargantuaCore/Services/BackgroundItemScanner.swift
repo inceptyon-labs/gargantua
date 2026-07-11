@@ -106,6 +106,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     private final class ResolutionMemo {
         private var byBundleID: [String: Bool] = [:]
         private var byPrefix: [String: Bool] = [:]
+        private var absenceConfirmable: Bool?
 
         func isInstalled(_ bundleID: String, using resolver: any OwningAppResolving) -> Bool {
             if let cached = byBundleID[bundleID] { return cached }
@@ -118,6 +119,15 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             if let cached = byPrefix[prefix] { return cached }
             let result = resolver.isAnyAppInstalled(bundleIDPrefix: prefix)
             byPrefix[prefix] = result
+            return result
+        }
+
+        /// Probed at most once per scan pass — the health of the discovery
+        /// layers doesn't change mid-scan.
+        func canConfirmAbsence(using resolver: any OwningAppResolving) -> Bool {
+            if let cached = absenceConfirmable { return cached }
+            let result = resolver.canConfirmAppAbsence()
+            absenceConfirmable = result
             return result
         }
     }
@@ -178,7 +188,16 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         let isAppleShaped = plist.label.hasPrefix("com.apple.") || identity?.vendor == .apple
         if !isAppleShaped, exists {
             if let bundleID = identity?.bundleIdentifier {
-                parentAppInstalled = memo.isInstalled(bundleID, using: appResolver)
+                if memo.isInstalled(bundleID, using: appResolver) {
+                    parentAppInstalled = true
+                } else if memo.canConfirmAbsence(using: appResolver) {
+                    // A miss only counts as "the app is gone" when the
+                    // resolver's discovery layers are healthy — with
+                    // Spotlight indexing off, a present-but-unregistered
+                    // app is invisible and absence must stay unknown (nil)
+                    // rather than flip a helper to safe-to-remove.
+                    parentAppInstalled = false
+                }
             } else if let orgPrefix = Self.labelOrgPrefix(plist.label),
                       Self.wellKnownVendorLabelPrefixes.contains(orgPrefix) {
                 knownVendorAppMissing = !memo.isAnyInstalled(prefix: orgPrefix + ".", using: appResolver)

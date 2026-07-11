@@ -103,8 +103,10 @@ public struct BackgroundItemSafetyClassifier: Sendable {
         // 3.5 Owning app uninstalled (strong bundle evidence) — the executable may
         //     still exist (Application Support helpers outlive their app). Safe.
         if input.parentAppInstalled == false {
+            // Deliberately NOT tagged `.orphaned` — that chip and the triage
+            // copy say "orphaned executable", and this executable exists.
+            // `.parentAppMissing` ("App Uninstalled") is the accurate story.
             reasons.insert(.parentAppMissing)
-            reasons.insert(.orphaned)
             return BackgroundItemClassification(safety: .safe, reasons: reasons)
         }
 

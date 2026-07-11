@@ -9,75 +9,8 @@ import Testing
 @Suite("BackgroundItemScanner — owning app evidence")
 struct BackgroundItemScannerOwningAppTests {
 
-    // MARK: - Stubs
-
-    private struct StubLaunchdIndex: LaunchdItemIndexing {
-        let items: [LaunchdItem]
-        func enumerate() -> [LaunchdItem] { items }
-    }
-
-    private struct StubLoginItems: LoginItemEnumerating {
-        let enumeration: LoginItemEnumeration
-        func enumerate() -> LoginItemEnumeration { enumeration }
-    }
-
-    private struct StubResolver: BinaryIdentityResolving {
-        let map: [String: BinaryIdentity]
-        func resolve(binaryPath: String) -> BinaryIdentity {
-            map[binaryPath] ?? BinaryIdentity(binaryPath: binaryPath, vendor: .unsigned)
-        }
-    }
-
-    private struct NilStateRuntimeProvider: LaunchdRuntimeStateProviding {
-        func snapshot() -> LaunchdRuntimeSnapshot { .empty }
-        func printDetail(label: String, source: BackgroundItemSource) -> LaunchdRuntimeDetail? { nil }
-        func state(
-            label: String,
-            source: BackgroundItemSource,
-            snapshot: LaunchdRuntimeSnapshot
-        ) -> LaunchdRuntimeState? { nil }
-    }
-
-    /// Counts `isInstalled`/`isAnyAppInstalled` calls so tests can assert the
-    /// scanner memoizes owning-app lookups instead of re-querying per item.
-    private final class CountingOwningAppResolver: OwningAppResolving, @unchecked Sendable {
-        private let lock = NSLock()
-        private var installedQueries: [String] = []
-        private var prefixQueries: [String] = []
-        private let installedResult: Bool
-        private let prefixResult: Bool
-
-        init(installedResult: Bool = false, prefixResult: Bool = false) {
-            self.installedResult = installedResult
-            self.prefixResult = prefixResult
-        }
-
-        func isInstalled(bundleID: String) -> Bool {
-            lock.lock()
-            installedQueries.append(bundleID)
-            lock.unlock()
-            return installedResult
-        }
-
-        func isAnyAppInstalled(bundleIDPrefix: String) -> Bool {
-            lock.lock()
-            prefixQueries.append(bundleIDPrefix)
-            lock.unlock()
-            return prefixResult
-        }
-
-        var installedCallCount: Int {
-            lock.lock()
-            defer { lock.unlock() }
-            return installedQueries.count
-        }
-
-        var prefixCallCount: Int {
-            lock.lock()
-            defer { lock.unlock() }
-            return prefixQueries.count
-        }
-    }
+    // Stubs are file-scoped (bottom of file) to keep this type body
+    // under the 300-line SwiftLint limit.
 
     // MARK: - Bundle-id evidence
 
@@ -105,6 +38,70 @@ struct BackgroundItemScannerOwningAppTests {
         let item = try? #require(scanner.scan().items.first)
         #expect(item?.safety == .safe)
         #expect(item?.reasons.contains(.parentAppMissing) == true)
+    }
+
+    @Test("A miss with degraded discovery layers stays unknown — never flips to safe")
+    func bundleIDMissUnknownWhenAbsenceUnconfirmable() {
+        let plist = LaunchdPlist(label: "com.acme.helper", program: "/Applications/Acme.app/Contents/MacOS/helper")
+        let launchd = [
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/acme.plist", plist: plist),
+        ]
+        // Spotlight-off shape: isInstalled misses, but the probe says a miss
+        // cannot be trusted as absence.
+        let resolver = CountingOwningAppResolver(installedResult: false, absenceConfirmable: false)
+        let scanner = makeScanner(
+            launchd: launchd,
+            login: .empty,
+            resolverMap: [
+                "/Applications/Acme.app/Contents/MacOS/helper": BinaryIdentity(
+                    binaryPath: "/Applications/Acme.app/Contents/MacOS/helper",
+                    bundlePath: "/Applications/Acme.app",
+                    bundleIdentifier: "com.acme.app",
+                    vendor: .thirdPartyUnknown
+                ),
+            ],
+            existingFiles: ["/Applications/Acme.app/Contents/MacOS/helper"],
+            appResolver: resolver
+        )
+        let item = try? #require(scanner.scan().items.first)
+        #expect(item?.safety == .review)
+        #expect(item?.reasons.contains(.parentAppMissing) == false)
+    }
+
+    @Test("The absence-confirmability probe runs at most once per scan pass")
+    func absenceProbeMemoized() {
+        let plist1 = LaunchdPlist(label: "com.acme.one", program: "/Applications/Acme.app/Contents/MacOS/one")
+        let plist2 = LaunchdPlist(label: "com.beta.two", program: "/Applications/Beta.app/Contents/MacOS/two")
+        let launchd = [
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/one.plist", plist: plist1),
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/two.plist", plist: plist2),
+        ]
+        let resolver = CountingOwningAppResolver(installedResult: false, absenceConfirmable: false)
+        let scanner = makeScanner(
+            launchd: launchd,
+            login: .empty,
+            resolverMap: [
+                "/Applications/Acme.app/Contents/MacOS/one": BinaryIdentity(
+                    binaryPath: "/Applications/Acme.app/Contents/MacOS/one",
+                    bundlePath: "/Applications/Acme.app",
+                    bundleIdentifier: "com.acme.app",
+                    vendor: .thirdPartyUnknown
+                ),
+                "/Applications/Beta.app/Contents/MacOS/two": BinaryIdentity(
+                    binaryPath: "/Applications/Beta.app/Contents/MacOS/two",
+                    bundlePath: "/Applications/Beta.app",
+                    bundleIdentifier: "com.beta.app",
+                    vendor: .thirdPartyUnknown
+                ),
+            ],
+            existingFiles: [
+                "/Applications/Acme.app/Contents/MacOS/one",
+                "/Applications/Beta.app/Contents/MacOS/two",
+            ],
+            appResolver: resolver
+        )
+        _ = scanner.scan()
+        #expect(resolver.probeCallCount == 1)
     }
 
     @Test("Two items sharing a bundle id resolve isInstalled exactly once (memo)")
@@ -291,5 +288,91 @@ struct BackgroundItemScannerOwningAppTests {
             fileExists: { existingFiles.contains($0) },
             now: { Date(timeIntervalSince1970: 1_700_000_000) }
         )
+    }
+}
+
+// MARK: - File-scoped stubs
+
+private struct StubLaunchdIndex: LaunchdItemIndexing {
+    let items: [LaunchdItem]
+    func enumerate() -> [LaunchdItem] { items }
+}
+
+private struct StubLoginItems: LoginItemEnumerating {
+    let enumeration: LoginItemEnumeration
+    func enumerate() -> LoginItemEnumeration { enumeration }
+}
+
+private struct StubResolver: BinaryIdentityResolving {
+    let map: [String: BinaryIdentity]
+    func resolve(binaryPath: String) -> BinaryIdentity {
+        map[binaryPath] ?? BinaryIdentity(binaryPath: binaryPath, vendor: .unsigned)
+    }
+}
+
+private struct NilStateRuntimeProvider: LaunchdRuntimeStateProviding {
+    func snapshot() -> LaunchdRuntimeSnapshot { .empty }
+    func printDetail(label: String, source: BackgroundItemSource) -> LaunchdRuntimeDetail? { nil }
+    func state(
+        label: String,
+        source: BackgroundItemSource,
+        snapshot: LaunchdRuntimeSnapshot
+    ) -> LaunchdRuntimeState? { nil }
+}
+
+/// Counts `isInstalled`/`isAnyAppInstalled` calls so tests can assert the
+/// scanner memoizes owning-app lookups instead of re-querying per item.
+private final class CountingOwningAppResolver: OwningAppResolving, @unchecked Sendable {
+    private let lock = NSLock()
+    private var installedQueries: [String] = []
+    private var prefixQueries: [String] = []
+    private let installedResult: Bool
+    private let prefixResult: Bool
+    private let absenceConfirmable: Bool
+    private var probeQueries = 0
+
+    init(installedResult: Bool = false, prefixResult: Bool = false, absenceConfirmable: Bool = true) {
+        self.installedResult = installedResult
+        self.prefixResult = prefixResult
+        self.absenceConfirmable = absenceConfirmable
+    }
+
+    func isInstalled(bundleID: String) -> Bool {
+        lock.lock()
+        installedQueries.append(bundleID)
+        lock.unlock()
+        return installedResult
+    }
+
+    func isAnyAppInstalled(bundleIDPrefix: String) -> Bool {
+        lock.lock()
+        prefixQueries.append(bundleIDPrefix)
+        lock.unlock()
+        return prefixResult
+    }
+
+    func canConfirmAppAbsence() -> Bool {
+        lock.lock()
+        probeQueries += 1
+        lock.unlock()
+        return absenceConfirmable
+    }
+
+    var installedCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return installedQueries.count
+    }
+
+    var prefixCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return prefixQueries.count
+    }
+
+    var probeCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return probeQueries
     }
 }

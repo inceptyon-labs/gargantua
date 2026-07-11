@@ -125,6 +125,19 @@ public struct WorkspaceInstalledAppResolver: OwningAppResolving {
         return mdfindHasPrefixMatch(bundleIDPrefix) || filesystemHasAppWithPrefix(bundleIDPrefix)
     }
 
+    /// A miss is only trustworthy when Spotlight can actually see installed
+    /// apps: probe for Finder, which exists (and is indexed) on every macOS
+    /// install. When the probe finds nothing, `mdfind` is degraded (indexing
+    /// off) — LaunchServices only knows registered apps and the filesystem
+    /// scan is non-recursive, so nested installs like
+    /// `/Applications/Adobe/Acrobat.app` could be invisible. Absence is
+    /// unknowable in that state; deliberately NOT backstopped by the
+    /// LaunchServices layer, which always resolves Finder and would make the
+    /// probe vacuous.
+    public func canConfirmAppAbsence() -> Bool {
+        mdfindHasMatch("com.apple.finder")
+    }
+
     /// Allow only well-formed bundle ids so nothing unsafe is interpolated into
     /// the mdfind query.
     static func isSafeBundleID(_ bundleID: String) -> Bool {

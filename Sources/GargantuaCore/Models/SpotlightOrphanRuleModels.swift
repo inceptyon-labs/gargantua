@@ -64,4 +64,10 @@ public protocol OwningAppResolving: InstalledAppResolving {
     /// `true` when ANY installed app's bundle identifier starts with
     /// `bundleIDPrefix` (e.g. "com.valvesoftware.").
     func isAnyAppInstalled(bundleIDPrefix: String) -> Bool
+    /// `true` when the resolver's discovery layers are healthy enough that a
+    /// miss can be trusted as "the app is gone" rather than "we can't see it"
+    /// (e.g. Spotlight indexing is disabled, so `mdfind` returns nothing for
+    /// apps that are on disk). Callers must treat a miss as *unknown* when
+    /// this is `false` — absence evidence gates a safe-to-remove rating.
+    func canConfirmAppAbsence() -> Bool
 }
