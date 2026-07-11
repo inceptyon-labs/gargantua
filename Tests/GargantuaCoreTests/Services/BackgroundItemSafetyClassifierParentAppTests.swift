@@ -6,7 +6,7 @@ import Testing
 // parentAppLikelyMissing) — split from BackgroundItemSafetyClassifierTests
 // to keep that suite's type body under the 300-line SwiftLint limit.
 @Suite("BackgroundItemSafetyClassifier — parent app evidence")
-struct BackgroundItemSafetyClassifierParentAppTests {
+struct SafetyClassifierParentAppTests {
 
     private let classifier = BackgroundItemSafetyClassifier()
 
