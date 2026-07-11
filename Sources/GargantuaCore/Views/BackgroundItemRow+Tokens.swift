@@ -27,8 +27,13 @@ extension BackgroundItemRow {
 
     func chipBackground(for reason: BackgroundItemReason) -> Color {
         switch reason {
+        // parentAppMissing yields a SAFE classification — its chip must not
+        // wear the review tint (The Classification Rule: safety colors track
+        // classification, never emphasis).
+        case .parentAppMissing:
+            GargantuaColors.safe.opacity(0.18)
         case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor,
-             .parentAppMissing, .parentAppLikelyMissing:
+             .parentAppLikelyMissing:
             GargantuaColors.review.opacity(0.18)
         case .system:
             GargantuaColors.protected_.opacity(0.18)
@@ -41,8 +46,10 @@ extension BackgroundItemRow {
 
     func chipForeground(for reason: BackgroundItemReason) -> Color {
         switch reason {
+        case .parentAppMissing:
+            GargantuaColors.safe
         case .sensitiveVendor, .unsigned, .orphaned, .orphanedVendor,
-             .parentAppMissing, .parentAppLikelyMissing:
+             .parentAppLikelyMissing:
             GargantuaColors.review
         case .system:
             GargantuaColors.protected_

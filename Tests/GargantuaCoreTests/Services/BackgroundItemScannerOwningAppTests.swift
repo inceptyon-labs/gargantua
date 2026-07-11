@@ -104,6 +104,74 @@ struct BackgroundItemScannerOwningAppTests {
         #expect(resolver.probeCallCount == 1)
     }
 
+    @Test("An embedded helper's bundle id yields no owning-app evidence — nested bundles aren't indexed")
+    func nestedBundleSkipsEvidence() {
+        let exe = "/Applications/Host.app/Contents/PlugIns/Helper.appex/Contents/MacOS/helper"
+        let plist = LaunchdPlist(label: "com.host.helper", program: exe)
+        let launchd = [
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/helper.plist", plist: plist),
+        ]
+        let resolver = CountingOwningAppResolver(installedResult: false)
+        let scanner = makeScanner(
+            launchd: launchd,
+            login: .empty,
+            resolverMap: [
+                exe: BinaryIdentity(
+                    binaryPath: exe,
+                    bundlePath: "/Applications/Host.app/Contents/PlugIns/Helper.appex",
+                    bundleIdentifier: "com.host.helper-appex",
+                    vendor: .thirdPartyUnknown
+                ),
+            ],
+            existingFiles: [exe],
+            appResolver: resolver
+        )
+        let item = try? #require(scanner.scan().items.first)
+        #expect(resolver.installedCallCount == 0)
+        #expect(item?.reasons.contains(.parentAppMissing) == false)
+        #expect(item?.safety == .review)
+    }
+
+    @Test("Vendor-prefix heuristic is suppressed when absence is unconfirmable")
+    func vendorPrefixSuppressedWhenAbsenceUnconfirmable() {
+        let plist = LaunchdPlist(
+            label: "com.valvesoftware.steamclean",
+            program: "/usr/local/bin/steamclean"
+        )
+        let launchd = [
+            LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/steam.plist", plist: plist),
+        ]
+        let resolver = CountingOwningAppResolver(prefixResult: false, absenceConfirmable: false)
+        let scanner = makeScanner(
+            launchd: launchd,
+            login: .empty,
+            resolverMap: [
+                "/usr/local/bin/steamclean": BinaryIdentity(binaryPath: "/usr/local/bin/steamclean", vendor: .unsigned),
+            ],
+            existingFiles: ["/usr/local/bin/steamclean"],
+            appResolver: resolver
+        )
+        let item = try? #require(scanner.scan().items.first)
+        #expect(resolver.prefixCallCount == 0)
+        #expect(item?.reasons.contains(.parentAppLikelyMissing) == false)
+        #expect(item?.safety == .review)
+    }
+
+    @Test("isNestedBundle detects bundle boundaries above the enclosing bundle")
+    func isNestedBundleDetection() {
+        #expect(DefaultBackgroundItemScanner.isNestedBundle(
+            "/Applications/Host.app/Contents/PlugIns/Helper.appex"
+        ))
+        #expect(DefaultBackgroundItemScanner.isNestedBundle(
+            "/Applications/Host.app/Contents/XPCServices/Agent.xpc"
+        ))
+        #expect(!DefaultBackgroundItemScanner.isNestedBundle("/Applications/Host.app"))
+        #expect(!DefaultBackgroundItemScanner.isNestedBundle(
+            "/Library/Application Support/Vendor/Tool.app"
+        ))
+        #expect(!DefaultBackgroundItemScanner.isNestedBundle(nil))
+    }
+
     @Test("Two items sharing a bundle id resolve isInstalled exactly once (memo)")
     func bundleIDLookupMemoized() {
         let plist1 = LaunchdPlist(label: "com.acme.one", program: "/Applications/Acme.app/Contents/MacOS/one")
@@ -142,6 +210,13 @@ struct BackgroundItemScannerOwningAppTests {
         #expect(scan.items.count == 2)
         #expect(resolver.installedCallCount == 1)
     }
+}
+
+// Vendor-prefix heuristic + skip-guard halves of the owning-app evidence
+// wiring — a second suite so each type body stays under the 300-line
+// SwiftLint limit.
+@Suite("BackgroundItemScanner — owning app heuristics")
+struct BackgroundItemScannerHeuristicsTests {
 
     // MARK: - Vendor-prefix heuristic evidence
 
@@ -267,28 +342,6 @@ struct BackgroundItemScannerOwningAppTests {
         #expect(DefaultBackgroundItemScanner.labelOrgPrefix("com.foo") == nil)
         #expect(DefaultBackgroundItemScanner.labelOrgPrefix("COM.Adobe.GC.Invoker-1.0") == "com.adobe")
     }
-
-    // MARK: - Helpers
-
-    private func makeScanner(
-        launchd: [LaunchdItem],
-        login: LoginItemEnumeration,
-        resolverMap: [String: BinaryIdentity] = [:],
-        existingFiles: Set<String> = [],
-        appResolver: any OwningAppResolving
-    ) -> DefaultBackgroundItemScanner {
-        DefaultBackgroundItemScanner(
-            launchdIndex: StubLaunchdIndex(items: launchd),
-            loginItems: StubLoginItems(enumeration: login),
-            resolver: StubResolver(map: resolverMap),
-            classifier: BackgroundItemSafetyClassifier(),
-            explainer: BackgroundItemExplainer(),
-            runtimeProvider: NilStateRuntimeProvider(),
-            appResolver: appResolver,
-            fileExists: { existingFiles.contains($0) },
-            now: { Date(timeIntervalSince1970: 1_700_000_000) }
-        )
-    }
 }
 
 // MARK: - File-scoped stubs
@@ -375,4 +428,26 @@ private final class CountingOwningAppResolver: OwningAppResolving, @unchecked Se
         defer { lock.unlock() }
         return probeQueries
     }
+}
+
+// MARK: - Helpers
+
+private func makeScanner(
+    launchd: [LaunchdItem],
+    login: LoginItemEnumeration,
+    resolverMap: [String: BinaryIdentity] = [:],
+    existingFiles: Set<String> = [],
+    appResolver: any OwningAppResolving
+) -> DefaultBackgroundItemScanner {
+    DefaultBackgroundItemScanner(
+        launchdIndex: StubLaunchdIndex(items: launchd),
+        loginItems: StubLoginItems(enumeration: login),
+        resolver: StubResolver(map: resolverMap),
+        classifier: BackgroundItemSafetyClassifier(),
+        explainer: BackgroundItemExplainer(),
+        runtimeProvider: NilStateRuntimeProvider(),
+        appResolver: appResolver,
+        fileExists: { existingFiles.contains($0) },
+        now: { Date(timeIntervalSince1970: 1_700_000_000) }
+    )
 }

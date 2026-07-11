@@ -98,6 +98,20 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         return "\(components[0]).\(components[1])".lowercased()
     }
 
+    /// A bundle nested inside another bundle (embedded `.appex`, XPC service,
+    /// helper `.app` in `Contents/`) is not separately Spotlight-indexed or
+    /// LaunchServices-registered, so a resolver miss for its bundle id says
+    /// nothing about whether the OUTER app is installed. Owning-app evidence
+    /// is skipped for those rather than risking a false "app gone" on an
+    /// active embedded helper.
+    static func isNestedBundle(_ bundlePath: String?) -> Bool {
+        guard let bundlePath else { return false }
+        let bundleExtensions: Set<String> = ["app", "appex", "xpc", "framework", "bundle", "systemextension"]
+        return (bundlePath as NSString).deletingLastPathComponent
+            .split(separator: "/")
+            .contains { bundleExtensions.contains(URL(fileURLWithPath: String($0)).pathExtension.lowercased()) }
+    }
+
     /// Per-scan-pass memo for owning-app lookups, so a bundle id or vendor
     /// prefix shared by multiple background items is resolved at most once.
     /// A plain class (not an actor) is fine here — it's created and consumed
@@ -187,7 +201,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         var knownVendorAppMissing = false
         let isAppleShaped = plist.label.hasPrefix("com.apple.") || identity?.vendor == .apple
         if !isAppleShaped, exists {
-            if let bundleID = identity?.bundleIdentifier {
+            if let bundleID = identity?.bundleIdentifier, !Self.isNestedBundle(identity?.bundlePath) {
                 if memo.isInstalled(bundleID, using: appResolver) {
                     parentAppInstalled = true
                 } else if memo.canConfirmAbsence(using: appResolver) {
@@ -199,7 +213,10 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
                     parentAppInstalled = false
                 }
             } else if let orgPrefix = Self.labelOrgPrefix(plist.label),
-                      Self.wellKnownVendorLabelPrefixes.contains(orgPrefix) {
+                      Self.wellKnownVendorLabelPrefixes.contains(orgPrefix),
+                      memo.canConfirmAbsence(using: appResolver) {
+                // Same health gate as the bundle path: with Spotlight off, a
+                // prefix miss would paint a false "App Not Found" chip.
                 knownVendorAppMissing = !memo.isAnyInstalled(prefix: orgPrefix + ".", using: appResolver)
             }
         }

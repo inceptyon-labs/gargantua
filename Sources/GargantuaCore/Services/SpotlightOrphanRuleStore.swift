@@ -159,9 +159,11 @@ public struct WorkspaceInstalledAppResolver: OwningAppResolving {
     }
 
     private func mdfindHasPrefixMatch(_ bundleIDPrefix: String) -> Bool {
+        // `[c]` = case-insensitive: the prefix is derived from a lowercased
+        // launchd label, but vendors mix case in bundle ids (com.Microsoft…).
         let output = try? processRunner.run(
             executable: URL(fileURLWithPath: "/usr/bin/mdfind"),
-            arguments: ["kMDItemCFBundleIdentifier == '\(bundleIDPrefix)*'"],
+            arguments: ["kMDItemCFBundleIdentifier ==[c] '\(bundleIDPrefix)*'"],
             timeout: 2,
             maxCapturedBytes: 64 * 1024
         )
@@ -179,7 +181,8 @@ public struct WorkspaceInstalledAppResolver: OwningAppResolving {
 
             for app in apps where app.pathExtension == "app" {
                 guard let appBundleID = Self.infoPlistBundleID(of: app, fileManager: fileManager) else { continue }
-                if appBundleID.hasPrefix(bundleIDPrefix) { return true }
+                // Case-folded to match the mdfind query's `[c]` modifier.
+                if appBundleID.lowercased().hasPrefix(bundleIDPrefix.lowercased()) { return true }
             }
         }
         return false
