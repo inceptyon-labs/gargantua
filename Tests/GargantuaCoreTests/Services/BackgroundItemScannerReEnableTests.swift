@@ -66,6 +66,33 @@ struct BackgroundItemScannerReEnableTests {
         #expect(item?.reasons.contains(.reEnabledByVendor) == false)
     }
 
+    @Test("Enable recorded with tolerated bootstrap exit 37 still clears — no false badge")
+    func enableWithBootstrapAlreadyLoadedClears() {
+        // A successful Gargantua enable can persist the bootstrap step's
+        // tolerated exit 37 ("already loaded") as the primary command.
+        // Attributing the user's own re-enable to a vendor would be worse
+        // than missing a real vendor re-enable.
+        let scanner = makeScanner(
+            auditEntries: [
+                auditEntry(command: "disable", exitCode: 0),
+                auditEntry(command: "enable", exitCode: 37),
+            ],
+            disabledOverride: false
+        )
+        let item = try? #require(scanner.scan().items.first)
+        #expect(item?.reasons.contains(.reEnabledByVendor) == false)
+    }
+
+    @Test("ANY enable attempt clears, even a failed one — enable already cleared the override")
+    func failedEnableStillClears() {
+        let entries = [
+            auditEntry(command: "disable", exitCode: 0),
+            auditEntry(command: "enable", exitCode: 5),
+        ]
+        let state = DefaultBackgroundItemScanner.lastDisabledByGargantua(entries)
+        #expect(state[Self.plistPath] == false)
+    }
+
     // MARK: - (f) safety untouched
 
     @Test("Safety is identical with and without the audit entry")

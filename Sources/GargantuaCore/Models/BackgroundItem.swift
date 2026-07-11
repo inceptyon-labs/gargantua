@@ -71,7 +71,9 @@ public enum BackgroundItemReason: String, Sendable, Equatable, Hashable, Codable
     /// ProgramArguments pipes downloaded content through a shell (`sh -c` + curl/wget/pipe/eval).
     case shellInvocation = "shell_invocation"
     /// Gargantua disabled this item (audited) but launchd's override DB now
-    /// reads enabled — a vendor updater re-enabled it behind the user's back.
+    /// reads enabled — it was re-enabled outside Gargantua after the user
+    /// disabled it (typically a vendor updater, though an out-of-band
+    /// `launchctl enable` by the user trips it too).
     case reEnabledByVendor = "re_enabled_by_vendor"
 
     /// Human-readable label for tag chips.

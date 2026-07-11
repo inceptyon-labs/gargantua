@@ -115,17 +115,28 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             .contains { bundleExtensions.contains(URL(fileURLWithPath: String($0)).pathExtension.lowercased()) }
     }
 
-    /// plist path -> whether Gargantua's LAST successful launchctl action on
-    /// it was a disable. Enable entries clear the flag; failed commands
-    /// (non-zero exit) don't count.
+    /// plist path -> whether Gargantua's LAST launchctl action on it was a
+    /// clean disable. Only exit-0 disables set the flag; ANY enable attempt
+    /// clears it.
     static func lastDisabledByGargantua(_ entries: [AuditEntry]) -> [String: Bool] {
         var state: [String: Bool] = [:]
-        for entry in entries where entry.kind == .command && entry.commandExitCode == 0 {
+        for entry in entries where entry.kind == .command {
             guard let path = entry.files.first?.path, !path.isEmpty else { continue }
             switch entry.command {
-            case BackgroundItemAction.disable.verb: state[path] = true
-            case BackgroundItemAction.enable.verb: state[path] = false
-            default: break
+            case BackgroundItemAction.disable.verb where entry.commandExitCode == 0:
+                // A successful disable always records the disable subcommand
+                // with exit 0 — a clean signal.
+                state[path] = true
+            case BackgroundItemAction.enable.verb:
+                // ANY enable attempt clears, regardless of recorded exit: a
+                // successful enable may persist the tolerated bootstrap code
+                // 37 ("already loaded"), and even a failed bootstrap follows
+                // an enable subcommand that already cleared the override.
+                // Missing a vendor re-enable is acceptable; accusing a vendor
+                // after the user's own re-enable is not.
+                state[path] = false
+            default:
+                break
             }
         }
         return state
