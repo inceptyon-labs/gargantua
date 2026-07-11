@@ -141,6 +141,11 @@ public struct MCPListBackgroundItemsToolHandler: Sendable {
         if let filterLabel, allItems.isEmpty {
             return "No item matching '\(filterLabel)'."
         }
+        if allItems.count == 1, let only = allItems.first {
+            // Inspect mode (or a genuinely one-item Mac): name the item
+            // instead of a pluralized tally.
+            return "1 background item: \(only.label) (\(only.safety.rawValue))."
+        }
         // Counts come from the FULL filtered set — the wire list may be
         // capped, and a summary computed from the trimmed list would lie.
         let safe = allItems.filter { $0.safety == .safe }.count

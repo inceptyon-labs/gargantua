@@ -169,6 +169,97 @@ struct MCPListBackgroundItemsToolHandlerTests {
         #expect(summary.contains("com.nonexistent.item"))
     }
 
+    @Test("label filter reaches items beyond the 100-item wire cap")
+    func labelFilterReachesPastCap() throws {
+        let overflow = (0 ..< 120).map { index in
+            BackgroundItem(
+                id: "agent-\(index)",
+                label: "com.example.agent\(index)",
+                source: .userLaunchAgent,
+                plistPath: "/Users/dev/Library/LaunchAgents/com.example.agent\(index).plist",
+                executablePath: "/usr/local/bin/agent\(index)",
+                identity: nil,
+                safety: .review,
+                reasons: [],
+                explanation: "Agent \(index).",
+                isOrphaned: false,
+                runtime: nil
+            )
+        }
+        let scan = BackgroundItemScan(
+            items: overflow,
+            loginItemsNeedPrivileges: false,
+            unparseableCount: 0,
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let arguments = MCPToolArguments(["label": .string("com.example.agent115")])
+        let output = try Self.decodeOutput(try handler(provider: { scan }).handle(arguments))
+        #expect(output.items.count == 1)
+        #expect(output.items.first?.label == "com.example.agent115")
+    }
+
+    @Test("duplicate labels across domains return every match")
+    func duplicateLabelAcrossDomains() throws {
+        let userCopy = BackgroundItem(
+            id: "dup-user",
+            label: "com.example.dup",
+            source: .userLaunchAgent,
+            plistPath: "/Users/dev/Library/LaunchAgents/com.example.dup.plist",
+            executablePath: "/usr/local/bin/dup",
+            identity: nil,
+            safety: .review,
+            reasons: [],
+            explanation: "User copy.",
+            isOrphaned: false,
+            runtime: nil
+        )
+        let systemCopy = BackgroundItem(
+            id: "dup-system",
+            label: "com.example.dup",
+            source: .launchDaemon,
+            plistPath: "/Library/LaunchDaemons/com.example.dup.plist",
+            executablePath: "/usr/local/bin/dup",
+            identity: nil,
+            safety: .review,
+            reasons: [],
+            explanation: "System copy.",
+            isOrphaned: false,
+            runtime: nil
+        )
+        let scan = BackgroundItemScan(
+            items: [userCopy, systemCopy],
+            loginItemsNeedPrivileges: false,
+            unparseableCount: 0,
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let arguments = MCPToolArguments(["label": .string("com.example.dup")])
+        let output = try Self.decodeOutput(try handler(provider: { scan }).handle(arguments))
+        #expect(output.items.count == 2)
+        #expect(Set(output.items.map(\.source)) == ["user_launch_agent", "launch_daemon"])
+    }
+
+    @Test("single-item result summarizes with the item's label, singular")
+    func singleItemSummaryNamesTheItem() throws {
+        let subject = handler(provider: { Self.sampleScan })
+        let arguments = MCPToolArguments(["label": .string("com.example.agent")])
+        let result = try subject.handle(arguments)
+        guard case .text(let summary) = result.content.first else {
+            Issue.record("expected text summary")
+            return
+        }
+        #expect(summary.contains("1 background item:"))
+        #expect(summary.contains("com.example.agent (review)"))
+    }
+
+    @Test("non-string label fails decoding instead of being silently ignored")
+    func nonStringLabelThrows() {
+        let subject = handler(provider: { Self.sampleScan })
+        let arguments = MCPToolArguments(["label": .int(5)])
+        #expect(throws: (any Error).self) {
+            _ = try subject.handle(arguments)
+        }
+    }
+
     // MARK: Provider errors
 
     @Test("provider throwing a plain error surfaces as .failure")

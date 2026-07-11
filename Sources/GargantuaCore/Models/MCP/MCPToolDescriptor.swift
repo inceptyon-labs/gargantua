@@ -266,14 +266,17 @@ public enum MCPPhase2Tools {
     public static let listBackgroundItems = MCPToolDescriptor(
         name: .listBackgroundItems,
         description: "List launchd background items (agents, daemons, login items) with safety classification, "
-            + "evidence reasons, runtime state, and explanations. Read-only.",
+            + "evidence reasons, runtime state, and explanations. Read-only. The wire list is capped at 100 "
+            + "items; totalItems carries the real count, and any item can be retrieved past the cap by "
+            + "passing its exact label.",
         inputSchema: MCPJSONSchema(
             type: .object,
-            description: "No inputs required; optionally inspect a single item by exact label.",
+            description: "All inputs optional; pass label to inspect specific item(s).",
             properties: [
                 "label": MCPJSONSchema(
                     type: .string,
-                    description: "Exact launchd label to inspect (e.g. com.adobe.GC.Invoker-1.0)."
+                    description: "Exact launchd label to inspect (e.g. com.adobe.GC.Invoker-1.0). Returns every "
+                        + "item with that label — the same label can exist in both the user and system domains."
                 ),
             ],
             required: []
