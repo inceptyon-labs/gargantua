@@ -174,6 +174,7 @@ public struct DefaultLaunchdRuntimeStateProvider: LaunchdRuntimeStateProviding {
     }
 
     // MARK: - Parsers
+
     //
     // Pure string -> value. Tolerant: malformed lines are skipped, never
     // thrown/crashed on, so a launchd output-format quirk degrades a single
@@ -209,7 +210,7 @@ public struct DefaultLaunchdRuntimeStateProvider: LaunchdRuntimeStateProviding {
             guard line.hasPrefix("\"") else { continue }
             let remainder = String(line.dropFirst())
             guard let closeQuoteIndex = remainder.firstIndex(of: "\"") else { continue }
-            let label = String(remainder[remainder.startIndex..<closeQuoteIndex])
+            let label = String(remainder[remainder.startIndex ..< closeQuoteIndex])
             guard !label.isEmpty else { continue }
             let afterLabel = String(remainder[remainder.index(after: closeQuoteIndex)...])
             guard let arrowRange = afterLabel.range(of: "=>") else { continue }
@@ -238,7 +239,7 @@ public struct DefaultLaunchdRuntimeStateProvider: LaunchdRuntimeStateProviding {
         for rawLine in stdout.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = String(rawLine).trimmingCharacters(in: .whitespaces)
             guard let equalsRange = line.range(of: "=") else { continue }
-            let key = String(line[line.startIndex..<equalsRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+            let key = String(line[line.startIndex ..< equalsRange.lowerBound]).trimmingCharacters(in: .whitespaces)
             let value = String(line[equalsRange.upperBound...]).trimmingCharacters(in: .whitespaces)
             switch key.lowercased() {
             case "state":
