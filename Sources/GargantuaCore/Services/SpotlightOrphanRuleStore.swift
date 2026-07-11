@@ -69,7 +69,7 @@ public struct StoreSpotlightRuleRemover: SpotlightRuleRemoving {
 /// positive that would wrongly flag a Spotlight rule as orphaned). Mirrors
 /// Mole's `bundle_has_installed_app` (tw93/Mole): LaunchServices → mdfind →
 /// filesystem scan. Any hit means installed; only an all-miss means gone.
-public struct WorkspaceInstalledAppResolver: InstalledAppResolving {
+public struct WorkspaceInstalledAppResolver: OwningAppResolving {
     private let appRoots: [URL]
     // FileManager isn't Sendable, but this resolver only issues read-only,
     // thread-safe queries against it (and defaults to the shared instance).
@@ -115,6 +115,16 @@ public struct WorkspaceInstalledAppResolver: InstalledAppResolving {
             || filesystemHasApp(bundleID)
     }
 
+    /// `true` when any installed app's bundle identifier starts with
+    /// `bundleIDPrefix` (e.g. `"com.valvesoftware."`). Vendor-prefix sibling
+    /// of `isInstalled(bundleID:)`, used when a background item's launchd
+    /// label carries no enclosing-bundle id to resolve exactly.
+    public func isAnyAppInstalled(bundleIDPrefix: String) -> Bool {
+        let candidate = bundleIDPrefix.hasSuffix(".") ? String(bundleIDPrefix.dropLast()) : bundleIDPrefix
+        guard Self.isSafeBundleID(candidate) else { return false }
+        return mdfindHasPrefixMatch(bundleIDPrefix) || filesystemHasAppWithPrefix(bundleIDPrefix)
+    }
+
     /// Allow only well-formed bundle ids so nothing unsafe is interpolated into
     /// the mdfind query.
     static func isSafeBundleID(_ bundleID: String) -> Bool {
@@ -133,6 +143,33 @@ public struct WorkspaceInstalledAppResolver: InstalledAppResolving {
         )
         guard let output, output.exitCode == 0 else { return false }
         return !output.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func mdfindHasPrefixMatch(_ bundleIDPrefix: String) -> Bool {
+        let output = try? processRunner.run(
+            executable: URL(fileURLWithPath: "/usr/bin/mdfind"),
+            arguments: ["kMDItemCFBundleIdentifier == '\(bundleIDPrefix)*'"],
+            timeout: 2,
+            maxCapturedBytes: 64 * 1024
+        )
+        guard let output, output.exitCode == 0 else { return false }
+        return !output.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func filesystemHasAppWithPrefix(_ bundleIDPrefix: String) -> Bool {
+        for root in appRoots {
+            guard let apps = try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for app in apps where app.pathExtension == "app" {
+                guard let appBundleID = Self.infoPlistBundleID(of: app, fileManager: fileManager) else { continue }
+                if appBundleID.hasPrefix(bundleIDPrefix) { return true }
+            }
+        }
+        return false
     }
 
     private func filesystemHasApp(_ bundleID: String) -> Bool {

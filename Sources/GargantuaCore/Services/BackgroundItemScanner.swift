@@ -51,8 +51,22 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     private let classifier: BackgroundItemSafetyClassifier
     private let explainer: BackgroundItemExplainer
     private let runtimeProvider: any LaunchdRuntimeStateProviding
+    private let appResolver: any OwningAppResolving
     private let fileExists: @Sendable (String) -> Bool
     private let now: @Sendable () -> Date
+
+    /// Org-domain prefixes (first two reverse-DNS components) of vendors whose
+    /// launchd labels reliably indicate an owning app. Gate for the
+    /// parentAppLikelyMissing heuristic — personal namespaces (com.jason.*)
+    /// must never match.
+    static let wellKnownVendorLabelPrefixes: Set<String> = [
+        "com.adobe", "com.valvesoftware", "com.grammarly", "com.dropbox",
+        "com.google", "com.microsoft", "org.mozilla", "com.spotify",
+        "com.docker", "com.logi", "com.logitech", "com.brave", "com.razer",
+        "com.corsair", "com.epicgames", "com.teamviewer", "com.citrix",
+        "com.parallels", "com.vmware", "com.box", "com.evernote",
+        "com.skype", "com.zoom", "us.zoom", "com.canon", "com.hp", "com.epson",
+    ]
 
     public init(
         launchdIndex: any LaunchdItemIndexing = DefaultLaunchdItemIndex(),
@@ -61,6 +75,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         classifier: BackgroundItemSafetyClassifier = BackgroundItemSafetyClassifier(),
         explainer: BackgroundItemExplainer = BackgroundItemExplainer(),
         runtimeProvider: any LaunchdRuntimeStateProviding = DefaultLaunchdRuntimeStateProvider(),
+        appResolver: any OwningAppResolving = WorkspaceInstalledAppResolver(),
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -70,8 +85,41 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         self.classifier = classifier
         self.explainer = explainer
         self.runtimeProvider = runtimeProvider
+        self.appResolver = appResolver
         self.fileExists = fileExists
         self.now = now
+    }
+
+    /// First two dot-components of a reverse-DNS label, lowercased; nil when
+    /// the label has fewer than three components (no org+product shape).
+    static func labelOrgPrefix(_ label: String) -> String? {
+        let components = label.split(separator: ".")
+        guard components.count >= 3 else { return nil }
+        return "\(components[0]).\(components[1])".lowercased()
+    }
+
+    /// Per-scan-pass memo for owning-app lookups, so a bundle id or vendor
+    /// prefix shared by multiple background items is resolved at most once.
+    /// A plain class (not an actor) is fine here — it's created and consumed
+    /// entirely within one synchronous `scan()` call, never shared across
+    /// concurrency domains.
+    private final class ResolutionMemo {
+        private var byBundleID: [String: Bool] = [:]
+        private var byPrefix: [String: Bool] = [:]
+
+        func isInstalled(_ bundleID: String, using resolver: any OwningAppResolving) -> Bool {
+            if let cached = byBundleID[bundleID] { return cached }
+            let result = resolver.isInstalled(bundleID: bundleID)
+            byBundleID[bundleID] = result
+            return result
+        }
+
+        func isAnyInstalled(prefix: String, using resolver: any OwningAppResolving) -> Bool {
+            if let cached = byPrefix[prefix] { return cached }
+            let result = resolver.isAnyAppInstalled(bundleIDPrefix: prefix)
+            byPrefix[prefix] = result
+            return result
+        }
     }
 
     public func scan() -> BackgroundItemScan {
@@ -82,12 +130,13 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         // One batched snapshot for the whole pass — `makeItem` merges it
         // per row instead of shelling out per-item.
         let runtimeSnapshot = runtimeProvider.snapshot()
+        let memo = ResolutionMemo()
         var items: [BackgroundItem] = []
         var unparseable = 0
 
         for launchd in launchdItems {
             if let plist = launchd.plist {
-                items.append(makeItem(launchd: launchd, plist: plist, runtimeSnapshot: runtimeSnapshot))
+                items.append(makeItem(launchd: launchd, plist: plist, runtimeSnapshot: runtimeSnapshot, memo: memo))
             } else {
                 unparseable += 1
             }
@@ -113,12 +162,28 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     private func makeItem(
         launchd: LaunchdItem,
         plist: LaunchdPlist,
-        runtimeSnapshot: LaunchdRuntimeSnapshot
+        runtimeSnapshot: LaunchdRuntimeSnapshot,
+        memo: ResolutionMemo
     ) -> BackgroundItem {
         let source = BackgroundItemSource(domain: launchd.domain)
         let exePath = plist.executablePath
         let identity = exePath.map(resolver.resolve)
         let exists = exePath.map(executableExists) ?? false
+
+        // Owning-app evidence — only when the lookup can change the outcome:
+        // Apple items are protected regardless; an exe-missing item is already
+        // orphaned; login items never reach makeItem.
+        var parentAppInstalled: Bool?
+        var knownVendorAppMissing = false
+        let isAppleShaped = plist.label.hasPrefix("com.apple.") || identity?.vendor == .apple
+        if !isAppleShaped, exists {
+            if let bundleID = identity?.bundleIdentifier {
+                parentAppInstalled = memo.isInstalled(bundleID, using: appResolver)
+            } else if let orgPrefix = Self.labelOrgPrefix(plist.label),
+                      Self.wellKnownVendorLabelPrefixes.contains(orgPrefix) {
+                knownVendorAppMissing = !memo.isAnyInstalled(prefix: orgPrefix + ".", using: appResolver)
+            }
+        }
 
         let classifierInput = BackgroundItemClassifierInput(
             label: plist.label,
@@ -127,6 +192,8 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             executablePath: exePath,
             identity: identity,
             executableExists: exists,
+            parentAppInstalled: parentAppInstalled,
+            knownVendorAppMissing: knownVendorAppMissing,
             plist: plist
         )
         let classification = classifier.classify(classifierInput)

@@ -57,3 +57,11 @@ public protocol SpotlightRulesWriting: Sendable {
 public protocol InstalledAppResolving: Sendable {
     func isInstalled(bundleID: String) -> Bool
 }
+
+/// Installed-app resolution plus vendor-prefix queries, for deciding whether
+/// a background item's owning app is still on disk.
+public protocol OwningAppResolving: InstalledAppResolving {
+    /// `true` when ANY installed app's bundle identifier starts with
+    /// `bundleIDPrefix` (e.g. "com.valvesoftware.").
+    func isAnyAppInstalled(bundleIDPrefix: String) -> Bool
+}
