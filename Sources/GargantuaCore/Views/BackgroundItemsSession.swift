@@ -32,6 +32,10 @@ public final class BackgroundItemsSession {
     /// IDs currently fetching deep runtime detail. Dedupes concurrent
     /// `loadRuntimeDetail` calls for the same item.
     public private(set) var loadingDetailIDs: Set<String> = []
+    /// Bumped whenever the detail cache is invalidated. A suspended
+    /// `loadRuntimeDetail` fetch compares its captured generation before
+    /// writing back so a stale result can't repopulate a fresh cache.
+    private var detailGeneration = 0
 
     private let scanner: any BackgroundItemScanning
     private let actionExecutor: (any BackgroundItemActionExecuting)?
@@ -57,14 +61,18 @@ public final class BackgroundItemsSession {
             scanner.scan()
         }.value
         self.scan = result
-        runtimeDetails.removeAll()
-        loadingDetailIDs.removeAll()
+        invalidateRuntimeDetails()
     }
 
     public func clearScan() {
         scan = nil
         busyItemIDs.removeAll()
         sessionDisabledIDs.removeAll()
+        invalidateRuntimeDetails()
+    }
+
+    private func invalidateRuntimeDetails() {
+        detailGeneration += 1
         runtimeDetails.removeAll()
         loadingDetailIDs.removeAll()
     }
@@ -77,12 +85,16 @@ public final class BackgroundItemsSession {
         guard runtimeDetails[item.id] == nil, !loadingDetailIDs.contains(item.id) else { return }
         loadingDetailIDs.insert(item.id)
         defer { loadingDetailIDs.remove(item.id) }
+        let generation = detailGeneration
         let provider = runtimeProvider
         let label = item.label
         let source = item.source
         let detail = await Task.detached(priority: .userInitiated) {
             provider.printDetail(label: label, source: source)
         }.value
+        // A rescan may have invalidated the cache while the fetch was
+        // suspended — its result describes the previous generation's world.
+        guard generation == detailGeneration else { return }
         if let detail { runtimeDetails[item.id] = detail }
     }
 
