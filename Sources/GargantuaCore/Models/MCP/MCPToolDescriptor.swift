@@ -13,6 +13,7 @@ public enum MCPToolName: String, Codable, Sendable, CaseIterable {
     case listProfiles = "list_profiles"
     case status
     case clean
+    case listBackgroundItems = "list_background_items"
 }
 
 /// A self-describing MCP tool definition: name, human description, and a
@@ -150,9 +151,9 @@ public enum MCPJSONValue: Codable, Sendable, Equatable {
 
 /// The canonical Phase 2 tool registry.
 ///
-/// Exactly five tools are defined (PRD §7.3). The destructive `clean` tool
-/// lives in `MCPPhase3Tools` so Phase 2 code paths cannot accidentally
-/// advertise destructive capabilities.
+/// The five PRD §7.3 tools plus `list_background_items` are defined here. The
+/// destructive `clean` tool lives in `MCPPhase3Tools` so Phase 2 code paths
+/// cannot accidentally advertise destructive capabilities.
 public enum MCPPhase2Tools {
     public static let all: [MCPToolDescriptor] = [
         scan,
@@ -160,6 +161,7 @@ public enum MCPPhase2Tools {
         explain,
         listProfiles,
         status,
+        listBackgroundItems,
     ]
 
     // MARK: scan
@@ -255,6 +257,25 @@ public enum MCPPhase2Tools {
             type: .object,
             description: "No inputs.",
             properties: [:],
+            required: []
+        )
+    )
+
+    // MARK: list_background_items
+
+    public static let listBackgroundItems = MCPToolDescriptor(
+        name: .listBackgroundItems,
+        description: "List launchd background items (agents, daemons, login items) with safety classification, "
+            + "evidence reasons, runtime state, and explanations. Read-only.",
+        inputSchema: MCPJSONSchema(
+            type: .object,
+            description: "No inputs required; optionally inspect a single item by exact label.",
+            properties: [
+                "label": MCPJSONSchema(
+                    type: .string,
+                    description: "Exact launchd label to inspect (e.g. com.adobe.GC.Invoker-1.0)."
+                ),
+            ],
             required: []
         )
     )

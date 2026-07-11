@@ -225,6 +225,14 @@ let listProfilesHandler = MCPListProfilesToolHandler(
 )
 dispatcher.register(tool: .listProfiles, handler: listProfilesHandler.toolHandler)
 
+// MARK: - list_background_items
+
+let listBackgroundItemsHandler = MCPListBackgroundItemsToolHandler(
+    scanProvider: { DefaultBackgroundItemScanner().scan() },
+    log: stderrLog
+)
+dispatcher.register(tool: .listBackgroundItems, handler: listBackgroundItemsHandler.toolHandler)
+
 // MARK: - clean (Phase 3)
 
 // Shared infrastructure for Phase 3 destructive tools. The `clean` handler

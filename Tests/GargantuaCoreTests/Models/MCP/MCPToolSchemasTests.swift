@@ -7,10 +7,10 @@ struct MCPToolSchemasTests {
 
     // MARK: Registry
 
-    @Test("Phase 2 registry has exactly the five PRD §7.3 tools")
+    @Test("Phase 2 registry has the five PRD §7.3 tools plus list_background_items")
     func phase2RegistryContents() {
         let names = MCPPhase2Tools.all.map(\.name)
-        #expect(names == [.scan, .analyze, .explain, .listProfiles, .status])
+        #expect(names == [.scan, .analyze, .explain, .listProfiles, .status, .listBackgroundItems])
     }
 
     @Test("No clean tool exists in the Phase 2 registry")
