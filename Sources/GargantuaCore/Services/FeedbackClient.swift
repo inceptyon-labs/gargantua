@@ -44,7 +44,7 @@ public enum FeedbackClientError: Error, Equatable {
 /// private feedback repo. The worker holds the GitHub token; nothing secret
 /// ships in the app.
 public struct FeedbackClient: Sendable {
-    public static let defaultEndpoint = URL(string: "https://gargantua-feedback.inceptyon-labs.workers.dev/report")!
+    public static let defaultEndpoint = URL(string: "https://gargantua-feedback.jnew008538.workers.dev/report")!
 
     private let session: URLSession
     private let endpoint: URL
