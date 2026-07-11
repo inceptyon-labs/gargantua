@@ -120,8 +120,8 @@ struct BackgroundItemExplainerTests {
             identity: nil,
             executableExists: true
         )
-        #expect(result.contains("started on demand by other processes"))
-        #expect(result.contains("other apps may fail to reach it if disabled"))
+        #expect(result.contains("starts on a Mach-service or socket request"))
+        #expect(result.contains("clients may fail to reach it if disabled"))
     }
 
     @Test("Watch path trigger appears in explanation")
@@ -226,10 +226,47 @@ struct BackgroundItemExplainerNarrationTests {
         ) == "on schedule")
     }
 
-    @Test("calendarPart prefers weekday over day when both are set")
-    func calendarPartWeekdayWinsOverDay() {
+    @Test("calendarPart narrates weekday+day compounds as on-schedule (launchd ANDs fields)")
+    func calendarPartCompoundWeekdayDayIsOnSchedule() {
         let interval = LaunchdCalendarInterval(minute: 15, hour: 12, day: 1, weekday: 1)
-        #expect(BackgroundItemExplainer.calendarPart([interval]) == "weekly on Monday at 12:15")
+        #expect(BackgroundItemExplainer.calendarPart([interval]) == "on schedule at 12:15")
+    }
+
+    @Test("calendarPart narrates the first VALID interval when a garbage one precedes it")
+    func calendarPartSkipsGarbageToFirstNarratable() {
+        let garbage = LaunchdCalendarInterval(minute: -1, hour: 99)
+        let valid = LaunchdCalendarInterval(minute: 0, hour: 2)
+        #expect(BackgroundItemExplainer.calendarPart([garbage, valid]) == "daily at 02:00")
+    }
+
+    @Test("Nonpositive StartInterval is not narrated")
+    func nonpositiveStartIntervalDropped() {
+        let plist = LaunchdPlist(
+            label: "com.example.zero",
+            program: "/usr/local/bin/zero",
+            startInterval: 0
+        )
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true
+        )
+        #expect(!result.contains("every"))
+    }
+
+    @Test("Suspicion outranks parentAppMissing in the impact phrase — no safety claim on a review item")
+    func suspicionOutranksParentAppMissingImpact() {
+        let plist = LaunchdPlist(label: "com.example.shady", program: "/tmp/shady")
+        let result = explainer.explain(
+            source: .userLaunchAgent,
+            plist: plist,
+            identity: nil,
+            executableExists: true,
+            reasons: [.parentAppMissing, .suspiciousExecutablePath]
+        )
+        #expect(result.contains("review before trusting"))
+        #expect(!result.contains("disabling should be safe"))
     }
 
     @Test("Fully populated line composes parts in the stable order")
@@ -255,8 +292,8 @@ struct BackgroundItemExplainerNarrationTests {
             executableExists: true
         )
         #expect(result == "User LaunchAgent · signed by Vendor Co · ships with Vendor"
-            + " · starts at login, restarts whenever it exits, started on demand by other processes"
-            + " · other apps may fail to reach it if disabled")
+            + " · starts at login, kept running by launchd, starts on a Mach-service or socket request"
+            + " · clients may fail to reach it if disabled")
     }
 
     @Test("Impact priority: sensitive category beats mach-service listener")
@@ -278,7 +315,7 @@ struct BackgroundItemExplainerNarrationTests {
             executableExists: true
         )
         #expect(result.contains("disabling may break VPN connectivity"))
-        #expect(!result.contains("other apps may fail to reach it"))
+        #expect(!result.contains("clients may fail to reach it"))
     }
 
     @Test("parentAppLikelyMissing reason surfaces the appears-uninstalled phrase")
@@ -331,7 +368,7 @@ struct BackgroundItemExplainerNarrationTests {
             identity: nil,
             executableExists: true
         )
-        #expect(result.contains("restarts whenever it exits"))
+        #expect(result.contains("kept running by launchd"))
     }
 
     @Test("RunAtLoad on a user launch agent narrates as starts-at-login")
@@ -402,7 +439,7 @@ struct BackgroundItemExplainerNarrationTests {
         #expect(!result.contains("disabling"))
         #expect(!result.contains("its app"))
         #expect(!result.contains("review before trusting"))
-        #expect(!result.contains("other apps may fail to reach it"))
+        #expect(!result.contains("clients may fail to reach it"))
         #expect(!result.contains("part of device management"))
     }
 

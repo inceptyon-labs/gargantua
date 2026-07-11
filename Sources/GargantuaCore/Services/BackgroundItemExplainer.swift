@@ -103,9 +103,12 @@ public struct BackgroundItemExplainer: Sendable {
             triggers.append(runAtLoadPhrase(for: source))
         }
         if plist.keepAlive {
-            triggers.append("restarts whenever it exits")
+            // KeepAlive may be conditional (SuccessfulExit/NetworkState
+            // dictionaries collapse to `true` in the parser) — "kept running"
+            // is true either way; "restarts whenever it exits" would not be.
+            triggers.append("kept running by launchd")
         }
-        if let interval = plist.startInterval {
+        if let interval = plist.startInterval, interval > 0 {
             triggers.append("every \(formatInterval(interval))")
         }
         if let calendar = Self.calendarPart(plist.startCalendarInterval) {
@@ -118,7 +121,8 @@ public struct BackgroundItemExplainer: Sendable {
             triggers.append("on queue")
         }
         if listensForOtherProcesses(plist) {
-            triggers.append("started on demand by other processes")
+            // Sockets can serve remote clients too, not only local processes.
+            triggers.append("starts on a Mach-service or socket request")
         }
 
         if triggers.isEmpty { return nil }
@@ -157,13 +161,23 @@ public struct BackgroundItemExplainer: Sendable {
     /// "daily at 02:00" / "weekly on Monday at 12:15" / "monthly on day 1 at 12:15" /
     /// "hourly at :30" / fallback "on schedule". Multiple intervals: first + " (+N more)".
     static func calendarPart(_ intervals: [LaunchdCalendarInterval]) -> String? {
-        guard let raw = intervals.first else { return nil }
+        guard !intervals.isEmpty else { return nil }
         // Clamp to launchd's valid ranges before narrating — a corrupt or
         // hand-edited plist must degrade to the vague-but-true "on schedule",
-        // never to garbage like "daily at 25:00" on a trust surface.
-        let first = validated(raw)
+        // never to garbage like "daily at 25:00" on a trust surface. Narrate
+        // the first interval that survives validation so one bad entry
+        // doesn't hide a real schedule behind it.
+        let narratable = intervals.map(validated).filter { !isAllNil($0) }
+        guard let first = narratable.first else {
+            return "on schedule"
+        }
         let text = calendarBase(first) + calendarTimeSuffix(first)
-        return appendIntervalCount(text, count: intervals.count)
+        return appendIntervalCount(text, count: narratable.count)
+    }
+
+    private static func isAllNil(_ interval: LaunchdCalendarInterval) -> Bool {
+        interval.minute == nil && interval.hour == nil
+            && interval.day == nil && interval.weekday == nil
     }
 
     /// Drops out-of-range fields (hour 0–23, minute 0–59, weekday 0–7,
@@ -179,6 +193,11 @@ public struct BackgroundItemExplainer: Sendable {
     }
 
     private static func calendarBase(_ interval: LaunchdCalendarInterval) -> String {
+        if interval.weekday != nil, interval.day != nil {
+            // launchd ANDs the fields — weekday 1 + day 1 fires only when
+            // day 1 IS a Monday. "weekly" would overstate the frequency.
+            return "on schedule"
+        }
         if let weekday = interval.weekday {
             return "weekly on \(weekdayName(weekday))"
         }
@@ -238,16 +257,20 @@ public struct BackgroundItemExplainer: Sendable {
             return impactPhrase(for: category)
         }
         if listensForOtherProcesses(plist) {
-            return "other apps may fail to reach it if disabled"
+            return "clients may fail to reach it if disabled"
+        }
+        // Suspicion outranks the orphan evidence below: an item can carry
+        // BOTH (suspicious + parentAppMissing forces review), and telling
+        // the user "disabling should be safe" about a suspicious item would
+        // contradict its own review rating.
+        if reasons.contains(where: { $0.isSuspicious }) {
+            return "review before trusting"
         }
         if reasons.contains(.parentAppMissing) {
             return "its app is gone — disabling should be safe"
         }
         if reasons.contains(.parentAppLikelyMissing) {
             return "its app appears uninstalled"
-        }
-        if reasons.contains(where: { $0.isSuspicious }) {
-            return "review before trusting"
         }
         return nil
     }

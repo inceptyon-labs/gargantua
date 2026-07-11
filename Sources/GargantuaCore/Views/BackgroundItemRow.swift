@@ -147,7 +147,9 @@ public struct BackgroundItemRow: View {
                 Text(item.explanation)
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink2)
-                    .lineLimit(2)
+                    // Dense when collapsed; the full line (including the
+                    // trailing impact segment) must be readable on expand.
+                    .lineLimit(isExpanded ? nil : 2)
 
                 if let plistPath = item.plistPath {
                     Text(plistPath)
