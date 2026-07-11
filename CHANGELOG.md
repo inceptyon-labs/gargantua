@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-07-11
+
+### Added
+
+- **Live runtime state for background items.** Deep Clean's Background Items view now shows whether a launch agent/daemon is actually running, alongside richer expanded detail pulled from `launchctl`.
+- **Orphaned background item detection.** Items whose owning app has been removed are now identified and flagged, so leftover launch agents from uninstalled apps are easier to spot.
+- **Suspicious-item warning chips.** Background items with deterministic red flags (e.g. hidden flags, disguised paths) now surface warning chips explaining what looks off.
+- **Plain-language schedule explanations.** The item explainer now narrates when a background item runs and what disabling it would impact.
+- **Vendor re-enable detection.** Background items that a vendor silently re-enabled after the user disabled them are now cross-checked against the audit trail and flagged.
+- **In-app bug/feature reports.** Settings → About now includes a way to file bug reports and feature requests directly from the app, with only app/OS version and build flavor attached — no other data collected.
+- **Agent-facing background items listing.** The MCP server exposes a new read-only `list_background_items` tool for inspecting background items by label, including matches on the underlying plist filename.
+
+### Fixed
+
+- **Vendor search matching.** A malformed Spotlight query modifier was breaking case-insensitive vendor name matching, causing some legitimate items to be misidentified.
+- **Re-enable ledger accuracy.** The disable ledger is now correctly cleared whenever the user re-enables an item themselves, preventing a false "vendor re-enabled this" badge on the user's own action.
+
 ## [0.4.6] - 2026-07-05
 
 ### Added
