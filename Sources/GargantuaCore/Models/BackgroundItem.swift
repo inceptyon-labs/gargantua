@@ -122,6 +122,11 @@ public struct BackgroundItem: Sendable, Equatable, Identifiable {
     /// vendor column rendering depends on it.
     public let isOrphaned: Bool
 
+    /// Best-effort launchd runtime facts (pid, last exit status, disabled
+    /// override, load state). Display metadata only — never classification
+    /// input.
+    public let runtime: LaunchdRuntimeState?
+
     public init(
         id: String,
         label: String,
@@ -132,7 +137,8 @@ public struct BackgroundItem: Sendable, Equatable, Identifiable {
         safety: SafetyLevel,
         reasons: Set<BackgroundItemReason>,
         explanation: String,
-        isOrphaned: Bool
+        isOrphaned: Bool,
+        runtime: LaunchdRuntimeState? = nil
     ) {
         self.id = id
         self.label = label
@@ -144,6 +150,7 @@ public struct BackgroundItem: Sendable, Equatable, Identifiable {
         self.reasons = reasons
         self.explanation = explanation
         self.isOrphaned = isOrphaned
+        self.runtime = runtime
     }
 
     /// Return a copy of this item with the `disabledFlag` reason added.
@@ -163,7 +170,8 @@ public struct BackgroundItem: Sendable, Equatable, Identifiable {
             safety: safety,
             reasons: augmented,
             explanation: explanation,
-            isOrphaned: isOrphaned
+            isOrphaned: isOrphaned,
+            runtime: runtime
         )
     }
 

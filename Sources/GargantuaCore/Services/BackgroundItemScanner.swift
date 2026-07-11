@@ -50,6 +50,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     private let resolver: any BinaryIdentityResolving
     private let classifier: BackgroundItemSafetyClassifier
     private let explainer: BackgroundItemExplainer
+    private let runtimeProvider: any LaunchdRuntimeStateProviding
     private let fileExists: @Sendable (String) -> Bool
     private let now: @Sendable () -> Date
 
@@ -59,6 +60,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         resolver: any BinaryIdentityResolving = DefaultBinaryIdentityResolver(),
         classifier: BackgroundItemSafetyClassifier = BackgroundItemSafetyClassifier(),
         explainer: BackgroundItemExplainer = BackgroundItemExplainer(),
+        runtimeProvider: any LaunchdRuntimeStateProviding = DefaultLaunchdRuntimeStateProvider(),
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -67,6 +69,7 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         self.resolver = resolver
         self.classifier = classifier
         self.explainer = explainer
+        self.runtimeProvider = runtimeProvider
         self.fileExists = fileExists
         self.now = now
     }
@@ -76,12 +79,15 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         // the same path re-resolves on its own — no per-pass clear needed for a
         // replaced binary to lose its prior (possibly `safe`) classification.
         let launchdItems = launchdIndex.enumerate()
+        // One batched snapshot for the whole pass — `makeItem` merges it
+        // per row instead of shelling out per-item.
+        let runtimeSnapshot = runtimeProvider.snapshot()
         var items: [BackgroundItem] = []
         var unparseable = 0
 
         for launchd in launchdItems {
             if let plist = launchd.plist {
-                items.append(makeItem(launchd: launchd, plist: plist))
+                items.append(makeItem(launchd: launchd, plist: plist, runtimeSnapshot: runtimeSnapshot))
             } else {
                 unparseable += 1
             }
@@ -104,7 +110,11 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
 
     // MARK: - Item construction
 
-    private func makeItem(launchd: LaunchdItem, plist: LaunchdPlist) -> BackgroundItem {
+    private func makeItem(
+        launchd: LaunchdItem,
+        plist: LaunchdPlist,
+        runtimeSnapshot: LaunchdRuntimeSnapshot
+    ) -> BackgroundItem {
         let source = BackgroundItemSource(domain: launchd.domain)
         let exePath = plist.executablePath
         let identity = exePath.map(resolver.resolve)
@@ -128,6 +138,8 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             executableExists: exists
         )
 
+        let runtime = runtimeProvider.state(label: plist.label, source: source, snapshot: runtimeSnapshot)
+
         return BackgroundItem(
             id: makeID(source: source, label: plist.label, secondaryKey: launchd.plistPath),
             label: plist.label,
@@ -138,7 +150,8 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             safety: classification.safety,
             reasons: classification.reasons,
             explanation: explanation,
-            isOrphaned: isAbsolute(exePath) && !exists
+            isOrphaned: isAbsolute(exePath) && !exists,
+            runtime: runtime
         )
     }
 
@@ -181,7 +194,10 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
             safety: classification.safety,
             reasons: classification.reasons,
             explanation: explanation,
-            isOrphaned: isAbsolute(exePath) && !exists
+            isOrphaned: isAbsolute(exePath) && !exists,
+            // Login items have no launchd runtime — they're SMAppService /
+            // Background Task Management records, not launchd jobs.
+            runtime: nil
         )
     }
 
