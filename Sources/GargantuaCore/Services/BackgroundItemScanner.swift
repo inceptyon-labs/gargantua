@@ -77,7 +77,12 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
         explainer: BackgroundItemExplainer = BackgroundItemExplainer(),
         runtimeProvider: any LaunchdRuntimeStateProviding = DefaultLaunchdRuntimeStateProvider(),
         appResolver: any OwningAppResolving = WorkspaceInstalledAppResolver(),
-        auditEntries: @escaping @Sendable () -> [AuditEntry] = { (try? AuditWriter().readEntries()) ?? [] },
+        // Capture one writer so its mtime+size read cache survives across
+        // scan passes; a fresh instance per call would re-decode the whole
+        // JSONL log every scan.
+        auditEntries: @escaping @Sendable () -> [AuditEntry] = { [writer = AuditWriter()] in
+            (try? writer.readEntries()) ?? []
+        },
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -116,24 +121,30 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     }
 
     /// plist path -> whether Gargantua's LAST launchctl action on it was a
-    /// clean disable. Only exit-0 disables set the flag; ANY enable attempt
-    /// clears it.
+    /// clean disable. Only exit-0 disables set the flag; ANY enable or
+    /// delete attempt clears it.
     static func lastDisabledByGargantua(_ entries: [AuditEntry]) -> [String: Bool] {
         var state: [String: Bool] = [:]
-        for entry in entries where entry.kind == .command {
+        for entry in entries {
             guard let path = entry.files.first?.path, !path.isEmpty else { continue }
-            switch entry.command {
-            case BackgroundItemAction.disable.verb where entry.commandExitCode == 0:
+            switch (entry.kind, entry.command) {
+            case (.command, BackgroundItemAction.disable.verb) where entry.commandExitCode == 0:
                 // A successful disable always records the disable subcommand
                 // with exit 0 — a clean signal.
                 state[path] = true
-            case BackgroundItemAction.enable.verb:
+            case (.command, BackgroundItemAction.enable.verb):
                 // ANY enable attempt clears, regardless of recorded exit: a
                 // successful enable may persist the tolerated bootstrap code
                 // 37 ("already loaded"), and even a failed bootstrap follows
                 // an enable subcommand that already cleared the override.
                 // Missing a vendor re-enable is acceptable; accusing a vendor
                 // after the user's own re-enable is not.
+                state[path] = false
+            case (.path, BackgroundItemAction.delete.verb):
+                // A delete ends the disable's story: if a plist reappears at
+                // the same path it's a fresh install, not a re-enable of the
+                // artifact the user disabled. Same false-accusation rule —
+                // clear on any delete attempt.
                 state[path] = false
             default:
                 break

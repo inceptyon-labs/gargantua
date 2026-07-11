@@ -93,6 +93,16 @@ struct BackgroundItemScannerReEnableTests {
         #expect(state[Self.plistPath] == false)
     }
 
+    @Test("A delete entry clears the disable ledger — a reinstalled plist is a fresh install")
+    func deleteClearsLedger() {
+        let entries = [
+            auditEntry(command: "disable", exitCode: 0),
+            auditEntry(command: "delete", exitCode: nil, kind: .path),
+        ]
+        let state = DefaultBackgroundItemScanner.lastDisabledByGargantua(entries)
+        #expect(state[Self.plistPath] == false)
+    }
+
     // MARK: - (f) safety untouched
 
     @Test("Safety is identical with and without the audit entry")
@@ -148,7 +158,12 @@ struct BackgroundItemScannerReEnableTests {
 
     // MARK: - Helpers
 
-    private func auditEntry(command: String, exitCode: Int32, path: String = plistPath) -> AuditEntry {
+    private func auditEntry(
+        command: String,
+        exitCode: Int32?,
+        path: String = plistPath,
+        kind: AuditEntryKind = .command
+    ) -> AuditEntry {
         AuditEntry(
             tool: "native",
             command: command,
@@ -156,7 +171,7 @@ struct BackgroundItemScannerReEnableTests {
             safetyLevel: .review,
             confirmationMethod: .summaryDialog,
             bytesFreed: 0,
-            kind: .command,
+            kind: kind,
             commandExitCode: exitCode
         )
     }
