@@ -227,6 +227,70 @@ struct MCPListBackgroundItemsToolHandlerTests {
 
     // MARK: Registry
 
+    @Test("wire output caps items and reports the real total")
+    func wireOutputCapsItems() throws {
+        let overflow = (0 ..< 120).map { index in
+            BackgroundItem(
+                id: "agent-\(index)",
+                label: "com.example.agent\(index)",
+                source: .userLaunchAgent,
+                plistPath: "/Users/dev/Library/LaunchAgents/com.example.agent\(index).plist",
+                executablePath: "/usr/local/bin/agent\(index)",
+                identity: nil,
+                safety: .review,
+                reasons: [],
+                explanation: "Agent \(index).",
+                isOrphaned: false,
+                runtime: nil
+            )
+        }
+        let scan = BackgroundItemScan(
+            items: overflow,
+            loginItemsNeedPrivileges: false,
+            unparseableCount: 0,
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let result = try handler(provider: { scan }).handle(Self.emptyArguments)
+        let output = try Self.decodeOutput(result)
+        #expect(output.items.count == MCPListBackgroundItemsToolHandler.maxItemsInWireOutput)
+        #expect(output.totalItems == 120)
+        guard case .text(let summary) = result.content.first else {
+            Issue.record("expected text summary")
+            return
+        }
+        #expect(summary.contains("120 background items"))
+        #expect(summary.contains("Showing first 100"))
+    }
+
+    @Test("long explanations are trimmed with an ellipsis on the wire")
+    func explanationsTrimmed() throws {
+        let longExplanation = String(repeating: "x", count: 400)
+        let item = BackgroundItem(
+            id: "agent-long",
+            label: "com.example.long",
+            source: .userLaunchAgent,
+            plistPath: "/Users/dev/Library/LaunchAgents/com.example.long.plist",
+            executablePath: "/usr/local/bin/long",
+            identity: nil,
+            safety: .review,
+            reasons: [],
+            explanation: longExplanation,
+            isOrphaned: false,
+            runtime: nil
+        )
+        let scan = BackgroundItemScan(
+            items: [item],
+            loginItemsNeedPrivileges: false,
+            unparseableCount: 0,
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let result = try handler(provider: { scan }).handle(Self.emptyArguments)
+        let output = try Self.decodeOutput(result)
+        let wire = try #require(output.items.first?.explanation)
+        #expect(wire.count == MCPListBackgroundItemsToolHandler.maxExplanationCharsInWireOutput + 1)
+        #expect(wire.hasSuffix("\u{2026}"))
+    }
+
     @Test("MCPPhase2Tools.all advertises list_background_items")
     func phase2AdvertisesTool() {
         #expect(MCPPhase2Tools.all.contains { $0.name == .listBackgroundItems })

@@ -80,16 +80,22 @@ public struct MCPBackgroundItemSummary: Codable, Sendable {
 /// Complete MCP `list_background_items` response payload.
 public struct MCPListBackgroundItemsOutput: Codable, Sendable {
     public let items: [MCPBackgroundItemSummary]
+    /// Real matching-item count. `items` is capped for the wire
+    /// (`MCPListBackgroundItemsToolHandler.maxItemsInWireOutput`), so a
+    /// trimmed list stays distinguishable from a complete one.
+    public let totalItems: Int
     public let loginItemsNeedPrivileges: Bool
     public let unparseableCount: Int
 
     /// Creates a list-background-items output payload.
     public init(
         items: [MCPBackgroundItemSummary],
+        totalItems: Int,
         loginItemsNeedPrivileges: Bool,
         unparseableCount: Int
     ) {
         self.items = items
+        self.totalItems = totalItems
         self.loginItemsNeedPrivileges = loginItemsNeedPrivileges
         self.unparseableCount = unparseableCount
     }

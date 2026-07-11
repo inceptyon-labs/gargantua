@@ -64,17 +64,37 @@ public struct MCPListBackgroundItemsToolHandler: Sendable {
 
         let output = Self.makeOutput(from: scan, items: filtered)
         let payload = try MCPEncoding.encodeAsJSONAny(output)
-        return .structured(payload, summary: Self.summary(for: output, filterLabel: input.label))
+        return .structured(
+            payload,
+            summary: Self.summary(allItems: filtered, output: output, filterLabel: input.label)
+        )
     }
 
     // MARK: - Helpers
 
+    /// Wire caps mirror `MCPScanToolHandler`: a power-user Mac can carry
+    /// hundreds of launchd items, and uncapped explanations would breach the
+    /// 256 KB client read ceiling. `totalItems` carries the real count so a
+    /// trimmed list is distinguishable from a complete one.
+    public static let maxItemsInWireOutput = 100
+    public static let maxExplanationCharsInWireOutput = 240
+
     static func makeOutput(from scan: BackgroundItemScan, items: [BackgroundItem]) -> MCPListBackgroundItemsOutput {
         MCPListBackgroundItemsOutput(
-            items: items.map(itemSummary(for:)),
+            items: items.prefix(maxItemsInWireOutput).map(itemSummary(for:)),
+            totalItems: items.count,
             loginItemsNeedPrivileges: scan.loginItemsNeedPrivileges,
             unparseableCount: scan.unparseableCount
         )
+    }
+
+    /// Trim an explanation to a fixed character budget, suffixing with `…`
+    /// when truncated so the agent can tell the difference between
+    /// "naturally short" and "trimmed".
+    private static func trimmedExplanation(_ explanation: String) -> String {
+        guard explanation.count > maxExplanationCharsInWireOutput else { return explanation }
+        let endIndex = explanation.index(explanation.startIndex, offsetBy: maxExplanationCharsInWireOutput)
+        return explanation[..<endIndex] + "\u{2026}"
     }
 
     private static func itemSummary(for item: BackgroundItem) -> MCPBackgroundItemSummary {
@@ -86,7 +106,7 @@ public struct MCPListBackgroundItemsToolHandler: Sendable {
             // `reasons` is a `Set` — sort so repeated calls produce identical
             // wire output instead of leaking Swift's nondeterministic Set order.
             reasons: item.reasons.map(\.rawValue).sorted(),
-            explanation: item.explanation,
+            explanation: trimmedExplanation(item.explanation),
             plistPath: item.plistPath,
             executablePath: item.executablePath,
             isOrphaned: item.isOrphaned,
@@ -113,13 +133,23 @@ public struct MCPListBackgroundItemsToolHandler: Sendable {
         }
     }
 
-    private static func summary(for output: MCPListBackgroundItemsOutput, filterLabel: String?) -> String {
-        if let filterLabel, output.items.isEmpty {
+    private static func summary(
+        allItems: [BackgroundItem],
+        output: MCPListBackgroundItemsOutput,
+        filterLabel: String?
+    ) -> String {
+        if let filterLabel, allItems.isEmpty {
             return "No item matching '\(filterLabel)'."
         }
-        let safe = output.items.filter { $0.safety == SafetyLevel.safe.rawValue }.count
-        let review = output.items.filter { $0.safety == SafetyLevel.review.rawValue }.count
-        let protectedCount = output.items.filter { $0.safety == SafetyLevel.protected_.rawValue }.count
-        return "\(output.items.count) background items (\(safe) safe, \(review) review, \(protectedCount) protected)."
+        // Counts come from the FULL filtered set — the wire list may be
+        // capped, and a summary computed from the trimmed list would lie.
+        let safe = allItems.filter { $0.safety == .safe }.count
+        let review = allItems.filter { $0.safety == .review }.count
+        let protectedCount = allItems.filter { $0.safety == .protected_ }.count
+        var text = "\(allItems.count) background items (\(safe) safe, \(review) review, \(protectedCount) protected)."
+        if output.items.count < allItems.count {
+            text += " Showing first \(output.items.count)."
+        }
+        return text
     }
 }
