@@ -164,7 +164,7 @@ extension AlertItem {
     /// Format bytes into a human-readable string with appropriate unit.
     ///
     /// Uses base-10 (SI) units to match macOS Finder behavior:
-    /// - Under 1 KB: "123 bytes"
+    /// - Under 1 KB: "123 bytes" (singular: "1 byte")
     /// - Under 1 MB: "4.2 KB"
     /// - Under 1 GB: "128 MB"
     /// - Under 1 TB: "23.4 GB"
@@ -174,7 +174,8 @@ extension AlertItem {
 
         switch absBytes {
         case 0 ..< 1_000:
-            return "\(bytes) bytes"
+            let unit = absBytes == 1 ? "byte" : "bytes"
+            return "\(bytes) \(unit)"
         case 1_000 ..< 1_000_000:
             let kb = Double(bytes) / 1_000
             return kb >= 10 ? "\(Int(kb)) KB" : String(format: "%.1f KB", kb)
