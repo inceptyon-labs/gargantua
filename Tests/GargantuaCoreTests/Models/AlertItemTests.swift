@@ -39,6 +39,12 @@ struct AlertItemTests {
         #expect(AlertItem.formatBytes(0) == "0 bytes")
     }
 
+    @Test("formatBytes: singular byte")
+    func formatSingularByte() {
+        #expect(AlertItem.formatBytes(1) == "1 byte")
+        #expect(AlertItem.formatBytes(-1) == "-1 byte")
+    }
+
     @Test("formatBytes: small bytes")
     func formatSmallBytes() {
         #expect(AlertItem.formatBytes(512) == "512 bytes")
