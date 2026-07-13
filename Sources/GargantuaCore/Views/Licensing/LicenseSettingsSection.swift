@@ -86,6 +86,8 @@ struct LicenseSettingsSection: View {
                         feedbackRow(inlineFeedback)
                     }
 
+                    manageDevicesLink
+
                     HStack(spacing: GargantuaSpacing.space3) {
                         Spacer()
                         GargantuaButton("Buy Gargantua · $29", icon: "arrow.up.right.square", tone: .neutral) {
@@ -103,6 +105,27 @@ struct LicenseSettingsSection: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Self-serve escape hatch for orphaned activation slots. A reinstalled or
+    /// replaced Mac can't be freed with "Deactivate this Mac" (no local receipt
+    /// survives), so point the user at Polar's portal where they log in by email
+    /// and deactivate the stale device themselves.
+    private var manageDevicesLink: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: "macbook.and.iphone")
+                .foregroundStyle(GargantuaColors.ink3)
+            Button {
+                openPortal()
+            } label: {
+                Text("Replaced or reinstalled a Mac? Manage activated devices")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.accent)
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .disabled(isWorking)
         }
     }
 
@@ -147,6 +170,10 @@ struct LicenseSettingsSection: View {
 
     private func openCheckout() {
         NSWorkspace.shared.open(LicensePolarConfig.checkoutURL)
+    }
+
+    private func openPortal() {
+        NSWorkspace.shared.open(LicensePolarConfig.customerPortalURL)
     }
 
     // MARK: State helpers

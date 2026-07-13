@@ -17,6 +17,15 @@ public enum LicensePolarConfig {
         string: "https://buy.polar.sh/polar_cl_NrgUcsS3Cz6LespqGpiQ42pYnpdo8vi345tYG0uglbC"
     )!
 
+    /// Polar's hosted customer portal for Inceptyon Labs LLC (slug:
+    /// inceptyon-labs-llc). Customers log in with their purchase email (Polar
+    /// mails a one-time code) and can deactivate stale device activations
+    /// themselves — the self-serve remedy when a reinstalled or replaced Mac
+    /// orphans an activation slot and reactivation hits the 3-Mac limit.
+    public static let customerPortalURL = URL(
+        string: "https://polar.sh/inceptyon-labs-llc/portal"
+    )!
+
     /// How long a cached `granted` validation is trusted without re-checking
     /// the server. Keeps the app usable offline; the background revalidation
     /// extends this window whenever the app is online. 14 days.
