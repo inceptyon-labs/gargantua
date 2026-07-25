@@ -10,6 +10,7 @@ struct DirectoryTreemapCellView: View {
     @State private var isHovered = false
     @State private var sizingPulse = false
     @State private var showTrashConfirm = false
+    @State private var trashError: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
@@ -33,6 +34,18 @@ struct DirectoryTreemapCellView: View {
                     cellBody
                 }
                 .buttonStyle(.plain)
+            } else if item.isOthersAggregate {
+                // Not drillable — there is no single directory behind it — but
+                // it must not be a dead end either. The owner routes this to
+                // list mode, where each folded-away folder gets its own row.
+                Button {
+                    onDrillDown()
+                } label: {
+                    cellBody
+                }
+                .buttonStyle(.plain)
+                .help("Smaller folders — show them as a list")
+                .accessibilityHint("Switches to list view, where these folders are listed individually")
             } else if item.isPermissionDenied {
                 Button {
                     openURL(Self.fullDiskAccessURL)
@@ -64,6 +77,14 @@ struct DirectoryTreemapCellView: View {
         } message: {
             Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
         }
+        .alert(
+            "Could not move to Trash",
+            isPresented: Binding(get: { trashError != nil }, set: { if !$0 { trashError = nil } })
+        ) {
+            Button("OK", role: .cancel) { trashError = nil }
+        } message: {
+            Text(trashError ?? "")
+        }
     }
 
     private var canRevealInFinder: Bool {
@@ -85,8 +106,17 @@ struct DirectoryTreemapCellView: View {
 
     private func moveToTrash() {
         let url = URL(fileURLWithPath: item.path)
-        NSWorkspace.shared.recycle([url]) { _, _ in
-            DispatchQueue.main.async { onItemTrashed?() }
+        // Report the failure rather than discarding it. Without this the row
+        // simply stays put after a refresh, which is indistinguishable from
+        // the delete never having been requested.
+        NSWorkspace.shared.recycle([url]) { _, error in
+            DispatchQueue.main.async {
+                if let error {
+                    trashError = error.localizedDescription
+                } else {
+                    onItemTrashed?()
+                }
+            }
         }
     }
 
@@ -170,8 +200,8 @@ struct DirectoryTreemapCellView: View {
     @ViewBuilder
     private var border: some View {
         // Aggregate "Others" tiles use a dashed stroke at lower opacity so
-        // they read as informational, not interactive. They aren't drillable
-        // and shouldn't compete with sibling tiles for click attention.
+        // they read as a rollup rather than a sibling folder — they open the
+        // list rather than drilling into a directory of their own.
         if item.isOthersAggregate {
             RoundedRectangle(cornerRadius: GargantuaRadius.medium)
                 .strokeBorder(
@@ -185,11 +215,14 @@ struct DirectoryTreemapCellView: View {
     }
 
     /// Tile background fill, including hover lift. Hover lifts when the tile
-    /// is actually clickable — drillable folders, and permission-denied
-    /// folders that route taps to the Full Disk Access pane. Aggregate tiles
-    /// stay flat (recessed surface2) to underline their non-interactive role.
+    /// is actually clickable — drillable folders, permission-denied folders
+    /// that route taps to the Full Disk Access pane, and the aggregate tile
+    /// that switches to list view. The aggregate keeps its recessed surface2
+    /// base so it still reads as a rollup rather than a sibling folder.
     private var fillForHoverState: Color {
-        if item.isOthersAggregate { return GargantuaColors.surface2 }
+        if item.isOthersAggregate {
+            return isHovered ? GargantuaColors.surface3 : GargantuaColors.surface2
+        }
         let interactive = canDrillDown || item.isPermissionDenied
         if interactive && isHovered { return GargantuaColors.surface4 }
         return GargantuaColors.surface3
@@ -360,6 +393,9 @@ extension DirectoryTreemapCellView {
     var accessibilityLabel: Text {
         if item.isPermissionDenied {
             return Text("\(item.name), requires Full Disk Access")
+        }
+        if item.isOthersAggregate {
+            return Text("\(item.name), \(AlertItem.formatBytes(item.size)) combined. Show as a list.")
         }
         if item.isPartial {
             return Text("\(item.name), partial size, \(AlertItem.formatBytes(item.size))")

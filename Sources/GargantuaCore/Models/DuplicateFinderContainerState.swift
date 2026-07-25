@@ -6,6 +6,14 @@ public enum DuplicateFinderScanState: Sendable {
     case idle
     case scanning
     case results([ScanResult])
+    /// A confirmed delete is in flight. Without this the results list stays
+    /// fully interactive and looks inert while `CleanupEngine.clean` runs.
+    case cleaning
+    /// Terminal state of a delete, rendered through the shared
+    /// `CleanupSummaryView` so failures are reported the way every other
+    /// destructive surface reports them. Carries the results to return to
+    /// when the user dismisses the summary.
+    case summary(CleanupResult, returningTo: [ScanResult])
     case error(String)
 }
 
@@ -68,6 +76,30 @@ public final class DuplicateFinderContainerState {
 
     public func failScan(_ message: String) {
         scanState = .error(message)
+    }
+
+    /// Enter the busy phase for a confirmed delete, remembering the list to
+    /// come back to. Returns the remembered results, or `nil` when the caller
+    /// is not on the results screen and the delete should not proceed.
+    @discardableResult
+    public func beginCleanup() -> [ScanResult]? {
+        guard case .results(let current) = scanState else { return nil }
+        scanState = .cleaning
+        return current
+    }
+
+    /// Show the cleanup summary. Deleting the wrong copy of a duplicate is
+    /// unrecoverable, so this surface must report failures rather than
+    /// silently leaving failed rows in the list.
+    public func finishCleanup(result: CleanupResult, returningTo results: [ScanResult]) {
+        scanState = .summary(result, returningTo: results)
+    }
+
+    /// Leave the summary and go back to the (refreshed) duplicate list.
+    public func dismissSummary(showing results: [ScanResult]) {
+        scanState = .results(results)
+        cachedResults = results
+        cachedAt = Date()
     }
 
     /// Replace the live + cached results after a successful Refresh prune —

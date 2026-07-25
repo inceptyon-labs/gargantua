@@ -70,7 +70,19 @@ public actor LicenseGate {
         _ = try? await store.revalidate()
     }
 
-    public func deactivate() async {
-        try? await store.deactivate()
+    /// Releases this Mac's activation slot. Returns the outcome so the caller
+    /// can tell the user — a silently swallowed failure leaves the slot
+    /// consumed and the user believing it was freed, which is exactly how an
+    /// activation orphans.
+    @discardableResult
+    public func deactivate() async -> Result<Void, PolarLicenseError> {
+        do {
+            try await store.deactivate()
+            return .success(())
+        } catch let error as PolarLicenseError {
+            return .failure(error)
+        } catch {
+            return .failure(.network(error.localizedDescription))
+        }
     }
 }

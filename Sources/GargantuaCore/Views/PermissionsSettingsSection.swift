@@ -8,6 +8,9 @@ import SwiftUI
 struct PermissionsSettingsSection: View {
     @State private var hasFullDiskAccess = PermissionChecker.hasFullDiskAccess
     @State private var helperStatus = SMAppServicePrivilegedHelperInstaller().status()
+    /// Set when re-registering the helper threw, so the row can explain why the
+    /// Login Items toggle the user was just sent to find is missing.
+    @State private var registerError: String?
 
     @Environment(\.openURL) private var openURL
 
@@ -58,9 +61,14 @@ struct PermissionsSettingsSection: View {
                 GargantuaButton("Open Settings", icon: "arrow.up.forward.app") {
                     // Re-register so the toggle is present in the list, reflect
                     // the new status immediately, then deep-link straight to the
-                    // Login Items & Extensions pane.
-                    if let newStatus = try? SMAppServicePrivilegedHelperInstaller().register() {
-                        helperStatus = newStatus
+                    // Login Items & Extensions pane. A failed registration means
+                    // the toggle will not be there at all, so say so rather than
+                    // sending the user to hunt for a row that does not exist.
+                    do {
+                        helperStatus = try SMAppServicePrivilegedHelperInstaller().register()
+                        registerError = nil
+                    } catch {
+                        registerError = error.localizedDescription
                     }
                     openURL(loginItemsURL)
                 }
@@ -69,6 +77,10 @@ struct PermissionsSettingsSection: View {
     }
 
     private var helperDetail: String {
+        if let registerError {
+            return "Gargantua could not register the helper, so it may not appear under Login Items & "
+                + "Extensions: \(registerError)"
+        }
         switch helperStatus {
         case .enabled:
             return "Approved — Gargantua can remove system-owned items (helpers, prefpanes, root caches)."
@@ -84,7 +96,8 @@ struct PermissionsSettingsSection: View {
     }
 
     private var helperDetailColor: Color {
-        switch helperStatus {
+        if registerError != nil { return GargantuaColors.review }
+        return switch helperStatus {
         case .enabled: GargantuaColors.safe
         case .notFound: GargantuaColors.ink3
         case .requiresApproval, .notRegistered, .unknown: GargantuaColors.review

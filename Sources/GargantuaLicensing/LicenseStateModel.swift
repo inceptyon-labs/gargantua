@@ -50,8 +50,10 @@ public final class LicenseStateModel {
         return result.map { _ in () }
     }
 
-    public func deactivate() async {
-        await gate.deactivate()
+    @discardableResult
+    public func deactivate() async -> Result<Void, PolarLicenseError> {
+        let result = await gate.deactivate()
         await refresh()
+        return result
     }
 }

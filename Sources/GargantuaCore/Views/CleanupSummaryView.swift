@@ -16,6 +16,11 @@ private let summaryLogger = Logger(subsystem: "com.gargantua.core", category: "C
 public struct CleanupSummaryView: View {
     let result: CleanupResult
     let outcomeAccent: Color?
+    /// True when the caller's audit write threw. The summary advertises a
+    /// "View Audit Trail" affordance, so a cleanup whose record never reached
+    /// disk has to say so — otherwise the product's traceability guarantee
+    /// silently does not hold for exactly this operation.
+    let auditWriteFailed: Bool
     /// Optional "Why?" handler for failed rows — routes the item into the same
     /// explanation sheet the scan lists use. Nil hides the affordance.
     let onExplain: ((ScanResult) -> Void)?
@@ -72,12 +77,14 @@ public struct CleanupSummaryView: View {
     public init(
         result: CleanupResult,
         outcomeAccent: Color? = nil,
+        auditWriteFailed: Bool = false,
         onExplain: ((ScanResult) -> Void)? = nil,
         onRetried: ((CleanupResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.result = result
         self.outcomeAccent = outcomeAccent
+        self.auditWriteFailed = auditWriteFailed
         self.onExplain = onExplain
         self.onRetried = onRetried
         self.onDismiss = onDismiss
@@ -175,6 +182,14 @@ public struct CleanupSummaryView: View {
                     .frame(height: 1)
 
                 failureSection
+            }
+
+            if auditWriteFailed {
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
+
+                auditWriteFailureRow
             }
 
             Rectangle()

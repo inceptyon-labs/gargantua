@@ -1,22 +1,6 @@
 import Foundation
 import SwiftUI
 
-struct ScanRootErrorRow: View {
-    let message: String
-
-    var body: some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 12))
-                .foregroundStyle(GargantuaColors.protected_)
-
-            Text(message)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.protected_)
-        }
-    }
-}
-
 var scanRootDivider: some View {
     SettingsHairlineDivider()
 }

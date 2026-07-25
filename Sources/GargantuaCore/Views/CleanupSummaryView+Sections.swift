@@ -314,11 +314,36 @@ extension CleanupSummaryView {
         }
     }
 
+    // MARK: - Audit write failure
+
+    var auditWriteFailureRow: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space2) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 12))
+                .foregroundStyle(GargantuaColors.review)
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("This cleanup could not be recorded to the audit trail")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+                Text("The files were still removed. The audit log at ~/Library/Logs/Gargantua/audit.json is missing this entry.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(GargantuaSpacing.space4)
+    }
+
     // MARK: - Footer Actions
 
     var footerActions: some View {
         HStack(spacing: GargantuaSpacing.space3) {
-            // Audit trail link
+            // Audit trail link. Disabled when there is no trail to open —
+            // otherwise it looks live and does nothing, which is exactly the
+            // case where the user most needs to know the record is missing.
             Button(action: openAuditTrail) {
                 HStack(spacing: GargantuaSpacing.space1) {
                     Image(systemName: "doc.text")
@@ -326,9 +351,11 @@ extension CleanupSummaryView {
                     Text("View Audit Trail")
                         .font(GargantuaFonts.caption)
                 }
-                .foregroundStyle(GargantuaColors.accent)
+                .foregroundStyle(auditTrailExists ? GargantuaColors.accent : GargantuaColors.ink4)
             }
             .buttonStyle(.plain)
+            .disabled(!auditTrailExists)
+            .help(auditTrailExists ? "Reveal the audit log in Finder" : "No audit log has been written yet.")
 
             Spacer()
 
@@ -373,6 +400,10 @@ extension CleanupSummaryView {
 
     func revealTrash() {
         TrashRevealer().revealCleanupResult(result)
+    }
+
+    var auditTrailExists: Bool {
+        FileManager.default.fileExists(atPath: AuditWriter().logFile.path)
     }
 
     func openAuditTrail() {

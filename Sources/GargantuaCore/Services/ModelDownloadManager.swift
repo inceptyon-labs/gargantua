@@ -85,10 +85,23 @@ public final class ModelDownloadManager: NSObject, ObservableObject {
         state = .notDownloaded
     }
 
-    /// Delete the staged model directory.
+    /// Delete the staged model directory, reporting the outcome.
+    ///
+    /// The removal used to be a bare `try?` followed by an unconditional
+    /// `.notDownloaded`, so a failure left Settings saying "Not downloaded"
+    /// while the model — the largest single artifact the app downloads — was
+    /// still on disk. Nothing re-checked, and the pane then offered to
+    /// download it again rather than to remove it.
     public func deleteModel() {
-        removeModelDirectory()
-        state = .notDownloaded
+        do {
+            try FileManager.default.removeItem(at: modelDirectory)
+            state = .notDownloaded
+        } catch CocoaError.fileNoSuchFile {
+            // Already absent is the desired end state, not a failure.
+            state = .notDownloaded
+        } catch {
+            state = .failed(message: "Could not remove the local model: \(error.localizedDescription)")
+        }
     }
 
     /// Formatted string for the expected model size (e.g., "680 MB").

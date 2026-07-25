@@ -4,6 +4,9 @@ struct DashboardTriageEvidenceView: View {
     let alerts: [AlertItem]
     let hasRunTriage: Bool
     let scanProgress: ScanProgress
+    /// Non-nil when the last triage threw. Drives the failure state so a scan
+    /// that crashed is never rendered as a clean bill of health.
+    let triageFailure: String?
     let onNavigate: (AlertDestination) -> Void
     let onScan: () -> Void
 
@@ -11,6 +14,12 @@ struct DashboardTriageEvidenceView: View {
         VStack(alignment: .leading, spacing: 0) {
             if scanProgress.isScanning {
                 progressContent
+            } else if let triageFailure {
+                // A scan that threw finishes with zero items, which is
+                // indistinguishable from a spotless Mac unless the failure is
+                // read. Rendering the green success state here would tell the
+                // user their machine is clean when the pass never ran.
+                failedContent(message: triageFailure)
             } else if alerts.isEmpty {
                 emptyContent
             } else {
@@ -68,6 +77,40 @@ struct DashboardTriageEvidenceView: View {
                         .foregroundStyle(GargantuaColors.ink3)
                 }
             }
+        }
+        .padding(GargantuaSpacing.space4)
+    }
+
+    private func failedContent(message: String) -> some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(GargantuaColors.review)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text("Triage did not complete")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(message)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Button(action: onScan) {
+                Text("Retry Triage")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, GargantuaSpacing.space3)
+                    .padding(.vertical, GargantuaSpacing.space2)
+                    .background(GargantuaColors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+            }
+            .buttonStyle(.plain)
         }
         .padding(GargantuaSpacing.space4)
     }

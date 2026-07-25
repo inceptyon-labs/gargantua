@@ -13,6 +13,7 @@ struct DirectoryRowView: View {
     @State private var isHovered = false
     @State private var isLoadingChildren = false
     @State private var showTrashConfirm = false
+    @State private var trashError: String?
     @Environment(\.openURL) private var openURL
 
     private static let fullDiskAccessURL = URL(
@@ -108,6 +109,14 @@ struct DirectoryRowView: View {
         } message: {
             Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
         }
+        .alert(
+            "Could not move to Trash",
+            isPresented: Binding(get: { trashError != nil }, set: { if !$0 { trashError = nil } })
+        ) {
+            Button("OK", role: .cancel) { trashError = nil }
+        } message: {
+            Text(trashError ?? "")
+        }
     }
 
     /// Aggregate rows render flat against `surface1` to read as informational;
@@ -150,8 +159,17 @@ struct DirectoryRowView: View {
 
     private func moveToTrash() {
         let url = URL(fileURLWithPath: item.path)
-        NSWorkspace.shared.recycle([url]) { _, _ in
-            DispatchQueue.main.async { onItemTrashed?() }
+        // Report the failure rather than discarding it. Without this the row
+        // simply stays put after a refresh, which is indistinguishable from
+        // the delete never having been requested.
+        NSWorkspace.shared.recycle([url]) { _, error in
+            DispatchQueue.main.async {
+                if let error {
+                    trashError = error.localizedDescription
+                } else {
+                    onItemTrashed?()
+                }
+            }
         }
     }
 

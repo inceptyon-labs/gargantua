@@ -125,6 +125,25 @@ public struct DiskExplorerView: View {
     private var breadcrumbView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: GargantuaSpacing.space1) {
+                // Visible counterpart to ⌘[ / Escape. The keyboard layer alone
+                // is invisible, so up-navigation was undiscoverable and users
+                // reached for the header Back button, which exits entirely.
+                Button(action: navigateUp) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(
+                            state.pathStack.count > 1
+                                ? GargantuaColors.accent
+                                : GargantuaColors.ink4
+                        )
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(state.pathStack.count <= 1)
+                .help("Up one level (⌘[)")
+                .accessibilityLabel("Up one level")
+
                 ForEach(Array(state.pathStack.enumerated()), id: \.offset) { index, crumb in
                     if index > 0 {
                         Image(systemName: "chevron.right")
@@ -212,8 +231,18 @@ public struct DiskExplorerView: View {
         }
     }
 
-    private var displayItems: [DirectoryItem] {
+    /// Treemap-only rollup. A sub-1% tile is too small to label, so collapsing
+    /// them into "Others (N)" is right for the map.
+    private var treemapItems: [DirectoryItem] {
         DiskExplorerView.collapseSmall(state.items)
+    }
+
+    /// The list enumerates. A row is legible at any size, so nothing is hidden
+    /// here — applying the treemap's rollup made the folded-away folders
+    /// unreachable from the Disk Explorer entirely, since the "Others (N)" row
+    /// cannot be clicked, expanded, revealed, or drilled into.
+    private var listItems: [DirectoryItem] {
+        state.items
     }
 
     private var treemapView: some View {
@@ -224,7 +253,7 @@ public struct DiskExplorerView: View {
                 let width = max(geometry.size.width - GargantuaSpacing.space6 * 2, 1)
                 let height = max(geometry.size.height - GargantuaSpacing.space6, 1)
                 let bounds = CGRect(origin: .zero, size: CGSize(width: width, height: height))
-                let displayed = displayItems
+                let displayed = treemapItems
                 let totalSize = displayed.reduce(0) { $0 + max($1.size, 0) }
                 let tiles = DiskTreemapLayout.tiles(for: displayed, in: bounds)
 
@@ -233,7 +262,16 @@ public struct DiskExplorerView: View {
                         DirectoryTreemapCellView(
                             item: tile.item,
                             totalSiblingSize: totalSize,
-                            onDrillDown: { drillDown(into: tile.item) },
+                            onDrillDown: {
+                                // The aggregate is an escape hatch, not a dead
+                                // end: the folders it stands for are all
+                                // individually listed in list mode.
+                                if tile.item.isOthersAggregate {
+                                    state.setDisplayMode(.list)
+                                } else {
+                                    drillDown(into: tile.item)
+                                }
+                            },
                             onItemTrashed: { refreshCurrent() }
                         )
                         .frame(width: max(tile.rect.width, 1), height: max(tile.rect.height, 1))
@@ -250,13 +288,9 @@ public struct DiskExplorerView: View {
     }
 
     private var listView: some View {
-        // Use `displayItems` so list and treemap show the same set at the
-        // top level. For directories with ≥12 sized children, sub-1%
-        // folders collapse into an "Others (N)" row at the bottom; below
-        // that threshold every folder shows individually in both modes.
         ScrollView {
             LazyVStack(spacing: 1) {
-                ForEach(displayItems) { item in
+                ForEach(listItems) { item in
                     DirectoryRowView(
                         item: item,
                         maxSize: state.maxSize,

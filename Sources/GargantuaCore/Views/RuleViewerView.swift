@@ -19,6 +19,9 @@ public struct RuleViewerView: View {
     @State var selectedRuleID: String?
     @State private var isLoading = true
     @State private var userRuleErrors: [String] = []
+    /// Non-nil when the *bundled* rule set failed to load, as opposed to the
+    /// per-file `userRuleErrors` from custom rules.
+    @State private var bundledRuleLoadError: String?
     @State private var customRuleCount = 0
 
     public init(
@@ -44,6 +47,8 @@ public struct RuleViewerView: View {
             if isLoading {
                 AccretionDiskView(activityRate: 12, size: 36, color: GargantuaColors.accretion)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let bundledRuleLoadError {
+                ruleLoadFailureView(message: bundledRuleLoadError)
             } else {
                 HSplitView {
                     categoryAndRuleList
@@ -59,6 +64,30 @@ public struct RuleViewerView: View {
         .task {
             await loadRules()
         }
+    }
+
+    private func ruleLoadFailureView(message: String) -> some View {
+        VStack(spacing: GargantuaSpacing.space3) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(GargantuaColors.review)
+
+            Text("Rules could not be loaded")
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+
+            Text(message)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 420)
+
+            GargantuaButton("Try Again", tone: .primary) {
+                Task { await loadRules() }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var headerView: some View {
@@ -180,8 +209,10 @@ public struct RuleViewerView: View {
 
     private func loadRules() async {
         isLoading = true
+        bundledRuleLoadError = nil
         let loader = RuleLoader()
         guard let rulesURL = RuleDirectoryResolver.resolve() else {
+            bundledRuleLoadError = "Gargantua could not locate its bundled rules directory."
             isLoading = false
             return
         }
@@ -236,7 +267,11 @@ public struct RuleViewerView: View {
                 selectedCategory = categories.first?.name
             }
         } catch {
+            // An empty category list is how "no rules exist" renders, so a
+            // load failure must say so explicitly — otherwise a broken bundle
+            // looks like a product that simply ships no rules.
             categories = []
+            bundledRuleLoadError = error.localizedDescription
         }
         isLoading = false
     }

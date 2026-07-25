@@ -31,6 +31,7 @@ public struct DuplicateFinderContainerView: View {
     @State private var showConfirmation = false
     @State private var pendingTrashItems: [ScanResult] = []
     @State private var blockedReason: BlockReason?
+    @State private var auditWriteFailed = false
 
     public init(
         state: DuplicateFinderContainerState,
@@ -79,6 +80,18 @@ public struct DuplicateFinderContainerView: View {
                     )
                 case .scanning:
                     DuplicateFinderScanningView(progress: state.scanProgress)
+                case .cleaning:
+                    DuplicateFinderCleaningView()
+                case .summary(let result, let priorResults):
+                    ScrollView {
+                        CleanupSummaryView(
+                            result: result,
+                            auditWriteFailed: auditWriteFailed,
+                            onExplain: onExplain,
+                            onDismiss: { dismissCleanupSummary(priorResults) }
+                        )
+                        .padding(GargantuaSpacing.space5)
+                    }
                 case .results(let results):
                     DuplicateFinderView(
                         results: results,
@@ -124,15 +137,45 @@ public struct DuplicateFinderContainerView: View {
             blockedReason = reason
             return
         }
+        // Remember the list to return to, and show a busy phase — the results
+        // view is otherwise fully interactive while the engine runs.
+        guard let priorResults = state.beginCleanup() else { return }
+
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
         let result = await engine.clean(items, method: method)
         do {
             try AuditWriter().record(result: result)
+            auditWriteFailed = false
         } catch {
+            auditWriteFailed = true
             duplicateFinderContainerLogger.warning("Failed to write audit entry: \(error.localizedDescription)")
         }
         selectedIDs.subtract(result.succeededItems.map(\.item.id))
-        refreshResults()
+        // Route through the shared summary rather than dropping straight back
+        // into the list. This is the surface where deleting the wrong copy is
+        // unrecoverable, so a failed delete must be reported, not left to
+        // reappear silently as an unchanged row.
+        state.finishCleanup(result: result, returningTo: priorResults)
         onCleanupCompleted?(result)
+    }
+
+    private func dismissCleanupSummary(_ priorResults: [ScanResult]) {
+        state.dismissSummary(showing: priorResults)
+        // Prune paths that are actually gone now that we are back on the list.
+        refreshResults()
+    }
+}
+
+/// Busy state shown while a confirmed delete runs.
+struct DuplicateFinderCleaningView: View {
+    var body: some View {
+        VStack(spacing: GargantuaSpacing.space3) {
+            AccretionDiskView(activityRate: 24, size: 56, color: GargantuaColors.accent)
+            Text("Removing selected duplicates…")
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("Removing selected duplicates")
     }
 }

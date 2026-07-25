@@ -23,6 +23,7 @@ struct MainContentView: View {
     /// on the matching row.
     @State var pendingBackgroundItemPlistPath: String?
     @State var persistence: PersistenceController?
+    @State var activationLinkModel = LicenseActivationLinkModel.shared
     @State var dashboardSession = DashboardSessionState()
     @State var deepCleanSession = DeepCleanSessionState()
     @State var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
@@ -134,8 +135,7 @@ struct MainContentView: View {
                                 if let persistence {
                                     ProfileContainerView(persistence: persistence)
                                 } else {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    persistenceLoadingView
                                 }
                             case "deepClean":
                                 DeepCleanView(
@@ -204,8 +204,7 @@ struct MainContentView: View {
                                         updateSettingsViewModel: updateSettingsViewModel
                                     )
                                 } else {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    persistenceLoadingView
                                 }
                             case "devPurge":
                                 DevArtifactScanView(
@@ -235,8 +234,7 @@ struct MainContentView: View {
                                         updateSettingsViewModel: updateSettingsViewModel
                                     )
                                 } else {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    persistenceLoadingView
                                 }
                             default:
                                 placeholderView
@@ -286,6 +284,34 @@ struct MainContentView: View {
                 KeyboardShortcutsCheatSheet(isPresented: $showKeyboardCheatSheet)
             }
         }
+        // A `gargantua://activate` link from the purchase email brings the app
+        // forward, so it has to say what happened — success or failure.
+        .alert(
+            activationOutcome?.succeeded == true ? "License activated" : "Activation failed",
+            isPresented: Binding(
+                get: { activationOutcome != nil },
+                set: { if !$0 { LicenseActivationLinkModel.shared.dismiss() } }
+            )
+        ) {
+            Button("OK") { LicenseActivationLinkModel.shared.dismiss() }
+        } message: {
+            Text(activationOutcome?.message ?? "")
+        }
         .focusedSceneValue(\.keyboardCheatSheet, $showKeyboardCheatSheet)
+    }
+
+    private var activationOutcome: LicenseActivationLinkModel.Outcome? {
+        activationLinkModel.outcome
+    }
+
+    /// Placeholder for the destinations that cannot render until SwiftData
+    /// finishes loading. Uses the project spinner rather than a bare
+    /// `ProgressView`, which is effectively invisible on the void background —
+    /// an empty black pane reads as a hang, not as loading. Extracted so a
+    /// fourth persistence-gated destination cannot reintroduce the bare one.
+    private var persistenceLoadingView: some View {
+        AccretionDiskView(activityRate: 18, size: 48, color: GargantuaColors.accent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Loading")
     }
 }

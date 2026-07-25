@@ -11,21 +11,36 @@ extension DiskExplorerView {
     @ViewBuilder
     var keyboardShortcutLayer: some View {
         HStack(spacing: 0) {
-            Button("Back") { state.exitToIdle() }
+            // Escape goes up one level, not out. Users press it expecting
+            // Finder's "go up"; the old binding reset the breadcrumb *and*
+            // dropped the per-directory size cache, so a reflex keystroke ten
+            // levels deep cost a full rescan of every level to get back.
+            Button("Up") { navigateUpOrExit() }
                 .keyboardShortcut(.escape, modifiers: [])
-            Button("Up") {
-                guard state.pathStack.count > 1 else { return }
-                state.navigateTo(index: state.pathStack.count - 2)
-            }
-            .keyboardShortcut("[", modifiers: .command)
-            .disabled(state.pathStack.count <= 1)
+            Button("Up one level") { navigateUp() }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(state.pathStack.count <= 1)
             Button("Refresh") { state.refreshCurrent() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(state.isLoading)
         }
         .opacity(0)
         .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
+    }
+
+    /// Up one level, or all the way out when already at the root — so Escape
+    /// still leaves the explorer from Home, where there is nowhere to go up to.
+    func navigateUpOrExit() {
+        if state.pathStack.count > 1 {
+            state.navigateTo(index: state.pathStack.count - 2)
+        } else {
+            state.exitToIdle()
+        }
+    }
+
+    func navigateUp() {
+        guard state.pathStack.count > 1 else { return }
+        state.navigateTo(index: state.pathStack.count - 2)
     }
 
     @ViewBuilder

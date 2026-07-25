@@ -1,5 +1,8 @@
 import AppKit
+import OSLog
 import SwiftUI
+
+private let dashboardLogger = Logger(subsystem: "com.gargantua.core", category: "DashboardView")
 
 // MARK: - Dashboard View
 
@@ -211,6 +214,7 @@ public struct DashboardView: View {
                     alerts: alerts,
                     hasRunTriage: hasRunTriageScan,
                     scanProgress: scanProgress,
+                    triageFailure: session.triageFailure,
                     onNavigate: navigateTo,
                     onScan: startTriageScan
                 )
@@ -264,6 +268,7 @@ public struct DashboardView: View {
             } catch {
                 progress.recordError(error.localizedDescription)
                 progress.finish(itemsFound: 0)
+                session.triageFailure = error.localizedDescription
             }
         }
     }
@@ -324,7 +329,16 @@ public struct DashboardView: View {
 
     private func acknowledgeScheduledScanSummary() {
         scheduledScanSummary = nil
-        try? makeFreshPersistence().acknowledgeScheduledScanSummary()
+        do {
+            try makeFreshPersistence().acknowledgeScheduledScanSummary()
+        } catch {
+            // A failed acknowledge means the card comes back next launch. The
+            // dismissal still holds for this session; log it so the resurrection
+            // is explicable rather than looking like the dismiss button is broken.
+            dashboardLogger.warning(
+                "Failed to persist scheduled-scan acknowledgement: \(error.localizedDescription)"
+            )
+        }
     }
 }
 

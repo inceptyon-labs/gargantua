@@ -23,6 +23,11 @@ public final class DashboardSessionState {
     /// starts (and can flicker false between adapters), so guarding
     /// re-entrancy on it races with ⌘R key-repeat.
     public private(set) var isTriageRequestInFlight = false
+    /// Set when a triage scan threw. Distinct from `scanProgress.errors`,
+    /// which also collects *non-fatal* per-category warnings: a scan that
+    /// completed, warned about one unreadable directory, and legitimately
+    /// found nothing must still read as success, not as a failure.
+    public var triageFailure: String?
 
     public init() {}
 
@@ -35,6 +40,7 @@ public final class DashboardSessionState {
         isTriageRequestInFlight = true
         hasRunTriageScan = true
         scanProgress = ScanProgress()
+        triageFailure = nil
         return true
     }
 

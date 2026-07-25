@@ -28,6 +28,21 @@ struct LicenseSettingsSection: View {
 
     private var statusCard: some View {
         SettingsSectionContainer("License", subtitle: statusSubtitle) {
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
+                statusRow
+
+                // Deactivation feedback belongs here, not on the activation
+                // card: that card is `EmptyView` while licensed, which is
+                // exactly when "Deactivate this Mac" is on screen.
+                if let inlineFeedback, case .licensed = model.state {
+                    feedbackRow(inlineFeedback)
+                }
+            }
+        }
+    }
+
+    private var statusRow: some View {
+        Group {
             HStack(spacing: GargantuaSpacing.space3) {
                 SettingsRowIcon(systemName: statusIconName, size: 16)
 
@@ -49,7 +64,16 @@ struct LicenseSettingsSection: View {
                     GargantuaButton("Deactivate this Mac", icon: "minus.circle", tone: .neutral) {
                         Task {
                             isWorking = true
-                            await model.deactivate()
+                            // Report the outcome. A failed deactivation leaves
+                            // the activation slot consumed, and the card would
+                            // otherwise just keep saying "Licensed to …" — the
+                            // user has no way to tell it did not work.
+                            switch await model.deactivate() {
+                            case .success:
+                                inlineFeedback = .success("This Mac has been deactivated.")
+                            case .failure(let error):
+                                inlineFeedback = .error(LicenseErrorCopy.message(for: error))
+                            }
                             isWorking = false
                         }
                     }
