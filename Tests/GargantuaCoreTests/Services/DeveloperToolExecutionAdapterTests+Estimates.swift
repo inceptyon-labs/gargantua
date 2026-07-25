@@ -67,8 +67,9 @@ extension DeveloperToolExecutionAdapterTests {
 
         #expect(pnpmResult.estimatedBytesFreed == 0)
         #expect(goResult.estimatedBytesFreed == 0)
-        #expect(audit.entries.map(\.command) == ["pnpm store prune", "go clean -cache"])
-        #expect(audit.entries.map(\.bytesFreed) == [0, 0])
+        let completed = audit.entries.filter { $0.status == .completed }
+        #expect(completed.map(\.command) == ["pnpm store prune", "go clean -cache"])
+        #expect(completed.map(\.bytesFreed) == [0, 0])
     }
 
     @Test("npm and Yarn cache cleans run their args and audit the sized estimate")
@@ -106,8 +107,9 @@ extension DeveloperToolExecutionAdapterTests {
 
         #expect(npmResult.estimatedBytesFreed == 4_096)
         #expect(yarnResult.estimatedBytesFreed == 8_192)
-        #expect(audit.entries.map(\.command) == ["npm cache clean --force", "yarn cache clean"])
-        #expect(audit.entries.map(\.bytesFreed) == [4_096, 8_192])
+        let completed = audit.entries.filter { $0.status == .completed }
+        #expect(completed.map(\.command) == ["npm cache clean --force", "yarn cache clean"])
+        #expect(completed.map(\.bytesFreed) == [4_096, 8_192])
     }
 
     private func cachePreview(

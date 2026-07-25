@@ -116,6 +116,26 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             )
         }
 
+        let estimatedBytes = operation.estimatedReclaimableBytes(in: preview) ?? 0
+        let commandPreview = operation.commandPreview(executable: executable)
+        let entryID = UUID()
+
+        // Intent record before the tool runs. `brew cleanup` and the docker
+        // prunes delete on their own schedule and give us no progress signal;
+        // if we die while one is mid-flight the disk has already changed and
+        // nothing else on the system would say so.
+        try auditRecorder.write(AuditEntry(
+            id: entryID,
+            tool: "developer-tools",
+            command: operation.commandName,
+            files: [],
+            safetyLevel: operation.safety,
+            confirmationMethod: confirmationMethod,
+            cleanupMethod: .toolNative,
+            bytesFreed: 0,
+            status: .attempted
+        ))
+
         let output = try runner.run(
             executable: executable,
             arguments: operation.arguments,
@@ -130,18 +150,17 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             )
         }
 
-        let estimatedBytes = operation.estimatedReclaimableBytes(in: preview) ?? 0
-        let commandPreview = operation.commandPreview(executable: executable)
-        let entry = AuditEntry(
+        try auditRecorder.write(AuditEntry(
+            id: entryID,
             tool: "developer-tools",
             command: operation.commandName,
             files: [],
             safetyLevel: operation.safety,
             confirmationMethod: confirmationMethod,
             cleanupMethod: .toolNative,
-            bytesFreed: estimatedBytes
-        )
-        try auditRecorder.write(entry)
+            bytesFreed: estimatedBytes,
+            status: .completed
+        ))
 
         return DeveloperToolExecutionResult(
             operation: operation,
@@ -159,6 +178,25 @@ public struct DeveloperToolExecutionAdapter: Sendable {
     ) throws -> DeveloperToolExecutionResult {
         let targets = preview.items.compactMap(Self.cargoPurgeTarget)
         let estimatedBytes = operation.estimatedReclaimableBytes(in: preview) ?? 0
+        let commandPreview = operation.commandPreview(executable: executable)
+        let entryID = UUID()
+
+        // The intent record names the candidate targets, not the removed ones:
+        // it is written before the first removeItem, so "what we were about to
+        // delete" is all that is known — and all that survives a crash partway
+        // through the loop.
+        try auditRecorder.write(AuditEntry(
+            id: entryID,
+            tool: "developer-tools",
+            command: operation.commandName,
+            files: targets.map { AuditFile(path: $0.path, size: $0.bytes) },
+            safetyLevel: operation.safety,
+            confirmationMethod: confirmationMethod,
+            cleanupMethod: .toolNative,
+            bytesFreed: 0,
+            status: .attempted
+        ))
+
         var removedFiles: [AuditFile] = []
 
         for target in targets where FileManager.default.fileExists(atPath: target.path) {
@@ -171,17 +209,17 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             removedFiles.append(AuditFile(path: target.path, size: target.bytes))
         }
 
-        let commandPreview = operation.commandPreview(executable: executable)
-        let entry = AuditEntry(
+        try auditRecorder.write(AuditEntry(
+            id: entryID,
             tool: "developer-tools",
             command: operation.commandName,
             files: removedFiles,
             safetyLevel: operation.safety,
             confirmationMethod: confirmationMethod,
             cleanupMethod: .toolNative,
-            bytesFreed: estimatedBytes
-        )
-        try auditRecorder.write(entry)
+            bytesFreed: estimatedBytes,
+            status: .completed
+        ))
 
         let stdout = removedFiles.isEmpty
             ? "No Cargo extracted caches found.\n"

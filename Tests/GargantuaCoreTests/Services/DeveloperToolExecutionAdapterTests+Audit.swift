@@ -24,7 +24,7 @@ extension DeveloperToolExecutionAdapterTests {
 
         #expect(runner.calls.map(\.arguments) == [["volume", "prune", "--force"]])
         #expect(runner.calls.first?.timeout == 60)
-        let entry = try #require(audit.entries.first)
+        let entry = try #require(audit.entries.last)
         #expect(entry.command == "docker volume prune --force")
         #expect(entry.safetyLevel == .protected_)
         #expect(entry.confirmationMethod == .fullModal)
@@ -54,7 +54,10 @@ extension DeveloperToolExecutionAdapterTests {
             confirmationMethod: .summaryDialog
         )
 
-        let entry = try #require(audit.entries.first)
+        #expect(audit.entries.count == 2)
+        #expect(audit.entries.first?.status == .attempted)
+        #expect(audit.entries.first?.id == audit.entries.last?.id)
+        let entry = try #require(audit.entries.last)
         #expect(result.estimatedBytesFreed == 12_000_000)
         #expect(entry.tool == "developer-tools")
         #expect(entry.command == "brew cleanup")
@@ -63,6 +66,7 @@ extension DeveloperToolExecutionAdapterTests {
         #expect(entry.confirmationMethod == .summaryDialog)
         #expect(entry.cleanupMethod == .toolNative)
         #expect(entry.bytesFreed == 12_000_000)
+        #expect(entry.status == .completed)
     }
 
     @Test("Xcode simulator cleanup runs through xcrun and audits preview bytes")
@@ -87,7 +91,7 @@ extension DeveloperToolExecutionAdapterTests {
             confirmationMethod: .summaryDialog
         )
 
-        let entry = try #require(audit.entries.first)
+        let entry = try #require(audit.entries.last)
         #expect(result.commandPreview == [xcrun.path, "simctl", "delete", "unavailable"])
         #expect(entry.command == "xcrun simctl delete unavailable")
         #expect(entry.safetyLevel == .review)
@@ -115,6 +119,27 @@ extension DeveloperToolExecutionAdapterTests {
             exitCode: 1,
             stderr: "daemon unavailable"
         )) {
+            _ = try adapter.execute(.dockerImagePrune, preview: dockerPreview(imageBytes: 500), confirmationMethod: .summaryDialog)
+        }
+        // The prune ran and may have deleted before it failed, so the attempt
+        // is on record; only the outcome entry is absent.
+        #expect(audit.entries.count == 1)
+        #expect(audit.entries.first?.status == .attempted)
+        #expect(audit.entries.first?.bytesFreed == 0)
+    }
+
+    @Test("missing binary throws notInstalled and writes no audit entry")
+    func missingBinaryWritesNoAudit() throws {
+        let audit = AuditSpy()
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.dockerEnvVarName: "/nonexistent/path/to/docker",
+            ]),
+            runner: StubRunner(outputs: [:]),
+            auditRecorder: audit
+        )
+
+        #expect(throws: DeveloperToolExecutionError.notInstalled(.docker)) {
             _ = try adapter.execute(.dockerImagePrune, preview: dockerPreview(imageBytes: 500), confirmationMethod: .summaryDialog)
         }
         #expect(audit.entries.isEmpty)

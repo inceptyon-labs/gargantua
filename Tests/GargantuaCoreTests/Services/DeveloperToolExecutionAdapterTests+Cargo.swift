@@ -34,13 +34,20 @@ extension DeveloperToolExecutionAdapterTests {
             confirmationMethod: .summaryDialog
         )
 
-        let entry = try #require(audit.entries.first)
+        #expect(audit.entries.count == 2)
+        #expect(audit.entries.first?.status == .attempted)
+        #expect(audit.entries.first?.id == audit.entries.last?.id)
+        let intentEntry = try #require(audit.entries.first)
+        #expect(intentEntry.files.map(\.path).sorted() == [gitCheckouts.path, registrySrc.path].sorted())
+
+        let entry = try #require(audit.entries.last)
         #expect(!FileManager.default.fileExists(atPath: registrySrc.path))
         #expect(!FileManager.default.fileExists(atPath: gitCheckouts.path))
         #expect(FileManager.default.fileExists(atPath: registryCache.path))
         #expect(result.commandPreview == [cargo.path, "cache", "purge-extracted"])
         #expect(result.estimatedBytesFreed > 0)
         #expect(entry.command == "cargo cache purge-extracted")
+        #expect(entry.status == .completed)
         #expect(entry.files.map(\.path).sorted() == [gitCheckouts.path, registrySrc.path].sorted())
         #expect(entry.safetyLevel == .review)
     }
