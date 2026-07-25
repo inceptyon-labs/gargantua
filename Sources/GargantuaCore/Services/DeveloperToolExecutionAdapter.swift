@@ -149,7 +149,11 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             // its doc comment says it means: the process died mid-operation.
             // `bytesFreed: 0` because a failed prune may still have deleted
             // something and we have no way to know how much.
-            try auditRecorder.write(AuditEntry(
+            //
+            // Best-effort, unlike the success-path write below: `commandFailed`
+            // carries the exit code and stderr the caller needs to explain the
+            // failure, and a secondary audit error must not replace it.
+            try? auditRecorder.write(AuditEntry(
                 id: entryID,
                 tool: "developer-tools",
                 command: operation.commandName,
@@ -244,6 +248,11 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             throw error
         }
 
+        // The completed entry reports bytes actually removed, not the preview
+        // estimate: targets can vanish or get skipped by `SymlinkSwapGuard`
+        // between preview and purge, and a forensic record must not claim
+        // bytes were freed that never were.
+        let removedBytes = removedFiles.reduce(Int64(0)) { $0 + $1.size }
         try auditRecorder.write(AuditEntry(
             id: entryID,
             tool: "developer-tools",
@@ -252,7 +261,7 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             safetyLevel: operation.safety,
             confirmationMethod: confirmationMethod,
             cleanupMethod: .toolNative,
-            bytesFreed: estimatedBytes,
+            bytesFreed: removedBytes,
             status: .completed
         ))
 

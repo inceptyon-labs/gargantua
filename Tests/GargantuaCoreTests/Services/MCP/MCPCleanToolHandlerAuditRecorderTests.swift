@@ -174,6 +174,46 @@ struct MCPCleanToolHandlerAuditRecorderTests {
         }
         #expect(cleanerRan.value == false, "the cleaner must never run when the intent write fails")
     }
+
+    @Test("audit failure after a successful nonzero clean never re-records the outcome as zero bytes")
+    func auditRecorderFailureAfterSuccessDoesNotOverwriteWithZeroBytes() throws {
+        let cache = cacheWith([makeResult(id: "a", size: 1_000_000)])
+        let captured = LogCapture()
+        let spy = SucceedThenFailSpy()
+        let subject = MCPCleanToolHandler(
+            sessionCache: cache,
+            cleaner: { items, _ in
+                CleanupResult(
+                    itemResults: items.map { CleanupItemResult(item: $0, succeeded: true) },
+                    cleanupMethod: .trash
+                )
+            },
+            auditIDGenerator: { fixedAuditUUID },
+            auditRecorder: { try spy.record($0) },
+            clientIDProvider: { "claude-code" },
+            log: { captured.append($0) }
+        )
+
+        do {
+            _ = try subject.handle(arguments([
+                "item_ids": .array([.string("a")]),
+                "confirm": .bool(true),
+            ]))
+            Issue.record("audit failure after a successful clean must throw internalError")
+        } catch MCPToolError.internalError(let message) {
+            #expect(message.lowercased().contains("audit"))
+        }
+
+        // Exactly one write succeeded — the intent (`.attempted`) entry.
+        // The outcome write must have been attempted (and failed) but never
+        // succeeded, so the collapsing reader is left with the honest
+        // `.attempted` record rather than a false zero-byte `.completed` one.
+        #expect(spy.successfulEntries.count == 1)
+        #expect(spy.successfulEntries.first?.status == .attempted)
+        #expect(spy.successfulEntries.first?.id == fixedAuditUUID)
+        #expect(spy.attemptedWriteCount == 2, "intent write plus the failed outcome write attempt")
+        #expect(!spy.successfulEntries.contains { $0.bytesFreed == 0 && $0.id == fixedAuditUUID && $0.status == .completed })
+    }
 }
 
 private final class LockedFlag: @unchecked Sendable {
@@ -201,6 +241,33 @@ private final class FailAfterFirstWrite: @unchecked Sendable {
     func record(_ entry: AuditEntry) throws {
         lock.lock(); calls += 1; let n = calls; lock.unlock()
         if n > 1 { throw RecordBoom() }
+    }
+}
+
+/// Captures every entry that is successfully written, and throws on every
+/// write after the first. Used to assert that a post-success audit failure
+/// leaves the `.attempted` intent entry as the sole surviving write — never
+/// overwriting it with a false zero-byte `.completed` entry.
+private final class SucceedThenFailSpy: @unchecked Sendable {
+    struct RecordBoom: Error, LocalizedError { var errorDescription: String? { "audit down" } }
+    private let lock = NSLock()
+    private var attempts = 0
+    private var succeeded: [AuditEntry] = []
+
+    func record(_ entry: AuditEntry) throws {
+        lock.lock(); attempts += 1; let n = attempts; lock.unlock()
+        if n > 1 { throw RecordBoom() }
+        lock.lock(); succeeded.append(entry); lock.unlock()
+    }
+
+    var attemptedWriteCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return attempts
+    }
+
+    var successfulEntries: [AuditEntry] {
+        lock.lock(); defer { lock.unlock() }
+        return succeeded
     }
 }
 

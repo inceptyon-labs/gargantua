@@ -309,33 +309,9 @@ public struct MCPCleanToolHandler: Sendable {
             )
         }
 
+        let result: CleanupResult
         do {
-            let result = try cleaner(found, method)
-            // Success path: audit is MANDATORY. A successful destructive op
-            // with no durable record breaks PRD §7.4 ("all MCP-initiated
-            // actions logged"). Fail-loud so the operator learns about the
-            // missing audit before it piles up.
-            do {
-                try recordAudit(
-                    entryID: auditUUID,
-                    clientID: clientID,
-                    requested: found,
-                    result: result,
-                    methodHint: method,
-                    status: .completed
-                )
-            } catch {
-                log?("clean audit record failed after successful clean: \(error)")
-                throw MCPToolError.internalError(
-                    "Clean completed but audit log write failed. "
-                        + "Audit trail may be incomplete; investigate the audit subsystem."
-                )
-            }
-            return try Self.makeResult(
-                result: result,
-                method: method,
-                auditID: auditUUID.uuidString
-            )
+            result = try cleaner(found, method)
         } catch let error as MCPToolError {
             // The cleaner signalled a protocol-level error (e.g. rejected
             // a method it didn't like). Best-effort audit of the attempt
@@ -362,6 +338,35 @@ public struct MCPCleanToolHandler: Sendable {
             )
             return .failure("Clean failed: \(MCPEncoding.clientFacingMessage(for: error))")
         }
+
+        // Past this point the clean SUCCEEDED. Nothing below may re-audit the
+        // operation as a zero-byte outcome: the reader keeps the last entry per
+        // id, so a retry with `result: nil` would overwrite a real 1 GB clean
+        // with a permanent record of "freed nothing". If the accurate write
+        // fails we fail loud and leave the `.attempted` entry standing — an
+        // honest "we could not confirm this" beats a confident wrong number.
+        do {
+            try recordAudit(
+                entryID: auditUUID,
+                clientID: clientID,
+                requested: found,
+                result: result,
+                methodHint: method,
+                status: .completed
+            )
+        } catch {
+            log?("clean audit record failed after successful clean: \(error)")
+            throw MCPToolError.internalError(
+                "Clean completed but audit log write failed. "
+                    + "Audit trail may be incomplete; investigate the audit subsystem."
+            )
+        }
+
+        return try Self.makeResult(
+            result: result,
+            method: method,
+            auditID: auditUUID.uuidString
+        )
     }
 
     // MARK: - Helpers
