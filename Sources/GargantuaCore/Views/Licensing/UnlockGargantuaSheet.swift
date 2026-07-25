@@ -70,15 +70,6 @@ public struct UnlockGargantuaSheet: View {
             }
 
             HStack(spacing: GargantuaSpacing.space3) {
-                if !showsKeyField {
-                    Button(action: { showsKeyField = true }, label: {
-                        Text("Already bought? Enter key")
-                            .font(GargantuaFonts.body)
-                            .foregroundStyle(GargantuaColors.ink2)
-                    })
-                    .buttonStyle(.plain)
-                }
-
                 Spacer()
 
                 GargantuaButton("Dismiss", tone: .neutral) {
@@ -102,6 +93,18 @@ public struct UnlockGargantuaSheet: View {
                     }
                     .keyboardShortcut(.defaultAction)
                 }
+            }
+
+            if !showsKeyField {
+                Button(action: { showsKeyField = true }, label: {
+                    Text("Already bought? Enter your key")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.accent)
+                        .underline()
+                        .lineLimit(1)
+                })
+                .buttonStyle(.plain)
+                .focusable(false)
             }
         }
         .padding(GargantuaSpacing.space5)
