@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Developer Tools now runs the tools it advertises.** Gargantua spawned every developer tool with whatever working directory it inherited, which is `/` for a Finder or Dock launch. `pnpm store path` writes a probe file into the current directory and `/` is read-only, so the pnpm card showed "Preview failed" in the shipped app while the same command worked from a terminal. Tools now get the home directory. pnpm was the only one of the eight affected.
+- **The pnpm row no longer claims there is nothing to reclaim.** It reported a hardcoded 0 bytes; a prune frees only unreferenced packages, so the estimate is genuinely unknown and now renders as such.
+- **Destructive Developer Tools commands take the license gate.** `docker system prune`, `brew autoremove`, `go clean -modcache` and twelve more ran with no license check in a licensed build.
+- **The MCP `clean` tool takes the license gate too**, so an expired trial can no longer delete files through an agent. Scans and dry runs stay available.
+- **A failed Dashboard triage no longer reports a clean bill of health.** A scan that threw rendered the green "No triage groups found" success state, indistinguishable from a spotless Mac.
+- **The Duplicate Finder reports failed deletions.** Failed items produced no summary and no banner, and silently reappeared in the list. Cleanups now route through the shared summary view, with a busy state while they run.
+- **Disk Explorer up-navigation.** Escape reset the entire session — breadcrumb and cached sizes — instead of going up one level. It now goes up, and the ⌘[ shortcut has a visible control.
+- **Directories hidden behind "Others (N)".** In any folder with 12 or more sized children, everything under 1% of the largest was folded into an inert aggregate row in *both* list and treemap mode, making those folders unreachable. The list enumerates everything now, and the treemap tile opens the list.
+- **Deleting the local AI model verifies the removal** before reporting "Not downloaded", instead of leaving ~680 MB on disk while claiming it was freed.
+- **Nine post-action failures that were logged and never shown**, including `gargantua://activate` deep-link failures, audit-write failures across six destructive flows, Disk Explorer trash errors, "Deactivate this Mac", and a bundled-rules load failure that rendered as "no rules exist".
+- **Loading spinners on the Profiles, Rules, and Settings panes** were the system spinner, which is invisible against the app's background.
+
+### Security
+
+- **MCP SSE endpoints reject non-loopback `Host` headers.** A localhost bind requires no bearer token and nothing validated `Host`, so a web page whose DNS was re-pointed at `127.0.0.1` could reach the server as same-origin — including the destructive `clean` tool.
+- **The `clean` rate limit is keyed on the connection**, not the client's self-declared name. `initialize` has no once-per-connection guard, so a client could rename itself between cleans for an unlimited budget.
+- **The clean consent notification fails closed.** A server with no bundle identifier — `swift run GargantuaMCP`, the client config the README documents — cannot post one, and cleans were proceeding unprompted. Pass `--allow-unattended-clean` to accept that trade.
+
+### Changed
+
+- Settings no longer describes the MCP SSE endpoint as exposing "read-only" tools; it exposes `clean`, which deletes files.
+- The README no longer claims exposing the destructive MCP registry requires opting in — the shipped binary registers both registries.
+- Dropped the unused `trivy.yaml`; the OSV dependency scanner it duplicated now runs in CI instead of only by hand.
+
 ## [0.4.7] - 2026-07-11
 
 ### Added
