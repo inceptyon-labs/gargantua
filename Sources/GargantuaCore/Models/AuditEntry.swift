@@ -54,7 +54,10 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
     /// the action.
     public let commandToolVersion: String?
 
-    /// Process exit code for command-action entries. Nil for path entries.
+    /// Process exit code for command-action entries. Nil for path entries and
+    /// for tool-native entries that completed successfully; set when a
+    /// tool-native operation ran and exited non-zero, so a known, survivable
+    /// tool failure is recorded with the code that explains it.
     public let commandExitCode: Int32?
 
     /// Argument list passed to the tool for command-action entries. Captured

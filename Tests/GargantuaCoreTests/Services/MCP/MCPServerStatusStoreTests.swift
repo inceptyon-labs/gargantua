@@ -123,6 +123,78 @@ struct MCPServerStatusStoreTests {
         #expect(model.snapshot.recentActions.first?.bytesFreed == 42)
     }
 
+    @Test("MCPServerRecentAction carries the audit entry's status through")
+    func recentActionCarriesAuditEntryStatus() {
+        let attemptedEntry = AuditEntry(
+            id: UUID(uuidString: "00000000-0000-0000-0000-00000000A003")!,
+            timestamp: Date(timeIntervalSince1970: 40),
+            tool: "native",
+            command: "clean",
+            files: [],
+            safetyLevel: .safe,
+            confirmationMethod: .mcp,
+            bytesFreed: 0,
+            transport: "mcp",
+            clientID: "cursor",
+            status: .attempted
+        )
+
+        let action = MCPServerRecentAction(auditEntry: attemptedEntry)
+        #expect(action.status == .attempted)
+
+        let completedEntry = AuditEntry(
+            id: UUID(uuidString: "00000000-0000-0000-0000-00000000A004")!,
+            timestamp: Date(timeIntervalSince1970: 41),
+            tool: "native",
+            command: "clean",
+            files: [],
+            safetyLevel: .safe,
+            confirmationMethod: .mcp,
+            bytesFreed: 100,
+            transport: "mcp",
+            clientID: "cursor",
+            status: .completed
+        )
+        #expect(MCPServerRecentAction(auditEntry: completedEntry).status == .completed)
+    }
+
+    @Test("persisted snapshot JSON lacking the status key decodes recent actions as completed")
+    func persistedSnapshotWithoutStatusKeyDecodesAsCompleted() throws {
+        let url = temporaryStatusURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        // Simulates a snapshot persisted before `status` existed on
+        // MCPServerRecentAction — no "status" key in the recentActions entry.
+        let json = """
+        {
+            "state": "stopped",
+            "transportMode": "stdio",
+            "clients": [],
+            "recentActions": [
+                {
+                    "id": "00000000-0000-0000-0000-00000000A005",
+                    "timestamp": "1970-01-01T00:00:50Z",
+                    "command": "clean",
+                    "clientID": "cursor",
+                    "bytesFreed": 42
+                }
+            ],
+            "updatedAt": "1970-01-01T00:00:50Z"
+        }
+        """
+        try Data(json.utf8).write(to: url)
+
+        let persistence = MCPServerStatusPersistence(url: url)
+        let snapshot = try persistence.readSnapshot(now: Self.fixedDate)
+
+        #expect(snapshot.recentActions.count == 1)
+        #expect(snapshot.recentActions.first?.status == .completed)
+    }
+
     @MainActor
     @Test("view model starts asynchronously without refresh stomping the starting state")
     func viewModelStartsAsynchronously() async throws {

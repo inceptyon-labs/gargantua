@@ -98,7 +98,7 @@ extension DeveloperToolExecutionAdapterTests {
         #expect(entry.bytesFreed == 24_000_000)
     }
 
-    @Test("failure surfaces stderr and does not write audit")
+    @Test("failure surfaces stderr and writes a completed outcome entry with the exit code")
     func failureSurfacesStderr() throws {
         let docker = try makeScratchBinary(name: "docker")
         defer { try? FileManager.default.removeItem(at: docker.deletingLastPathComponent()) }
@@ -121,11 +121,16 @@ extension DeveloperToolExecutionAdapterTests {
         )) {
             _ = try adapter.execute(.dockerImagePrune, preview: dockerPreview(imageBytes: 500), confirmationMethod: .summaryDialog)
         }
-        // The prune ran and may have deleted before it failed, so the attempt
-        // is on record; only the outcome entry is absent.
-        #expect(audit.entries.count == 1)
+        // The prune ran and failed on its own terms — we know the exit code,
+        // so this is an outcome, not a crash. A surviving `.attempted` line
+        // would misreport this as the process having died mid-operation.
+        #expect(audit.entries.count == 2)
         #expect(audit.entries.first?.status == .attempted)
-        #expect(audit.entries.first?.bytesFreed == 0)
+        #expect(audit.entries.first?.id == audit.entries.last?.id)
+        let outcome = try #require(audit.entries.last)
+        #expect(outcome.status == .completed)
+        #expect(outcome.bytesFreed == 0)
+        #expect(outcome.commandExitCode == 1)
     }
 
     @Test("missing binary throws notInstalled and writes no audit entry")

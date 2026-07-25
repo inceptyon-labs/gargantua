@@ -292,10 +292,16 @@ public final class AuditWriter: Sendable {
                 }
             }
 
-            // `purgedCount` stays the age-purge count the API documents;
-            // superseded-line compaction is bookkeeping, not retention, but
-            // still has to trigger the rewrite.
-            if purgedCount > 0 || supersededCount > 0 {
+            // Only rewrite when retention actually removed something. Superseded
+            // intent lines are compacted opportunistically as part of that
+            // rewrite, never on their own: this is a read-modify-write whose
+            // final atomic rename replaces the inode, so a concurrent O_APPEND
+            // from the MCP server process would be silently destroyed. Firing it
+            // whenever any completed operation exists — i.e. almost always —
+            // would widen that window inside the very subsystem this two-phase
+            // record exists to protect. The reader collapses superseded lines
+            // anyway, so leaving them on disk costs one ~300-byte line per op.
+            if purgedCount > 0 {
                 let newContent = keptLines.joined(separator: "\n") + (keptLines.isEmpty ? "" : "\n")
                 try Data(newContent.utf8).write(to: logFile, options: .atomic)
             }

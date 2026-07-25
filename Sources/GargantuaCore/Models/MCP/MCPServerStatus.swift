@@ -66,18 +66,25 @@ public struct MCPServerRecentAction: Identifiable, Codable, Sendable, Equatable 
     public let clientID: String
     public let bytesFreed: Int64?
 
+    /// Whether the underlying audit entry was an attempt or an outcome. This
+    /// is the signal that lets the mini-log distinguish a crashed clean from
+    /// a completed 0-byte one.
+    public let status: AuditEntryStatus
+
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
         command: String,
         clientID: String,
-        bytesFreed: Int64? = nil
+        bytesFreed: Int64? = nil,
+        status: AuditEntryStatus = .completed
     ) {
         self.id = id
         self.timestamp = timestamp
         self.command = command
         self.clientID = clientID
         self.bytesFreed = bytesFreed
+        self.status = status
     }
 
     public init(auditEntry: AuditEntry) {
@@ -86,8 +93,30 @@ public struct MCPServerRecentAction: Identifiable, Codable, Sendable, Equatable 
             timestamp: auditEntry.timestamp,
             command: auditEntry.command,
             clientID: auditEntry.clientID ?? "unknown",
-            bytesFreed: auditEntry.bytesFreed
+            bytesFreed: auditEntry.bytesFreed,
+            status: auditEntry.status
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case timestamp
+        case command
+        case clientID
+        case bytesFreed
+        case status
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.timestamp = try container.decode(Date.self, forKey: .timestamp)
+        self.command = try container.decode(String.self, forKey: .command)
+        self.clientID = try container.decode(String.self, forKey: .clientID)
+        self.bytesFreed = try container.decodeIfPresent(Int64.self, forKey: .bytesFreed)
+        // Default to .completed so persisted snapshots written before this
+        // field existed decode cleanly.
+        self.status = (try container.decodeIfPresent(AuditEntryStatus.self, forKey: .status)) ?? .completed
     }
 }
 

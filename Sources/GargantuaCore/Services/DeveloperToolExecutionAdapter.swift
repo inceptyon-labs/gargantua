@@ -143,6 +143,24 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
         )
         guard output.exitCode == 0 else {
+            // The tool ran and failed on its own terms — we are alive and know
+            // the exit code, so this is an outcome, not a crash. Recording it
+            // as `.completed` keeps a surviving `.attempted` line meaning what
+            // its doc comment says it means: the process died mid-operation.
+            // `bytesFreed: 0` because a failed prune may still have deleted
+            // something and we have no way to know how much.
+            try auditRecorder.write(AuditEntry(
+                id: entryID,
+                tool: "developer-tools",
+                command: operation.commandName,
+                files: [],
+                safetyLevel: operation.safety,
+                confirmationMethod: confirmationMethod,
+                cleanupMethod: .toolNative,
+                bytesFreed: 0,
+                commandExitCode: output.exitCode,
+                status: .completed
+            ))
             throw DeveloperToolExecutionError.commandFailed(
                 operation: operation,
                 exitCode: output.exitCode,
@@ -198,15 +216,32 @@ public struct DeveloperToolExecutionAdapter: Sendable {
         ))
 
         var removedFiles: [AuditFile] = []
-
-        for target in targets where FileManager.default.fileExists(atPath: target.path) {
-            // TOCTOU guard: skip any target whose parent chain now resolves
-            // through a symlink, so a swapped path can't redirect removeItem
-            // onto an unselected file. Preview items carry no scan-time
-            // ancestry recording, so any symlink ancestor is rejected.
-            guard SymlinkSwapGuard.isUnchanged(target.url, scanTimeResolvedParent: nil) else { continue }
-            try FileManager.default.removeItem(at: target.url)
-            removedFiles.append(AuditFile(path: target.path, size: target.bytes))
+        do {
+            for target in targets where FileManager.default.fileExists(atPath: target.path) {
+                // TOCTOU guard: skip any target whose parent chain now resolves
+                // through a symlink, so a swapped path can't redirect removeItem
+                // onto an unselected file. Preview items carry no scan-time
+                // ancestry recording, so any symlink ancestor is rejected.
+                guard SymlinkSwapGuard.isUnchanged(target.url, scanTimeResolvedParent: nil) else { continue }
+                try FileManager.default.removeItem(at: target.url)
+                removedFiles.append(AuditFile(path: target.path, size: target.bytes))
+            }
+        } catch {
+            // We are alive and know exactly what came out. Record it before
+            // rethrowing, so the surviving record names the files actually
+            // removed rather than every candidate we intended to remove.
+            try? auditRecorder.write(AuditEntry(
+                id: entryID,
+                tool: "developer-tools",
+                command: operation.commandName,
+                files: removedFiles,
+                safetyLevel: operation.safety,
+                confirmationMethod: confirmationMethod,
+                cleanupMethod: .toolNative,
+                bytesFreed: 0,
+                status: .completed
+            ))
+            throw error
         }
 
         try auditRecorder.write(AuditEntry(
