@@ -61,6 +61,11 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
     /// verbatim so audit consumers can replay the exact invocation.
     public let commandArguments: [String]?
 
+    /// Whether this line records the attempt or the outcome. Decodes to
+    /// `.completed` when absent so entries written before the two-phase shape
+    /// existed read back as finished operations.
+    public let status: AuditEntryStatus
+
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -76,7 +81,8 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         kind: AuditEntryKind = .path,
         commandToolVersion: String? = nil,
         commandExitCode: Int32? = nil,
-        commandArguments: [String]? = nil
+        commandArguments: [String]? = nil,
+        status: AuditEntryStatus = .completed
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -93,6 +99,7 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         self.commandToolVersion = commandToolVersion
         self.commandExitCode = commandExitCode
         self.commandArguments = commandArguments
+        self.status = status
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -111,6 +118,7 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         case commandToolVersion = "command_tool_version"
         case commandExitCode = "command_exit_code"
         case commandArguments = "command_arguments"
+        case status
     }
 
     public init(from decoder: Decoder) throws {
@@ -132,7 +140,21 @@ public struct AuditEntry: Codable, Sendable, Identifiable {
         self.commandToolVersion = try container.decodeIfPresent(String.self, forKey: .commandToolVersion)
         self.commandExitCode = try container.decodeIfPresent(Int32.self, forKey: .commandExitCode)
         self.commandArguments = try container.decodeIfPresent([String].self, forKey: .commandArguments)
+        self.status = (try container.decodeIfPresent(AuditEntryStatus.self, forKey: .status)) ?? .completed
     }
+}
+
+/// Whether an entry records the *attempt* at a destructive operation or its
+/// *outcome*. Two entries sharing an `id` describe one operation: the intent
+/// line is written before anything touches disk, the outcome line after, and
+/// readers collapse the pair keeping the last.
+///
+/// An entry that survives as `.attempted` means the process died mid-operation.
+/// That is the whole point of the shape — without it a crash between the act
+/// and the record leaves no evidence the operation ever happened.
+public enum AuditEntryStatus: String, Codable, Sendable, CaseIterable {
+    case attempted
+    case completed
 }
 
 /// Discriminator for what kind of cleanup work an `AuditEntry` describes.

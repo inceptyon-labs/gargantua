@@ -209,9 +209,10 @@ public final class AuditWriter: Sendable {
         }
 
         let content = try String(contentsOf: logFile, encoding: .utf8)
-        let entries = content.split(separator: "\n").compactMap { line in
+        let decoded = content.split(separator: "\n").compactMap { line in
             try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8))
         }
+        let entries = Self.collapsingByID(decoded)
 
         if let modificationDate, let size {
             readCache.withLock {
@@ -219,6 +220,26 @@ public final class AuditWriter: Sendable {
             }
         }
         return entries
+    }
+
+    /// Collapse two-phase intent+outcome pairs into one effective entry each.
+    ///
+    /// A destructive operation appends an `.attempted` line before it acts and
+    /// a `.completed` line after, both carrying the same `id`. Consumers want
+    /// one row per operation, so the later line wins. An operation whose
+    /// process died mid-act leaves only the `.attempted` line, which survives
+    /// here — that surviving orphan is the forensic signal.
+    ///
+    /// Both the value and the position come from the last occurrence, so the
+    /// returned array still reads chronologically.
+    static func collapsingByID(_ entries: [AuditEntry]) -> [AuditEntry] {
+        var seen: Set<UUID> = []
+        var collapsed: [AuditEntry] = []
+        collapsed.reserveCapacity(entries.count)
+        for entry in entries.reversed() where seen.insert(entry.id).inserted {
+            collapsed.append(entry)
+        }
+        return collapsed.reversed()
     }
 
     // MARK: - Retention
@@ -239,23 +260,42 @@ public final class AuditWriter: Sendable {
             let lines = content.split(separator: "\n")
             let cutoff = now.addingTimeInterval(-Double(retentionDays) * 86400)
 
-            var keptLines: [String] = []
-            var purgedCount = 0
-
-            for line in lines {
+            // Last line index per id. Anything earlier with the same id is the
+            // superseded intent record of an operation that finished; the
+            // reader already ignores it, so compaction drops it rather than
+            // letting the log carry two lines per operation forever.
+            var lastIndexByID: [UUID: Int] = [:]
+            for (index, line) in lines.enumerated() {
                 if let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) {
-                    if entry.timestamp >= cutoff {
-                        keptLines.append(String(line))
-                    } else {
-                        purgedCount += 1
-                    }
-                } else {
-                    // Keep malformed lines to avoid silent data loss
-                    keptLines.append(String(line))
+                    lastIndexByID[entry.id] = index
                 }
             }
 
-            if purgedCount > 0 {
+            var keptLines: [String] = []
+            var purgedCount = 0
+            var supersededCount = 0
+
+            for (index, line) in lines.enumerated() {
+                guard let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) else {
+                    // Keep malformed lines to avoid silent data loss
+                    keptLines.append(String(line))
+                    continue
+                }
+                if lastIndexByID[entry.id] != index {
+                    supersededCount += 1
+                    continue
+                }
+                if entry.timestamp >= cutoff {
+                    keptLines.append(String(line))
+                } else {
+                    purgedCount += 1
+                }
+            }
+
+            // `purgedCount` stays the age-purge count the API documents;
+            // superseded-line compaction is bookkeeping, not retention, but
+            // still has to trigger the rewrite.
+            if purgedCount > 0 || supersededCount > 0 {
                 let newContent = keptLines.joined(separator: "\n") + (keptLines.isEmpty ? "" : "\n")
                 try Data(newContent.utf8).write(to: logFile, options: .atomic)
             }
