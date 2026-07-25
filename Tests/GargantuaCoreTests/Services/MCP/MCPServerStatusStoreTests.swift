@@ -230,5 +230,4 @@ struct MCPServerStatusStoreTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
             .appendingPathComponent("mcp-status.json")
     }
-
 }
