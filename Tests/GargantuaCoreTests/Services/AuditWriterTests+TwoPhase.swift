@@ -289,6 +289,82 @@ extension AuditWriterTests {
         #expect(entries.isEmpty)
     }
 
+    @Test("purgeEntries compaction keeps the surviving outcome line, not the superseded intent line")
+    func purgeEntriesCompactionKeepsSurvivingLine() throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let writer = AuditWriter(logDirectory: dir)
+        let now = Date()
+        let old = now.addingTimeInterval(-100 * 86400)
+
+        // Standalone aged-out entry: this alone makes purgedCount > 0 and
+        // triggers the rewrite branch, independent of the pair below.
+        let agedOut = AuditEntry(
+            timestamp: old,
+            tool: "native",
+            command: "clean",
+            files: [AuditFile(path: "/tmp/aged-standalone.txt", size: 100)],
+            safetyLevel: .safe,
+            confirmationMethod: .singleButton,
+            bytesFreed: 100
+        )
+        try writer.write(agedOut)
+
+        // Intent+outcome pair, both timestamps inside the retention window,
+        // so neither is purged by age — only the rewrite's id-compaction
+        // decides which of the two survives.
+        let pairID = UUID()
+        let intent = AuditEntry(
+            id: pairID,
+            timestamp: now,
+            tool: "native",
+            command: "clean",
+            files: [AuditFile(path: "/tmp/compaction-pair.txt", size: 100)],
+            safetyLevel: .safe,
+            confirmationMethod: .singleButton,
+            bytesFreed: 0,
+            status: .attempted
+        )
+        try writer.write(intent)
+
+        let outcome = AuditEntry(
+            id: pairID,
+            timestamp: now,
+            tool: "native",
+            command: "clean",
+            files: [AuditFile(path: "/tmp/compaction-pair.txt", size: 100)],
+            safetyLevel: .safe,
+            confirmationMethod: .singleButton,
+            bytesFreed: 250,
+            status: .completed
+        )
+        try writer.write(outcome)
+
+        let purged = try writer.purgeEntries(olderThanDays: 90, now: now)
+        #expect(purged == 1)
+
+        // Read the raw rewritten file: the aged-out entry purged, the
+        // superseded intent line compacted away, only the outcome line left.
+        // If `lastIndexByID` kept the FIRST index per id instead of the
+        // LAST, this compaction would keep the intent line and drop the
+        // outcome line instead — this assertion would then fail because the
+        // surviving line would decode with `bytesFreed == 0` and
+        // `status == .attempted`, not the values asserted below.
+        let content = try String(contentsOf: writer.logFile, encoding: .utf8)
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: true)
+        #expect(lines.count == 1)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let survivor = try #require(
+            lines.first.flatMap { try? decoder.decode(AuditEntry.self, from: Data($0.utf8)) }
+        )
+        #expect(survivor.status == .completed)
+        #expect(survivor.bytesFreed == 250)
+        #expect(survivor.id == pairID)
+    }
+
     @Test("purgeEntries keeps an orphaned attempted entry within retention")
     func purgeEntriesKeepsOrphanedAttempt() throws {
         let dir = try makeTempDir()

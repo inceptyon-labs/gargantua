@@ -66,9 +66,9 @@ public struct MCPServerRecentAction: Identifiable, Codable, Sendable, Equatable 
     public let clientID: String
     public let bytesFreed: Int64?
 
-    /// Whether the underlying audit entry was an attempt or an outcome. This
-    /// is the signal that lets the mini-log distinguish a crashed clean from
-    /// a completed 0-byte one.
+    /// Whether the underlying audit entry was an attempt or an outcome.
+    /// Carries the audit entry's two-phase status through to the snapshot so
+    /// a consumer can distinguish a crashed clean from a completed 0-byte one.
     public let status: AuditEntryStatus
 
     public init(

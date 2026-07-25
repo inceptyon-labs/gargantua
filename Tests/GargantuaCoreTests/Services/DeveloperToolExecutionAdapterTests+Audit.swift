@@ -38,13 +38,18 @@ extension DeveloperToolExecutionAdapterTests {
         defer { try? FileManager.default.removeItem(at: brew.deletingLastPathComponent()) }
 
         let audit = AuditSpy()
+        let runner = StubRunner(outputs: [
+            "brew cleanup": ProcessOutput(stdout: "Removed 12MB\n", stderr: "", exitCode: 0),
+        ])
+        // Observe at write time how many runner.run calls have completed. If
+        // the intent write moved to after runner.run, the first write's
+        // observation would flip from 0 to 1 and this test would fail.
+        audit.observeRunnerCallCount = { runner.calls.count }
         let adapter = DeveloperToolExecutionAdapter(
             resolver: DeveloperToolBinaryResolver(environment: [
                 DeveloperToolBinaryResolver.homebrewEnvVarName: brew.path,
             ]),
-            runner: StubRunner(outputs: [
-                "brew cleanup": ProcessOutput(stdout: "Removed 12MB\n", stderr: "", exitCode: 0),
-            ]),
+            runner: runner,
             auditRecorder: audit
         )
 
@@ -57,6 +62,10 @@ extension DeveloperToolExecutionAdapterTests {
         #expect(audit.entries.count == 2)
         #expect(audit.entries.first?.status == .attempted)
         #expect(audit.entries.first?.id == audit.entries.last?.id)
+        // The intent write must happen before runner.run, and the completed
+        // write after it — not merely that a pair exists once execution
+        // finishes.
+        #expect(audit.runnerCallCountAtWrite == [0, 1])
         let entry = try #require(audit.entries.last)
         #expect(result.estimatedBytesFreed == 12_000_000)
         #expect(entry.tool == "developer-tools")
@@ -131,6 +140,69 @@ extension DeveloperToolExecutionAdapterTests {
         #expect(outcome.status == .completed)
         #expect(outcome.bytesFreed == 0)
         #expect(outcome.commandExitCode == 1)
+    }
+
+    /// Runner that always throws, standing in for `DefaultProcessRunner`
+    /// surfacing `ProcessRunnerError.spawnFailed`/`.timedOut`/`.waitFailed`
+    /// when `posix_spawn` fails, the tool hangs past the timeout, or `wait4`
+    /// itself fails — none of which run the destructive tool.
+    final class ThrowingRunner: ProcessRunner, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _callCount = 0
+        let error: Error
+
+        init(error: Error) {
+            self.error = error
+        }
+
+        var callCount: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return _callCount
+        }
+
+        func run(executable: URL, arguments: [String]) throws -> ProcessOutput {
+            try run(executable: executable, arguments: arguments, timeout: nil)
+        }
+
+        func run(executable: URL, arguments: [String], timeout: TimeInterval?) throws -> ProcessOutput {
+            lock.lock()
+            _callCount += 1
+            lock.unlock()
+            throw error
+        }
+    }
+
+    @Test("a throw from runner.run writes a completed outcome entry instead of leaving an orphaned attempt")
+    func runnerThrowWritesCompletedOutcome() throws {
+        let brew = try makeScratchBinary(name: "brew")
+        defer { try? FileManager.default.removeItem(at: brew.deletingLastPathComponent()) }
+
+        let audit = AuditSpy()
+        let runner = ThrowingRunner(error: ProcessRunnerError.spawnFailed(errno: 2))
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.homebrewEnvVarName: brew.path,
+            ]),
+            runner: runner,
+            auditRecorder: audit
+        )
+
+        #expect(throws: ProcessRunnerError.spawnFailed(errno: 2)) {
+            _ = try adapter.execute(.homebrewCleanup, preview: homebrewPreview(bytes: 12_000_000), confirmationMethod: .summaryDialog)
+        }
+
+        // `posix_spawn` failing is a strictly false-record risk: NOTHING ran,
+        // yet a surviving `.attempted` line would claim a destructive prune
+        // died mid-flight. If the runner.run throw were left unhandled (the
+        // original gap), only the intent write would exist and this count
+        // would be 1, not 2.
+        #expect(audit.entries.count == 2)
+        #expect(audit.entries.first?.status == .attempted)
+        #expect(audit.entries.first?.id == audit.entries.last?.id)
+        let outcome = try #require(audit.entries.last)
+        #expect(outcome.status == .completed)
+        #expect(outcome.bytesFreed == 0)
     }
 
     @Test("missing binary throws notInstalled and writes no audit entry")

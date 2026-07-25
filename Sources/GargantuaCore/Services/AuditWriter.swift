@@ -273,7 +273,6 @@ public final class AuditWriter: Sendable {
 
             var keptLines: [String] = []
             var purgedCount = 0
-            var supersededCount = 0
 
             for (index, line) in lines.enumerated() {
                 guard let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) else {
@@ -282,7 +281,6 @@ public final class AuditWriter: Sendable {
                     continue
                 }
                 if lastIndexByID[entry.id] != index {
-                    supersededCount += 1
                     continue
                 }
                 if entry.timestamp >= cutoff {

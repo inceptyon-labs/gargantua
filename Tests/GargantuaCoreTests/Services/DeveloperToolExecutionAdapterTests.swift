@@ -43,15 +43,44 @@ struct DeveloperToolExecutionAdapterTests {
         private let lock = NSLock()
         private var _entries: [AuditEntry] = []
 
+        /// Optional hooks evaluated at the moment `write` is called, so tests
+        /// can observe world state (filesystem, runner call count) exactly
+        /// when each audit line lands rather than after `execute` returns —
+        /// the only way to pin down that an intent write happens *before* the
+        /// destructive act, not merely that the pair exists afterward.
+        var observeFileExists: (@Sendable () -> Bool)?
+        private var _fileExistsAtWrite: [Bool] = []
+
+        var observeRunnerCallCount: (@Sendable () -> Int)?
+        private var _runnerCallCountAtWrite: [Int] = []
+
         var entries: [AuditEntry] {
             lock.lock()
             defer { lock.unlock() }
             return _entries
         }
 
+        var fileExistsAtWrite: [Bool] {
+            lock.lock()
+            defer { lock.unlock() }
+            return _fileExistsAtWrite
+        }
+
+        var runnerCallCountAtWrite: [Int] {
+            lock.lock()
+            defer { lock.unlock() }
+            return _runnerCallCountAtWrite
+        }
+
         func write(_ entry: AuditEntry) throws {
             lock.lock()
             _entries.append(entry)
+            if let observeFileExists {
+                _fileExistsAtWrite.append(observeFileExists())
+            }
+            if let observeRunnerCallCount {
+                _runnerCallCountAtWrite.append(observeRunnerCallCount())
+            }
             lock.unlock()
         }
     }

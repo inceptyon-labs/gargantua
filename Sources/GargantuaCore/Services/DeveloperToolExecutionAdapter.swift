@@ -124,24 +124,38 @@ public struct DeveloperToolExecutionAdapter: Sendable {
         // prunes delete on their own schedule and give us no progress signal;
         // if we die while one is mid-flight the disk has already changed and
         // nothing else on the system would say so.
-        try auditRecorder.write(AuditEntry(
-            id: entryID,
-            tool: "developer-tools",
-            command: operation.commandName,
-            files: [],
-            safetyLevel: operation.safety,
+        try auditRecorder.write(toolAuditEntry(
+            entryID: entryID,
+            operation: operation,
             confirmationMethod: confirmationMethod,
-            cleanupMethod: .toolNative,
             bytesFreed: 0,
             status: .attempted
         ))
 
-        let output = try runner.run(
-            executable: executable,
-            arguments: operation.arguments,
-            timeout: timeout,
-            maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
-        )
+        let output: ProcessOutput
+        do {
+            output = try runner.run(
+                executable: executable,
+                arguments: operation.arguments,
+                timeout: timeout,
+                maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
+            )
+        } catch {
+            // Spawn/timeout/wait failure. We are alive and the tool either never
+            // started or was killed on our own timeout — an outcome we can
+            // describe, not a death mid-write. Recording it as `.completed`
+            // keeps a surviving `.attempted` line meaning what its doc comment
+            // says: the process died mid-operation. Best-effort so a secondary
+            // audit error cannot mask the process error the caller needs.
+            try? auditRecorder.write(toolAuditEntry(
+                entryID: entryID,
+                operation: operation,
+                confirmationMethod: confirmationMethod,
+                bytesFreed: 0,
+                status: .completed
+            ))
+            throw error
+        }
         guard output.exitCode == 0 else {
             // The tool ran and failed on its own terms — we are alive and know
             // the exit code, so this is an outcome, not a crash. Recording it
@@ -153,14 +167,10 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             // Best-effort, unlike the success-path write below: `commandFailed`
             // carries the exit code and stderr the caller needs to explain the
             // failure, and a secondary audit error must not replace it.
-            try? auditRecorder.write(AuditEntry(
-                id: entryID,
-                tool: "developer-tools",
-                command: operation.commandName,
-                files: [],
-                safetyLevel: operation.safety,
+            try? auditRecorder.write(toolAuditEntry(
+                entryID: entryID,
+                operation: operation,
                 confirmationMethod: confirmationMethod,
-                cleanupMethod: .toolNative,
                 bytesFreed: 0,
                 commandExitCode: output.exitCode,
                 status: .completed
@@ -172,14 +182,10 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             )
         }
 
-        try auditRecorder.write(AuditEntry(
-            id: entryID,
-            tool: "developer-tools",
-            command: operation.commandName,
-            files: [],
-            safetyLevel: operation.safety,
+        try auditRecorder.write(toolAuditEntry(
+            entryID: entryID,
+            operation: operation,
             confirmationMethod: confirmationMethod,
-            cleanupMethod: .toolNative,
             bytesFreed: estimatedBytes,
             status: .completed
         ))
@@ -189,6 +195,31 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             commandPreview: commandPreview,
             output: output,
             estimatedBytesFreed: estimatedBytes
+        )
+    }
+
+    /// Builds the `developer-tools` audit entry shared by the intent write
+    /// and every outcome write in `execute`. `files` is always empty here —
+    /// non-Cargo tool-native operations don't enumerate individual paths.
+    private func toolAuditEntry(
+        entryID: UUID,
+        operation: DeveloperToolCleanupOperation,
+        confirmationMethod: ConfirmationTier,
+        bytesFreed: Int64,
+        commandExitCode: Int32? = nil,
+        status: AuditEntryStatus
+    ) -> AuditEntry {
+        AuditEntry(
+            id: entryID,
+            tool: "developer-tools",
+            command: operation.commandName,
+            files: [],
+            safetyLevel: operation.safety,
+            confirmationMethod: confirmationMethod,
+            cleanupMethod: .toolNative,
+            bytesFreed: bytesFreed,
+            commandExitCode: commandExitCode,
+            status: status
         )
     }
 

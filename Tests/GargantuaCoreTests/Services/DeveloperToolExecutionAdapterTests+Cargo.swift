@@ -34,6 +34,12 @@ extension DeveloperToolExecutionAdapterTests {
             auditRecorder: audit
         )
 
+        // Observe at write time whether `registrySrc` still exists on disk.
+        // If the intent write moved to after the removeItem loop, the first
+        // write's observation would flip from true to false and this test
+        // would fail.
+        audit.observeFileExists = { FileManager.default.fileExists(atPath: registrySrc.path) }
+
         var preview = cargoPreview(registrySrc: registrySrc, gitCheckouts: gitCheckouts)
         preview = DeveloperToolPreview(
             tool: preview.tool,
@@ -60,6 +66,10 @@ extension DeveloperToolExecutionAdapterTests {
         #expect(audit.entries.count == 2)
         #expect(audit.entries.first?.status == .attempted)
         #expect(audit.entries.first?.id == audit.entries.last?.id)
+        // The intent write must happen before the destructive removeItem
+        // loop, and the completed write after it — not merely that a pair
+        // exists once execution finishes.
+        #expect(audit.fileExistsAtWrite == [true, false])
         let intentEntry = try #require(audit.entries.first)
         #expect(
             intentEntry.files.map(\.path).sorted() ==
