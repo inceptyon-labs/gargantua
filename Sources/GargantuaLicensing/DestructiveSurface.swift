@@ -11,14 +11,25 @@ extension BlockReason: Error {}
 ///
 /// This is not documentation — it is load-bearing. Each case names a surface
 /// that must obtain a ``DestructiveActionAuthorization`` before it can reach
-/// one of those four. Adding a caller of them without adding a case here is a
-/// compile error at the call site, not a review miss.
+/// one of those four. The compile-time guarantee is narrow but real: a caller
+/// of `CleanupEngine.clean`, `UninstallExecutor`'s real run, the Spotlight
+/// orphan-rule writer, or the Developer Tools command runner cannot invoke
+/// them without presenting a token, so a surface that forgets the gate fails
+/// to build. It is *not* a guarantee that nothing inside `GargantuaCore` can
+/// touch the disk — module-internal helpers such as
+/// `CleanupEngine.recycleSingle(url:item:)` and `deleteSingle(url:item:)`
+/// delete files and take no token; they are reachable from other files in the
+/// module and are covered only by the gate their callers pass through.
 ///
-/// Two shipping features destroy user data outside that boundary and are
+/// Three shipping features destroy user data outside that boundary and are
 /// deliberately not enumerated here: Background Items
-/// (`DefaultBackgroundItemTrasher`) and the File Organizer
-/// (`OrganizerExecutor`). Whether they should require a license is a product
-/// decision that has not been made; do not read their absence as coverage.
+/// (`DefaultBackgroundItemTrasher`), the File Organizer (`OrganizerExecutor`),
+/// and Disk Explorer's per-row "Move to Trash"
+/// (`DirectoryRowView.moveToTrash()` and
+/// `DirectoryTreemapCellView.moveToTrash()`, both calling
+/// `NSWorkspace.shared.recycle` directly on the selected path). Whether they
+/// should require a license is a product decision that has not been made; do
+/// not read their absence as coverage.
 public enum DestructiveSurface: String, CaseIterable, Sendable {
     case deepClean
     case devArtifacts
@@ -66,6 +77,12 @@ public struct DestructiveActionAuthorization: Sendable, Equatable {
     }
 }
 
+/// What ``LicenseGate/authorize(_:)`` hands back: the token on success, the
+/// `BlockReason` that drives the Unlock sheet (GUI) or the tool error (MCP) on
+/// failure. Views and controllers that inject the call for testing express
+/// their provider closures in terms of this so the shape is declared once.
+public typealias DestructiveAuthorizationResult = Result<DestructiveActionAuthorization, BlockReason>
+
 public extension LicenseGate {
     /// The only production mint for ``DestructiveActionAuthorization``.
     ///
@@ -78,9 +95,20 @@ public extension LicenseGate {
     /// same answer. If tiered licensing ever makes the answer per-surface,
     /// every call site that does not check `authorization.surface` becomes a
     /// real hole and has to be revisited.
+    ///
+    /// That is also why the boundaries check `surface` inconsistently, and why
+    /// making them uniform would be wrong. `UninstallExecutor` and the
+    /// Spotlight orphan-rule writer mint and consume a token within the same
+    /// call, so they can assert the surface matches as defense-in-depth.
+    /// `CleanupEngine.clean` and `DeveloperToolsExecutionFlow.execute`
+    /// legitimately accept a token minted elsewhere and forwarded in — the
+    /// uninstaller's `WorkspaceUninstallRemover.moveToTrash` hands a
+    /// `.uninstaller` token straight to `CleanupEngine.clean` — so they
+    /// deliberately do not assert on it. The surface-independent decision is
+    /// what makes that forwarding sound.
     func authorize(
         _ surface: DestructiveSurface
-    ) async -> Result<DestructiveActionAuthorization, BlockReason> {
+    ) async -> DestructiveAuthorizationResult {
         if case .blocked(let reason) = await canExecuteDestructiveAction() {
             return .failure(reason)
         }

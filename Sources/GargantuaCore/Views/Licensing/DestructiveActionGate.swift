@@ -3,8 +3,8 @@ import GargantuaLicensing
 import SwiftUI
 
 /// Shared sheet wiring for every GUI surface that deletes files — Deep Clean,
-/// AI Models, Duplicate Finder, File Health, Dev Artifacts, and the summary
-/// "retry failed" path.
+/// AI Models, Duplicate Finder, File Health, Dev Artifacts, Developer Tools,
+/// Agent Run, and the summary "retry failed" path.
 ///
 /// The gate decision itself is made by ``LicenseGate/authorize(_:)``, which
 /// mints a ``DestructiveActionAuthorization`` on success or returns the

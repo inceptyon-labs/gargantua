@@ -21,6 +21,12 @@
 # Callers should use this instead of `swift test` when running tests locally,
 # especially integration tests that exercise MLX. CI can either call this
 # script directly or add the same staging step before `swift test`.
+#
+# Constraint: `-c release` does not build the tests. Test call sites mint
+# authorization tokens with `DestructiveActionAuthorization.unchecked(_:)`,
+# which is `#if DEBUG` on purpose so the bypass is absent from shipped
+# binaries. The debug configuration is the only one the test target compiles
+# in; nothing in CI or muter runs release tests.
 
 set -euo pipefail
 

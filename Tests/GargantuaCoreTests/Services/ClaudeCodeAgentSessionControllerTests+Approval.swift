@@ -221,6 +221,9 @@ extension ClaudeCodeAgentSessionControllerTests {
         // pending so the user can re-approve after unlocking.
         #expect(controller.pendingApproval?.gateID == pending.gateID)
         #expect(controller.approvalGates.first?.status == .pending)
+        // And the reason is published so ClaudeCodeAgentView can raise the
+        // shared Unlock sheet — a transcript line alone is a dead end.
+        #expect(controller.blockedReason == .noLicense)
     }
 
     @Test("An allowed license gate lets agent cleanup run to completion")

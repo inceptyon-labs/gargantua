@@ -74,6 +74,7 @@ public struct ClaudeCodeAgentView: View {
                 .transition(.opacity)
             }
         }
+        .destructiveActionGate(reason: $controller.blockedReason)
     }
 
     private var header: some View {

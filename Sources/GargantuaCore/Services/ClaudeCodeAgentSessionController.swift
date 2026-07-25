@@ -24,12 +24,9 @@ public struct ClaudeCodeAgentPendingApproval: Sendable {
 
 @MainActor
 public final class ClaudeCodeAgentSessionController: ObservableObject {
-    /// Mirrors `LicenseGate.authorize(_:)`: the token on success, the
-    /// `BlockReason` that drives the blocked-cleanup transcript event on
-    /// failure. Injected so tests can reach the blocked branch without the
-    /// trial machinery.
-    public typealias GateAuthorizationProvider =
-        @Sendable () async -> Result<DestructiveActionAuthorization, BlockReason>
+    /// Mirrors `LicenseGate.authorize(_:)`. Injected so tests can reach the
+    /// blocked branch without the trial machinery.
+    public typealias GateAuthorizationProvider = @Sendable () async -> DestructiveAuthorizationResult
 
     @Published public private(set) var status: ClaudeCodeAgentSessionStatus = .idle
     @Published public private(set) var events: [ClaudeCodeAgentTranscriptEvent] = []
@@ -60,6 +57,12 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// alongside the items closes the gap where the user couldn't see why
     /// each row was selected.
     @Published public internal(set) var lastAssistantText: String = ""
+    /// Set when `confirmPendingApproval` is denied a
+    /// ``DestructiveActionAuthorization``. `ClaudeCodeAgentView` binds it to
+    /// ``SwiftUI/View/destructiveActionGate(reason:)`` so a blocked user gets
+    /// the same Unlock sheet — and the same route to checkout — every other
+    /// destructive surface offers, rather than only a transcript line.
+    @Published public internal(set) var blockedReason: BlockReason?
 
     private let runner: ClaudeCodeAgentSessionRunner
     private let cleanupEngine: CleanupEngine
@@ -275,6 +278,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
                     stream: .system,
                     message: Self.blockedCleanupMessage(for: reason)
                 ))
+                blockedReason = reason
                 pendingApproval = pending
                 return
             }

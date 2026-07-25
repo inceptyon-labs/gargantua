@@ -20,11 +20,9 @@ public struct DeveloperToolsView: View {
         DeveloperToolPreview,
         ConfirmationTier
     ) throws -> DeveloperToolExecutionResult
-    /// Mirrors `LicenseGate.authorize(_:)`: the token on success, the
-    /// `BlockReason` that drives the Unlock sheet on failure. Injected so tests
-    /// can reach the blocked branch without the trial machinery.
-    public typealias GateAuthorizationProvider =
-        @Sendable () async -> Result<DestructiveActionAuthorization, BlockReason>
+    /// Mirrors `LicenseGate.authorize(_:)`. Injected so tests can reach the
+    /// blocked branch without the trial machinery.
+    public typealias GateAuthorizationProvider = @Sendable () async -> DestructiveAuthorizationResult
 
     let availabilityProvider: AvailabilityProvider
     let previewProvider: PreviewProvider

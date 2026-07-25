@@ -92,7 +92,13 @@ jobs:
       # lcov export because rebuilding with the flag replaces the instrumented
       # test binary the export step reads.
       - name: Test (licensing build)
-        run: GARGANTUA_LICENSING=1 swift test
+        run: |
+          set -o pipefail
+          GARGANTUA_LICENSING=1 swift test 2>&1 | tee licensed-test.log
+          # A licensing-only test has to appear in the output. Without this the
+          # step would pass green if the flag never reached the compiler and the
+          # unlicensed suite simply re-ran.
+          grep -q 'Every surface is denied authorization when the gate is blocked' licensed-test.log
 
       - name: Enforce coverage floor (78%)
         run: Scripts/coverage-priorities.sh coverage.lcov --fail-under 78
