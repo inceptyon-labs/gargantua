@@ -1,3 +1,4 @@
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -21,14 +22,16 @@ struct SpotlightOrphanRulesPanelViewModelTests {
     private func model(
         store: FakeStore,
         installed: Set<String> = [],
-        gate: @escaping @Sendable () async -> Bool = { true }
+        gate: @escaping @Sendable () async -> DestructiveActionAuthorization? = {
+            .unchecked(.spotlightOrphanRules)
+        }
     ) -> SpotlightOrphanRulesPanelViewModel {
         SpotlightOrphanRulesPanelViewModel(
             scanner: SpotlightOrphanRuleScanner(
                 reader: store,
                 writer: store,
                 resolver: Resolver(installed: installed),
-                canExecuteDestructive: gate
+                authorizeDestructive: gate
             )
         )
     }
@@ -62,7 +65,7 @@ struct SpotlightOrphanRulesPanelViewModelTests {
     @Test("a blocked license surfaces a blocked notice and writes nothing")
     func pruneBlocked() async {
         let store = FakeStore(["com.gone.app"])
-        let model = model(store: store, installed: [], gate: { false })
+        let model = model(store: store, installed: [], gate: { nil })
         model.load()
 
         await model.prune()

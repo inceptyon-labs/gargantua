@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -60,7 +61,7 @@ struct SpotlightOrphanRuleScannerTests {
             reader: FakeReader(ids: Self.mixedRules),
             writer: writer,
             resolver: FakeResolver(installed: ["com.docker.docker"]),
-            canExecuteDestructive: { true }
+            authorizeDestructive: { .unchecked(.spotlightOrphanRules) }
         )
 
         let outcome = try await scanner.prune(dryRun: true)
@@ -76,7 +77,7 @@ struct SpotlightOrphanRuleScannerTests {
             reader: FakeReader(ids: Self.mixedRules),
             writer: writer,
             resolver: FakeResolver(installed: ["com.docker.docker"]),
-            canExecuteDestructive: { true }
+            authorizeDestructive: { .unchecked(.spotlightOrphanRules) }
         )
 
         let outcome = try await scanner.prune()
@@ -96,7 +97,7 @@ struct SpotlightOrphanRuleScannerTests {
             reader: FakeReader(ids: Self.mixedRules),
             writer: writer,
             resolver: FakeResolver(installed: []),
-            canExecuteDestructive: { false }
+            authorizeDestructive: { nil }
         )
 
         await #expect(throws: SpotlightOrphanRuleScanner.PruneError.destructiveActionBlocked) {
@@ -112,7 +113,7 @@ struct SpotlightOrphanRuleScannerTests {
             reader: FakeReader(ids: ["System.Applications", "com.apple.Safari", "com.docker.docker"]),
             writer: writer,
             resolver: FakeResolver(installed: ["com.docker.docker"]),
-            canExecuteDestructive: { true }
+            authorizeDestructive: { .unchecked(.spotlightOrphanRules) }
         )
 
         let outcome = try await scanner.prune()

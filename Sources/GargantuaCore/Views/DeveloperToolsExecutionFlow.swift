@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import OSLog
 import SwiftUI
 
@@ -265,18 +266,25 @@ extension DeveloperToolsView {
     /// surfaces. Checked before `executingOperationID` is set so a blocked user
     /// gets the Unlock sheet rather than a spinner that never resolves.
     func runGatedExecution(_ request: ExecutionRequest) async {
-        if let reason = await DestructiveActionGate.blockReason(decide: gateDecision) {
+        let authorization: DestructiveActionAuthorization
+        switch await gateAuthorization() {
+        case .failure(let reason):
             await MainActor.run { session.blockedReason = reason }
             return
+        case .success(let granted):
+            authorization = granted
         }
         await MainActor.run {
             session.executingOperationID = request.operation.id
             session.executionNotices[request.operation.id] = nil
         }
-        await execute(request)
+        await execute(request, authorization: authorization)
     }
 
-    func execute(_ request: ExecutionRequest) async {
+    /// - Parameter authorization: Proof the license gate allowed this command.
+    ///   Required so the only way to reach the command runner is through
+    ///   ``runGatedExecution(_:)``.
+    func execute(_ request: ExecutionRequest, authorization: DestructiveActionAuthorization) async {
         let operation = request.operation
         let beforeBytes = operation.estimatedReclaimableBytes(in: request.preview)
         let tier = confirmationTier(for: [Self.confirmationItem(for: request)])

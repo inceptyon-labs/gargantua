@@ -41,7 +41,7 @@ struct DeveloperToolsExecutionGateTests {
                     estimatedBytesFreed: 0
                 )
             },
-            gateDecision: { .blocked(reason: .trialExpired) }
+            gateAuthorization: { .failure(.trialExpired) }
         )
 
         await view.runGatedExecution(makeRequest())
@@ -70,7 +70,7 @@ struct DeveloperToolsExecutionGateTests {
                     estimatedBytesFreed: 0
                 )
             },
-            gateDecision: { .allowed }
+            gateAuthorization: { .success(.unchecked(.developerTools)) }
         )
 
         await view.runGatedExecution(makeRequest())

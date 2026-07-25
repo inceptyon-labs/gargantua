@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 @testable import GargantuaCore
 
 // MARK: - Fixtures
@@ -71,6 +72,7 @@ struct StubPlanner: UninstallPlanning {
 final class StubExecutor: UninstallExecuting, @unchecked Sendable {
     var planSeen: UninstallPlan?
     var optionsSeen: UninstallExecutionOptions?
+    var authorizationSeen: DestructiveActionAuthorization?
     var result: Result<UninstallExecutionResult, Error>
 
     init(result: Result<UninstallExecutionResult, Error>) {
@@ -78,9 +80,14 @@ final class StubExecutor: UninstallExecuting, @unchecked Sendable {
     }
 
     @MainActor
-    func execute(_ plan: UninstallPlan, options: UninstallExecutionOptions) async throws -> UninstallExecutionResult {
+    func execute(
+        _ plan: UninstallPlan,
+        options: UninstallExecutionOptions,
+        authorization: DestructiveActionAuthorization?
+    ) async throws -> UninstallExecutionResult {
         planSeen = plan
         optionsSeen = options
+        authorizationSeen = authorization
         return try result.get()
     }
 }

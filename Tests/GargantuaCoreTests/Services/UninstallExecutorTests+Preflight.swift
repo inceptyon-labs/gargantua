@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -22,7 +23,8 @@ extension UninstallExecutorTests {
         await #expect(throws: UninstallExecutionError.authorizationRequired) {
             _ = try await executor.execute(
                 UninstallPlan(app: app, appBundle: bundle, remnants: [ordinary]),
-                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+                authorization: .unchecked(.uninstaller)
             )
         }
 
@@ -50,7 +52,8 @@ extension UninstallExecutorTests {
         await #expect(throws: UninstallExecutionError.authorizationRequired) {
             _ = try await executor.execute(
                 Self.makePlan(remnants: [ordinary, privileged]),
-                options: UninstallExecutionOptions(includeProtectedItems: true, confirmationMethod: .fullModal)
+                options: UninstallExecutionOptions(includeProtectedItems: true, confirmationMethod: .fullModal),
+                authorization: .unchecked(.uninstaller)
             )
         }
 

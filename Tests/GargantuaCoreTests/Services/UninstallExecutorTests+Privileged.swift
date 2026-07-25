@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -17,7 +18,8 @@ extension UninstallExecutorTests {
         await #expect(throws: UninstallExecutionError.protectedItemsRequireFullModalOverride) {
             _ = try await executor.execute(
                 Self.makePlan(remnants: [item]),
-                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+                authorization: .unchecked(.uninstaller)
             )
         }
         #expect(remover.removedPaths.isEmpty)
@@ -38,7 +40,8 @@ extension UninstallExecutorTests {
         await #expect(throws: UninstallExecutionError.authorizationRequired) {
             _ = try await executor.execute(
                 Self.makePlan(remnants: [item]),
-                options: UninstallExecutionOptions(includeProtectedItems: true, confirmationMethod: .fullModal)
+                options: UninstallExecutionOptions(includeProtectedItems: true, confirmationMethod: .fullModal),
+                authorization: .unchecked(.uninstaller)
             )
         }
 
@@ -48,7 +51,8 @@ extension UninstallExecutorTests {
                 includeProtectedItems: true,
                 confirmationMethod: .fullModal,
                 authorization: .authorizedForTesting
-            )
+            ),
+            authorization: .unchecked(.uninstaller)
         )
 
         #expect(helper.removedPaths == [item.path])
@@ -83,7 +87,8 @@ extension UninstallExecutorTests {
             options: UninstallExecutionOptions(
                 confirmationMethod: .summaryDialog,
                 authorization: .authorizedForTesting
-            )
+            ),
+            authorization: .unchecked(.uninstaller)
         )
 
         #expect(helper.removedPaths == [app.bundlePath])

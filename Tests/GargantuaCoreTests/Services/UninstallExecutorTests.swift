@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -21,7 +22,8 @@ struct UninstallExecutorTests {
 
         let result = try await executor.execute(
             Self.makePlan(remnants: [item]),
-            options: UninstallExecutionOptions(dryRun: true, confirmationMethod: .singleButton)
+            options: UninstallExecutionOptions(dryRun: true, confirmationMethod: .singleButton),
+            authorization: nil
         )
 
         #expect(result.dryRun)
@@ -45,7 +47,8 @@ struct UninstallExecutorTests {
 
         let result = try await executor.execute(
             Self.makePlan(remnants: [item]),
-            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+            authorization: .unchecked(.uninstaller)
         )
 
         #expect(result.cleanupResult.allSucceeded)
@@ -82,7 +85,8 @@ struct UninstallExecutorTests {
 
         let result = try await executor.execute(
             Self.makePlan(remnants: [file, rule]),
-            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+            authorization: .unchecked(.uninstaller)
         )
 
         #expect(spotlight.removed == ["com.example.Demo"])
@@ -114,7 +118,8 @@ struct UninstallExecutorTests {
 
         let result = try await executor.execute(
             UninstallPlan(app: app, appBundle: bundle),
-            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+            authorization: .unchecked(.uninstaller)
         )
 
         #expect(remover.removedPaths == [app.bundlePath])
@@ -143,7 +148,8 @@ struct UninstallExecutorTests {
 
         _ = try await executor.execute(
             UninstallPlan(app: app, appBundle: bundle),
-            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog)
+            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+            authorization: .unchecked(.uninstaller)
         )
 
         #expect(terminator.terminatedBundleIDs == [app.bundleID])

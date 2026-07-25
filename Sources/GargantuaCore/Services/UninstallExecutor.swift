@@ -100,7 +100,8 @@ public enum UninstallExecutionError: Error, Equatable, LocalizedError {
 
 public protocol UninstallRemoving: AnyObject, Sendable {
     /// - Parameter authorization: Proof the license gate allowed this uninstall.
-    ///   `UninstallExecutor.execute` mints it once and threads it through here.
+    ///   The caller of `UninstallExecutor.execute` mints it once and the
+    ///   executor threads it through here.
     @MainActor
     func moveToTrash(
         _ item: ScanResult,
@@ -130,10 +131,14 @@ extension AuditWriter: UninstallAuditRecording {}
 
 /// Executes an `UninstallPlan` — test seam for the Smart Uninstaller UI.
 public protocol UninstallExecuting: Sendable {
+    /// - Parameter authorization: Proof the license gate allowed this uninstall.
+    ///   `nil` is accepted only for `options.dryRun`, which touches nothing; a
+    ///   real run without a token throws `UninstallExecutionError.licenseBlocked`.
     @MainActor
     func execute(
         _ plan: UninstallPlan,
-        options: UninstallExecutionOptions
+        options: UninstallExecutionOptions,
+        authorization: DestructiveActionAuthorization?
     ) async throws -> UninstallExecutionResult
 }
 
@@ -190,7 +195,8 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
     @MainActor
     public func execute(
         _ plan: UninstallPlan,
-        options: UninstallExecutionOptions
+        options: UninstallExecutionOptions,
+        authorization: DestructiveActionAuthorization?
     ) async throws -> UninstallExecutionResult {
         guard options.cleanupMethod == .trash else {
             throw UninstallExecutionError.unsupportedCleanupMethod(options.cleanupMethod)
@@ -202,12 +208,10 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
             return dryRunResult(items: scanItems)
         }
 
-        let authorization: DestructiveActionAuthorization
-        switch await LicenseGate.shared.authorize(.uninstaller) {
-        case .failure(let reason):
-            throw UninstallExecutionError.licenseBlocked(reason)
-        case .success(let granted):
-            authorization = granted
+        // A real run destroys files, so the caller has to prove the license
+        // gate allowed it. Dry runs returned above and stay open to everyone.
+        guard let authorization, authorization.surface == .uninstaller else {
+            throw UninstallExecutionError.licenseBlocked(.noLicense)
         }
 
         try validateProtection(for: items, options: options)

@@ -236,11 +236,8 @@ extension SpotlightOrphanRuleScanner {
             reader: store,
             writer: store,
             resolver: WorkspaceInstalledAppResolver(),
-            canExecuteDestructive: {
-                if case .allowed = await LicenseGate.shared.canExecuteDestructiveAction() {
-                    return true
-                }
-                return false
+            authorizeDestructive: {
+                try? await LicenseGate.shared.authorize(.spotlightOrphanRules).get()
             }
         )
     }

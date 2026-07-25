@@ -95,7 +95,8 @@ extension SmartUninstallerViewModel {
                 authorization: authorizationProvider()
             )
             do {
-                let result = try await exec.execute(pruned, options: options)
+                let authorization = try await uninstallAuthorization()
+                let result = try await exec.execute(pruned, options: options, authorization: authorization)
                 pruneUninstalledApps([pruned.app])
                 results.append(result)
             } catch {

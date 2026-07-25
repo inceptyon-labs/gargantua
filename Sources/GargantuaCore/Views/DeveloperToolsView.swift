@@ -20,12 +20,16 @@ public struct DeveloperToolsView: View {
         DeveloperToolPreview,
         ConfirmationTier
     ) throws -> DeveloperToolExecutionResult
-    public typealias GateDecisionProvider = @Sendable () async -> GateDecision
+    /// Mirrors `LicenseGate.authorize(_:)`: the token on success, the
+    /// `BlockReason` that drives the Unlock sheet on failure. Injected so tests
+    /// can reach the blocked branch without the trial machinery.
+    public typealias GateAuthorizationProvider =
+        @Sendable () async -> Result<DestructiveActionAuthorization, BlockReason>
 
     let availabilityProvider: AvailabilityProvider
     let previewProvider: PreviewProvider
     let executionProvider: ExecutionProvider
-    let gateDecision: GateDecisionProvider
+    let gateAuthorization: GateAuthorizationProvider
     let dockerControl: DockerDaemonControl
 
     /// Session-scoped state hoisted out of the view so navigating away and
@@ -81,8 +85,8 @@ public struct DeveloperToolsView: View {
         executionProvider: @escaping ExecutionProvider = {
             try DeveloperToolExecutionAdapter().execute($0, preview: $1, confirmationMethod: $2)
         },
-        gateDecision: @escaping GateDecisionProvider = {
-            await LicenseGate.shared.canExecuteDestructiveAction()
+        gateAuthorization: @escaping GateAuthorizationProvider = {
+            await LicenseGate.shared.authorize(.developerTools)
         },
         dockerControl: DockerDaemonControl = DockerDaemonControl()
     ) {
@@ -90,7 +94,7 @@ public struct DeveloperToolsView: View {
         self.availabilityProvider = availabilityProvider
         self.previewProvider = previewProvider
         self.executionProvider = executionProvider
-        self.gateDecision = gateDecision
+        self.gateAuthorization = gateAuthorization
         self.dockerControl = dockerControl
     }
 

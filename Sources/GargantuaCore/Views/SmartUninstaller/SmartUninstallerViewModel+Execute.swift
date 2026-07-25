@@ -1,6 +1,23 @@
 import Foundation
+import GargantuaLicensing
 
 extension SmartUninstallerViewModel {
+
+    // MARK: - License gate
+
+    /// Mint the destructive-action token `UninstallExecutor.execute` requires.
+    ///
+    /// Throwing `UninstallExecutionError.licenseBlocked` keeps a blocked
+    /// license on the exact path — and the exact user-facing copy — the
+    /// single-app and batch catch blocks already render for it.
+    func uninstallAuthorization() async throws -> DestructiveActionAuthorization {
+        switch await LicenseGate.shared.authorize(.uninstaller) {
+        case .success(let authorization):
+            return authorization
+        case .failure(let reason):
+            throw UninstallExecutionError.licenseBlocked(reason)
+        }
+    }
 
     // MARK: - Single-app execute
 
@@ -32,7 +49,8 @@ extension SmartUninstallerViewModel {
         phase = .executing(prunedPlan)
         let exec = observing(executor)
         do {
-            let result = try await exec.execute(prunedPlan, options: options)
+            let authorization = try await uninstallAuthorization()
+            let result = try await exec.execute(prunedPlan, options: options, authorization: authorization)
             // Drop the app from the cached picker list when its bundle is
             // gone, so navigating back lands on a fresh list without a full
             // rescan. Idempotent: pruneUninstalledApps stat-checks each path.

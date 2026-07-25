@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 
 /// Detects and (optionally) prunes orphaned `com.apple.Spotlight`
 /// `EnabledPreferenceRules` — dead reverse-DNS bundle-id rows left behind in
@@ -13,24 +14,27 @@ import Foundation
 /// - `System.*` and `com.apple.*` rules are never touched.
 /// - Only entries that look like third-party bundle ids AND whose app is not
 ///   installed are dropped.
-/// - The destructive rewrite is gated behind `canExecuteDestructive` and is a
-///   no-op in `dryRun`.
+/// - The destructive rewrite requires a ``DestructiveActionAuthorization`` from
+///   `authorizeDestructive` and is a no-op in `dryRun`.
 public struct SpotlightOrphanRuleScanner: Sendable {
     private let reader: any SpotlightRulesReading
     private let writer: (any SpotlightRulesWriting)?
     private let resolver: any InstalledAppResolving
-    private let canExecuteDestructive: @Sendable () async -> Bool
+    private let authorizeDestructive: @Sendable () async -> DestructiveActionAuthorization?
 
+    /// - Parameter authorizeDestructive: Mints the token `prune()` needs.
+    ///   Defaults to refusing, so a scanner assembled without an explicit gate
+    ///   can scan but never rewrite; ``live()`` wires the real `LicenseGate`.
     public init(
         reader: any SpotlightRulesReading,
         writer: (any SpotlightRulesWriting)? = nil,
         resolver: any InstalledAppResolving,
-        canExecuteDestructive: @escaping @Sendable () async -> Bool = { true }
+        authorizeDestructive: @escaping @Sendable () async -> DestructiveActionAuthorization? = { nil }
     ) {
         self.reader = reader
         self.writer = writer
         self.resolver = resolver
-        self.canExecuteDestructive = canExecuteDestructive
+        self.authorizeDestructive = authorizeDestructive
     }
 
     /// Returns the orphaned rules without modifying anything.
@@ -80,7 +84,10 @@ public struct SpotlightOrphanRuleScanner: Sendable {
             return PruneOutcome(removed: [], didWrite: false)
         }
         guard let writer else { throw PruneError.noWriter }
-        guard await canExecuteDestructive() else { throw PruneError.destructiveActionBlocked }
+        guard let authorization = await authorizeDestructive(),
+              authorization.surface == .spotlightOrphanRules else {
+            throw PruneError.destructiveActionBlocked
+        }
 
         let drop = Set(orphans.map(\.identifier))
         let kept = identifiers.filter { !drop.contains($0) }
