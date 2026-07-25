@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Observation
 
 /// State shared by ``DeveloperToolsView`` while users navigate around the app.
@@ -15,6 +16,10 @@ public final class DeveloperToolsSessionState {
     /// state instead of a stale daemon-stopped CTA while the daemon comes up
     /// (or goes down).
     public var dockerLifecycleActivity: DeveloperToolsView.DockerLifecycleActivity?
+    /// Set when the license gate refuses an execution, which raises the Unlock
+    /// sheet. Lives on the session rather than as view `@State` so the gate
+    /// decision is observable from a test without rendering the view.
+    public var blockedReason: BlockReason?
     /// Bumped on every kickoff or return-to-idle so background scan tasks
     /// can detect that they've been superseded and bail rather than
     /// stomping the current phase.

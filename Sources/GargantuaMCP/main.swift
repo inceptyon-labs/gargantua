@@ -1,5 +1,6 @@
 import Foundation
 import GargantuaCore
+import GargantuaLicensing
 
 // Phase 3 stdio MCP server entry point.
 //
@@ -243,15 +244,34 @@ private let cleanRateLimiter = MCPRateLimiter() // 1 op / 60s default
 private let cleanupEngine = CleanupEngine()
 private let cleanNotificationService = MCPCleanNotificationFactory.automatic(
     gracePeriod: 5,
+    allowsUnattendedClean: runtimeOptions.allowsUnattendedClean,
     log: stderrLog
 )
 
-// Production cleaner. Posts the user-facing notification (PRD §7.4), waits
-// the grace period, then either delegates to `CleanupEngine.clean` or
-// short-circuits with an all-failed result if the user tapped Cancel. The
-// handler audits either way — cancel produces an entry with `bytesFreed: 0`
-// so forensic tooling sees the attempted op even if nothing touched disk.
+// Production cleaner. Takes the license gate, posts the user-facing
+// notification (PRD §7.4), waits the grace period, then either delegates to
+// `CleanupEngine.clean` or short-circuits with an all-failed result if the
+// user tapped Cancel. The handler audits either way — a refusal produces an
+// entry with `bytesFreed: 0` so forensic tooling sees the attempted op even if
+// nothing touched disk.
+//
+// The gate lives here rather than inside `MCPCleanToolHandler` because the
+// handler's `Cleaner` contract is deliberately synchronous while
+// `canExecuteDestructiveAction()` is async on an actor; this closure already
+// bridges async work through `runBlocking`, so it is the natural seam. Dry runs
+// never reach the cleaner, so previews stay available to unlicensed users —
+// matching the GUI, where scanning is always free.
 private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
+    let gateDecision = try runBlocking {
+        await LicenseGate.shared.canExecuteDestructiveAction()
+    }
+    if case .blocked = gateDecision {
+        throw MCPToolError.invalidParams(
+            "Gargantua's trial has expired. Destructive MCP operations require a license key; "
+                + "scans and dry runs remain available."
+        )
+    }
+
     let decision = cleanNotificationService.request(
         items: items,
         method: method,
@@ -259,14 +279,15 @@ private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
             ?? MCPCleanToolHandler.unknownClientSentinel
     )
     switch decision {
-    case .cancelled:
+    case .cancelled, .refused:
+        let error = if case .refused(let reason) = decision {
+            reason
+        } else {
+            "User cancelled via MCP notification"
+        }
         return CleanupResult(
             itemResults: items.map {
-                CleanupItemResult(
-                    item: $0,
-                    succeeded: false,
-                    error: "User cancelled via MCP notification"
-                )
+                CleanupItemResult(item: $0, succeeded: false, error: error)
             },
             cleanupMethod: method
         )
@@ -281,6 +302,15 @@ let cleanHandler = MCPCleanToolHandler(
     auditRecorder: { try auditWriter.write($0) },
     rateLimiter: cleanRateLimiter,
     clientIDProvider: { dispatcher.currentCallClientIdentity()?.name },
+    // Rate-limit shard. Deliberately the connection, not the declared client
+    // name: `initialize` is an ordinary dispatchable method with no
+    // once-per-connection guard and last-initialize-wins, so a client that
+    // renames itself between cleans would otherwise get a fresh budget every
+    // time without even reconnecting. The connection is established by the
+    // transport and cannot be re-declared by the peer. The declared name is
+    // still what lands in the audit entry, which is where a human-meaningful
+    // attribution belongs.
+    rateLimitKeyProvider: { String(describing: dispatcher.currentCallConnection()) },
     log: stderrLog
 )
 dispatcher.register(tool: .clean, handler: cleanHandler.toolHandler)

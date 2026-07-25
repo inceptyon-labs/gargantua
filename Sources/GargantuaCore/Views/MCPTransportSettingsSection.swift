@@ -15,7 +15,9 @@ struct MCPTransportSettingsSection: View {
     var body: some View {
         SettingsSectionContainer(
             "MCP Transport",
-            subtitle: "Local Server-Sent Events endpoint exposing read-only Gargantua tools to MCP clients."
+            subtitle: "Local Server-Sent Events endpoint for MCP clients. Exposes the scan and "
+                + "analysis tools plus the guarded `clean` tool, which can delete files. "
+                + "Protected items are always rejected."
         ) {
             statusHeader
 

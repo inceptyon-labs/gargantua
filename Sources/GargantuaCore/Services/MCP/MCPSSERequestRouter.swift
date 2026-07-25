@@ -49,8 +49,8 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         guard request.method == "GET", request.path == "/sse" else {
             return .rejected(.text(404, "Not Found", "Unknown MCP SSE endpoint."))
         }
-        guard authorize(request, configuration: configuration, storedToken: storedToken) else {
-            return .rejected(Self.unauthorizedResponse())
+        if let rejection = rejection(for: request, configuration: configuration, storedToken: storedToken) {
+            return .rejected(rejection)
         }
 
         let sessionID = UUID().uuidString
@@ -101,8 +101,8 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         guard request.method == "POST", request.path == "/message" else {
             return .text(404, "Not Found", "Unknown MCP SSE endpoint.")
         }
-        guard authorize(request, configuration: configuration, storedToken: storedToken) else {
-            return Self.unauthorizedResponse()
+        if let rejection = rejection(for: request, configuration: configuration, storedToken: storedToken) {
+            return rejection
         }
         guard let sessionID = request.query["sessionId"] else {
             return .text(400, "Bad Request", "Missing SSE session id.")
@@ -131,16 +131,59 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         return MCPHTTPResponse(statusCode: 202, reasonPhrase: "Accepted")
     }
 
-    private func authorize(
-        _ request: MCPHTTPRequest,
+    /// Returns the response to send when the request must be refused, or `nil`
+    /// when it may proceed. Both entry points funnel through here so neither
+    /// can be hardened without the other.
+    private func rejection(
+        for request: MCPHTTPRequest,
         configuration: MCPSSEServerConfiguration,
         storedToken: String?
-    ) -> Bool {
-        MCPSSEAuthorization.isAuthorized(
+    ) -> MCPHTTPResponse? {
+        guard Self.hasAllowedHost(request, configuration: configuration) else {
+            log?("SSE request rejected: Host header is not a loopback literal.")
+            return .text(403, "Forbidden", "Host header must be a loopback address.")
+        }
+        guard MCPSSEAuthorization.isAuthorized(
             authorizationHeader: request.header("authorization"),
             configuration: configuration,
             storedToken: storedToken
-        )
+        ) else {
+            return Self.unauthorizedResponse()
+        }
+        return nil
+    }
+
+    /// DNS-rebinding defense for localhost binds.
+    ///
+    /// A localhost bind requires no bearer token, and rejecting CORS preflight
+    /// is not enough on its own: an attacker who re-points their own hostname's
+    /// DNS record at 127.0.0.1 makes the browser treat the request as
+    /// *same-origin*, so no preflight happens and the response — including the
+    /// `endpoint` event carrying the session id — is fully readable. The one
+    /// field that still carries the attacker's name is `Host`, and a genuine
+    /// local client always sends a loopback literal there.
+    ///
+    /// LAN binds are exempt: they are reached by hostname on purpose and are
+    /// already bearer-token gated.
+    static func hasAllowedHost(
+        _ request: MCPHTTPRequest,
+        configuration: MCPSSEServerConfiguration
+    ) -> Bool {
+        guard configuration.bindScope == .localhost else { return true }
+        guard let host = request.header("host")?
+            .trimmingCharacters(in: .whitespaces)
+            .lowercased(),
+            !host.isEmpty
+        else { return false }
+
+        // Strip the optional :port, tolerating a bracketed IPv6 literal.
+        let hostname: String
+        if host.hasPrefix("[") {
+            hostname = String(host.dropFirst().prefix { $0 != "]" })
+        } else {
+            hostname = String(host.prefix { $0 != ":" })
+        }
+        return ["127.0.0.1", "::1", "localhost"].contains(hostname)
     }
 
     private func encodedResponseLine(_ response: MCPResponse, fallbackID: MCPRequestID) -> String {

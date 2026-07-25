@@ -256,12 +256,24 @@ extension DeveloperToolsView {
 
     func confirmExecution(_ request: ExecutionRequest) {
         session.pendingExecution = nil
-        session.executingOperationID = request.operation.id
-        session.executionNotices[request.operation.id] = nil
+        Task { await runGatedExecution(request) }
+    }
 
-        Task {
-            await execute(request)
+    /// License gate in front of every Developer Tools command. These delete
+    /// files — `docker system prune`, `brew autoremove`, `go clean -modcache` —
+    /// so they take the same gate as Deep Clean and the other destructive GUI
+    /// surfaces. Checked before `executingOperationID` is set so a blocked user
+    /// gets the Unlock sheet rather than a spinner that never resolves.
+    func runGatedExecution(_ request: ExecutionRequest) async {
+        if let reason = await DestructiveActionGate.blockReason(decide: gateDecision) {
+            await MainActor.run { session.blockedReason = reason }
+            return
         }
+        await MainActor.run {
+            session.executingOperationID = request.operation.id
+            session.executionNotices[request.operation.id] = nil
+        }
+        await execute(request)
     }
 
     func execute(_ request: ExecutionRequest) async {

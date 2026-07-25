@@ -97,3 +97,20 @@ jobs:
         with:
           name: coverage-lcov
           path: coverage.lcov
+
+  deps:
+    name: Dependency scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64
+          chmod +x /usr/local/bin/osv-scanner
+
+      - name: Scan pinned SwiftPM dependencies for known CVEs
+        run: Scripts/osv-spm-scan.sh

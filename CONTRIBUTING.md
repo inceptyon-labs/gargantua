@@ -286,11 +286,10 @@ signature, and agent lifecycle paths. CI reports these priorities but does not
 fail on a coverage percentage yet. Once the team agrees on a baseline that the
 suite reliably exceeds, enable the same script as a gate with `--fail-under`.
 
-Dependency scanning uses Trivy for SwiftPM lockfile CVEs and an OSV wrapper for
-OSV-backed checks against the pinned Git revisions in `Package.resolved`:
+Dependency scanning uses an OSV wrapper against the pinned Git revisions in
+`Package.resolved`. CI runs it on every pull request; run it locally with:
 
 ```bash
-trivy fs --config trivy.yaml .
 Scripts/osv-spm-scan.sh -- --all-packages
 ```
 

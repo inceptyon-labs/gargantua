@@ -41,7 +41,8 @@ enum ProcessSpawner {
     ///
     /// - Precondition: `executable` must be an absolute path. This helper uses
     ///   `posix_spawn`, not `posix_spawnp`, so it does not search PATH.
-    /// - The child inherits the parent's full environment and stdin fd.
+    /// - The child inherits the parent's full environment and stdin fd, but not
+    ///   its working directory — see `configureWorkingDirectory`.
     /// - The pipe fds (both read and write ends for stdout and stderr) are
     ///   closed in the child after the dup2s, so the child never holds extra
     ///   copies that would delay EOF on the parent side — except when a pipe
@@ -69,6 +70,7 @@ enum ProcessSpawner {
 
         let pipes = SpawnPipes(stdout: stdoutPipe, stderr: stderrPipe)
         try configureFileActions(&fileActions, pipes: pipes)
+        try configureWorkingDirectory(&fileActions)
         try configureSpawnAttributes(&attrs)
 
         var argv = try buildCStringArray([executable.path] + arguments)
@@ -114,6 +116,32 @@ enum ProcessSpawner {
         for fd in [pipes.outWrite, pipes.errWrite, pipes.outRead, pipes.errRead] where fd != 1 && fd != 2 {
             try check(posix_spawn_file_actions_addclose(&fileActions, fd))
         }
+    }
+
+    /// Give the child an explicitly writable working directory instead of
+    /// whatever Gargantua inherited.
+    ///
+    /// A Finder- or Dock-launched app inherits `/`, which is read-only on
+    /// macOS. `pnpm store path` writes a probe temp file into the current
+    /// directory while resolving the store, so it dies there with `EROFS`
+    /// (exit 226) and the Developer Tools preview renders "Preview failed" —
+    /// while the same command works from a terminal, where the cwd happens to
+    /// be writable. Home is always writable, always exists, and is the
+    /// neutral location for a tool invoked with no project context.
+    ///
+    /// The existence check keeps a missing home from turning every spawn into
+    /// a spawn failure: a chdir file action that fails aborts the whole
+    /// `posix_spawn`, so falling back to the inherited directory is strictly
+    /// better than failing to run at all.
+    private static func configureWorkingDirectory(
+        _ fileActions: inout posix_spawn_file_actions_t?
+    ) throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: home, isDirectory: &isDirectory),
+              isDirectory.boolValue
+        else { return }
+        try check(posix_spawn_file_actions_addchdir_np(&fileActions, home))
     }
 
     /// POSIX_SPAWN_SETPGROUP + pgroup=0 makes the child its own pgroup

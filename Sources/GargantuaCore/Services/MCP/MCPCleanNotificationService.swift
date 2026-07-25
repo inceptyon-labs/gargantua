@@ -19,6 +19,10 @@ public enum MCPCleanDecision: Sendable, Equatable {
     case proceed
     /// User tapped Cancel. Cleaner must short-circuit and audit the attempt.
     case cancelled
+    /// No consent prompt could be shown at all and unattended cleaning was not
+    /// explicitly allowed. Distinct from `.cancelled` so the client is told the
+    /// truth — nobody declined, nobody was asked. Carries the reason verbatim.
+    case refused(reason: String)
 }
 
 /// Surfaces a user-facing notification for an incoming MCP clean request and
@@ -263,21 +267,54 @@ public final class UNCleanNotificationService: NSObject,
     static let maxClientIDLength: Int = 64
 }
 
+/// Refuses every clean. Used when the process cannot post user notifications
+/// and the operator has not explicitly accepted unattended deletion, so the
+/// consent gate fails closed rather than silently disappearing.
+public struct RefusingMCPCleanNotificationService: MCPCleanNotificationService {
+    public static let reason = "Gargantua's MCP server is running unbundled and cannot show the clean "
+        + "confirmation notification, so it will not delete files unattended. "
+        + "Run the server from the Gargantua app bundle, or pass --allow-unattended-clean."
+
+    public init() {}
+
+    public func request(
+        items: [ScanResult],
+        method: CleanupMethod,
+        clientID: String
+    ) -> MCPCleanDecision {
+        .refused(reason: Self.reason)
+    }
+}
+
 /// Picks a notification service based on runtime availability. Use this in
 /// `main.swift`; tests always inject a deterministic fake.
 public enum MCPCleanNotificationFactory {
     /// Produces a production notification service when the process has a
-    /// bundle identifier and can reach `UNUserNotificationCenter`. Returns
-    /// `NoopMCPCleanNotificationService` otherwise. Never throws — a
-    /// startup-time notification failure should not prevent the MCP server
-    /// from serving other tools.
+    /// bundle identifier and can reach `UNUserNotificationCenter`. Never
+    /// throws — a startup-time notification failure should not prevent the MCP
+    /// server from serving other tools.
+    ///
+    /// An unbundled process (`swift run GargantuaMCP`, the client config the
+    /// README documents) cannot post a notification at all. Refuse destructive
+    /// cleans there rather than auto-proceeding: a consent gate that vanishes
+    /// in the most common developer setup is worse than no gate, because the
+    /// README promises the prompt. `allowsUnattendedClean` is the explicit
+    /// opt-out for operators who want the old behavior.
     public static func automatic(
         gracePeriod: TimeInterval = 5,
+        allowsUnattendedClean: Bool = false,
         log: (@Sendable (String) -> Void)? = nil
     ) -> any MCPCleanNotificationService {
         guard Bundle.main.bundleIdentifier != nil else {
-            log?("notification service: unbundled process, using Noop (cleans will auto-proceed).")
-            return NoopMCPCleanNotificationService()
+            if allowsUnattendedClean {
+                log?("notification service: unbundled process with --allow-unattended-clean; cleans auto-proceed.")
+                return NoopMCPCleanNotificationService()
+            }
+            log?(
+                "notification service: unbundled process cannot prompt for consent; "
+                    + "destructive cleans refused. Pass --allow-unattended-clean to override."
+            )
+            return RefusingMCPCleanNotificationService()
         }
         return UNCleanNotificationService(gracePeriod: gracePeriod, log: log)
     }

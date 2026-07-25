@@ -150,9 +150,13 @@ public struct DeveloperToolPreviewAdapter: Sendable {
         let parsed = parsePreview(tool: tool, commandPreview: commandPreview, output: output)
         switch tool {
         case .pnpm:
-            return parsed.map { item in
-                item.id == "pnpm-store" ? item.withReclaimableBytes(0) : item
-            }
+            // Deliberately unsized. `pnpm store prune` removes only packages no
+            // installed project references, so the store's total is not the
+            // reclaimable total — measuring it the way npm/yarn are measured
+            // below would promise gigabytes a prune will not free. Leave the
+            // estimate unknown so the row renders "—" rather than a number in
+            // either wrong direction.
+            return parsed
         case .go, .npm, .yarn:
             let sizedIDs: Set<String> = ["go-build-cache", "go-module-cache", "npm-cache", "yarn-cache"]
             return parsed.map { item in

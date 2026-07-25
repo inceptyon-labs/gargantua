@@ -23,6 +23,9 @@ struct MCPRuntimeOptions {
     var ssePort: Int?
     var bindScope: MCPServerBindScope?
     var bearerToken: String?
+    /// Accepts destructive cleans in a process that cannot show the consent
+    /// notification. Off by default so the consent gate fails closed.
+    var allowsUnattendedClean: Bool = false
 }
 
 func parseRuntimeOptions(log: (String) -> Void) -> MCPRuntimeOptions {
@@ -30,12 +33,6 @@ func parseRuntimeOptions(log: (String) -> Void) -> MCPRuntimeOptions {
     var iterator = CommandLine.arguments.dropFirst().makeIterator()
     while let argument = iterator.next() {
         switch argument {
-        case "--stdio":
-            options.transportMode = .stdio
-        case "--sse":
-            options.transportMode = .sse
-        case "--both":
-            options.transportMode = .both
         case "--transport":
             options.transportMode = parseTransportArgument(iterator.next(), log: log)
         case "--port":
@@ -44,16 +41,38 @@ func parseRuntimeOptions(log: (String) -> Void) -> MCPRuntimeOptions {
             options.bindScope = parseBindArgument(iterator.next(), log: log)
         case "--token":
             options.bearerToken = parseTokenArgument(iterator.next(), log: log)
-        case "--help", "-h":
-            printRuntimeHelp()
-            exit(0)
         default:
-            log("unknown argument \(argument)")
-            printRuntimeHelp()
-            exit(64)
+            applyValuelessArgument(argument, to: &options, log: log)
         }
     }
     return options
+}
+
+/// Handles the arguments that take no value, plus the unknown-argument exit.
+/// Split out of `parseRuntimeOptions` so neither switch trips the cyclomatic
+/// complexity limit as flags accumulate.
+private func applyValuelessArgument(
+    _ argument: String,
+    to options: inout MCPRuntimeOptions,
+    log: (String) -> Void
+) {
+    switch argument {
+    case "--stdio":
+        options.transportMode = .stdio
+    case "--sse":
+        options.transportMode = .sse
+    case "--both":
+        options.transportMode = .both
+    case "--allow-unattended-clean":
+        options.allowsUnattendedClean = true
+    case "--help", "-h":
+        printRuntimeHelp()
+        exit(0)
+    default:
+        log("unknown argument \(argument)")
+        printRuntimeHelp()
+        exit(64)
+    }
 }
 
 private func parseTransportArgument(
@@ -108,6 +127,10 @@ private func printRuntimeHelp() {
       --port 7493                  Override the SSE port.
       --bind localhost|lan         Bind SSE to 127.0.0.1 or all interfaces.
       --token TOKEN                Bearer token override for LAN SSE.
+      --allow-unattended-clean     Permit `clean` when the process cannot post the
+                                   consent notification (an unbundled launch such as
+                                   `swift run`). Off by default: without it, `clean`
+                                   is refused rather than proceeding unprompted.
 
     Security:
       GargantuaMCP serves plain HTTP. For network clients, keep --bind localhost

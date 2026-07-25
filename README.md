@@ -64,7 +64,7 @@ The features that don't exist anywhere else in this category:
 - **A community rule-contribution model.** Cleanup logic isn't a vendor secret — it's a public, reviewed, versioned ruleset. Each bundled rule carries provenance (the exact `gargantua-rules` commit) surfaced in-app, so you can audit where a path came from and who reviewed it.
 - **A three-tier safety classification that AI can't override.** Findings are graded `safe` / `review` / `protected` before any UI sees them. A bundled protected-roots policy hard-blocks cleanup at filesystem roots no matter what a rule (or a model) says.
 - **Explainability as a first-class output.** Every finding answers "why is this here and why is it safe to remove" — from rule metadata directly, or from an optional local/cloud model that can add detail but never lower a rating.
-- **AI-agent automation over MCP.** Gargantua ships a local Model Context Protocol server with segregated read-only and destructive tool registries, bearer-token auth, per-client rate limits, and a hard `protected` reject. No other cleaner lets an AI agent drive it under guardrails.
+- **AI-agent automation over MCP.** Gargantua ships a local Model Context Protocol server with segregated read-only and destructive tool registries, bearer-token auth, per-connection rate limits, and a hard `protected` reject. No other cleaner lets an AI agent drive it under guardrails.
 - **Local-first and telemetry-free.** The default explanation engine needs no network and no model. Local MLX inference runs entirely on Apple Silicon. Nothing phones home.
 - **Developer-native cleanup.** Tool-aware previews for Docker, Homebrew, Xcode simulators, pnpm, npm, Yarn, Go, and Cargo — run through each tool's own commands, not by blindly deleting directories.
 - **Open and free at the source.** The paid build only gates the *execution* of destructive actions behind a one-time license; scans always run, and a clean source build is fully unlocked forever.
@@ -268,11 +268,14 @@ Destructive:
 - `confirm: true` is required.
 - Unknown item IDs are rejected.
 - Any `protected` item aborts the whole request.
-- Each MCP client gets one clean operation per 60 seconds.
+- Each MCP connection gets one clean operation per 60 seconds. The budget is keyed on the connection rather than the client's self-declared name, which a client can change at will.
+- A valid license (or an unexpired trial) is required, the same gate the app's own destructive flows take. Scans and dry runs stay available either way.
 - Every non-dry-run attempt writes an audit entry with the client identifier to `~/Library/Logs/Gargantua/audit.json`.
-- The app attempts a local notification with a short cancel window before files move.
+- A local notification with a short cancel window appears before files move. This needs a bundled launch; a server started with `swift run` cannot post notifications, so it refuses destructive cleans instead of proceeding unprompted. Pass `--allow-unattended-clean` to accept that trade.
 
-The read-only and destructive tools live in separate registries in code, so a read-only server can't accidentally advertise the destructive `clean` tool — exposing it requires explicitly opting the destructive registry in. See [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
+Over SSE, requests must also carry a loopback `Host` header when the server is bound to localhost. That is the standard DNS-rebinding defense: without it a hostile web page whose DNS is re-pointed at `127.0.0.1` would reach the endpoint as same-origin, and a localhost bind requires no bearer token.
+
+The read-only and destructive tools live in separate registries in code (`MCPPhase2Tools` / `MCPPhase3Tools`), so a fork or an embedding host can register only the read-only set. The bundled `GargantuaMCP` binary registers both. See [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
 
 ## Security
 
@@ -281,12 +284,12 @@ Gargantua runs with elevated trust on a user's machine. Defenses are layered:
 - **Trust layer**: every finding gets a `safe`/`review`/`protected` classification before any UI sees it. Destructive flows hard-reject `protected`.
 - **Bundled protected roots**: `protected_roots.yaml` blocks cleanup at filesystem roots regardless of rule classification. Users can extend it but cannot remove bundled entries.
 - **Privileged helper**: operations needing elevated trust are routed through `GargantuaPrivilegedHelper`, registered via SMAppService and reached over XPC. The app never calls `sudo` directly.
-- **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, per-client rate limit, hard `protected` reject, audit log, cancel-notification grace period, and separate read-only/destructive tool registries.
+- **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, loopback `Host` validation on localhost binds, per-connection rate limit, hard `protected` reject, license gate on destructive tools, audit log, and a cancel-notification grace period that fails closed when it cannot be shown.
 - **Keychain-only secret storage**: cloud API keys (Anthropic and OpenAI-compatible, in separate Keychain accounts) and the MCP bearer token live in Keychain, never on disk in plaintext. A presence check never decrypts the key, so it stays sealed until an actual request needs it.
 - **Cloud AI redaction**: outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
 - **Hardened runtime + notarization**: release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.
 - **Pre-commit secret scanning**: versioned `.githooks/` with `gitleaks` blocks committed credentials. See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup).
-- **Dependency scanning**: `trivy fs` plus an OSV wrapper run against `Package.resolved` to flag CVEs in pinned SwiftPM dependencies.
+- **Dependency scanning**: an OSV wrapper runs in CI against `Package.resolved` to flag CVEs in pinned SwiftPM dependencies.
 
 If you discover a security issue, especially anything involving the privileged helper, MCP guardrails, audit trails, cloud-AI redaction, or a path that could remove a `protected` item, please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
 
@@ -435,7 +438,6 @@ Gargantua stands on a lot of open source.
 **Security and supply-chain tooling**
 
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks): pre-commit secret scanning
-- [`aquasecurity/trivy`](https://github.com/aquasecurity/trivy): `Package.resolved` CVE scanning
 - [`google/osv-scanner`](https://github.com/google/osv-scanner) and the [OSV](https://osv.dev/) database: vulnerability checks against pinned SwiftPM revisions
 - [`muter-mutation-testing/muter`](https://github.com/muter-mutation-testing/muter): optional mutation testing for changed Swift files
 

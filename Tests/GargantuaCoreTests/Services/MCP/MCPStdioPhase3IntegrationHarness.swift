@@ -24,6 +24,21 @@ final class Phase3StdioTestServer: @unchecked Sendable {
     private var completed = DispatchSemaphore(value: 0)
     private let clockHolder: Phase3TimeHolder
 
+    /// Every item failed for one shared reason — the shape both the cancelled
+    /// and the consent-unavailable branches return.
+    static func allFailed(
+        _ items: [ScanResult],
+        method: CleanupMethod,
+        error: String
+    ) -> CleanupResult {
+        CleanupResult(
+            itemResults: items.map {
+                CleanupItemResult(item: $0, succeeded: false, error: error)
+            },
+            cleanupMethod: method
+        )
+    }
+
     init(
         initialDate: Date = Date(),
         notificationDecision: MCPCleanDecision = .proceed,
@@ -75,16 +90,9 @@ final class Phase3StdioTestServer: @unchecked Sendable {
                 ?? MCPCleanToolHandler.unknownClientSentinel
             switch notifications.request(items: items, method: method, clientID: clientID) {
             case .cancelled:
-                return CleanupResult(
-                    itemResults: items.map {
-                        CleanupItemResult(
-                            item: $0,
-                            succeeded: false,
-                            error: "User cancelled via MCP notification"
-                        )
-                    },
-                    cleanupMethod: method
-                )
+                return Self.allFailed(items, method: method, error: "User cancelled via MCP notification")
+            case .refused(let reason):
+                return Self.allFailed(items, method: method, error: reason)
             case .proceed:
                 return log.perform(items: items, method: method)
             }

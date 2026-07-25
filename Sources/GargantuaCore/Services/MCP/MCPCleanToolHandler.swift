@@ -22,11 +22,18 @@ import Foundation
 //   deliberately exempt from the rate limiter and do not write audit entries
 //   — they don't touch the disk, so the attack surface the guardrails exist
 //   to cover isn't present.
-// - Rate limit: by default, 1 clean op per 60 seconds per MCP client. Tripped
-//   requests return `invalidParams` with a retry-after hint. The scope
-//   (per-client) is enforced via `clientIDProvider`; unknown clients fall
-//   back to the literal `"unknown"` key so they share a budget and cannot
+// - Rate limit: by default, 1 clean op per 60 seconds per MCP connection.
+//   Tripped requests return `invalidParams` with a retry-after hint. The shard
+//   key comes from `rateLimitKeyProvider` — production passes the connection id
+//   rather than the declared `clientInfo.name`, because a peer can re-declare
+//   its name mid-connection and would otherwise reset its own budget at will.
+//   Callers with no key provider fall back to the declared name, and unknown
+//   clients to the literal `"unknown"` key, so they share a budget and cannot
 //   bypass the limit by omitting `clientInfo`.
+// - Licensing: the destructive path is gated by the caller's injected
+//   `Cleaner` (see `GargantuaMCP/main.swift`), which takes
+//   `LicenseGate.canExecuteDestructiveAction()` before touching disk. The gate
+//   is not here because this type is deliberately synchronous.
 // - Audit: every non-dry-run invocation — success *or* failure — writes an
 //   entry through the injected `auditRecorder`. The entry's UUID is what
 //   `MCPCleanOutput.auditID` reports, so clients can cross-reference the
@@ -73,6 +80,16 @@ public struct MCPCleanToolHandler: Sendable {
     /// `"unknown"` for both audit attribution and rate-limit sharding.
     public typealias ClientIDProvider = @Sendable () -> String?
 
+    /// Resolves the key the rate limiter shards on. Kept separate from
+    /// ``ClientIDProvider`` on purpose: the declared `clientInfo.name` is
+    /// attacker-controlled and re-declarable mid-connection (`initialize` is an
+    /// ordinary dispatchable method and last-initialize-wins), so sharding a
+    /// security control on it lets a client reset its own budget by renaming
+    /// itself. Production passes the connection id here and the declared name
+    /// to `clientIDProvider`, which only feeds audit attribution. `nil` falls
+    /// back to the shared `"unknown"` sentinel.
+    public typealias RateLimitKeyProvider = @Sendable () -> String?
+
     /// Persists an `AuditEntry`. Production wiring plugs in
     /// `AuditWriter.write(_:)`. Tests can capture calls for assertion.
     /// Throwing is non-fatal — the handler logs and continues so audit
@@ -93,6 +110,7 @@ public struct MCPCleanToolHandler: Sendable {
     private let auditRecorder: AuditRecorder?
     private let rateLimiter: MCPRateLimiter?
     private let clientIDProvider: ClientIDProvider
+    private let rateLimitKeyProvider: RateLimitKeyProvider?
     private let log: MCPDispatcherLog?
 
     public init(
@@ -102,6 +120,7 @@ public struct MCPCleanToolHandler: Sendable {
         auditRecorder: AuditRecorder? = nil,
         rateLimiter: MCPRateLimiter? = nil,
         clientIDProvider: @escaping ClientIDProvider = { nil },
+        rateLimitKeyProvider: RateLimitKeyProvider? = nil,
         log: MCPDispatcherLog? = nil
     ) {
         self.init(
@@ -111,6 +130,7 @@ public struct MCPCleanToolHandler: Sendable {
             auditRecorder: auditRecorder,
             rateLimiter: rateLimiter,
             clientIDProvider: clientIDProvider,
+            rateLimitKeyProvider: rateLimitKeyProvider,
             log: log
         )
     }
@@ -122,6 +142,7 @@ public struct MCPCleanToolHandler: Sendable {
         auditRecorder: AuditRecorder? = nil,
         rateLimiter: MCPRateLimiter? = nil,
         clientIDProvider: @escaping ClientIDProvider = { nil },
+        rateLimitKeyProvider: RateLimitKeyProvider? = nil,
         log: MCPDispatcherLog? = nil
     ) {
         self.sessionCacheProvider = sessionCacheProvider
@@ -130,6 +151,7 @@ public struct MCPCleanToolHandler: Sendable {
         self.auditRecorder = auditRecorder
         self.rateLimiter = rateLimiter
         self.clientIDProvider = clientIDProvider
+        self.rateLimitKeyProvider = rateLimitKeyProvider
         self.log = log
     }
 
@@ -165,7 +187,11 @@ public struct MCPCleanToolHandler: Sendable {
         }
 
         let clientID = clientIDProvider() ?? Self.unknownClientSentinel
-        try enforceRateLimit(clientID: clientID)
+        // Sharded on the connection where one is available, so a client cannot
+        // re-`initialize` under a new name to win a fresh budget. Falls back to
+        // the declared name when no key provider is wired.
+        let rateLimitKey = rateLimitKeyProvider?() ?? clientID
+        try enforceRateLimit(clientID: rateLimitKey)
         return try executeAndAudit(
             found: found,
             method: method,

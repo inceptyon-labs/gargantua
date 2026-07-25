@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import SwiftUI
 
 // MARK: - Container
@@ -19,10 +20,12 @@ public struct DeveloperToolsView: View {
         DeveloperToolPreview,
         ConfirmationTier
     ) throws -> DeveloperToolExecutionResult
+    public typealias GateDecisionProvider = @Sendable () async -> GateDecision
 
     let availabilityProvider: AvailabilityProvider
     let previewProvider: PreviewProvider
     let executionProvider: ExecutionProvider
+    let gateDecision: GateDecisionProvider
     let dockerControl: DockerDaemonControl
 
     /// Session-scoped state hoisted out of the view so navigating away and
@@ -78,12 +81,16 @@ public struct DeveloperToolsView: View {
         executionProvider: @escaping ExecutionProvider = {
             try DeveloperToolExecutionAdapter().execute($0, preview: $1, confirmationMethod: $2)
         },
+        gateDecision: @escaping GateDecisionProvider = {
+            await LicenseGate.shared.canExecuteDestructiveAction()
+        },
         dockerControl: DockerDaemonControl = DockerDaemonControl()
     ) {
         self.session = session
         self.availabilityProvider = availabilityProvider
         self.previewProvider = previewProvider
         self.executionProvider = executionProvider
+        self.gateDecision = gateDecision
         self.dockerControl = dockerControl
     }
 
@@ -121,6 +128,7 @@ public struct DeveloperToolsView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: session.pendingExecution)
+        .destructiveActionGate(reason: $session.blockedReason)
     }
 
     var currentAvailabilities: [DeveloperToolAvailability] {

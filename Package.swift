@@ -62,7 +62,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "GargantuaMCP",
-            dependencies: ["GargantuaCore"],
+            dependencies: ["GargantuaCore", "GargantuaLicensing"],
             path: "Sources/GargantuaMCP"
         ),
         .executableTarget(

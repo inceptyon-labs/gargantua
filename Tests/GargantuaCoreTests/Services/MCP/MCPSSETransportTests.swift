@@ -74,7 +74,7 @@ struct MCPSSETransportTests {
     func localhostStreamOpensWithoutToken() throws {
         let router = MCPSSERequestRouter(handler: Self.echoHandler)
         let recorder = EventRecorder()
-        let request = MCPHTTPRequest(method: "GET", path: "/sse")
+        let request = MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"])
 
         let result = router.openStream(
             request: request,
@@ -161,7 +161,7 @@ struct MCPSSETransportTests {
         let router = MCPSSERequestRouter(handler: Self.echoHandler)
         let recorder = EventRecorder()
         let open = router.openStream(
-            request: MCPHTTPRequest(method: "GET", path: "/sse"),
+            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"]),
             configuration: MCPSSEServerConfiguration(),
             storedToken: nil,
             eventSink: { recorder.append(event: $0, data: $1) }
@@ -177,6 +177,7 @@ struct MCPSSETransportTests {
                 method: "POST",
                 path: "/message",
                 query: ["sessionId": sessionID],
+                headers: ["Host": "127.0.0.1:7493"],
                 body: requestBody
             ),
             configuration: MCPSSEServerConfiguration(),

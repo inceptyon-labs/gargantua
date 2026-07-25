@@ -74,8 +74,10 @@ extension DeveloperToolPreviewAdapterTests {
         #expect(preview.items.count == 1)
         #expect(preview.items.first?.id == "pnpm-store")
         #expect(preview.items.first?.detail == "/Users/me/Library/pnpm/store/v10")
-        #expect(preview.items.first?.reclaimableBytes == 0)
-        #expect(preview.reclaimableBytes == 0)
+        // A prune frees only unreferenced packages, so the estimate is unknown
+        // rather than zero — zero would read as "nothing to clean".
+        #expect(preview.items.first?.reclaimableBytes == nil)
+        #expect(preview.hasKnownReclaimableBytes == false)
     }
 
     @Test("pnpm resolver includes nvm-managed node bins")

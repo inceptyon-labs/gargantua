@@ -149,7 +149,39 @@ struct MCPCleanNotificationServiceTests {
             method: .trash,
             clientID: "factory-test"
         )
-        #expect(decision == .proceed || decision == .cancelled)
+        switch decision {
+        case .proceed, .cancelled, .refused:
+            break
+        }
+    }
+
+    @Test("the factory fails closed when the process cannot post a notification")
+    func factoryFailsClosedWhenUnbundled() {
+        // The test runner has no bundle identifier, which is the same condition
+        // `swift run GargantuaMCP` hits — the client config the README
+        // documents. Without the opt-out the consent gate must refuse rather
+        // than silently auto-proceeding.
+        guard Bundle.main.bundleIdentifier == nil else { return }
+
+        let refusing = MCPCleanNotificationFactory.automatic(gracePeriod: 1)
+        guard case .refused = refusing.request(
+            items: [Self.makeItem()],
+            method: .trash,
+            clientID: "factory-test"
+        ) else {
+            Issue.record("expected an unbundled process to refuse destructive cleans")
+            return
+        }
+
+        let permissive = MCPCleanNotificationFactory.automatic(
+            gracePeriod: 1,
+            allowsUnattendedClean: true
+        )
+        #expect(permissive.request(
+            items: [Self.makeItem()],
+            method: .trash,
+            clientID: "factory-test"
+        ) == .proceed)
     }
 
     // MARK: Fake for integration
