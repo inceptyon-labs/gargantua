@@ -133,16 +133,20 @@ public struct DuplicateFinderContainerView: View {
     private func trashConfirmed(_ items: [ScanResult], method: CleanupMethod) async {
         // License gate fronts the send-to-trash. On blocked, refuse the delete
         // and present the Unlock sheet instead.
-        if let reason = await DestructiveActionGate.blockReason() {
+        let authorization: DestructiveActionAuthorization
+        switch await LicenseGate.shared.authorize(.duplicateFinder) {
+        case .failure(let reason):
             blockedReason = reason
             return
+        case .success(let granted):
+            authorization = granted
         }
         // Remember the list to return to, and show a busy phase — the results
         // view is otherwise fully interactive while the engine runs.
         guard let priorResults = state.beginCleanup() else { return }
 
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-        let result = await engine.clean(items, method: method)
+        let result = await engine.clean(items, method: method, authorization: authorization)
         do {
             try AuditWriter().record(result: result)
             auditWriteFailed = false

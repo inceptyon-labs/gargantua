@@ -1,11 +1,15 @@
 import Foundation
+import GargantuaLicensing
 @testable import GargantuaCore
 
 @MainActor
 final class SpyUninstallRemover: UninstallRemoving {
     private(set) var removedPaths: [String] = []
 
-    func moveToTrash(_ item: ScanResult) async -> CleanupItemResult {
+    func moveToTrash(
+        _ item: ScanResult,
+        authorization _: DestructiveActionAuthorization
+    ) async -> CleanupItemResult {
         removedPaths.append(item.path)
         return CleanupItemResult(
             item: item,

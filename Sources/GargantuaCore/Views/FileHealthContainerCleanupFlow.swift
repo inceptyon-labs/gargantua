@@ -94,14 +94,18 @@ extension FileHealthContainerView {
         Task { @MainActor in
             // License gate fronts the send-to-trash. On blocked, stay on the
             // results phase and present the Unlock sheet instead.
-            if let reason = await DestructiveActionGate.blockReason() {
+            let authorization: DestructiveActionAuthorization
+            switch await LicenseGate.shared.authorize(.fileHealthContainers) {
+            case .failure(let reason):
                 blockedReason = reason
                 return
+            case .success(let granted):
+                authorization = granted
             }
             state.beginCleanup()
 
             let result = await CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-                .clean(items, method: .trash)
+                .clean(items, method: .trash, authorization: authorization)
             do {
                 try AuditWriter().record(
                     result: result,

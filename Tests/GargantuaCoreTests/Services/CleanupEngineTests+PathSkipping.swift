@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -14,7 +15,7 @@ extension CleanupResultTests {
             trashMover: mover
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(!result.allSucceeded)
         #expect(result.failedItems.count == 1)
@@ -40,7 +41,7 @@ extension CleanupResultTests {
             let mover = RecordingTrashMover(outcome: .success(URL(fileURLWithPath: "/Users/test/.Trash/Library")))
             let engine = CleanupEngine(homeDirectoryForTesting: home, trashMover: mover)
 
-            let result = await engine.clean([item], method: .trash)
+            let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
             #expect(!result.allSucceeded)
             #expect(result.failedItems.count == 1)
@@ -79,7 +80,7 @@ extension CleanupResultTests {
             trashMover: mover
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(mover.movedURLs == [URL(fileURLWithPath: throughLink.path)])
@@ -91,7 +92,7 @@ extension CleanupResultTests {
             homeDirectoryForTesting: URL(fileURLWithPath: "/Users/gargantua-test", isDirectory: true),
             trashMover: refusedMover
         )
-        let refused = await refusingEngine.clean([unrecorded], method: .trash)
+        let refused = await refusingEngine.clean([unrecorded], method: .trash, authorization: .unchecked(.deepClean))
         #expect(!refused.allSucceeded)
         #expect(refused.failedItems.first?.error?.contains("symlink") == true)
         #expect(refusedMover.movedURLs.isEmpty)
@@ -111,7 +112,7 @@ extension CleanupResultTests {
         let mover = RecordingTrashMover(outcome: .success(expectedTrashURL))
         let engine = CleanupEngine(homeDirectoryForTesting: home, trashMover: mover)
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(result.itemResults.first?.trashURL == expectedTrashURL)

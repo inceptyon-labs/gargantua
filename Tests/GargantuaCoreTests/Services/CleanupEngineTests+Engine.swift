@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -15,7 +16,7 @@ extension CleanupResultTests {
         try Data("delete".utf8).write(to: file)
 
         let item = makeItem(id: "delete", path: file.path, size: 6)
-        let result = await CleanupEngine().clean([item], method: .delete)
+        let result = await CleanupEngine().clean([item], method: .delete, authorization: .unchecked(.deepClean))
 
         #expect(result.cleanupMethod == .delete)
         #expect(result.allSucceeded)
@@ -31,7 +32,7 @@ extension CleanupResultTests {
         let mover = RecordingTrashMover(outcome: .success(expectedTrashURL))
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(result.totalFreed == 12)
@@ -49,7 +50,7 @@ extension CleanupResultTests {
         let mover = FallbackTrashMover(primary: primary, fallback: fallback)
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(result.itemResults.first?.trashURL == expectedTrashURL)
@@ -66,7 +67,7 @@ extension CleanupResultTests {
         let mover = FallbackTrashMover(primary: primary, fallback: fallback)
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.cleanupMethod == .trash)
         #expect(result.itemResults.count == 1)

@@ -293,13 +293,19 @@ extension AIModelsView {
         Task {
             // License gate fronts every AI Models execute. On blocked, revert
             // the cleaning phase and present the Unlock sheet instead.
-            if let reason = await DestructiveActionGate.blockReason() {
+            let authorization: DestructiveActionAuthorization
+            switch await LicenseGate.shared.authorize(.aiModels) {
+            case .failure(let reason):
                 session.cancelCleanupForBlock()
                 blockedReason = reason
                 return
+            case .success(let granted):
+                authorization = granted
             }
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-            let result = await engine.clean(items, method: method, observer: session.pathStream)
+            let result = await engine.clean(
+                items, method: method, observer: session.pathStream, authorization: authorization
+            )
             do {
                 try AuditWriter().record(result: result)
             } catch {

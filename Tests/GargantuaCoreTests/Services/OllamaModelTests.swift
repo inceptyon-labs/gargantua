@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -177,7 +178,7 @@ struct CleanupEngineOllamaTests {
         )
         let item = OllamaModelScanAdapter.makeResult(.sample(reference: "deepseek:14b"))
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.aiModels))
         #expect(result.allSucceeded)
         #expect(await deleter.references == ["deepseek:14b"])
     }

@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -81,7 +82,7 @@ extension CleanupResultTests {
             privilegedHelper: helper
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(helper.received.count == 1)
         #expect(helper.received.first?.items.first?.id == "root-owned")
@@ -102,7 +103,7 @@ extension CleanupResultTests {
             privilegedHelper: helper
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(helper.received.count == 1)
         #expect(result.failedItems.count == 1)
@@ -126,7 +127,7 @@ extension CleanupResultTests {
             privilegedHelper: helper
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(helper.received.isEmpty)
         #expect(result.failedItems.count == 1)
@@ -152,7 +153,7 @@ extension CleanupResultTests {
         )
         let trashItem = makeItem(id: "trash", path: fixture.trash.path)
 
-        let result = await engine.clean([trashItem], method: .delete)
+        let result = await engine.clean([trashItem], method: .delete, authorization: .unchecked(.deepClean))
 
         #expect(helper.received.count == 1)
         #expect(helper.received.first?.items.first?.operation == .deleteFromTrash)
@@ -181,7 +182,7 @@ extension CleanupResultTests {
             fileExists: { _ in false }
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
     }
@@ -196,7 +197,7 @@ extension CleanupResultTests {
             trashMover: mover
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(mover.attempts == 3) // 2 failures + 1 success
@@ -212,7 +213,7 @@ extension CleanupResultTests {
             trashMover: mover
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.failedItems.count == 1)
         #expect(mover.movedURLs.count == 1) // single attempt, no retry
@@ -228,7 +229,7 @@ extension CleanupResultTests {
             trashMover: mover
         )
 
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.failedItems.count == 1)
     }

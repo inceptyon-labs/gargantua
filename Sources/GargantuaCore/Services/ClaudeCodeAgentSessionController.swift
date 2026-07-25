@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import GargantuaLicensing
 
 /// Hydrated approval state surfaced when the user clicks Approve on a gate
 /// that carries structured `proposedItemIDs`. Carries the gate's original
@@ -249,6 +250,20 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             ))
         }
         if !cleanupItems.isEmpty {
+            // The agent path is destructive like any other execute surface, so
+            // it needs the same license authorization. Blocked leaves the gate
+            // `.pending` and restores the approval the guard above cleared, so
+            // the user can re-approve after unlocking instead of losing it.
+            guard case .success(let authorization) =
+                await LicenseGate.shared.authorize(.claudeCodeAgent) else {
+                events.append(ClaudeCodeAgentTranscriptEvent(
+                    stream: .system,
+                    message: "Cleanup blocked: Gargantua's trial has expired. "
+                        + "Destructive agent actions require a license key."
+                ))
+                pendingApproval = pending
+                return
+            }
             // Surface progress so the user sees "Cleaning… N of M" instead
             // of the modal disappearing into a beach ball while large items
             // are deleted. The observer drives the counter; CleanupEngine
@@ -265,7 +280,8 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             let result = await cleanupEngine.clean(
                 cleanupItems,
                 method: method,
-                observer: observer
+                observer: observer,
+                authorization: authorization
             )
             isCleaning = false
             cleaningProgress = 0

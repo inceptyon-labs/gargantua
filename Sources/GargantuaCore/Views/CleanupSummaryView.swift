@@ -118,13 +118,19 @@ public struct CleanupSummaryView: View {
         defer { isRetrying = false }
         // Retry re-runs the privileged helper against the failed items, so it is
         // itself a destructive action — front it with the license gate.
-        if let reason = await DestructiveActionGate.blockReason() {
+        let authorization: DestructiveActionAuthorization
+        switch await LicenseGate.shared.authorize(.cleanupRetry) {
+        case .failure(let reason):
             blockedReason = reason
             return
+        case .success(let granted):
+            authorization = granted
         }
 
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-        let retry = await engine.clean(failed, method: shown.cleanupMethod, observer: nil)
+        let retry = await engine.clean(
+            failed, method: shown.cleanupMethod, observer: nil, authorization: authorization
+        )
 
         // Same audit trail as the original clean — every destructive attempt is
         // recorded, including a retry.

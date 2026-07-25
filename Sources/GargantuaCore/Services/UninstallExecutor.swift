@@ -99,8 +99,13 @@ public enum UninstallExecutionError: Error, Equatable, LocalizedError {
 }
 
 public protocol UninstallRemoving: AnyObject, Sendable {
+    /// - Parameter authorization: Proof the license gate allowed this uninstall.
+    ///   `UninstallExecutor.execute` mints it once and threads it through here.
     @MainActor
-    func moveToTrash(_ item: ScanResult) async -> CleanupItemResult
+    func moveToTrash(
+        _ item: ScanResult,
+        authorization: DestructiveActionAuthorization
+    ) async -> CleanupItemResult
 }
 
 public protocol PrivilegedUninstallHelping: AnyObject, Sendable {
@@ -197,8 +202,12 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
             return dryRunResult(items: scanItems)
         }
 
-        if case .blocked(let reason) = await LicenseGate.shared.canExecuteDestructiveAction() {
+        let authorization: DestructiveActionAuthorization
+        switch await LicenseGate.shared.authorize(.uninstaller) {
+        case .failure(let reason):
             throw UninstallExecutionError.licenseBlocked(reason)
+        case .success(let granted):
+            authorization = granted
         }
 
         try validateProtection(for: items, options: options)
@@ -223,7 +232,7 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
 
         var itemResults: [CleanupItemResult] = []
         for item in ordinary {
-            let result = await remover.moveToTrash(item)
+            let result = await remover.moveToTrash(item, authorization: authorization)
             emit(result: result, item: item)
             itemResults.append(result)
         }
@@ -357,8 +366,11 @@ public final class WorkspaceUninstallRemover: UninstallRemoving {
     }
 
     @MainActor
-    public func moveToTrash(_ item: ScanResult) async -> CleanupItemResult {
-        let result = await cleanupEngine.clean([item], method: .trash)
+    public func moveToTrash(
+        _ item: ScanResult,
+        authorization: DestructiveActionAuthorization
+    ) async -> CleanupItemResult {
+        let result = await cleanupEngine.clean([item], method: .trash, authorization: authorization)
         return result.itemResults.first ?? CleanupItemResult(
             item: item,
             succeeded: false,

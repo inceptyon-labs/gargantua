@@ -189,13 +189,19 @@ extension DevArtifactScanView {
         session.activeTask = Task {
             // License gate fronts every Dev Purge execute. On blocked, sever
             // the cleanup phase and present the Unlock sheet instead.
-            if let reason = await DestructiveActionGate.blockReason() {
+            let authorization: DestructiveActionAuthorization
+            switch await LicenseGate.shared.authorize(.devArtifacts) {
+            case .failure(let reason):
                 session.severTether()
                 blockedReason = reason
                 return
+            case .success(let granted):
+                authorization = granted
             }
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-            let result = await engine.clean(items, method: method, observer: session.pathStream)
+            let result = await engine.clean(
+                items, method: method, observer: session.pathStream, authorization: authorization
+            )
             do {
                 try AuditWriter().record(result: result)
             } catch {

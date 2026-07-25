@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -110,7 +111,7 @@ struct CleanupEngineHFRevisionTests {
         let item = HuggingFaceModelScanAdapter.makeRevisionResult(stale)
 
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser)
-        let result = await engine.clean([item], method: .delete)
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.aiModels))
         #expect(result.allSucceeded)
 
         let fm = FileManager.default

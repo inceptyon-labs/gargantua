@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -15,7 +16,7 @@ extension CleanupResultTests {
 
         let item = makeItem(id: "trash", path: fixture.trash.path, size: fixture.totalBytes)
         let engine = CleanupEngine(homeDirectoryForTesting: fixture.home)
-        let result = await engine.clean([item], method: .delete)
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(result.totalFreed == fixture.totalBytes)
@@ -36,7 +37,7 @@ extension CleanupResultTests {
 
         let item = makeItem(id: "trash", path: fixture.trash.path, size: fixture.totalBytes)
         let engine = CleanupEngine(homeDirectoryForTesting: fixture.home)
-        let result = await engine.clean([item], method: .trash)
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(FileManager.default.fileExists(atPath: fixture.trash.path))
@@ -52,7 +53,7 @@ extension CleanupResultTests {
 
         let item = makeItem(id: "trash", path: fixture.trash.path, size: 0)
         let engine = CleanupEngine(homeDirectoryForTesting: fixture.home)
-        let result = await engine.clean([item], method: .delete)
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(FileManager.default.fileExists(atPath: fixture.trash.path))
@@ -70,7 +71,7 @@ extension CleanupResultTests {
         let pathWithSlash = fixture.trash.path + "/"
         let item = makeItem(id: "trash", path: pathWithSlash, size: fixture.totalBytes)
         let engine = CleanupEngine(homeDirectoryForTesting: fixture.home)
-        let result = await engine.clean([item], method: .delete)
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
 
         #expect(result.allSucceeded)
         #expect(FileManager.default.fileExists(atPath: fixture.trash.path))
@@ -106,7 +107,7 @@ extension CleanupResultTests {
 
         let item = makeItem(id: "trash", path: fixture.trash.path, size: fixture.totalBytes)
         let engine = CleanupEngine(homeDirectoryForTesting: fixture.home)
-        let result = await engine.clean([item], method: .delete)
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
 
         #expect(!result.allSucceeded)
         #expect(result.failedItems.count == 1)

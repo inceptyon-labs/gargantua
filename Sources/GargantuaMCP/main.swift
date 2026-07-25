@@ -262,14 +262,15 @@ private let cleanNotificationService = MCPCleanNotificationFactory.automatic(
 // never reach the cleaner, so previews stay available to unlicensed users —
 // matching the GUI, where scanning is always free.
 private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
-    let gateDecision = try runBlocking {
-        await LicenseGate.shared.canExecuteDestructiveAction()
-    }
-    if case .blocked = gateDecision {
+    let authorization: DestructiveActionAuthorization
+    switch try runBlocking({ await LicenseGate.shared.authorize(.mcpClean) }) {
+    case .failure:
         throw MCPToolError.invalidParams(
             "Gargantua's trial has expired. Destructive MCP operations require a license key; "
                 + "scans and dry runs remain available."
         )
+    case .success(let granted):
+        authorization = granted
     }
 
     let decision = cleanNotificationService.request(
@@ -292,7 +293,9 @@ private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
             cleanupMethod: method
         )
     case .proceed:
-        return try runBlocking { await cleanupEngine.clean(items, method: method) }
+        return try runBlocking {
+            await cleanupEngine.clean(items, method: method, authorization: authorization)
+        }
     }
 }
 

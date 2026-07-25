@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -79,7 +80,7 @@ struct CleanupEngineCommandActionTests {
             commandActionRunner: router
         )
 
-        let result = await engine.clean([commandScanResult()], method: .trash)
+        let result = await engine.clean([commandScanResult()], method: .trash, authorization: .unchecked(.deepClean))
         #expect(result.allSucceeded)
         #expect(stub.executedRules == ["sample"])
     }
@@ -94,7 +95,7 @@ struct CleanupEngineCommandActionTests {
             homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
             commandActionRunner: router
         )
-        let result = await engine.clean([commandScanResult()], method: .trash)
+        let result = await engine.clean([commandScanResult()], method: .trash, authorization: .unchecked(.deepClean))
         #expect(!result.allSucceeded)
         let item = result.itemResults.first
         #expect(item?.error?.contains("boom") == true)
@@ -125,7 +126,7 @@ struct CleanupEngineCommandActionTests {
             commandActionRunner: router
         )
 
-        let result = await engine.clean([commandScanResult()], method: .trash)
+        let result = await engine.clean([commandScanResult()], method: .trash, authorization: .unchecked(.deepClean))
         #expect(result.allSucceeded)
         #expect(stub.executedRules == ["sample"])
     }
@@ -138,7 +139,7 @@ struct CleanupEngineCommandActionTests {
             homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
             commandActionRunner: router
         )
-        let result = await engine.clean([commandScanResult(ruleID: "ghost")], method: .trash)
+        let result = await engine.clean([commandScanResult(ruleID: "ghost")], method: .trash, authorization: .unchecked(.deepClean))
         #expect(!result.allSucceeded)
         #expect(result.itemResults.first?.error?.contains("ghost") == true)
     }

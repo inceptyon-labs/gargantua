@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import GargantuaLicensing
 
 /// Result of cleaning a single item.
 public struct CleanupItemResult: Sendable {
@@ -158,19 +159,34 @@ public final class CleanupEngine: Sendable {
     ///
     /// Each file is handled individually so partial failures are tracked.
     /// Returns a `CleanupResult` with per-item success/failure details.
+    ///
+    /// - Parameters:
+    ///   - authorization: Proof the license gate allowed this operation. Obtained
+    ///     from `LicenseGate.authorize(_:)`; unforgeable by construction, so a new
+    ///     destructive surface cannot reach this method without being gated.
     @MainActor
-    public func clean(_ items: [ScanResult], method: CleanupMethod = .trash) async -> CleanupResult {
-        await clean(items, method: method, observer: nil)
+    public func clean(
+        _ items: [ScanResult],
+        method: CleanupMethod = .trash,
+        authorization: DestructiveActionAuthorization
+    ) async -> CleanupResult {
+        await clean(items, method: method, observer: nil, authorization: authorization)
     }
 
     /// Variant that emits a `ScanProgressEvent` per item to feed the
     /// EventHorizon console during the cleaning phase. Successful removals
     /// surface as `.match` (with bytes); failures surface as `.failed`.
+    ///
+    /// - Parameters:
+    ///   - authorization: Proof the license gate allowed this operation. Obtained
+    ///     from `LicenseGate.authorize(_:)`; unforgeable by construction, so a new
+    ///     destructive surface cannot reach this method without being gated.
     @MainActor
     public func clean(
         _ items: [ScanResult],
         method: CleanupMethod = .trash,
-        observer: (any ScanProgressObserving)?
+        observer: (any ScanProgressObserving)?,
+        authorization: DestructiveActionAuthorization
     ) async -> CleanupResult {
         var results: [CleanupItemResult] = []
 
