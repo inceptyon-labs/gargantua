@@ -33,6 +33,54 @@ struct UninstallExecutorTests {
         #expect(result.privilegedItems.map(\.path) == [item.path])
     }
 
+    @Test("non-dry-run without an authorization token is rejected before anything is deleted")
+    @MainActor
+    func realRunWithoutAuthorizationIsBlocked() async throws {
+        let remover = SpyUninstallRemover()
+        let audit = SpyUninstallAuditRecorder()
+        let item = Self.makeRemnant(id: "prefs", path: "/tmp/prefs.plist", safety: .review)
+        let executor = UninstallExecutor(
+            remover: remover,
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: audit
+        )
+
+        await #expect(throws: UninstallExecutionError.licenseBlocked(.noLicense)) {
+            try await executor.execute(
+                Self.makePlan(remnants: [item]),
+                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+                authorization: nil
+            )
+        }
+
+        #expect(remover.removedPaths.isEmpty)
+        #expect(audit.entries.isEmpty)
+    }
+
+    @Test("non-dry-run with a token minted for another surface is rejected")
+    @MainActor
+    func realRunWithWrongSurfaceTokenIsBlocked() async throws {
+        let remover = SpyUninstallRemover()
+        let audit = SpyUninstallAuditRecorder()
+        let item = Self.makeRemnant(id: "prefs", path: "/tmp/prefs.plist", safety: .review)
+        let executor = UninstallExecutor(
+            remover: remover,
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: audit
+        )
+
+        await #expect(throws: UninstallExecutionError.licenseBlocked(.noLicense)) {
+            try await executor.execute(
+                Self.makePlan(remnants: [item]),
+                options: UninstallExecutionOptions(confirmationMethod: .summaryDialog),
+                authorization: .unchecked(.deepClean)
+            )
+        }
+
+        #expect(remover.removedPaths.isEmpty)
+        #expect(audit.entries.isEmpty)
+    }
+
     @Test("trash execution moves non-privileged items and writes uninstaller audit entry")
     @MainActor
     func trashExecutionWritesAudit() async throws {

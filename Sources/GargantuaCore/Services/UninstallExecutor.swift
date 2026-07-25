@@ -210,6 +210,13 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
 
         // A real run destroys files, so the caller has to prove the license
         // gate allowed it. Dry runs returned above and stay open to everyone.
+        //
+        // The hardcoded `.noLicense` is fine because this is a programming-error
+        // guard, not the user-facing block path: a caller that reached here with
+        // no token (or one minted for another surface) never consulted the gate,
+        // so there is no real reason to report. Users hit
+        // `SmartUninstallerViewModel.uninstallAuthorization()`, which throws
+        // first with the gate's actual `BlockReason`.
         guard let authorization, authorization.surface == .uninstaller else {
             throw UninstallExecutionError.licenseBlocked(.noLicense)
         }

@@ -5,13 +5,20 @@ import Foundation
 /// failure type of a `Result`.
 extension BlockReason: Error {}
 
-/// The registry of every code path in Gargantua that destroys user data.
+/// The registry of the destructive surfaces that cross four execution
+/// boundaries: `CleanupEngine`, `UninstallExecutor`, the Spotlight orphan-rule
+/// writer, and the Developer Tools command runner.
 ///
 /// This is not documentation — it is load-bearing. Each case names a surface
 /// that must obtain a ``DestructiveActionAuthorization`` before it can reach
-/// `CleanupEngine`, `UninstallExecutor`, the Spotlight rule writer, or the
-/// Developer Tools command executor. Adding a destructive surface without
-/// adding a case here is a compile error at the call site, not a review miss.
+/// one of those four. Adding a caller of them without adding a case here is a
+/// compile error at the call site, not a review miss.
+///
+/// Two shipping features destroy user data outside that boundary and are
+/// deliberately not enumerated here: Background Items
+/// (`DefaultBackgroundItemTrasher`) and the File Organizer
+/// (`OrganizerExecutor`). Whether they should require a license is a product
+/// decision that has not been made; do not read their absence as coverage.
 public enum DestructiveSurface: String, CaseIterable, Sendable {
     case deepClean
     case devArtifacts
@@ -41,13 +48,18 @@ public struct DestructiveActionAuthorization: Sendable, Equatable {
         self.surface = surface
     }
 
-    /// Test-only mint that bypasses the license gate.
-    ///
-    /// Production code must never call this: `DestructiveSurfaceRegistryTests`
-    /// fails the build if any file under `Sources/` references it.
-    public static func unchecked(_ surface: DestructiveSurface) -> DestructiveActionAuthorization {
-        DestructiveActionAuthorization(surface: surface)
-    }
+    #if DEBUG
+        /// Test-only mint that bypasses the license gate.
+        ///
+        /// Compiled out of release builds, so the bypass does not exist as a
+        /// symbol in a shipped binary. SwiftPM builds test targets in debug, so
+        /// tests keep it. `DestructiveSurfaceRegistryTests` additionally fails
+        /// the build if any file under `Sources/` references it, catching a
+        /// debug-only production call site.
+        public static func unchecked(_ surface: DestructiveSurface) -> DestructiveActionAuthorization {
+            DestructiveActionAuthorization(surface: surface)
+        }
+    #endif
 
     fileprivate static func granted(_ surface: DestructiveSurface) -> DestructiveActionAuthorization {
         DestructiveActionAuthorization(surface: surface)
@@ -60,6 +72,12 @@ public extension LicenseGate {
     /// Callers pass the returned token to the destructive entry point. On
     /// failure the `BlockReason` drives the Unlock sheet (GUI) or the tool
     /// error (MCP) — the same reasons `canExecuteDestructiveAction()` returns.
+    ///
+    /// The decision is surface-independent today: `surface` labels the token
+    /// for auditing, it does not scope its authority, so every surface gets the
+    /// same answer. If tiered licensing ever makes the answer per-surface,
+    /// every call site that does not check `authorization.surface` becomes a
+    /// real hole and has to be revisited.
     func authorize(
         _ surface: DestructiveSurface
     ) async -> Result<DestructiveActionAuthorization, BlockReason> {

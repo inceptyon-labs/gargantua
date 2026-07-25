@@ -32,8 +32,9 @@ import Foundation
 //   bypass the limit by omitting `clientInfo`.
 // - Licensing: the destructive path is gated by the caller's injected
 //   `Cleaner` (see `GargantuaMCP/main.swift`), which takes
-//   `LicenseGate.canExecuteDestructiveAction()` before touching disk. The gate
-//   is not here because this type is deliberately synchronous.
+//   `LicenseGate.authorize(.mcpClean)` and forwards the resulting
+//   `DestructiveActionAuthorization` into `CleanupEngine.clean` before touching
+//   disk. The gate is not here because this type is deliberately synchronous.
 // - Audit: every non-dry-run invocation — success *or* failure — writes an
 //   entry through the injected `auditRecorder`. The entry's UUID is what
 //   `MCPCleanOutput.auditID` reports, so clients can cross-reference the

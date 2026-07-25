@@ -24,6 +24,13 @@ public struct ClaudeCodeAgentPendingApproval: Sendable {
 
 @MainActor
 public final class ClaudeCodeAgentSessionController: ObservableObject {
+    /// Mirrors `LicenseGate.authorize(_:)`: the token on success, the
+    /// `BlockReason` that drives the blocked-cleanup transcript event on
+    /// failure. Injected so tests can reach the blocked branch without the
+    /// trial machinery.
+    public typealias GateAuthorizationProvider =
+        @Sendable () async -> Result<DestructiveActionAuthorization, BlockReason>
+
     @Published public private(set) var status: ClaudeCodeAgentSessionStatus = .idle
     @Published public private(set) var events: [ClaudeCodeAgentTranscriptEvent] = []
     @Published public internal(set) var streamEvents: [ClaudeCodeStreamEvent] = []
@@ -57,6 +64,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     private let runner: ClaudeCodeAgentSessionRunner
     private let cleanupEngine: CleanupEngine
     private let auditWriter: AuditWriter
+    private let gateAuthorization: GateAuthorizationProvider
     /// Host-side mirror of the agent's scan-session cache. Populated from
     /// `mcp__gargantua__scan` tool_result events (parsed via the
     /// `ClaudeCodeToolResultPayload.scanResults` payload). Last-scan-wins,
@@ -74,11 +82,15 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     public init(
         runner: ClaudeCodeAgentSessionRunner = ClaudeCodeAgentSessionRunner(),
         cleanupEngine: CleanupEngine = CleanupEngine(),
-        auditWriter: AuditWriter = AuditWriter()
+        auditWriter: AuditWriter = AuditWriter(),
+        gateAuthorization: @escaping GateAuthorizationProvider = {
+            await LicenseGate.shared.authorize(.claudeCodeAgent)
+        }
     ) {
         self.runner = runner
         self.cleanupEngine = cleanupEngine
         self.auditWriter = auditWriter
+        self.gateAuthorization = gateAuthorization
     }
 
     /// Root under which the runner creates per-session scratch directories.
@@ -254,12 +266,14 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             // it needs the same license authorization. Blocked leaves the gate
             // `.pending` and restores the approval the guard above cleared, so
             // the user can re-approve after unlocking instead of losing it.
-            guard case .success(let authorization) =
-                await LicenseGate.shared.authorize(.claudeCodeAgent) else {
+            let authorization: DestructiveActionAuthorization
+            switch await gateAuthorization() {
+            case .success(let token):
+                authorization = token
+            case .failure(let reason):
                 events.append(ClaudeCodeAgentTranscriptEvent(
                     stream: .system,
-                    message: "Cleanup blocked: Gargantua's trial has expired. "
-                        + "Destructive agent actions require a license key."
+                    message: Self.blockedCleanupMessage(for: reason)
                 ))
                 pendingApproval = pending
                 return
@@ -312,6 +326,21 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// their mind.
     public func cancelPendingApproval() {
         pendingApproval = nil
+    }
+
+    /// Transcript copy for a blocked cleanup. `UnlockGargantuaSheet`'s wording
+    /// is view-private and sheet-shaped, so the two reasons get short variants
+    /// here — the point is that a user who never started a trial isn't told
+    /// their trial expired.
+    private static func blockedCleanupMessage(for reason: BlockReason) -> String {
+        switch reason {
+        case .trialExpired:
+            return "Cleanup blocked: Gargantua's trial has expired. "
+                + "Destructive agent actions require a license key."
+        case .noLicense:
+            return "Cleanup blocked: Gargantua isn't activated on this Mac. "
+                + "Destructive agent actions require a license key."
+        }
     }
 
     private func decide(

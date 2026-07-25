@@ -3,6 +3,7 @@
 // them across source lines would corrupt the assertion data.
 
 import Foundation
+import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
 
@@ -184,6 +185,77 @@ extension ClaudeCodeAgentSessionControllerTests {
         _ = await waitForTerminalStatus(controller)
 
         #expect(controller.lastAssistantText == "These are stale Adobe caches the parent app no longer reads — safe to remove for a macOS upgrade.")
+    }
+
+    @Test("A blocked license gate stops agent cleanup, logs the reason, and restores the approval")
+    func blockedGateStopsAgentCleanup() async throws {
+        let directory = try makeTemporaryDirectory()
+        let target = directory.appendingPathComponent("blocked-item.txt")
+        try "payload".write(to: target, atomically: true, encoding: .utf8)
+
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(Self.scanResultLine(id: "blocked-1", path: target.path) + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(
+            runner: runner,
+            auditWriter: AuditWriter(logDirectory: directory.appendingPathComponent("audit")),
+            gateAuthorization: { .failure(.noLicense) }
+        )
+        controller.start(template: .investigateSpace, userContext: "audit")
+        _ = await waitForTerminalStatus(controller)
+
+        let pending = try #require(controller.pendingApproval)
+        #expect(pending.items.count == 1)
+
+        await controller.confirmPendingApproval(method: .delete)
+
+        // Nothing cleaned.
+        #expect(FileManager.default.fileExists(atPath: target.path))
+        #expect(controller.isCleaning == false)
+        // The user is told why, with the gate's actual reason rather than a
+        // hardcoded trial-expired line.
+        #expect(controller.events.contains {
+            $0.stream == .system && $0.message.contains("isn't activated on this Mac")
+        })
+        // The approval the guard cleared is restored, and the gate stays
+        // pending so the user can re-approve after unlocking.
+        #expect(controller.pendingApproval?.gateID == pending.gateID)
+        #expect(controller.approvalGates.first?.status == .pending)
+    }
+
+    @Test("An allowed license gate lets agent cleanup run to completion")
+    func allowedGateCleansAgentItems() async throws {
+        let directory = try makeTemporaryDirectory()
+        let target = directory.appendingPathComponent("allowed-item.txt")
+        try "payload".write(to: target, atomically: true, encoding: .utf8)
+
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(Self.scanResultLine(id: "allowed-1", path: target.path) + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(
+            runner: runner,
+            auditWriter: AuditWriter(logDirectory: directory.appendingPathComponent("audit")),
+            gateAuthorization: { .success(.unchecked(.claudeCodeAgent)) }
+        )
+        controller.start(template: .investigateSpace, userContext: "audit")
+        _ = await waitForTerminalStatus(controller)
+
+        #expect(controller.pendingApproval != nil)
+
+        await controller.confirmPendingApproval(method: .delete)
+
+        #expect(FileManager.default.fileExists(atPath: target.path) == false)
+        #expect(controller.pendingApproval == nil)
+        #expect(controller.approvalGates.first?.status == .approved)
+    }
+
+    /// One scan `tool_result` line carrying a single safe item at `path`, so a
+    /// licensing test can point the agent at a real file on disk and assert
+    /// whether it survived.
+    private static func scanResultLine(id: String, path: String) -> String {
+        #"""
+        {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_scan_\#(id)","type":"tool_result","content":"summary"}]},"tool_use_result":{"content":"summary","structuredContent":{"items":[{"id":"\#(id)","name":"Item","path":"\#(path)","size":"7 bytes","safety":"safe","confidence":90,"explanation":"cache","source":"Rules","category":"browser_cache"}],"summary":{"safe_count":1,"safe_size":"7 bytes","review_count":0,"review_size":"0 bytes","protected_count":0},"total_reclaimable":"7 bytes"}}}
+        """#
     }
 
     @Test("Cleanup progress publishers expose isCleaning + counts so the view can render the overlay")

@@ -86,6 +86,14 @@ jobs:
             -instr-profile .build/debug/codecov/default.profdata \
             -ignore-filename-regex='.build|Tests' > coverage.lcov
 
+      # The licensed configuration compiles in the trial clock and the license
+      # gate, so every test wrapped in `#if GARGANTUA_LICENSING` — the whole
+      # blocked-path corpus — is dead code in the run above. Runs after the
+      # lcov export because rebuilding with the flag replaces the instrumented
+      # test binary the export step reads.
+      - name: Test (licensing build)
+        run: GARGANTUA_LICENSING=1 swift test
+
       - name: Enforce coverage floor (78%)
         run: Scripts/coverage-priorities.sh coverage.lcov --fail-under 78
 
