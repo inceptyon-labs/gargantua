@@ -81,9 +81,9 @@ struct MCPCleanToolHandlerAuditRecorderTests {
 
     @Test("audit recorder failure on successful clean fails loud with internalError")
     func auditRecorderFailureOnSuccessIsFailLoud() throws {
-        struct RecordBoom: Error, LocalizedError { var errorDescription: String? { "audit down" } }
         let cache = cacheWith([makeResult(id: "a", size: 5)])
         let captured = LogCapture()
+        let spy = FailAfterFirstWrite()
         let subject = MCPCleanToolHandler(
             sessionCache: cache,
             cleaner: { items, _ in
@@ -93,7 +93,7 @@ struct MCPCleanToolHandlerAuditRecorderTests {
                 )
             },
             auditIDGenerator: { fixedAuditUUID },
-            auditRecorder: { _ in throw RecordBoom() },
+            auditRecorder: { try spy.record($0) },
             clientIDProvider: { "claude-code" },
             log: { captured.append($0) }
         )
@@ -114,14 +114,14 @@ struct MCPCleanToolHandlerAuditRecorderTests {
     @Test("audit recorder failure on cleaner failure path is best-effort — primary error surfaces")
     func auditRecorderFailureOnCleanerFailureIsBestEffort() throws {
         struct CleanerBoom: Error, LocalizedError { var errorDescription: String? { "cleaner exploded" } }
-        struct RecordBoom: Error {}
         let cache = cacheWith([makeResult(id: "a", size: 5)])
         let captured = LogCapture()
+        let spy = FailAfterFirstWrite()
         let subject = MCPCleanToolHandler(
             sessionCache: cache,
             cleaner: { _, _ in throw CleanerBoom() },
             auditIDGenerator: { fixedAuditUUID },
-            auditRecorder: { _ in throw RecordBoom() },
+            auditRecorder: { try spy.record($0) },
             clientIDProvider: { "claude-code" },
             log: { captured.append($0) }
         )
@@ -140,6 +140,67 @@ struct MCPCleanToolHandlerAuditRecorderTests {
         #expect(message.contains("Clean failed"))
         #expect(message.contains("cleaner exploded"))
         #expect(captured.joined.contains("audit record failed during error path"))
+    }
+
+    @Test("audit recorder failure on the intent write aborts before the cleaner runs")
+    func auditRecorderFailureOnIntentWriteBlocksCleaner() throws {
+        struct RecordBoom: Error, LocalizedError { var errorDescription: String? { "audit down" } }
+        let cache = cacheWith([makeResult(id: "a", size: 5)])
+        let captured = LogCapture()
+        let cleanerRan = LockedFlag()
+        let subject = MCPCleanToolHandler(
+            sessionCache: cache,
+            cleaner: { items, _ in
+                cleanerRan.set(true)
+                return CleanupResult(
+                    itemResults: items.map { CleanupItemResult(item: $0, succeeded: true) },
+                    cleanupMethod: .trash
+                )
+            },
+            auditIDGenerator: { fixedAuditUUID },
+            auditRecorder: { _ in throw RecordBoom() },
+            clientIDProvider: { "claude-code" },
+            log: { captured.append($0) }
+        )
+
+        do {
+            _ = try subject.handle(arguments([
+                "item_ids": .array([.string("a")]),
+                "confirm": .bool(true),
+            ]))
+            Issue.record("a failing intent write must throw internalError")
+        } catch MCPToolError.internalError(let message) {
+            #expect(message.lowercased().contains("no files were touched"))
+        }
+        #expect(cleanerRan.value == false, "the cleaner must never run when the intent write fails")
+    }
+}
+
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    func set(_ newValue: Bool) {
+        lock.lock(); flag = newValue; lock.unlock()
+    }
+
+    var value: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return flag
+    }
+}
+
+/// Succeeds on the intent write, throws on every later write. Lets a test
+/// target the post-clean audit failure specifically, now that a failing
+/// intent write aborts before the cleaner runs.
+private final class FailAfterFirstWrite: @unchecked Sendable {
+    struct RecordBoom: Error, LocalizedError { var errorDescription: String? { "audit down" } }
+    private let lock = NSLock()
+    private var calls = 0
+
+    func record(_ entry: AuditEntry) throws {
+        lock.lock(); calls += 1; let n = calls; lock.unlock()
+        if n > 1 { throw RecordBoom() }
     }
 }
 

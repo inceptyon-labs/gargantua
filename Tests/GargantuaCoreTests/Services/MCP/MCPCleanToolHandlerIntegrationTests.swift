@@ -96,7 +96,7 @@ struct MCPCleanToolHandlerIntegrationTests {
         ))
         #expect(cleanResponse?.error == nil)
 
-        let entry = try #require(audit.entries.first)
+        let entry = try #require(audit.entries.last)
         #expect(entry.clientID == "claude-code-e2e")
         #expect(entry.transport == "mcp")
         #expect(entry.bytesFreed == 12_345)

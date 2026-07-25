@@ -89,8 +89,13 @@ struct MCPCleanToolHandlerAuditWriteTests {
             "confirm": .bool(true),
         ]))
 
-        let entry = try #require(audit.entries.first, "expected exactly one audit entry")
-        #expect(audit.entries.count == 1)
+        #expect(audit.entries.count == 2)
+        let intent = try #require(audit.entries.first, "expected an intent entry")
+        #expect(intent.status == .attempted)
+        #expect(intent.bytesFreed == 0)
+
+        let entry = try #require(audit.entries.last, "expected an outcome entry")
+        #expect(entry.status == .completed)
         #expect(entry.transport == "mcp")
         #expect(entry.clientID == "claude-code")
         #expect(entry.command == "clean")
@@ -150,7 +155,10 @@ struct MCPCleanToolHandlerAuditWriteTests {
         ]))
 
         #expect(result.isError == true)
-        let entry = try #require(audit.entries.first)
+        #expect(audit.entries.count == 2)
+        #expect(audit.entries.first?.status == .attempted)
+
+        let entry = try #require(audit.entries.last)
         #expect(entry.clientID == "claude-code")
         #expect(entry.bytesFreed == 0, "no bytes freed on failure")
         #expect(entry.cleanupMethod == .trash, "falls back to requested method on failure")
@@ -177,7 +185,61 @@ struct MCPCleanToolHandlerAuditWriteTests {
         } catch MCPToolError.invalidParams {
             // expected
         }
-        #expect(audit.entries.count == 1)
+        #expect(audit.entries.count == 2)
+    }
+
+    @Test("a Cleaner that throws after the intent write still leaves an entry with the operation's auditID")
+    func auditEntrySurvivesCleanerThrowAfterIntentWrite() throws {
+        struct Boom: Error, LocalizedError { var errorDescription: String? { "kaboom" } }
+        let cache = cacheWith([makeResult(id: "a", size: 1_000)])
+        let audit = AuditCapture()
+        let subject = makeHandler(
+            cache: cache,
+            cleaner: { _, _ in throw Boom() },
+            auditRecorder: { try audit.record($0) },
+            clientID: "claude-code"
+        )
+
+        let result = try subject.handle(arguments([
+            "item_ids": .array([.string("a")]),
+            "confirm": .bool(true),
+        ]))
+
+        #expect(result.isError == true)
+        #expect(audit.entries.contains { $0.id == fixedAuditUUID })
+    }
+
+    @Test("a successful clean reads back through the audit reader as exactly one entry")
+    func successfulCleanCollapsesToOneEffectiveEntry() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gargantua-audit-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let writer = AuditWriter(logDirectory: dir)
+        let cache = cacheWith([makeResult(id: "a", size: 1_000)])
+        let subject = makeHandler(
+            cache: cache,
+            cleaner: { items, method in
+                CleanupResult(
+                    itemResults: items.map { CleanupItemResult(item: $0, succeeded: true) },
+                    cleanupMethod: method
+                )
+            },
+            auditRecorder: { try writer.write($0) },
+            clientID: "claude-code"
+        )
+
+        _ = try subject.handle(arguments([
+            "item_ids": .array([.string("a")]),
+            "confirm": .bool(true),
+        ]))
+
+        // Two lines on disk, one effective entry to every consumer.
+        let entries = try writer.readEntries()
+        #expect(entries.count == 1)
+        #expect(entries.first?.id == fixedAuditUUID)
+        #expect(entries.first?.status == .completed)
+        #expect(entries.first?.bytesFreed == 1_000)
     }
 }
 

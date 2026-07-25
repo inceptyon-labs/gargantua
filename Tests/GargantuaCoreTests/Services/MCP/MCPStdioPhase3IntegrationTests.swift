@@ -85,7 +85,7 @@ struct MCPStdioPhase3IntegrationTests {
         )
         #expect(cleanResponse.error == nil)
 
-        let entry = try #require(server.audit.entries.first)
+        let entry = try #require(server.audit.entries.last)
         #expect(entry.clientID == "claude-code-stdio")
         #expect(entry.transport == "mcp")
         #expect(entry.bytesFreed == 30_000)
@@ -149,9 +149,9 @@ struct MCPStdioPhase3IntegrationTests {
         #expect(error.code == MCPErrorCode.invalidParams)
         #expect(error.message.contains("rate limit") || error.message.contains("Cool-down"))
 
-        // Exactly one audit entry — the allowed clean. The rejected one was
-        // stopped before the cleaner/audit path by design.
-        #expect(server.audit.entries.count == 1)
+        // Two audit entries (intent + outcome) from the allowed clean. The
+        // rejected one was stopped before the cleaner/audit path by design.
+        #expect(server.audit.entries.count == 2)
         #expect(server.cleanupLog.invocations.count == 1)
     }
 

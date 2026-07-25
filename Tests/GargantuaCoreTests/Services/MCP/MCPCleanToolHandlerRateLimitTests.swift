@@ -188,8 +188,10 @@ struct MCPCleanToolHandlerRateLimitTests {
             "confirm": .bool(true),
         ]))
 
-        #expect(audit.entries.count == 1,
-                "rate-limited requests never reached the cleaner and must not be audited")
+        #expect(
+            audit.entries.count == 2,
+            "rate-limited requests never reached the cleaner; the 2 entries are the allowed call's intent + outcome pair"
+        )
     }
 }
 

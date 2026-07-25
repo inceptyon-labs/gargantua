@@ -35,15 +35,25 @@ import Foundation
 //   `LicenseGate.authorize(.mcpClean)` and forwards the resulting
 //   `DestructiveActionAuthorization` into `CleanupEngine.clean` before touching
 //   disk. The gate is not here because this type is deliberately synchronous.
-// - Audit: every non-dry-run invocation — success *or* failure — writes an
-//   entry through the injected `auditRecorder`. The entry's UUID is what
+// - Audit: every non-dry-run invocation writes audit entries in two phases,
+//   both sharing the call's `auditUUID` — which is also what
 //   `MCPCleanOutput.auditID` reports, so clients can cross-reference the
-//   wire response against the persisted trail. The success path is
-//   fail-loud: if audit write fails after a successful clean, the handler
-//   surfaces `internalError` so operators cannot miss a destructive op
-//   whose record never made it to disk. Failure-path audit is best-effort
-//   — an already-failing request hiding a secondary audit-write error is
-//   less dangerous than dropping the forensic trail on a successful op.
+//   wire response against the persisted trail.
+//   - Intent: an `.attempted` entry is written before `cleaner` runs. This
+//     is fail-closed — if the intent write itself fails, the handler throws
+//     `internalError` and never calls `cleaner`, because a destructive op we
+//     cannot record is an op we do not run. If the process dies inside
+//     `cleaner` (crash, SIGKILL, power loss), this line is the only evidence
+//     the operation happened.
+//   - Outcome: a `.completed` entry, written after `cleaner` returns (success
+//     or failure), supersedes the intent line on read — `AuditWriter.readEntries()`
+//     collapses entries sharing an id and keeps the last. The success path is
+//     fail-loud: if this write fails after a successful clean, the handler
+//     surfaces `internalError` so operators cannot miss a destructive op whose
+//     outcome never made it to disk. The failure path's outcome write is
+//     best-effort — an already-failing request hiding a secondary audit-write
+//     error is less dangerous than dropping the forensic trail — but the
+//     `.attempted` entry from the intent write still stands as evidence.
 //
 // Not implemented here (future tasks):
 // - User notification + cancel window (Task 4 `gargantua-uxdr`).
@@ -272,6 +282,33 @@ public struct MCPCleanToolHandler: Sendable {
         auditUUID: UUID,
         clientID: String
     ) throws -> MCPToolCallResult {
+        // Intent record, written before anything touches disk. If the process
+        // dies inside `cleaner` — crash, SIGKILL, power loss, the user force
+        // quitting a long prune — this line is the only evidence the operation
+        // happened at all, and for `method: .delete` the only record the files
+        // ever existed. The outcome entry below carries the same id and
+        // supersedes it on read.
+        //
+        // Fail-closed: a destructive op we cannot record is an op we do not
+        // run. Nothing has been touched yet, so refusing costs the caller a
+        // retry instead of costing them an untraceable deletion.
+        do {
+            try recordAudit(
+                entryID: auditUUID,
+                clientID: clientID,
+                requested: found,
+                result: nil,
+                methodHint: method,
+                status: .attempted
+            )
+        } catch {
+            log?("clean intent audit record failed before clean: \(error)")
+            throw MCPToolError.internalError(
+                "Clean aborted: the audit log could not record the attempt. "
+                    + "No files were touched; investigate the audit subsystem."
+            )
+        }
+
         do {
             let result = try cleaner(found, method)
             // Success path: audit is MANDATORY. A successful destructive op
@@ -284,7 +321,8 @@ public struct MCPCleanToolHandler: Sendable {
                     clientID: clientID,
                     requested: found,
                     result: result,
-                    methodHint: method
+                    methodHint: method,
+                    status: .completed
                 )
             } catch {
                 log?("clean audit record failed after successful clean: \(error)")
@@ -308,7 +346,8 @@ public struct MCPCleanToolHandler: Sendable {
                 clientID: clientID,
                 requested: found,
                 result: nil,
-                methodHint: method
+                methodHint: method,
+                status: .completed
             )
             throw error
         } catch {
@@ -318,7 +357,8 @@ public struct MCPCleanToolHandler: Sendable {
                 clientID: clientID,
                 requested: found,
                 result: nil,
-                methodHint: method
+                methodHint: method,
+                status: .completed
             )
             return .failure("Clean failed: \(MCPEncoding.clientFacingMessage(for: error))")
         }
@@ -334,7 +374,8 @@ public struct MCPCleanToolHandler: Sendable {
         clientID: String,
         requested: [ScanResult],
         result: CleanupResult?,
-        methodHint: CleanupMethod
+        methodHint: CleanupMethod,
+        status: AuditEntryStatus = .completed
     ) throws {
         guard let auditRecorder else { return }
 
@@ -358,7 +399,8 @@ public struct MCPCleanToolHandler: Sendable {
             cleanupMethod: result?.cleanupMethod ?? methodHint,
             bytesFreed: result?.totalFreed ?? 0,
             transport: "mcp",
-            clientID: clientID
+            clientID: clientID,
+            status: status
         )
 
         try auditRecorder(entry)
@@ -372,7 +414,8 @@ public struct MCPCleanToolHandler: Sendable {
         clientID: String,
         requested: [ScanResult],
         result: CleanupResult?,
-        methodHint: CleanupMethod
+        methodHint: CleanupMethod,
+        status: AuditEntryStatus = .completed
     ) {
         do {
             try recordAudit(
@@ -380,7 +423,8 @@ public struct MCPCleanToolHandler: Sendable {
                 clientID: clientID,
                 requested: requested,
                 result: result,
-                methodHint: methodHint
+                methodHint: methodHint,
+                status: status
             )
         } catch {
             log?("clean audit record failed during error path: \(error)")
