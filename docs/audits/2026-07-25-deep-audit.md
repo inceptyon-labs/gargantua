@@ -1782,54 +1782,73 @@ by hand.
 
 ---
 
-### [TOOL-02] Clear the 433 Swift-6-fatal warnings in the test target
+### [TOOL-02] Correct the Swift 6-fatal warning inventory: 49 real sites, 9 fixed in Sources/, 43 remain in Tests/
 
-- **Severity:** Low
+- **Severity:** Low (remaining `Tests/` portion). The `Sources/` portion is fixed as of this branch.
 - **Confidence:** High
-- **Effort:** M (half day)
-- **Files:** `Tests/GargantuaCoreTests/Services/MaintenanceEngineAuditHookTests.swift:14,95,101,113,119`, `Tests/GargantuaCoreTests/Views/ProcessInventorySessionTests.swift:56-63`, `Tests/GargantuaCoreTests/Views/BackgroundItemsSessionTests.swift:228,257,260`, `Tests/GargantuaCoreTests/Services/ClaudeCodeAgentProcessExecutorTests.swift:139`, `Tests/GargantuaCoreTests/Services/MCP/MCPExplainToolHandlerInputTests.swift:69,81`, `Tests/GargantuaCoreTests/Services/CloudAITransportTests.swift:68`
+- **Effort:** `Sources/`: done, this branch. `Tests/`: M (half day), deferred — see follow-up bean.
+- **Files (production, fixed on this branch):** `Sources/GargantuaCore/Views/ClaudeCodeAgentHelpContent.swift`, `Sources/GargantuaCore/Views/SidebarItem.swift`, `Sources/GargantuaCore/Models/CleanupNarrative.swift`, `Sources/GargantuaCore/Views/AIEngineEnvironment.swift`, `Sources/GargantuaCore/Views/DuplicateGroupClassifier.swift`, `Sources/GargantuaCore/Views/ProcessInventoryFormat.swift`, `Sources/GargantuaCore/Services/ClaudeCodeAgentProcessExecutor.swift`, `Sources/GargantuaCore/Services/SystemMetricCollector.swift`, `Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift` (commits `6d26e2a`, `a23304b`, `709f03d`, `7bf1676`)
+- **Files (test-side, 43 sites across 10 files, deferred to follow-up bean):** the original six — `MaintenanceEngineAuditHookTests`, `ProcessInventorySessionTests`, `BackgroundItemsSessionTests`, `ClaudeCodeAgentProcessExecutorTests`, `MCPExplainToolHandlerInputTests`, `CloudAITransportTests` — plus four the original inventory missed: `DeveloperToolsViewApplyResultTests` (11 sites), `CloudAITests` (9 sites), `DeveloperToolsViewInitialPhaseTests` (3 sites), `PrivilegedBackgroundItemValidatorTests` (1 site)
 - **Depends on:** none
 
-**What's wrong.** A full recompile emits 1225 warnings, every one of them in `Tests/`.
-433 are `this is an error in the Swift 6 language mode`: `NSLock.lock()`/`unlock()` and
-`DispatchSemaphore.wait()` called from async contexts, and `var` captured and mutated
-inside concurrent closures. Production code emits zero warnings.
+**What's wrong, corrected.** The original write-up of this finding was wrong on two
+counts. First, it claimed zero Swift-6-fatal sites in `Sources/` — false. A corrected
+probe found 9 such sites in production code, and all 9 are now fixed on this branch.
+Second, the headline counts of 433 (Swift-6-fatal) and 1225 (total) were never
+distinct-site counts; they are warning *emissions*, inflated by re-emission of the same
+diagnostic across compilation units. `GargantuaCore` alone compiles 523 files, and a
+fatal site referenced from multiple files gets re-emitted once per compiling unit that
+touches it. The true count, verified against distinct source locations, is **49 distinct
+sites**: 9 in `Sources/` (fixed) and 43 remaining in `Tests/` across 10 files, not the six
+files the original inventory named.
 
-**Evidence.** Counts from `swift build --build-tests` after touching every source file:
+**Measurement caveat: the original probe over-reports.** The original count came from
+Swift 5 language mode plus `-strict-concurrency=complete` alone. That flag combination
+overstates fatal sites, because keypath literals are only inferred `Sendable` under the
+`InferSendableFromCaptures` upcoming feature, which Swift 6 language mode enables by
+default but bare `-strict-concurrency=complete` does not. Probing with the incomplete
+flag set produced 7 phantom `KeyPath` sites that looked fatal, were implemented as fixes,
+and then had to be reverted once the correct probe showed they were never real (commits
+`6f7cbe1` -> `83fe821`). A correct probe needs `-strict-concurrency=complete` plus three
+more upcoming features enabled together: `RegionBasedIsolation`, `IsolatedDefaultValues`,
+and `GlobalConcurrency`, in addition to `InferSendableFromCaptures`. Any future recount of
+this finding should use that full flag set, not `-strict-concurrency=complete` alone.
 
-```
-767  '#require(_:_:)' is redundant because '…' never equals 'nil'
-240  instance method 'lock'/'unlock' is unavailable from asynchronous contexts   [Swift 6 error]
- 97  instance method 'wait' is unavailable from asynchronous contexts            [Swift 6 error]
- 96  mutation of captured var in concurrently-executing code                     [Swift 6 error]
- 25  result of call to 'withLock' is unused
-```
+**The MCPSSETransport finding, described accurately.**
+`Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift` was one of the 9 production
+sites. It is a genuine Swift 6 strict-concurrency violation — session-id state written
+outside proper isolation — but it was not an active leak in the shipped app. The type is
+declared `@unchecked Sendable` and all access to the affected state ran through a single
+serial `DispatchQueue` (`com.gargantua.mcp.sse`), so nothing raced in practice; the
+violation is one the compiler cannot see through the `@unchecked` annotation, not a
+defect that was manifesting for users. Runtime safety rested on that undocumented
+single-serial-queue confinement rather than on anything the type system enforced. Fixed
+in commit `7bf1676`, which also adds `MCPSSETransportTests` (184 lines) covering the
+corrected synchronization.
 
-(The per-warning counts are inflated by repeated emission across compilation units; the
-distinct source locations are the ~20 listed in **Files** above.)
+**Corrected baseline facts.** This finding's acceptance criteria, and §1/§2 of this
+report, cited a stale total test count of 2410. The actual suite is 2457 tests as of this
+audit, and 2458 once this branch's `MCPSSETransportTests` regression coverage is
+included.
 
-**Why it matters.** Not a runtime risk — this is test-only code and the suite passes. It
-is a migration wall: the package is `swift-tools-version: 5.10` and any move to the Swift
-6 language mode turns 433 warnings into build failures at once. Fixing them now, while
-they are understood, is much cheaper than fixing them under a migration deadline.
+**Why it matters.** Production code was not, in fact, clean — the "0 in `Sources/`" claim
+in the original inventory was false and understated this finding's real severity. The 9
+production sites are now fixed, closing that gap. The remaining 43 `Tests/` sites are
+still a genuine Swift 6 migration wall (the package is `swift-tools-version: 5.10`), now
+correctly scoped at 10 files rather than six, and counted by distinct site rather than by
+inflated emission total.
 
-**Proposed fix.** Three mechanical substitutions, no design decisions:
-- `NSLock.lock()/unlock()` in async test helpers → `Mutex` or an `actor` holding the
-  state; or hoist the locked section into a synchronous `withLock { }` whose result is
-  used.
-- `DispatchSemaphore.wait()` in async tests → `await` the `Task` handle the test already
-  has (several of these tests were changed to store task handles in `8a735eb`, "join
-  stored session tasks instead of deadline polls" — the same treatment applies here).
-- Captured-`var` mutation → replace the `var` with a small `final class Box: @unchecked
-  Sendable` or an actor, which is the pattern already used elsewhere in the suite.
-
-The 767 redundant-`#require` warnings are separate and trivially fixed by dropping
-`try #require(...)` where the expression is non-optional; they are noise but not a
-migration blocker, so do them second.
+**Proposed fix.** Production side: done, this branch (see file list above). Test side:
+the same three mechanical substitutions originally proposed — `NSLock`/`DispatchSemaphore`
+use in async contexts, and captured-`var` mutation in concurrent closures — applied
+across all 10 files. Deferred to a follow-up bean rather than fixed in this pass: it is
+half a day of mechanical edits to test-side locking with a real chance of introducing
+flakiness, and it buys nothing until a Swift 6 migration is actually scheduled.
 
 **Acceptance criteria.**
-- [ ] `swift build --build-tests 2>&1 | grep -c "error in the Swift 6 language mode"` returns `0`.
-- [ ] `Scripts/test.sh` still reports 2410 passing tests (no test deleted to silence a warning).
+- [ ] `swift build --build-tests 2>&1 | grep -c "error in the Swift 6 language mode"`, restricted to `Sources/`, returns `0` — true as of this branch.
+- [ ] `Scripts/test.sh` reports 2458 passing tests (2457 baseline plus the new `MCPSSETransportTests` regression test), with no test deleted to silence a warning.
+- [ ] The 43 remaining `Tests/` sites are tracked in a follow-up bean, not silently dropped.
 
 ---
 
@@ -2536,7 +2555,7 @@ unblock others. Work this table top-down.
 | 18 | DOC-01 | Correct the README's destructive-registry claim | Low | S | — |
 | 19 | CPX-01 | Delete three orphaned SwiftUI views | Low | S | — |
 | 20 | TOOL-01 | Resolve trivy: wire it into CI or delete its config | Low | S | — |
-| 21 | TOOL-02 | Clear the 433 Swift-6-fatal warnings in the test target | Low | M | — |
+| 21 | TOOL-02 | Clear the 49 Swift-6-fatal sites — 9 fixed in Sources/, 43 remain in Tests/ | Low | M | — |
 
 **Severity totals:** 5 High, 10 Medium, 6 Low. 21 findings.
 
