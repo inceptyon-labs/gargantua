@@ -44,8 +44,8 @@ struct CloudAITests {
 
     @Test("Monthly cap blocks before the transport is called")
     func monthlyCapBlocksBeforeTransport() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         configStore.save(CloudAIConfiguration(isEnabled: true, monthlySpendCapCents: 0))
         let transport = FakeCloudAITransport(response: CloudAIResponse(
             text: #"{"summary":"unused","recommendations":[]}"#,
@@ -57,7 +57,7 @@ struct CloudAITests {
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: "sk-ant-api03-\(String(repeating: "a", count: 32))"),
             transport: transport,
-            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
             logger: CloudAIRequestLogger(logURL: tempURL("cloud-cap-log.jsonl"))
         )
 
@@ -75,8 +75,8 @@ struct CloudAITests {
 
     @Test("Target cleanup filters protected item IDs returned by Claude")
     func targetCleanupFiltersProtectedItems() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         configStore.save(CloudAIConfiguration(isEnabled: true, monthlySpendCapCents: 500))
         let logURL = tempURL("cloud-target-log.jsonl")
         let logger = CloudAIRequestLogger(logURL: logURL)
@@ -86,7 +86,7 @@ struct CloudAITests {
             outputTokens: 100,
             requestID: "req_test"
         ))
-        let ledger = CloudAIUsageLedger(defaults: defaults)
+        let ledger = CloudAIUsageLedger(defaults: try defaults(suite))
         let service = CloudAIService(
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: "sk-ant-api03-\(String(repeating: "b", count: 32))"),
@@ -119,8 +119,8 @@ struct CloudAITests {
 
     @Test("Scan-rule suggestions write to proposed file and reject live rule directories")
     func scanRuleSuggestionsWriteOnlyProposedFiles() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         configStore.save(CloudAIConfiguration(isEnabled: true, monthlySpendCapCents: 500))
         let transport = FakeCloudAITransport(response: CloudAIResponse(
             text: #"""
@@ -133,7 +133,7 @@ struct CloudAITests {
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: "sk-ant-api03-\(String(repeating: "c", count: 32))"),
             transport: transport,
-            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
             logger: CloudAIRequestLogger(logURL: tempURL("cloud-rules-log.jsonl"))
         )
         let proposedURL = tempURL("proposed-rules.yaml")
@@ -161,8 +161,8 @@ struct CloudAITests {
 
     @Test("Duplicate resolution suggestions never include protected delete IDs")
     func duplicateResolutionFiltersProtectedDeletes() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         configStore.save(CloudAIConfiguration(isEnabled: true, monthlySpendCapCents: 500))
         let transport = FakeCloudAITransport(response: CloudAIResponse(
             text: #"""
@@ -175,7 +175,7 @@ struct CloudAITests {
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: "sk-ant-api03-\(String(repeating: "d", count: 32))"),
             transport: transport,
-            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
             logger: CloudAIRequestLogger(logURL: tempURL("cloud-duplicates-log.jsonl"))
         )
         let group = DuplicateGroup(
@@ -198,15 +198,15 @@ struct CloudAITests {
 
     @Test("Service reports disabled and missing-key states before network calls")
     func disabledAndMissingKeyStates() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         configStore.save(CloudAIConfiguration(isEnabled: false))
         let transport = FakeCloudAITransport(response: CloudAIResponse(text: "{}", inputTokens: 1, outputTokens: 1))
         let service = CloudAIService(
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: nil),
             transport: transport,
-            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
             logger: CloudAIRequestLogger(logURL: tempURL("cloud-disabled-log.jsonl"))
         )
 
@@ -238,8 +238,8 @@ struct CloudAITests {
 
     @Test("Deeper explain routes through the explanation feature and is cloud-sourced")
     func deeperExplainProducesCloudExplanation() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         configStore.save(CloudAIConfiguration(isEnabled: true, monthlySpendCapCents: 500))
         let transport = FakeCloudAITransport(response: CloudAIResponse(
             text: "  This cache is regenerated automatically and is safe to remove.  ",
@@ -250,7 +250,7 @@ struct CloudAITests {
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: "sk-ant-api03-\(String(repeating: "a", count: 32))"),
             transport: transport,
-            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
             logger: CloudAIRequestLogger(logURL: tempURL("cloud-explain-log.jsonl"))
         )
         let result = makeResult(id: "explain-me", safety: .safe)
@@ -269,25 +269,29 @@ struct CloudAITests {
 
     @Test("canExplainDeeper requires both enabled and a stored key")
     func canExplainDeeperRequiresEnabledAndKey() throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         let transport = FakeCloudAITransport(response: CloudAIResponse(text: "{}", inputTokens: 1, outputTokens: 1))
 
-        func service(enabled: Bool, key: String?) -> CloudAIService {
+        func service(enabled: Bool, key: String?) throws -> CloudAIService {
             configStore.save(CloudAIConfiguration(isEnabled: enabled))
             return CloudAIService(
                 configurationStore: configStore,
                 keyStore: FakeCloudAPIKeyStore(apiKey: key),
                 transport: transport,
-                usageLedger: CloudAIUsageLedger(defaults: defaults),
+                usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
                 logger: CloudAIRequestLogger(logURL: tempURL("cloud-can-log.jsonl"))
             )
         }
         let key = "sk-ant-api03-\(String(repeating: "a", count: 32))"
 
-        #expect(service(enabled: true, key: key).canExplainDeeper())
-        #expect(!service(enabled: false, key: key).canExplainDeeper())
-        #expect(!service(enabled: true, key: nil).canExplainDeeper())
+        let enabledWithKey = try service(enabled: true, key: key).canExplainDeeper()
+        let disabledWithKey = try service(enabled: false, key: key).canExplainDeeper()
+        let enabledWithoutKey = try service(enabled: true, key: nil).canExplainDeeper()
+
+        #expect(enabledWithKey)
+        #expect(!disabledWithKey)
+        #expect(!enabledWithoutKey)
     }
 
     private func makeResult(
@@ -313,11 +317,17 @@ struct CloudAITests {
         )
     }
 
-    private func makeDefaults() throws -> UserDefaults {
+    /// A fresh, empty defaults suite. Returns the name, not the object — each
+    /// consumer mints its own handle so nothing is sent to an actor while the
+    /// test still holds it.
+    private func makeSuite() -> String {
         let suite = "gargantua-cloud-ai-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        return suite
+    }
+
+    private nonisolated func defaults(_ suite: String) throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: suite))
     }
 
     private func tempURL(_ name: String) -> URL {
@@ -331,8 +341,8 @@ struct CloudAITests {
 extension CloudAITests {
     @Test("OpenAI-compatible provider skips the monthly cap and allows an empty key")
     func openAICompatibleSkipsCapAndAllowsNoKey() async throws {
-        let defaults = try makeDefaults()
-        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let suite = makeSuite()
+        let configStore = CloudAIConfigurationStore(defaults: try defaults(suite))
         // Cap of 0 would block any Anthropic request; OpenAI-compatible isn't metered here.
         configStore.save(CloudAIConfiguration(
             isEnabled: true,
@@ -350,7 +360,7 @@ extension CloudAITests {
             configurationStore: configStore,
             keyStore: FakeCloudAPIKeyStore(apiKey: nil), // local server, no key
             transport: transport,
-            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            usageLedger: CloudAIUsageLedger(defaults: try defaults(suite)),
             logger: CloudAIRequestLogger(logURL: tempURL("cloud-openai-log.jsonl"))
         )
 
@@ -359,7 +369,7 @@ extension CloudAITests {
         #expect(await transport.lastKey == "")
 
         // OpenAI-compatible isn't metered: a request is counted but no spend recorded.
-        let usage = await CloudAIUsageLedger(defaults: defaults).snapshot()
+        let usage = await CloudAIUsageLedger(defaults: try defaults(suite)).snapshot()
         #expect(usage.requestCount == 1)
         #expect(usage.spentCents == 0)
     }
