@@ -128,7 +128,12 @@ public struct SystemMetricCollector: Sendable {
                 return MemoryInfo(pressure: 0, total: total, used: 0)
             }
 
-            let pageSize = UInt64(vm_kernel_page_size)
+            var kernelPageSize: vm_size_t = 0
+            guard host_page_size(mach_host_self(), &kernelPageSize) == KERN_SUCCESS else {
+                logger.warning("host_page_size failed")
+                return MemoryInfo(pressure: 0, total: total, used: 0)
+            }
+            let pageSize = UInt64(kernelPageSize)
             let active = UInt64(stats.active_count) * pageSize
             let wired = UInt64(stats.wire_count) * pageSize
             let compressed = UInt64(stats.compressor_page_count) * pageSize

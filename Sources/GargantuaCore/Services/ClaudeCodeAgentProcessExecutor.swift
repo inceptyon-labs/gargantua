@@ -120,7 +120,7 @@ public final class FoundationClaudeCodeProcessExecutor: ClaudeCodeAgentProcessEx
     }
 }
 
-private final class ResumeState<Value>: @unchecked Sendable {
+private final class ResumeState<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var didResume = false
 
