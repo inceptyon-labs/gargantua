@@ -144,6 +144,18 @@ public final class MCPSSETransport: @unchecked Sendable {
                     // box first so a later invocation is a no-op, then close the
                     // session and cancel the connection directly here so nothing is
                     // leaked in the meantime.
+                    //
+                    // UNTESTED: no test in the suite reaches this branch. Triggering it
+                    // needs the connection to transition to .cancelled/.failed in the
+                    // narrow window between openStream() returning and this switch
+                    // running, which isn't reliably reproducible from a real socket
+                    // without the test itself becoming racy. The ordering here — clear
+                    // sessionBox, THEN closeStream, THEN cancel the connection — is
+                    // load-bearing (reversing the first two would let a later, async
+                    // firing of stateUpdateHandler's own .cancelled/.failed arm read a
+                    // stale session id and double-close it) but is verified only by
+                    // inspection. Do not reorder these three statements without adding
+                    // coverage first.
                     sessionBox.withLock { $0 = nil }
                     router.closeStream(sessionID: openedSessionID)
                     connection.cancel()

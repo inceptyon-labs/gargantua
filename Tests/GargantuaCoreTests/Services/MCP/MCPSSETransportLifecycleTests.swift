@@ -8,15 +8,10 @@ import Testing
 /// on the server side rather than leaked.
 ///
 /// This is **not** a data-race regression test. It runs against a real
-/// listening socket in the order "open, then die" — by the time
-/// `connection.state` is checked in `MCPSSETransport.handle(_:on:)`, the
-/// connection is still alive, so the code takes the `default:` branch and
-/// writes the response normally. The eventual close is observed later, via
-/// `NWConnection`'s pre-existing `stateUpdateHandler` path, not via the
-/// `.cancelled`/`.failed` branch taken when the connection has already died
-/// by the time the SSE stream response would be written. Nothing here
-/// exercises that branch; it verifies SSE session cleanup on peer
-/// disconnect instead.
+/// listening socket in the order "open, then die," so the close is observed
+/// via `NWConnection`'s ordinary `stateUpdateHandler` path — the `default:`
+/// branch in `MCPSSETransport.handle(_:on:)`. See that file for the one
+/// branch this test does not reach and why.
 @Suite("MCP SSE transport lifecycle")
 struct MCPSSETransportLifecycleTests {
     private typealias TCPClient = MCPSSETransportTestSupport.TCPClient
@@ -41,14 +36,6 @@ struct MCPSSETransportLifecycleTests {
         }
     }
 
-    private static let echoHandler: MCPConnectionMessageHandler = { request, _ in
-        guard !request.isNotification else { return nil }
-        return .success(
-            id: request.id ?? .null,
-            result: .object(["ok": .bool(true)])
-        )
-    }
-
     /// This test exercises the full, real lifecycle end to end: open an SSE
     /// stream over a real socket, sever the client connection, then drive a
     /// `/message` POST for that session id so the router's event sink
@@ -65,7 +52,7 @@ struct MCPSSETransportLifecycleTests {
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
                 tokenProvider: { nil },
-                handler: Self.echoHandler,
+                handler: MCPSSETransportTestSupport.echoHandler,
                 onConnectionClose: { connection in recorder.record(connection) }
             )
         }
@@ -100,8 +87,8 @@ struct MCPSSETransportLifecycleTests {
         // can still land, so whether it observes the disconnect depends on
         // network-stack timing. Force an RST instead so the server's next
         // write to this connection fails deterministically.
-        client.closeAbortively()
-        return extractSessionID(from: response)
+        try client.closeAbortively()
+        return MCPSSETransportTestSupport.extractSessionID(from: response)
     }
 
     /// Sends a JSON-RPC `ping` to `/message?sessionId=` over a fresh
@@ -116,14 +103,5 @@ struct MCPSSETransportLifecycleTests {
                 + "Host: 127.0.0.1\r\nContent-Length: \(body.utf8.count)\r\n\r\n\(body)"
         )
         _ = try? client.read(until: "\r\n\r\n")
-    }
-
-    private static func extractSessionID(from response: String) -> String? {
-        guard let range = response.range(of: "sessionId=") else { return nil }
-        let suffix = response[range.upperBound...]
-        let id = suffix.prefix { character in
-            character.isLetter || character.isNumber || character == "-"
-        }
-        return id.isEmpty ? nil : String(id)
     }
 }

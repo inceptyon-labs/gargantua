@@ -1,5 +1,4 @@
 import Foundation
-import Darwin
 import Testing
 @testable import GargantuaCore
 
@@ -42,7 +41,7 @@ struct MCPSSETransportNetworkingTests {
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
                 tokenProvider: { nil },
-                handler: Self.echoHandler
+                handler: MCPSSETransportTestSupport.echoHandler
             )
         }
         defer { transport.stop() }
@@ -53,7 +52,7 @@ struct MCPSSETransportNetworkingTests {
 
         #expect(openResponse.contains("HTTP/1.1 200 OK"))
         #expect(openResponse.contains("event: endpoint"))
-        let sessionID = try #require(extractSessionID(from: openResponse))
+        let sessionID = try #require(MCPSSETransportTestSupport.extractSessionID(from: openResponse))
 
         let body = #"{"jsonrpc":"2.0","id":"socket","method":"ping"}"#
         let post = try TCPClient(port: Int(port))
@@ -84,7 +83,7 @@ struct MCPSSETransportNetworkingTests {
                     bindScope: .lan
                 ),
                 tokenProvider: { Self.validToken },
-                handler: Self.echoHandler
+                handler: MCPSSETransportTestSupport.echoHandler
             )
         }
         defer { transport.stop() }
@@ -128,22 +127,5 @@ struct MCPSSETransportNetworkingTests {
 
         #expect(first == second)
         #expect(rotated != first)
-    }
-
-    private static let echoHandler: MCPConnectionMessageHandler = { request, _ in
-        guard !request.isNotification else { return nil }
-        return .success(
-            id: request.id ?? .null,
-            result: .object(["ok": .bool(true)])
-        )
-    }
-
-    private func extractSessionID(from response: String) -> String? {
-        guard let range = response.range(of: "sessionId=") else { return nil }
-        let suffix = response[range.upperBound...]
-        let id = suffix.prefix { character in
-            character.isLetter || character.isNumber || character == "-"
-        }
-        return id.isEmpty ? nil : String(id)
     }
 }

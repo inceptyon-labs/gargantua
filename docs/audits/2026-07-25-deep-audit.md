@@ -1868,7 +1868,7 @@ half a day of mechanical edits to test-side locking with a real chance of introd
 flakiness, and it buys nothing until a Swift 6 migration is actually scheduled.
 
 **Acceptance criteria.**
-- [ ] The correct probe (see the measurement caveat above — `-strict-concurrency=complete`
+- [x] The correct probe (see the measurement caveat above — `-strict-concurrency=complete`
       plus `RegionBasedIsolation`, `IsolatedDefaultValues`, `GlobalConcurrency`, and
       `InferSendableFromCaptures`), actually restricted to `Sources/`, returns `0`:
       `swift build --build-tests -Xswiftc -strict-concurrency=complete -Xswiftc
@@ -1880,8 +1880,8 @@ flakiness, and it buys nothing until a Swift 6 migration is actually scheduled.
       (the earlier acceptance criterion here piped a bare `grep -c` with no `Sources/`
       restriction at all, so it could never have distinguished a clean `Sources/` from
       the 43 known `Tests/` sites).
-- [ ] `Scripts/test.sh` reports 2458 passing tests (2457 baseline plus the new `MCPSSETransportTests` regression test, now in `MCPSSETransportLifecycleTests.swift`), with no test deleted to silence a warning.
-- [ ] The 43 remaining `Tests/` sites are tracked in a follow-up bean, not silently dropped.
+- [x] `Scripts/test.sh` reports 2458 passing tests (2457 baseline plus the new `MCPSSETransportTests` regression test, now in `MCPSSETransportLifecycleTests.swift`), with no test deleted to silence a warning.
+- [x] The 43 remaining `Tests/` sites are tracked in a follow-up bean, not silently dropped.
 
 ---
 
