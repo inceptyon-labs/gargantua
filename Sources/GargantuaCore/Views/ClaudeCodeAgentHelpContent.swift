@@ -25,7 +25,7 @@ public enum ClaudeCodeAgentHelpContent {
 
     // MARK: When to use Agent Run — example prompts
 
-    public struct ExamplePrompt: Identifiable, Hashable {
+    public struct ExamplePrompt: Identifiable, Hashable, Sendable {
         public let id: String
         public let useCase: String
         /// Compact topic phrase (≤24 chars) used when the prompt is rendered as

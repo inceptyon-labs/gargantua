@@ -1,7 +1,7 @@
 import Foundation
 
 /// A navigation item in the sidebar.
-public struct SidebarItem: Identifiable, Equatable {
+public struct SidebarItem: Identifiable, Equatable, Sendable {
     public let id: String
     public let label: String
     public let icon: String // SF Symbol name
@@ -14,7 +14,7 @@ public struct SidebarItem: Identifiable, Equatable {
 }
 
 /// A labeled group of sidebar items.
-public struct SidebarSection: Identifiable, Equatable {
+public struct SidebarSection: Identifiable, Equatable, Sendable {
     public let id: String
     public let label: String
     public let items: [SidebarItem]
