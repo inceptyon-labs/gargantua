@@ -26,6 +26,12 @@ public enum ProcessInventoryFormat {
     /// churned an allocation on every row body eval while scrolling the
     /// inventory list; the formatter is only read from MainActor row bodies, so
     /// one shared instance is safe.
+    ///
+    /// Deliberately kept `@MainActor` rather than switching to
+    /// `ByteCountFormatStyle` or `nonisolated(unsafe)`: the style API doesn't
+    /// reproduce this formatter's exact output, and these strings are
+    /// user-visible, so `@MainActor` states the real constraint honestly
+    /// instead of risking a silent display change.
     @MainActor private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useMB, .useGB, .useKB]

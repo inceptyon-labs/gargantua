@@ -60,17 +60,16 @@ struct MCPSSETransportLifecycleTests {
     /// table, and `onConnectionClose` never fires for it).
     @Test("a connection that fails after its SSE stream opens still closes the session")
     func failedConnectionAfterOpenClosesItsSession() throws {
-        let port = try MCPSSETransportTestSupport.findFreePort()
         let recorder = ConnectionCloseRecorder()
-        let transport = MCPSSETransport(
-            configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-            tokenProvider: { nil },
-            handler: Self.echoHandler,
-            onConnectionClose: { connection in recorder.record(connection) }
-        )
-        try transport.start()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
+                tokenProvider: { nil },
+                handler: Self.echoHandler,
+                onConnectionClose: { connection in recorder.record(connection) }
+            )
+        }
         defer { transport.stop() }
-        usleep(150_000)
 
         let opened = try Self.openSSEStreamThenDisconnect(port: port)
         let sessionID = try #require(opened, "expected the SSE stream to open and return a session id")
@@ -91,15 +90,17 @@ struct MCPSSETransportLifecycleTests {
     }
 
     /// Opens an SSE stream over a real socket, reads the initial `endpoint`
-    /// event to learn the session id, then closes the client connection.
+    /// event to learn the session id, then severs the client connection.
     /// Returns the session id, or `nil` if the stream never opened.
     private static func openSSEStreamThenDisconnect(port: UInt16) throws -> String? {
         let client = try TCPClient(port: Int(port))
         try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         let response = try client.read(until: "\n\n")
-        // `client` goes out of scope at the end of this function, which
-        // closes its streams (and the underlying socket) — that is the
-        // "sever the client connection" step.
+        // A plain close is a half-close (TCP FIN): the server's next write
+        // can still land, so whether it observes the disconnect depends on
+        // network-stack timing. Force an RST instead so the server's next
+        // write to this connection fails deterministically.
+        client.closeAbortively()
         return extractSessionID(from: response)
     }
 

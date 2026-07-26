@@ -38,17 +38,16 @@ struct MCPSSETransportNetworkingTests {
 
     @Test("running transport serves SSE endpoint and POST dispatch")
     func runningTransportServesEndpoint() throws {
-        let port = try findFreePort()
-        let transport = MCPSSETransport(
-            configuration: MCPSSEServerConfiguration(isEnabled: true, port: port),
-            tokenProvider: { nil },
-            handler: Self.echoHandler
-        )
-        try transport.start()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
+                tokenProvider: { nil },
+                handler: Self.echoHandler
+            )
+        }
         defer { transport.stop() }
-        usleep(150_000)
 
-        let sse = try TCPClient(port: port)
+        let sse = try TCPClient(port: Int(port))
         try sse.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         let openResponse = try sse.read(until: "\n\n")
 
@@ -57,7 +56,7 @@ struct MCPSSETransportNetworkingTests {
         let sessionID = try #require(extractSessionID(from: openResponse))
 
         let body = #"{"jsonrpc":"2.0","id":"socket","method":"ping"}"#
-        let post = try TCPClient(port: port)
+        let post = try TCPClient(port: Int(port))
         try post.write(
             "POST /message?sessionId=\(sessionID) HTTP/1.1\r\n"
                 + "Host: 127.0.0.1\r\n"
@@ -77,27 +76,26 @@ struct MCPSSETransportNetworkingTests {
 
     @Test("running LAN transport enforces bearer token at endpoint")
     func runningLANTransportEnforcesToken() throws {
-        let port = try findFreePort()
-        let transport = MCPSSETransport(
-            configuration: MCPSSEServerConfiguration(
-                isEnabled: true,
-                port: port,
-                bindScope: .lan
-            ),
-            tokenProvider: { Self.validToken },
-            handler: Self.echoHandler
-        )
-        try transport.start()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(
+                    isEnabled: true,
+                    port: Int(port),
+                    bindScope: .lan
+                ),
+                tokenProvider: { Self.validToken },
+                handler: Self.echoHandler
+            )
+        }
         defer { transport.stop() }
-        usleep(150_000)
 
-        let denied = try TCPClient(port: port)
+        let denied = try TCPClient(port: Int(port))
         try denied.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         let deniedResponse = try denied.read(until: "\r\n\r\n")
         #expect(deniedResponse.contains("HTTP/1.1 401 Unauthorized"))
         #expect(deniedResponse.contains("WWW-Authenticate: Bearer"))
 
-        let allowed = try TCPClient(port: port)
+        let allowed = try TCPClient(port: Int(port))
         try allowed.write(
             "GET /sse HTTP/1.1\r\n"
                 + "Host: 127.0.0.1\r\n"
@@ -138,10 +136,6 @@ struct MCPSSETransportNetworkingTests {
             id: request.id ?? .null,
             result: .object(["ok": .bool(true)])
         )
-    }
-
-    private func findFreePort() throws -> Int {
-        Int(try MCPSSETransportTestSupport.findFreePort())
     }
 
     private func extractSessionID(from response: String) -> String? {
