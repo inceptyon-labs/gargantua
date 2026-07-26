@@ -1817,14 +1817,36 @@ this finding should use that full flag set, not `-strict-concurrency=complete` a
 **The MCPSSETransport finding, described accurately.**
 `Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift` was one of the 9 production
 sites. It is a genuine Swift 6 strict-concurrency violation — session-id state written
-outside proper isolation — but it was not an active leak in the shipped app. The type is
-declared `@unchecked Sendable` and all access to the affected state ran through a single
-serial `DispatchQueue` (`com.gargantua.mcp.sse`), so nothing raced in practice; the
-violation is one the compiler cannot see through the `@unchecked` annotation, not a
-defect that was manifesting for users. Runtime safety rested on that undocumented
-single-serial-queue confinement rather than on anything the type system enforced. Fixed
-in commit `7bf1676`, which also adds `MCPSSETransportTests` (184 lines) covering the
-corrected synchronization.
+outside proper isolation — but it was not an active leak in the shipped app in the
+transport's default configuration. The diagnostic Swift 6 raises here is mutation of a
+captured `var` across concurrently-executing code, triggered because both the
+request-handling closure and `NWConnection`'s `stateUpdateHandler` closure are
+`@Sendable`; the enclosing class's `@unchecked Sendable` conformance is unrelated to
+this diagnostic and suppresses nothing here — `@unchecked Sendable` only affects whether
+the compiler treats the *type itself* as safely shareable, not whether it flags
+captured-variable mutation inside the type's own methods. In the app's own usage today,
+all access to the affected state ran through one serial queue and nothing raced in
+practice at runtime, but that "one serial queue" was never structurally guaranteed:
+`MCPSSETransport.init`'s `queue:` parameter is `public`, and `GargantuaMCP/main.swift:350`
+does pass its own queue (`DispatchQueue(label: "com.gargantua.mcp.sse", qos:
+.userInitiated)`) rather than the default — it happens to still be serial, which is why
+"no true runtime race today" holds, but nothing stopped a caller from passing a
+`.concurrent` queue instead, which would have made the old code a genuine data race. That
+possibility, not the absence of an observed incident, is the strongest argument for the
+fix. Fixed in commit `7bf1676`, which added 184 lines to the then-213-line
+`MCPSSETransportTests.swift` (not a new 184-line file) covering the corrected
+synchronization. That regression test has since been relabeled and moved to
+`MCPSSETransportLifecycleTests.swift`: it is an end-to-end SSE session-cleanup-on-
+disconnect lifecycle test, not a data-race regression test — it passes against the old
+implementation too and never reaches the `.cancelled`/`.failed` branch this fix added,
+since by the time it runs the connection is still alive at open time.
+
+**This does not close the SSE session-leak risk.** A separate, pre-existing bug in the
+same method means a client that opens `/sse`, reads the endpoint event, and disconnects
+without ever POSTing to `/message` still leaks its session and `NWConnection` for the
+process lifetime — no receive is re-armed on that connection after the `.opened` write,
+so an `NWConnection` with nothing pending never observes the peer's FIN. Tracked
+separately; not fixed by this pass.
 
 **Corrected baseline facts.** This finding's acceptance criteria, and §1/§2 of this
 report, cited a stale total test count of 2410. The actual suite is 2457 tests as of this
@@ -1846,8 +1868,19 @@ half a day of mechanical edits to test-side locking with a real chance of introd
 flakiness, and it buys nothing until a Swift 6 migration is actually scheduled.
 
 **Acceptance criteria.**
-- [ ] `swift build --build-tests 2>&1 | grep -c "error in the Swift 6 language mode"`, restricted to `Sources/`, returns `0` — true as of this branch.
-- [ ] `Scripts/test.sh` reports 2458 passing tests (2457 baseline plus the new `MCPSSETransportTests` regression test), with no test deleted to silence a warning.
+- [ ] The correct probe (see the measurement caveat above — `-strict-concurrency=complete`
+      plus `RegionBasedIsolation`, `IsolatedDefaultValues`, `GlobalConcurrency`, and
+      `InferSendableFromCaptures`), actually restricted to `Sources/`, returns `0`:
+      `swift build --build-tests -Xswiftc -strict-concurrency=complete -Xswiftc
+      -enable-upcoming-feature -Xswiftc RegionBasedIsolation -Xswiftc
+      -enable-upcoming-feature -Xswiftc IsolatedDefaultValues -Xswiftc
+      -enable-upcoming-feature -Xswiftc GlobalConcurrency -Xswiftc
+      -enable-upcoming-feature -Xswiftc InferSendableFromCaptures 2>&1 | grep "error in
+      the Swift 6 language mode" | grep -c "/Sources/"` — verified `0` as of this branch
+      (the earlier acceptance criterion here piped a bare `grep -c` with no `Sources/`
+      restriction at all, so it could never have distinguished a clean `Sources/` from
+      the 43 known `Tests/` sites).
+- [ ] `Scripts/test.sh` reports 2458 passing tests (2457 baseline plus the new `MCPSSETransportTests` regression test, now in `MCPSSETransportLifecycleTests.swift`), with no test deleted to silence a warning.
 - [ ] The 43 remaining `Tests/` sites are tracked in a follow-up bean, not silently dropped.
 
 ---

@@ -26,7 +26,7 @@ private struct AIEngineNeedsFirstWarmupKey: EnvironmentKey {
 private struct OpenAIModelSettingsKey: EnvironmentKey {
     // Permanently nil; the value is only ever supplied per-view via
     // .environment(\.openAIModelSettings, …) on the main actor.
-    nonisolated(unsafe) static let defaultValue: (() -> Void)? = nil
+    static let defaultValue: (@MainActor @Sendable () -> Void)? = nil
 }
 
 public extension EnvironmentValues {
@@ -61,7 +61,7 @@ public extension EnvironmentValues {
     /// Optional deep-link into the AI Model section of Settings. Used by
     /// sheets and the cleanup summary to render an "Enable AI" CTA when the
     /// rendered text is rule-based and the user might want generated output.
-    var openAIModelSettings: (() -> Void)? {
+    var openAIModelSettings: (@MainActor @Sendable () -> Void)? {
         get { self[OpenAIModelSettingsKey.self] }
         set { self[OpenAIModelSettingsKey.self] = newValue }
     }

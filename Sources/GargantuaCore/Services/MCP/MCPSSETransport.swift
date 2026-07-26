@@ -136,10 +136,17 @@ public final class MCPSSETransport: @unchecked Sendable {
                 switch connection.state {
                 case .cancelled, .failed:
                     // The connection already died between openStream registering the
-                    // session and this write — the stateUpdateHandler may have already
-                    // run (and found the box empty) or may never run again from here.
-                    // Close directly so the session is never leaked.
+                    // session and this write. The stateUpdateHandler installed above
+                    // runs asynchronously on this same serial queue: it will either
+                    // fire later for this transition — and would double-close the
+                    // session if the box were left populated — or never fire at all if
+                    // it was installed too late to observe the transition. Clear the
+                    // box first so a later invocation is a no-op, then close the
+                    // session and cancel the connection directly here so nothing is
+                    // leaked in the meantime.
+                    sessionBox.withLock { $0 = nil }
                     router.closeStream(sessionID: openedSessionID)
+                    connection.cancel()
                 default:
                     write(response, to: connection, closeAfterWrite: false)
                 }

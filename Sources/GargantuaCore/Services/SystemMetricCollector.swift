@@ -112,6 +112,9 @@ public struct SystemMetricCollector: Sendable {
         #if canImport(Darwin)
             let total = UInt64(ProcessInfo.processInfo.physicalMemory)
 
+            let host = mach_host_self()
+            defer { mach_port_deallocate(mach_task_self_, host) }
+
             var stats = vm_statistics64()
             var count = mach_msg_type_number_t(
                 MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size
@@ -119,7 +122,7 @@ public struct SystemMetricCollector: Sendable {
 
             let result = withUnsafeMutablePointer(to: &stats) { ptr in
                 ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-                    host_statistics64(mach_host_self(), HOST_VM_INFO64, intPtr, &count)
+                    host_statistics64(host, HOST_VM_INFO64, intPtr, &count)
                 }
             }
 
@@ -129,7 +132,7 @@ public struct SystemMetricCollector: Sendable {
             }
 
             var kernelPageSize: vm_size_t = 0
-            guard host_page_size(mach_host_self(), &kernelPageSize) == KERN_SUCCESS else {
+            guard host_page_size(host, &kernelPageSize) == KERN_SUCCESS else {
                 logger.warning("host_page_size failed")
                 return MemoryInfo(pressure: 0, total: total, used: 0)
             }
