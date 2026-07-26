@@ -136,7 +136,7 @@ struct ClaudeCodeAgentProcessExecutorTests {
             )
         }
 
-        startedSemaphore.wait()
+        await awaitSignal(startedSemaphore)
         executor.cancel()
         _ = await task.result
         #expect(sink.stdout.contains("started"))

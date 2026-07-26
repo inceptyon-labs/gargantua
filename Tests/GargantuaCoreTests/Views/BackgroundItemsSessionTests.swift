@@ -225,7 +225,7 @@ struct BackgroundItemsSessionTests {
         // let it resume — its result describes the previous generation and
         // must be dropped.
         let load = Task { await session.loadRuntimeDetail(for: item) }
-        await Task.detached { provider.started.wait() }.value
+        await awaitSignal(provider.started)
         session.clearScan()
         provider.releases[0].signal()
         await load.value
@@ -254,10 +254,10 @@ struct BackgroundItemsSessionTests {
         // Fetch A (old generation) suspends; invalidate; fetch B (new
         // generation) starts for the same id and suspends too.
         let loadA = Task { await session.loadRuntimeDetail(for: item) }
-        await Task.detached { provider.started.wait() }.value
+        await awaitSignal(provider.started)
         session.clearScan()
         let loadB = Task { await session.loadRuntimeDetail(for: item) }
-        await Task.detached { provider.started.wait() }.value
+        await awaitSignal(provider.started)
 
         // A resumes stale: it must neither write back nor remove B's marker.
         provider.releases[0].signal()
