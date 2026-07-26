@@ -53,16 +53,14 @@ struct ProcessInventorySessionTests {
         }
 
         func scan(metric: ProcessSortMetric, topN: Int?) async -> ProcessInventoryScan {
-            lock.lock()
-            defer { lock.unlock() }
-            return scans.count > 1 ? scans.removeFirst() : scans[0]
+            lock.withLock { scans.count > 1 ? scans.removeFirst() : scans[0] }
         }
 
         func search(query: String, metric: ProcessSortMetric, limit: Int) async -> ProcessInventoryScan {
-            lock.lock()
-            defer { lock.unlock() }
-            searchCalls.append((query, metric))
-            return searches.count > 1 ? searches.removeFirst() : searches[0]
+            lock.withLock {
+                searchCalls.append((query, metric))
+                return searches.count > 1 ? searches.removeFirst() : searches[0]
+            }
         }
 
         func recordedQueries() -> [String] {
