@@ -13,7 +13,7 @@ struct PrivilegedBackgroundItemValidatorTests {
         existing: Set<String> = [],
         symlinks: [String: String] = [:],
         plistLabels: [String: String] = [:],
-        defaultPlistLabel: ((String) -> String?)? = nil
+        defaultPlistLabel: (@Sendable (String) -> String?)? = nil
     ) -> PrivilegedBackgroundItemValidator.FileSystem {
         let existing = existing
         let symlinks = symlinks

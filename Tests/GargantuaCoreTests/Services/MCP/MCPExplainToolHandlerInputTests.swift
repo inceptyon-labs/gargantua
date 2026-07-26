@@ -64,25 +64,25 @@ struct MCPExplainToolHandlerInputTests {
 
     @Test("path-only arguments are accepted and forwarded to provider")
     func pathAccepted() throws {
-        var seen: MCPExplainInput?
+        let seen = UncheckedSendableBox<MCPExplainInput?>(nil)
         let subject = makeHandler(explain: { input in
-            seen = input
+            seen.value = input
             return makeOutput()
         })
         _ = try subject.handle(pathArguments("/tmp/foo"))
-        #expect(seen?.path == "/tmp/foo")
-        #expect(seen?.itemId == nil)
+        #expect(seen.value?.path == "/tmp/foo")
+        #expect(seen.value?.itemId == nil)
     }
 
     @Test("item_id-only arguments are accepted and forwarded to provider")
     func itemIdAccepted() throws {
-        var seen: MCPExplainInput?
+        let seen = UncheckedSendableBox<MCPExplainInput?>(nil)
         let subject = makeHandler(explain: { input in
-            seen = input
+            seen.value = input
             return makeOutput()
         })
         _ = try subject.handle(itemIdArguments("abc"))
-        #expect(seen?.path == nil)
-        #expect(seen?.itemId == "abc")
+        #expect(seen.value?.path == nil)
+        #expect(seen.value?.itemId == "abc")
     }
 }

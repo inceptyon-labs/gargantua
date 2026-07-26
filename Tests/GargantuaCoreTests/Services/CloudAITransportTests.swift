@@ -53,7 +53,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) throws -> (Data, URLResponse)
 
     private static let lock = NSLock()
-    private static var handlers: [String: Handler] = [:]
+    nonisolated(unsafe) private static var handlers: [String: Handler] = [:]
 
     static func makeSession(handler: @escaping Handler) -> (URLSession, String) {
         let key = UUID().uuidString
