@@ -73,9 +73,9 @@ public enum DuplicateGroupClassifier {
 
 // MARK: - Patterns
 
-private struct PathPattern {
-    let matches: ([String], String) -> Bool
-    let build: ([String], String, String) -> DuplicateGroupClassification
+private struct PathPattern: Sendable {
+    let matches: @Sendable ([String], String) -> Bool
+    let build: @Sendable ([String], String, String) -> DuplicateGroupClassification
 }
 
 private let patterns: [PathPattern] = [

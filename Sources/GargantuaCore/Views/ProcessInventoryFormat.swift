@@ -26,7 +26,7 @@ public enum ProcessInventoryFormat {
     /// churned an allocation on every row body eval while scrolling the
     /// inventory list; the formatter is only read from MainActor row bodies, so
     /// one shared instance is safe.
-    private static let byteFormatter: ByteCountFormatter = {
+    @MainActor private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useMB, .useGB, .useKB]
         formatter.countStyle = .memory
@@ -36,7 +36,7 @@ public enum ProcessInventoryFormat {
     }()
 
     /// Render a byte count using `ByteCountFormatter`'s memory style — KB / MB / GB.
-    public static func bytes(_ bytes: UInt64) -> String {
+    @MainActor public static func bytes(_ bytes: UInt64) -> String {
         byteFormatter.string(fromByteCount: Int64(min(bytes, UInt64(Int64.max))))
     }
 }

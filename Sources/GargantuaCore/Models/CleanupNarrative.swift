@@ -7,7 +7,7 @@ import SwiftUI
 /// model is available or the engine fails. Main-actor-isolated because
 /// `CleanupSummaryView.task` calls it from the main actor and the backing
 /// service (`LocalAIService`) is `@MainActor`.
-public typealias CleanupNarrator = @MainActor (CleanupResult) async -> CleanupNarrative
+public typealias CleanupNarrator = @MainActor @Sendable (CleanupResult) async -> CleanupNarrative
 
 private struct CleanupNarratorKey: EnvironmentKey {
     static let defaultValue: CleanupNarrator? = nil
