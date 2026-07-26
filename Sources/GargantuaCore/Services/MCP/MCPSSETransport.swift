@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import os
 
 /// TCP/SSE transport that exposes the MCP server over loopback HTTP.
 public final class MCPSSETransport: @unchecked Sendable {
@@ -105,7 +106,7 @@ public final class MCPSSETransport: @unchecked Sendable {
     private func handle(_ request: MCPHTTPRequest, on connection: NWConnection) {
         let storedToken = (try? tokenProvider())
         if request.method == "GET", request.path == "/sse" {
-            var sessionID: String?
+            let sessionBox = OSAllocatedUnfairLock<String?>(initialState: nil)
             let sink: MCPSSERequestRouter.EventSink = { [weak connection] event, data in
                 let payload = MCPSSEEvent.encode(event: event, data: data)
                 connection?.send(
@@ -116,7 +117,7 @@ public final class MCPSSETransport: @unchecked Sendable {
             connection.stateUpdateHandler = { [weak self] state in
                 switch state {
                 case .cancelled, .failed:
-                    if let sessionID {
+                    if let sessionID = sessionBox.withLock({ $0 }) {
                         self?.router.closeStream(sessionID: sessionID)
                     }
                 default:
@@ -131,8 +132,17 @@ public final class MCPSSETransport: @unchecked Sendable {
                 eventSink: sink
             ) {
             case .opened(let openedSessionID, let response):
-                sessionID = openedSessionID
-                write(response, to: connection, closeAfterWrite: false)
+                sessionBox.withLock { $0 = openedSessionID }
+                switch connection.state {
+                case .cancelled, .failed:
+                    // The connection already died between openStream registering the
+                    // session and this write — the stateUpdateHandler may have already
+                    // run (and found the box empty) or may never run again from here.
+                    // Close directly so the session is never leaked.
+                    router.closeStream(sessionID: openedSessionID)
+                default:
+                    write(response, to: connection, closeAfterWrite: false)
+                }
             case .rejected(let response):
                 write(response, to: connection, closeAfterWrite: true)
             }
