@@ -17,6 +17,7 @@ private func availability(
     )
 }
 
+@MainActor
 @Suite("DeveloperToolsView.deriveInitialPhase")
 struct DeveloperToolsViewInitialPhaseTests {
 

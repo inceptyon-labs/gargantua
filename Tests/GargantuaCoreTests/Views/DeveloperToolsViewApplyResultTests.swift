@@ -30,6 +30,7 @@ private func preview(
     )
 }
 
+@MainActor
 @Suite("DeveloperToolsView.applyPreviewResult")
 struct DeveloperToolsViewApplyResultTests {
 
