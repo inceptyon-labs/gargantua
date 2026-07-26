@@ -11,7 +11,7 @@ private final class SpyAuditHook: ScheduledScanAgentAuditHook, @unchecked Sendab
         return _ran
     }
     func run(summary _: ScheduledScanSummary) async {
-        lock.lock(); _ran = true; lock.unlock()
+        lock.withLock { _ran = true }
     }
 }
 
@@ -90,16 +90,15 @@ struct MaintenanceEngineAuditHookTests {
         let store = CodexAgentConfigurationStore(defaults: defaults)
         store.save(CodexAgentConfiguration(isEnabled: false, runAfterScheduledScans: true))
 
-        let didSpawn = NSLock(); var spawned = false
+        let spawned = UncheckedSendableBox(false)
         let runner = CodexOneShotRunner(processFactory: {
-            didSpawn.lock(); spawned = true; didSpawn.unlock()
+            spawned.value = true
             return Process()
         })
         let hook = CodexScheduledAgentAuditHook(configurationStore: store, runner: runner)
         await hook.run(summary: Self.makeSummary())
 
-        didSpawn.lock(); let didRun = spawned; didSpawn.unlock()
-        #expect(didRun == false)
+        #expect(spawned.value == false)
     }
 
     @Test("Opted-out Codex config (enabled but runAfterScheduledScans off) is a no-op")
@@ -108,15 +107,14 @@ struct MaintenanceEngineAuditHookTests {
         let store = CodexAgentConfigurationStore(defaults: defaults)
         store.save(CodexAgentConfiguration(isEnabled: true, runAfterScheduledScans: false))
 
-        let didSpawn = NSLock(); var spawned = false
+        let spawned = UncheckedSendableBox(false)
         let runner = CodexOneShotRunner(processFactory: {
-            didSpawn.lock(); spawned = true; didSpawn.unlock()
+            spawned.value = true
             return Process()
         })
         let hook = CodexScheduledAgentAuditHook(configurationStore: store, runner: runner)
         await hook.run(summary: Self.makeSummary())
 
-        didSpawn.lock(); let didRun = spawned; didSpawn.unlock()
-        #expect(didRun == false)
+        #expect(spawned.value == false)
     }
 }
