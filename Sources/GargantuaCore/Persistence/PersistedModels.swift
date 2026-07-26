@@ -310,17 +310,3 @@ public final class PersistedPersonalScopeRoot {
         self.createdAt = createdAt
     }
 }
-
-// SwiftData @Model classes are reference types the compiler cannot prove safe
-// to share. Every access in this codebase goes through PersistenceController,
-// which is @MainActor and reads/writes only container.mainContext, so instances
-// never leave the main actor. The conformance exists so KeyPath<Self, _> — used
-// by the SortDescriptor literals in the PersistenceController extensions — picks
-// up its conditional Sendable conformance. Do not pass instances across actors;
-// convert to a domain model (`toDomain()`) at the boundary instead.
-extension PersistedProfile: @unchecked Sendable {}
-extension PersistedAuditEntry: @unchecked Sendable {}
-extension PersistedSettings: @unchecked Sendable {}
-extension PersistedScanHistory: @unchecked Sendable {}
-extension PersistedWhitelistEntry: @unchecked Sendable {}
-extension PersistedPersonalScopeRoot: @unchecked Sendable {}
