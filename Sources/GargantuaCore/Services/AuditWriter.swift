@@ -43,12 +43,13 @@ public final class AuditWriter: Sendable {
         let deadline = Date().addingTimeInterval(lockTimeout)
         while flock(fd, LOCK_EX | LOCK_NB) != 0 {
             let code = errno
-            if code == EINTR { continue }
-            guard code == EWOULDBLOCK, Date() < deadline else {
+            guard code == EINTR || code == EWOULDBLOCK, Date() < deadline else {
                 Darwin.close(fd)
                 throw AuditWriteError.lockFailed(code: code)
             }
-            Thread.sleep(forTimeInterval: 0.01)
+            // Retry a signal-interrupted call immediately; back off only when
+            // the lock is genuinely held by someone else.
+            if code == EWOULDBLOCK { Thread.sleep(forTimeInterval: 0.01) }
         }
         return fd
     }
@@ -97,7 +98,9 @@ public final class AuditWriter: Sendable {
     /// `flock(LOCK_EX)` blocks forever, and `write(_:)` runs on the main thread
     /// from the Deep Clean confirmation path — a wedged peer process holding the
     /// sidecar would beachball the app with no cancel. Bound the wait instead.
-    public let lockTimeout: TimeInterval
+    /// Clamped to [0, 60]: a negative or non-finite bound would silently turn
+    /// every acquisition into an immediate failure or an unbounded wait.
+    private let lockTimeout: TimeInterval
 
     /// Creates an AuditWriter targeting the given directory.
     ///
@@ -108,7 +111,7 @@ public final class AuditWriter: Sendable {
             .appendingPathComponent("Library/Logs/Gargantua")
         self.logDirectory = dir
         self.logFile = dir.appendingPathComponent("audit.json")
-        self.lockTimeout = lockTimeout
+        self.lockTimeout = lockTimeout.isFinite ? min(max(lockTimeout, 0), 60) : 60
     }
 
     /// Write an audit entry for a completed cleanup operation.
@@ -129,14 +132,13 @@ public final class AuditWriter: Sendable {
             withIntermediateDirectories: true
         )
 
-        // Losing an audit record is the failure this subsystem exists to
-        // prevent, so a sidecar we can't take is not a reason to drop the
-        // entry. Append anyway: the O_APPEND write is still kernel-atomic and
-        // still can't tear a line. All that's given up is exclusion against a
-        // retention rewrite — a window of milliseconds, only reachable when a
-        // peer is already wedged.
-        let fd = try? acquireFileLock()
-        defer { if let fd { releaseFileLock(fd) } }
+        // Appending without the sidecar would reintroduce the clobber this
+        // guards against — a purge that outlives the timeout is exactly when
+        // the rewrite is in flight, so an unlocked append would land on the
+        // inode about to be discarded and vanish with a success return. A
+        // reported failure the caller can log beats a silent loss.
+        let fd = try acquireFileLock()
+        defer { releaseFileLock(fd) }
 
         try appendLine(lineData)
     }

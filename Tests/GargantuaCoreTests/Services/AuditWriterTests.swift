@@ -2,7 +2,12 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
-@Suite("AuditWriter")
+// Serialized: appendsSurviveConcurrentPurges' purge loop is fully synchronous
+// (no `await` inside), so under contention from sibling tests running in
+// parallel it can monopolize a cooperative-pool thread and finish all 20
+// rounds before any append Task ever gets scheduled — starving out the very
+// overlap the test exists to exercise, rather than racing it.
+@Suite("AuditWriter", .serialized)
 struct AuditWriterTests {
     func makeTempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
