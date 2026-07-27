@@ -220,7 +220,9 @@ struct SystemInfoBar: View {
         guard size > 0 else { return nil }
         var model = [CChar](repeating: 0, count: size)
         sysctlbyname("hw.model", &model, &size, nil, 0)
-        let raw = String(cString: model)
+        // Not a Data conversion; decoding a NUL-padded CChar buffer.
+        // swiftlint:disable:next optional_data_string_conversion
+        let raw = String(decoding: model.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
         return Self.friendlyModelName(raw)
     }
 

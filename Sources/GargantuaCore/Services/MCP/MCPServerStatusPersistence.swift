@@ -98,7 +98,9 @@ public struct MCPServerStatusPersistence: Sendable {
         var buffer = [CChar](repeating: 0, count: 4_096)
         let result = proc_pidpath(processID, &buffer, UInt32(buffer.count))
         guard result > 0 else { return nil }
-        return String(cString: buffer)
+        // Not a Data conversion; decoding a NUL-padded CChar buffer.
+        // swiftlint:disable:next optional_data_string_conversion
+        return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
     private static let encoder: JSONEncoder = {

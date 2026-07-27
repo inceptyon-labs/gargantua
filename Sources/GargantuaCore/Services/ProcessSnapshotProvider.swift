@@ -186,7 +186,9 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
                 proc_pidpath(pid, ptr.baseAddress, UInt32(ptr.count))
             }
             guard written > 0 else { return nil }
-            let path = String(cString: buffer)
+            // Not a Data conversion; decoding a NUL-padded CChar buffer.
+            // swiftlint:disable:next optional_data_string_conversion
+            let path = String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
             return path.isEmpty ? nil : path
         }
 
