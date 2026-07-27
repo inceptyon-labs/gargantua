@@ -7,9 +7,9 @@ struct MCPStdioTransportTests {
 
     // MARK: In-memory doubles
 
-    // Both doubles are driven synchronously by `runTransport` on the test's own
-    // thread — the transport is never sent to another queue here — so the
-    // unguarded mutable state is safe without a lock.
+    // Both doubles are driven synchronously on the test's own thread — the
+    // transport is never sent to another queue here — so the unguarded
+    // mutable state is safe without a lock.
     private final class QueueSource: MCPMessageSource, @unchecked Sendable {
         private var lines: [String]
         init(_ lines: [String]) { self.lines = lines }
@@ -199,6 +199,97 @@ struct MCPStdioTransportTests {
         #expect(responses[0].id == .int(5))
         #expect(responses[0].error?.code == MCPErrorCode.internalError)
         #expect(responses[0].error?.message.contains("failed to encode") == true)
+    }
+
+    // MARK: Encoding format
+
+    @Test("Encoded responses keep sorted keys and unescaped slashes")
+    func encodedResponsesKeepSortedKeysAndUnescapedSlashes() {
+        // Every other assertion in this suite decodes the response, which
+        // normalizes away both `.sortedKeys` and `.withoutEscapingSlashes`.
+        // This test asserts on the raw encoded line so a dropped flag on the
+        // transport's encoder actually fails a test.
+        let line = #"{"jsonrpc":"2.0","id":42,"method":"tools/unknown"}"#
+        let source = QueueSource([line])
+        let sink = RecordingSink()
+        let transport = MCPStdioTransport(source: source, sink: sink, handler: Self.methodNotFoundHandler)
+        transport.run()
+        #expect(sink.lines.count == 1)
+        let raw = sink.lines[0]
+
+        // Guards `.withoutEscapingSlashes`: the method name's slash must survive
+        // in the raw output unescaped.
+        #expect(raw.contains("tools/unknown"))
+        #expect(!raw.contains(#"tools\/unknown"#))
+
+        // Guards `.sortedKeys`: top-level object keys must appear in sorted order.
+        let topLevelKeys = Self.topLevelKeys(in: raw)
+        #expect(!topLevelKeys.isEmpty)
+        #expect(topLevelKeys == topLevelKeys.sorted())
+    }
+
+    /// Manual scan for the keys of a JSON object, at depth 1 only — nested
+    /// keys (e.g. inside `"error": {...}`) are skipped so this only reflects
+    /// the ordering `.sortedKeys` actually controls at the top level.
+    private static func topLevelKeys(in json: String) -> [String] {
+        var scanner = TopLevelKeyScanner()
+        for char in json {
+            scanner.consume(char)
+        }
+        return scanner.keys
+    }
+
+    private struct TopLevelKeyScanner {
+        private(set) var keys: [String] = []
+        private var depth = 0
+        private var inString = false
+        private var escaped = false
+        private var expectingKey = false
+        private var currentKey = ""
+
+        mutating func consume(_ char: Character) {
+            if inString {
+                consumeInString(char)
+            } else {
+                consumeStructural(char)
+            }
+        }
+
+        private mutating func consumeInString(_ char: Character) {
+            if escaped {
+                escaped = false
+            } else if char == "\\" {
+                escaped = true
+            } else if char == "\"" {
+                inString = false
+                endKeyIfExpected()
+            } else if depth == 1, expectingKey {
+                currentKey.append(char)
+            }
+        }
+
+        private mutating func consumeStructural(_ char: Character) {
+            switch char {
+            case "{":
+                depth += 1
+                if depth == 1 { expectingKey = true }
+            case "}":
+                depth -= 1
+            case ",":
+                if depth == 1 { expectingKey = true }
+            case "\"":
+                inString = true
+                if depth == 1, expectingKey { currentKey = "" }
+            default:
+                break
+            }
+        }
+
+        private mutating func endKeyIfExpected() {
+            guard depth == 1, expectingKey else { return }
+            keys.append(currentKey)
+            expectingKey = false
+        }
     }
 
     // MARK: Log truncation

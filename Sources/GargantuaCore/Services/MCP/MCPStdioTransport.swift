@@ -54,15 +54,16 @@ public final class MCPStdioTransport: Sendable {
     // JSONEncoder/JSONDecoder are not Sendable, so storing them would block a
     // checked `Sendable` conformance on this class. Building one per message is
     // the honest alternative: MCP stdio traffic is request-paced, so the
-    // allocation is not on any hot path.
-    private var encoder: JSONEncoder {
+    // allocation is not on any hot path. Factory methods (rather than computed
+    // properties) make that per-call allocation visible at each call site.
+    private func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         // Deterministic output keeps integration tests and client diffs stable.
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return encoder
     }
 
-    private var decoder: JSONDecoder { JSONDecoder() }
+    private func makeDecoder() -> JSONDecoder { JSONDecoder() }
 
     public init(
         source: MCPMessageSource,
@@ -77,6 +78,12 @@ public final class MCPStdioTransport: Sendable {
     }
 
     /// Reads lines until EOF, dispatching each complete message.
+    ///
+    /// Single-consumer: call `run()` from exactly one context at a time.
+    /// `Sendable` here means the transport may be transferred between
+    /// contexts, not that it may be driven concurrently — two concurrent
+    /// callers would race the source's `readLine()` and interleave writes
+    /// to the sink.
     public func run() {
         while let rawLine = source.readLine() {
             let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -104,7 +111,7 @@ public final class MCPStdioTransport: Sendable {
 
         let request: MCPRequest
         do {
-            request = try decoder.decode(MCPRequest.self, from: data)
+            request = try makeDecoder().decode(MCPRequest.self, from: data)
         } catch {
             // On parse failure, try to salvage the request id so a misnamed
             // method (valid JSON, wrong shape) still gets a correlatable
@@ -159,7 +166,7 @@ public final class MCPStdioTransport: Sendable {
     @discardableResult
     private func writeEncoded(_ response: MCPResponse) -> Bool {
         do {
-            let data = try encoder.encode(response)
+            let data = try makeEncoder().encode(response)
             guard let line = String(data: data, encoding: .utf8) else {
                 log?("unable to decode response as UTF-8 string")
                 return false

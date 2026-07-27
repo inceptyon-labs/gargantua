@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The README no longer claims exposing the destructive MCP registry requires opting in — the shipped binary registers both registries.
 - Dropped the unused `trivy.yaml`; the OSV dependency scanner it duplicated now runs in CI instead of only by hand.
 - The package builds in Swift 6 language mode. `swift-tools-version` moved from 5.10 to 6.0, which puts every target — including the test targets — under full data-race checking, so concurrency mistakes are compile errors rather than warnings. Contributors now need a Swift 6 toolchain, which the macOS 15 + latest-Xcode requirement already implied.
+- **`MCPMessageSource` and `MCPMessageSink` now require `Sendable`.** The stdio transport is handed to a background queue, so its message source and sink must be safe to transfer with it. The two bundled implementations are stateless and need no change; an external conformer with mutable state must serialize its own access.
 
 ## [0.4.7] - 2026-07-11
 

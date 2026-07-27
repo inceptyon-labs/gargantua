@@ -381,12 +381,13 @@ private let transportQueue = DispatchQueue(
 )
 
 if effectiveTransportMode.includesStdio {
-    // Snapshot both transports at closure-formation time. Top-level globals are
-    // @MainActor under Swift 6; the capture list carries the values across to the
-    // nonisolated queue. `sseTransport` is assigned above (line 355) before this
-    // closure is formed, so the snapshot is the final value — same reasoning as
-    // the shutdown handler below.
-    transportQueue.async { [stdioTransport, sseTransport] in
+    // `sseTransport` is a `var`, and a mutable top-level global is @MainActor
+    // under Swift 6 — so it needs an explicit capture to snapshot its value for
+    // the nonisolated queue. The immutable `let` globals referenced below need
+    // no capture now that their types are Sendable. The single assignment in the
+    // SSE setup block above happens before this closure is formed, so the
+    // snapshot is the final value — same reasoning as the shutdown handler below.
+    transportQueue.async { [sseTransport] in
         stdioTransport.run()
         if effectiveTransportMode.includesSSE, sseTransport != nil {
             serverStatusStore.markRunning(transportMode: .sse)
