@@ -215,81 +215,14 @@ struct MCPStdioTransportTests {
         let transport = MCPStdioTransport(source: source, sink: sink, handler: Self.methodNotFoundHandler)
         transport.run()
         #expect(sink.lines.count == 1)
-        let raw = sink.lines[0]
 
-        // Guards `.withoutEscapingSlashes`: the method name's slash must survive
-        // in the raw output unescaped.
-        #expect(raw.contains("tools/unknown"))
-        #expect(!raw.contains(#"tools\/unknown"#))
-
-        // Guards `.sortedKeys`: top-level object keys must appear in sorted order.
-        let topLevelKeys = Self.topLevelKeys(in: raw)
-        #expect(!topLevelKeys.isEmpty)
-        #expect(topLevelKeys == topLevelKeys.sorted())
-    }
-
-    /// Manual scan for the keys of a JSON object, at depth 1 only — nested
-    /// keys (e.g. inside `"error": {...}`) are skipped so this only reflects
-    /// the ordering `.sortedKeys` actually controls at the top level.
-    private static func topLevelKeys(in json: String) -> [String] {
-        var scanner = TopLevelKeyScanner()
-        for char in json {
-            scanner.consume(char)
-        }
-        return scanner.keys
-    }
-
-    private struct TopLevelKeyScanner {
-        private(set) var keys: [String] = []
-        private var depth = 0
-        private var inString = false
-        private var escaped = false
-        private var expectingKey = false
-        private var currentKey = ""
-
-        mutating func consume(_ char: Character) {
-            if inString {
-                consumeInString(char)
-            } else {
-                consumeStructural(char)
-            }
-        }
-
-        private mutating func consumeInString(_ char: Character) {
-            if escaped {
-                escaped = false
-            } else if char == "\\" {
-                escaped = true
-            } else if char == "\"" {
-                inString = false
-                endKeyIfExpected()
-            } else if depth == 1, expectingKey {
-                currentKey.append(char)
-            }
-        }
-
-        private mutating func consumeStructural(_ char: Character) {
-            switch char {
-            case "{":
-                depth += 1
-                if depth == 1 { expectingKey = true }
-            case "}":
-                depth -= 1
-            case ",":
-                if depth == 1 { expectingKey = true }
-            case "\"":
-                inString = true
-                if depth == 1, expectingKey { currentKey = "" }
-            default:
-                break
-            }
-        }
-
-        private mutating func endKeyIfExpected() {
-            guard depth == 1, expectingKey else { return }
-            keys.append(currentKey)
-            expectingKey = false
-        }
+        // Exact match, deliberately: `error` < `id` < `jsonrpc` is sorted order,
+        // and `tools/unknown` is unescaped. Dropping either flag changes these
+        // bytes.
+        #expect(
+            sink.lines[0]
+                == #"{"error":{"code":-32601,"message":"Method not found: tools/unknown"},"id":42,"jsonrpc":"2.0"}"#
+        )
     }
 
     // MARK: Log truncation
