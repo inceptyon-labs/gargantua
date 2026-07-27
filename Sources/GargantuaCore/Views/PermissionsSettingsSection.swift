@@ -6,16 +6,38 @@ import SwiftUI
 /// or who skipped/denied a permission — need a durable place to grant or repair
 /// it. Full Disk Access is link-only (macOS has no programmatic grant).
 struct PermissionsSettingsSection: View {
-    @State private var hasFullDiskAccess = PermissionChecker.hasFullDiskAccess
-    @State private var helperStatus = SMAppServicePrivilegedHelperInstaller().status()
+    @State private var hasFullDiskAccess: Bool
+    @State private var helperStatus: PrivilegedHelperStatus
     /// Set when re-registering the helper threw, so the row can explain why the
     /// Login Items toggle the user was just sent to find is missing.
     @State private var registerError: String?
+
+    /// Whether this bundle ships the helper's launch daemon plist at all.
+    /// `FileManager.fileExists` can't change during the process lifetime, so
+    /// this is resolved once (via the cached static default below) rather than
+    /// re-stat'd on every body pass under the 2s poll.
+    private let isHelperBundled: Bool
 
     @Environment(\.openURL) private var openURL
 
     /// Reflects grants made directly in System Settings without a manual refresh.
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
+    /// Computed exactly once per process, regardless of how many times this
+    /// view struct is initialized, unlike a plain stored-property default would be.
+    private static let cachedIsHelperBundled = PrivilegedHelperConfiguration.isHelperBundled(
+        bundleURL: Bundle.main.bundleURL
+    )
+
+    init(
+        hasFullDiskAccess: Bool = PermissionChecker.hasFullDiskAccess,
+        helperStatus: PrivilegedHelperStatus = SMAppServicePrivilegedHelperInstaller().status(),
+        isHelperBundled: Bool = Self.cachedIsHelperBundled
+    ) {
+        self._hasFullDiskAccess = State(initialValue: hasFullDiskAccess)
+        self._helperStatus = State(initialValue: helperStatus)
+        self.isHelperBundled = isHelperBundled
+    }
 
     var body: some View {
         SettingsSectionContainer(
@@ -30,19 +52,47 @@ struct PermissionsSettingsSection: View {
         }
         .onReceive(timer) { _ in
             hasFullDiskAccess = PermissionChecker.hasFullDiskAccess
-            helperStatus = SMAppServicePrivilegedHelperInstaller().status()
+            let polledStatus = SMAppServicePrivilegedHelperInstaller().status()
+            if polledStatus != helperStatus {
+                // A stale `registerError` from an earlier failed `register()`
+                // call would otherwise outlive the condition it described —
+                // e.g. the user fixes things in System Settings and the row
+                // still shows a red "could not register" message next to a
+                // green "Granted" badge until relaunch. Any polled status
+                // change means the world has moved since that error, so drop it.
+                registerError = nil
+            }
+            helperStatus = polledStatus
         }
     }
 
     // MARK: - Privileged helper
 
-    private var helperRowState: PrivilegedHelperRowState {
-        PrivilegedHelperRowState(
-            status: helperStatus,
-            isHelperBundled: PrivilegedHelperConfiguration.isHelperBundled(
-                bundleURL: Bundle.main.bundleURL
-            )
-        )
+    /// Trailing accessory shown in place of the exhaustive `switch` on
+    /// `PrivilegedHelperRowState` — see `helperTrailingAccessory` below.
+    enum HelperTrailingAccessory: Equatable {
+        case grantedBadge
+        case registrationRetryButton
+        case notBundledLabel
+    }
+
+    // Internal (not `private`) so tests can construct this view and assert it
+    // actually consumes `PrivilegedHelperRowState` rather than reimplementing
+    // status handling inline — see PermissionsSettingsSectionTests.
+    var helperRowState: PrivilegedHelperRowState {
+        PrivilegedHelperRowState(status: helperStatus, isHelperBundled: isHelperBundled)
+    }
+
+    /// What the trailing accessory should show for the current row state.
+    /// Kept as an exhaustive switch (not `if/else`) so a future
+    /// `PrivilegedHelperRowState` case fails to compile here instead of
+    /// silently falling through to the wrong accessory.
+    var helperTrailingAccessory: HelperTrailingAccessory {
+        switch helperRowState {
+        case .granted: .grantedBadge
+        case .needsApproval, .registrationRefused, .statusUnknown: .registrationRetryButton
+        case .notBundled: .notBundledLabel
+        }
     }
 
     private var privilegedHelperRow: some View {
@@ -57,28 +107,28 @@ struct PermissionsSettingsSection: View {
 
             Spacer(minLength: GargantuaSpacing.space3)
 
-            let state = helperRowState
-            if state == .granted {
+            switch helperTrailingAccessory {
+            case .grantedBadge:
                 grantedBadge
-            } else if state.offersRegistrationRetry {
+            case .registrationRetryButton:
                 GargantuaButton("Open Settings", icon: "arrow.up.forward.app") {
                     // Re-register so the toggle is present in the list, reflect
                     // the new status immediately, then deep-link straight to the
-                    // Login Items & Extensions pane. A failed registration means
-                    // the toggle will not be there at all, so say so rather than
-                    // sending the user to hunt for a row that does not exist.
+                    // Login Items & Extensions pane — but only once registration
+                    // actually succeeded. `.notFound` (the status `register()`
+                    // most often fails from) would otherwise send the user to a
+                    // toggle that was never created.
                     do {
                         helperStatus = try SMAppServicePrivilegedHelperInstaller().register()
                         registerError = nil
+                        openURL(loginItemsURL)
                     } catch {
                         registerError = error.localizedDescription
                     }
-                    openURL(loginItemsURL)
                 }
-            } else {
-                // `.notBundled`: no embedded helper (a raw `swift build` run, or
-                // a fork signed by another team). Informational — there's
-                // nothing to approve.
+            case .notBundledLabel:
+                // No embedded helper (a raw `swift build` run, or a fork signed
+                // by another team). Informational — there's nothing to approve.
                 Text("Not in this build")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink4)
@@ -86,7 +136,7 @@ struct PermissionsSettingsSection: View {
         }
     }
 
-    private var helperDetail: String {
+    var helperDetail: String {
         if let registerError {
             return "Gargantua could not register the helper, so it may not appear under Login Items & "
                 + "Extensions: \(registerError)"
@@ -94,7 +144,7 @@ struct PermissionsSettingsSection: View {
         return helperRowState.detail
     }
 
-    private var helperDetailColor: Color {
+    var helperDetailColor: Color {
         if registerError != nil { return GargantuaColors.review }
         return switch helperRowState {
         case .granted: GargantuaColors.safe

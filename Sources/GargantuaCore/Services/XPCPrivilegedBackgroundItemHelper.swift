@@ -36,7 +36,7 @@ public final class XPCPrivilegedBackgroundItemHelper: PrivilegedBackgroundItemHe
                 return PrivilegedBackgroundItemResponse(
                     id: request.id,
                     succeeded: false,
-                    error: approvalMessage(for: status)
+                    error: status.approvalMessage
                 )
             }
             return await send(request)
@@ -128,22 +128,6 @@ public final class XPCPrivilegedBackgroundItemHelper: PrivilegedBackgroundItemHe
                 connection.invalidate()
                 continuation.resume(returning: responseData)
             }
-        }
-    }
-
-    private func approvalMessage(for status: PrivilegedHelperStatus) -> String {
-        switch status {
-        case .requiresApproval:
-            "Privileged helper requires approval in System Settings > General > Login Items & Extensions."
-        case .notRegistered:
-            "Privileged helper is not registered."
-        case .notFound:
-            "macOS did not register the privileged helper. Make sure Gargantua is in your Applications "
-                + "folder, then enable it under Login Items & Extensions."
-        case .enabled:
-            "Privileged helper is enabled."
-        case .unknown(let rawValue):
-            "Privileged helper status is unknown (\(rawValue))."
         }
     }
 }

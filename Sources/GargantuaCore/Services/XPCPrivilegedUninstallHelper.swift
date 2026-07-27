@@ -84,6 +84,27 @@ extension PrivilegedHelperStatus: CustomStringConvertible {
     }
 }
 
+extension PrivilegedHelperStatus {
+    /// Explanation for why a privileged operation was blocked at this status.
+    /// Shared by both XPC helper façades (uninstall + background item) so
+    /// their error copy can't drift out of sync — it did once already.
+    public var approvalMessage: String {
+        switch self {
+        case .requiresApproval:
+            "Privileged helper requires approval in System Settings > General > Login Items & Extensions."
+        case .notRegistered:
+            "Privileged helper is not registered."
+        case .notFound:
+            "macOS did not register the privileged helper. Make sure Gargantua is in your Applications "
+                + "folder, then enable it under Login Items & Extensions."
+        case .enabled:
+            "Privileged helper is enabled."
+        case .unknown(let rawValue):
+            "Privileged helper status is unknown (\(rawValue))."
+        }
+    }
+}
+
 public protocol PrivilegedUninstallHelperInstalling: Sendable {
     func status() -> PrivilegedHelperStatus
     func register() throws -> PrivilegedHelperStatus
@@ -136,7 +157,7 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
         do {
             let status = try ensureRegistered()
             guard status == .enabled else {
-                return failureResults(for: request, message: approvalMessage(for: status))
+                return failureResults(for: request, message: status.approvalMessage)
             }
             try await reloadStaleHelperIfNeeded()
             return await send(request)
@@ -305,22 +326,6 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
             source: SourceAttribution(name: "Gargantua", bundleID: PrivilegedHelperConfiguration.appBundleID),
             category: item.category
         )
-    }
-
-    private func approvalMessage(for status: PrivilegedHelperStatus) -> String {
-        switch status {
-        case .requiresApproval:
-            "Privileged helper requires approval in System Settings > General > Login Items & Extensions."
-        case .notRegistered:
-            "Privileged helper is not registered."
-        case .notFound:
-            "macOS did not register the privileged helper. Make sure Gargantua is in your Applications "
-                + "folder, then enable it under Login Items & Extensions."
-        case .enabled:
-            "Privileged helper is enabled."
-        case .unknown(let rawValue):
-            "Privileged helper status is unknown (\(rawValue))."
-        }
     }
 }
 

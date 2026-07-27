@@ -131,4 +131,26 @@ struct PrivilegedHelperRowStateTests {
         #expect(detail.contains("Not included in this build"))
         #expect(detail.contains("system-owned items can’t be removed"))
     }
+
+    // MARK: - PrivilegedHelperStatus.approvalMessage
+
+    @Test("Not found approval message does not claim the plist is missing from the app bundle")
+    func notFoundApprovalMessageDoesNotClaimMissingPlist() {
+        let message = PrivilegedHelperStatus.notFound.approvalMessage
+        #expect(message.lowercased().contains("plist") == false)
+        #expect(message.lowercased().contains("app bundle") == false)
+        #expect(message.contains("Applications"))
+    }
+
+    @Test("Approval message is identical between the two XPC helper façades")
+    func approvalMessageIsSharedAcrossFacades() {
+        // Both `XPCPrivilegedUninstallHelper` and `XPCPrivilegedBackgroundItemHelper`
+        // now call `PrivilegedHelperStatus.approvalMessage` directly rather than
+        // keeping their own copy, so this just pins the shared source's wording.
+        #expect(
+            PrivilegedHelperStatus.requiresApproval.approvalMessage
+                == "Privileged helper requires approval in System Settings > General > Login Items & Extensions."
+        )
+        #expect(PrivilegedHelperStatus.enabled.approvalMessage == "Privileged helper is enabled.")
+    }
 }
