@@ -28,6 +28,20 @@ public enum PrivilegedHelperConfiguration {
     public static let codeSigningRequirement =
         "identifier \"\(appBundleID)\" and anchor apple generic "
             + "and certificate leaf[subject.OU] = \"\(teamID)\""
+
+    /// True when this bundle actually ships the launch daemon plist. `SMAppService`
+    /// reports `.notFound` both for a build with no helper (a raw `swift build`) and
+    /// for a signed release macOS declines to register, so the status alone can't
+    /// tell the user which one they're in — this can.
+    public static func isHelperBundled(
+        bundleURL: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let plist = bundleURL
+            .appendingPathComponent("Contents/Library/LaunchDaemons", isDirectory: true)
+            .appendingPathComponent(helperPlistName)
+        return fileManager.fileExists(atPath: plist.path)
+    }
 }
 
 public enum PrivilegedHelperStatus: Sendable, Equatable {
