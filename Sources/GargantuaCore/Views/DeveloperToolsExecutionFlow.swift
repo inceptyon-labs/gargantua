@@ -8,7 +8,14 @@ private let executionLogger = Logger(subsystem: "com.gargantua.core", category: 
 extension DeveloperToolsView {
     /// Build the initial phase from availability results, seeding installed tools
     /// with `.loading` so the UI can show spinners while previews resolve.
-    static func deriveInitialPhase(availabilities: [DeveloperToolAvailability]) -> Phase {
+    // These helpers are pure functions over value types — they read no
+    // MainActor-isolated state (no `session`, no view state) — so they are
+    // marked `nonisolated` to opt out of the @MainActor isolation SwiftUI's
+    // `View` conformance would otherwise infer for this extension. Without
+    // this, calling them from a non-MainActor context (as several unit
+    // tests do synchronously) trips a Swift 6 runtime isolation-assertion
+    // trap when swift-testing schedules that test off the main actor.
+    nonisolated static func deriveInitialPhase(availabilities: [DeveloperToolAvailability]) -> Phase {
         let installed = availabilities.filter(\.isInstalled)
         if installed.isEmpty {
             return .empty(availabilities: availabilities)
@@ -20,13 +27,13 @@ extension DeveloperToolsView {
         return .ready(availabilities: availabilities, previews: previews)
     }
 
-    static func operations(for preview: DeveloperToolPreview) -> [DeveloperToolCleanupOperation] {
+    nonisolated static func operations(for preview: DeveloperToolPreview) -> [DeveloperToolCleanupOperation] {
         DeveloperToolCleanupOperation.allCases.filter {
             $0.tool == preview.tool && $0.isApplicable(to: preview)
         }
     }
 
-    static func confirmationItem(for request: ExecutionRequest) -> ScanResult {
+    nonisolated static func confirmationItem(for request: ExecutionRequest) -> ScanResult {
         let operation = request.operation
         let estimatedBytes = operation.estimatedReclaimableBytes(in: request.preview)
         let explanation = estimatedBytes == nil
@@ -47,7 +54,7 @@ extension DeveloperToolsView {
         )
     }
 
-    static func successMessage(
+    nonisolated static func successMessage(
         operation: DeveloperToolCleanupOperation,
         beforeBytes: Int64?,
         afterBytes: Int64?
@@ -68,7 +75,7 @@ extension DeveloperToolsView {
         }
     }
 
-    static func refreshFailureMessage(operation: DeveloperToolCleanupOperation, error: Error) -> String {
+    nonisolated static func refreshFailureMessage(operation: DeveloperToolCleanupOperation, error: Error) -> String {
         let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         return "\(operation.label) completed, but the preview refresh failed: \(message)"
     }
@@ -110,7 +117,7 @@ extension DeveloperToolsView {
     }
 
     /// Fold a new per-tool preview result into the phase.
-    static func applyPreviewResult(
+    nonisolated static func applyPreviewResult(
         tool: DeveloperTool,
         result: Result<DeveloperToolPreview, Error>,
         to phase: Phase

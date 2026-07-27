@@ -97,7 +97,12 @@ extension BackgroundItemsView {
     /// What to do with a pending pre-selection given the current scan:
     /// expand on a hit; on a miss, rescan once (the cached scan may predate
     /// the item) before declaring the path missing.
-    static func preSelectionStep(
+    ///
+    /// `nonisolated`: pure function over value types, no MainActor state —
+    /// opts out of the @MainActor isolation `View` conformance would
+    /// otherwise infer, which would trap at runtime when unit tests call it
+    /// synchronously off the main actor under Swift 6.
+    nonisolated static func preSelectionStep(
         matchFound: Bool,
         alreadyRescannedForPath: Bool
     ) -> PreSelectionStep {

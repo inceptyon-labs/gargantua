@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.0
 
 import Foundation
 import PackageDescription
@@ -16,6 +16,10 @@ let licensingEnabled = Context.environment["GARGANTUA_LICENSING"] == "1"
 let licensingSwiftSettings: [SwiftSetting] = licensingEnabled
     ? [.define("GARGANTUA_LICENSING")]
     : []
+
+// Swift 6 language mode is enabled per-target: SwiftPM has no package-wide
+// swiftSettings hook, so every Swift target appends this array.
+let swift6SwiftSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
 
 let package = Package(
     name: "Gargantua",
@@ -106,7 +110,8 @@ let package = Package(
                 .copy("Resources/Brand"),
                 .copy("Resources/bin"),
                 .copy("Resources/rules-sync.json")
-            ]
+            ],
+            swiftSettings: swift6SwiftSettings
         ),
         .target(
             name: "GargantuaLicensing",
@@ -120,7 +125,8 @@ let package = Package(
                 "GargantuaLicensing",
                 .product(name: "Tokenizers", package: "swift-transformers")
             ],
-            path: "Tests/GargantuaCoreTests"
+            path: "Tests/GargantuaCoreTests",
+            swiftSettings: swift6SwiftSettings
         ),
         .testTarget(
             name: "GargantuaLicensingTests",

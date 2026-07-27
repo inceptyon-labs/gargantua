@@ -86,7 +86,12 @@ extension DeveloperToolPanel {
     /// Appends an orphan formula count to the `.homebrewAutoremove` estimate
     /// line (e.g. " · 3 formulae"). Empty for every other operation, and for
     /// autoremove itself when there are no orphans to report.
-    static func autoremoveFormulaSuffix(
+    ///
+    /// `nonisolated`: pure function over value types, no MainActor state —
+    /// opts out of the @MainActor isolation `View` conformance would
+    /// otherwise infer, which would trap at runtime when unit tests call it
+    /// synchronously off the main actor under Swift 6.
+    nonisolated static func autoremoveFormulaSuffix(
         _ operation: DeveloperToolCleanupOperation,
         preview: DeveloperToolPreview
     ) -> String {

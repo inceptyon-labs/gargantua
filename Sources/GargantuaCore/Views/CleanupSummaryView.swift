@@ -67,7 +67,12 @@ public struct CleanupSummaryView: View {
     /// Classify a result for header presentation. A result with no items at
     /// all is treated as `.complete` to preserve the "nothing failed" framing
     /// the view showed historically.
-    static func outcome(for result: CleanupResult) -> SummaryOutcome {
+    ///
+    /// `nonisolated`: pure function over value types, no MainActor state —
+    /// opts out of the @MainActor isolation `View` conformance would
+    /// otherwise infer, which would trap at runtime when unit tests call it
+    /// synchronously off the main actor under Swift 6.
+    nonisolated static func outcome(for result: CleanupResult) -> SummaryOutcome {
         if result.failedItems.isEmpty {
             return .complete
         }
@@ -98,7 +103,7 @@ public struct CleanupSummaryView: View {
     /// `CleanupEngine.clean` returns fewer results than it was given, so this
     /// keeps every original item and updates only the ones the retry re-ran —
     /// no item can silently vanish from the summary.
-    static func mergeRetry(into current: [CleanupItemResult], retry: [CleanupItemResult]) -> [CleanupItemResult] {
+    nonisolated static func mergeRetry(into current: [CleanupItemResult], retry: [CleanupItemResult]) -> [CleanupItemResult] {
         var byID = Dictionary(current.map { ($0.item.id, $0) }, uniquingKeysWith: { _, new in new })
         for outcome in retry { byID[outcome.item.id] = outcome }
         return current.map { byID[$0.item.id] ?? $0 }
