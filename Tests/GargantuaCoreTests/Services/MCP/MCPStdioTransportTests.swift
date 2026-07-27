@@ -7,7 +7,10 @@ struct MCPStdioTransportTests {
 
     // MARK: In-memory doubles
 
-    private final class QueueSource: MCPMessageSource {
+    // Both doubles are driven synchronously by `runTransport` on the test's own
+    // thread — the transport is never sent to another queue here — so the
+    // unguarded mutable state is safe without a lock.
+    private final class QueueSource: MCPMessageSource, @unchecked Sendable {
         private var lines: [String]
         init(_ lines: [String]) { self.lines = lines }
         func readLine() -> String? {
@@ -16,7 +19,7 @@ struct MCPStdioTransportTests {
         }
     }
 
-    private final class RecordingSink: MCPMessageSink {
+    private final class RecordingSink: MCPMessageSink, @unchecked Sendable {
         private(set) var lines: [String] = []
         func writeLine(_ line: String) { lines.append(line) }
     }

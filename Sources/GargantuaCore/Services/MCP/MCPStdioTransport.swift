@@ -9,13 +9,18 @@ import Foundation
 // spec.
 
 /// Line-oriented source of JSON-RPC messages. Returning `nil` denotes EOF.
-public protocol MCPMessageSource: AnyObject {
+///
+/// `Sendable` because the transport that owns a source is itself sent across
+/// queues (the MCP entry point runs `run()` off the main thread). Implementations
+/// with mutable buffers must serialize their own access.
+public protocol MCPMessageSource: AnyObject, Sendable {
     func readLine() -> String?
 }
 
 /// Line-oriented sink for JSON-RPC messages. Implementations are
-/// responsible for appending a trailing newline.
-public protocol MCPMessageSink: AnyObject {
+/// responsible for appending a trailing newline. `Sendable` for the same
+/// reason as `MCPMessageSource`.
+public protocol MCPMessageSink: AnyObject, Sendable {
     func writeLine(_ line: String)
 }
 
@@ -40,13 +45,24 @@ private let mcpLogExcerptLimit = 512
 /// Runs a blocking read/dispatch/write loop. The transport decodes each
 /// line into an `MCPRequest`, invokes the handler, and writes any
 /// resulting `MCPResponse` as a single JSON line.
-public final class MCPStdioTransport {
+public final class MCPStdioTransport: Sendable {
     private let source: MCPMessageSource
     private let sink: MCPMessageSink
     private let handler: MCPMessageHandler
     private let log: MCPTransportLog?
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
+
+    // JSONEncoder/JSONDecoder are not Sendable, so storing them would block a
+    // checked `Sendable` conformance on this class. Building one per message is
+    // the honest alternative: MCP stdio traffic is request-paced, so the
+    // allocation is not on any hot path.
+    private var encoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        // Deterministic output keeps integration tests and client diffs stable.
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }
+
+    private var decoder: JSONDecoder { JSONDecoder() }
 
     public init(
         source: MCPMessageSource,
@@ -58,10 +74,6 @@ public final class MCPStdioTransport {
         self.sink = sink
         self.handler = handler
         self.log = log
-        self.encoder = JSONEncoder()
-        // Deterministic output keeps integration tests and client diffs stable.
-        self.encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        self.decoder = JSONDecoder()
     }
 
     /// Reads lines until EOF, dispatching each complete message.
