@@ -111,4 +111,24 @@ struct PrivilegedHelperRowStateTests {
     func statusUnknownOffersRetry() {
         #expect(PrivilegedHelperRowState.statusUnknown(7).offersRegistrationRetry == true)
     }
+
+    // MARK: - detail copy
+
+    @Test("Registration refused detail does not claim the helper is missing from this build")
+    func registrationRefusedDetailDoesNotClaimNotIncluded() {
+        let detail = PrivilegedHelperRowState.registrationRefused.detail
+        #expect(detail.lowercased().contains("not included in this build") == false)
+    }
+
+    @Test("Registration refused detail mentions the Applications folder")
+    func registrationRefusedDetailMentionsApplications() {
+        #expect(PrivilegedHelperRowState.registrationRefused.detail.contains("Applications"))
+    }
+
+    @Test("Not bundled detail keeps the existing wording")
+    func notBundledDetailRetainsExistingWording() {
+        let detail = PrivilegedHelperRowState.notBundled.detail
+        #expect(detail.contains("Not included in this build"))
+        #expect(detail.contains("system-owned items can’t be removed"))
+    }
 }

@@ -30,4 +30,25 @@ public enum PrivilegedHelperRowState: Equatable {
         case .needsApproval, .registrationRefused, .statusUnknown: true
         }
     }
+
+    /// Copy for the Permissions row's detail line. Doesn't cover the
+    /// `registerError` override — that's a runtime message the view still owns.
+    public var detail: String {
+        switch self {
+        case .granted:
+            "Approved — Gargantua can remove system-owned items (helpers, prefpanes, root caches)."
+        case .needsApproval:
+            "Not approved — system-owned items can’t be removed until you enable Gargantua under "
+                + "Login Items & Extensions."
+        case .registrationRefused:
+            "Included in this build, but macOS hasn’t registered it — system-owned items can’t be "
+                + "removed yet. Make sure Gargantua is in your Applications folder, then enable it "
+                + "under Login Items & Extensions."
+        case .notBundled:
+            "Not included in this build — system-owned items can’t be removed. The signed release "
+                + "ships the helper; files you own are still cleaned."
+        case .statusUnknown:
+            "Status unknown — check Gargantua under Login Items & Extensions."
+        }
+    }
 }

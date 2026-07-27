@@ -314,7 +314,8 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
         case .notRegistered:
             "Privileged helper is not registered."
         case .notFound:
-            "Privileged helper launch daemon plist was not found in the app bundle."
+            "macOS did not register the privileged helper. Make sure Gargantua is in your Applications "
+                + "folder, then enable it under Login Items & Extensions."
         case .enabled:
             "Privileged helper is enabled."
         case .unknown(let rawValue):

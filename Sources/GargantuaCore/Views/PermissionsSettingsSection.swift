@@ -36,6 +36,15 @@ struct PermissionsSettingsSection: View {
 
     // MARK: - Privileged helper
 
+    private var helperRowState: PrivilegedHelperRowState {
+        PrivilegedHelperRowState(
+            status: helperStatus,
+            isHelperBundled: PrivilegedHelperConfiguration.isHelperBundled(
+                bundleURL: Bundle.main.bundleURL
+            )
+        )
+    }
+
     private var privilegedHelperRow: some View {
         HStack(spacing: GargantuaSpacing.space3) {
             SettingsRowIcon(systemName: "lock.shield.fill", size: 20)
@@ -48,16 +57,10 @@ struct PermissionsSettingsSection: View {
 
             Spacer(minLength: GargantuaSpacing.space3)
 
-            switch helperStatus {
-            case .enabled:
+            let state = helperRowState
+            if state == .granted {
                 grantedBadge
-            case .notFound:
-                // No embedded helper (a raw `swift build` run, or a fork signed
-                // by another team). Informational — there's nothing to approve.
-                Text("Not in this build")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink4)
-            case .requiresApproval, .notRegistered, .unknown:
+            } else if state.offersRegistrationRetry {
                 GargantuaButton("Open Settings", icon: "arrow.up.forward.app") {
                     // Re-register so the toggle is present in the list, reflect
                     // the new status immediately, then deep-link straight to the
@@ -72,6 +75,13 @@ struct PermissionsSettingsSection: View {
                     }
                     openURL(loginItemsURL)
                 }
+            } else {
+                // `.notBundled`: no embedded helper (a raw `swift build` run, or
+                // a fork signed by another team). Informational — there's
+                // nothing to approve.
+                Text("Not in this build")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink4)
             }
         }
     }
@@ -81,26 +91,15 @@ struct PermissionsSettingsSection: View {
             return "Gargantua could not register the helper, so it may not appear under Login Items & "
                 + "Extensions: \(registerError)"
         }
-        switch helperStatus {
-        case .enabled:
-            return "Approved — Gargantua can remove system-owned items (helpers, prefpanes, root caches)."
-        case .requiresApproval, .notRegistered:
-            return "Not approved — system-owned items can’t be removed until you enable Gargantua under "
-                + "Login Items & Extensions."
-        case .notFound:
-            return "Not included in this build — system-owned items can’t be removed. The signed release "
-                + "ships the helper; files you own are still cleaned."
-        case .unknown:
-            return "Status unknown — check Gargantua under Login Items & Extensions."
-        }
+        return helperRowState.detail
     }
 
     private var helperDetailColor: Color {
         if registerError != nil { return GargantuaColors.review }
-        return switch helperStatus {
-        case .enabled: GargantuaColors.safe
-        case .notFound: GargantuaColors.ink3
-        case .requiresApproval, .notRegistered, .unknown: GargantuaColors.review
+        return switch helperRowState {
+        case .granted: GargantuaColors.safe
+        case .notBundled: GargantuaColors.ink3
+        case .needsApproval, .registrationRefused, .statusUnknown: GargantuaColors.review
         }
     }
 
