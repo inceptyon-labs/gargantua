@@ -106,7 +106,10 @@ jobs:
       # test binary the export step reads.
       - name: Test (licensing build)
         run: |
-          set -o pipefail
+          # errexit as well as pipefail: the sentinel grep below is no longer
+          # the block's last command, so without it a missing sentinel would
+          # be shrugged off and the step would still exit on the scan's status.
+          set -euo pipefail
           GARGANTUA_LICENSING=1 swift test 2>&1 | tee licensed-test.log
           # A licensing-only test has to appear in the output. Without this the
           # step would pass green if the flag never reached the compiler and the
