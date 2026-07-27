@@ -33,12 +33,11 @@ public enum HealthScoreRange: Equatable {
 /// Both arcs span 270° with the gap at the bottom — the orbital signature
 /// element from PRODUCT.md, driven by data the cleanup app actually moves.
 public struct HealthGaugeView: View {
-    // These are plain Sendable value-type properties (Double/CGFloat) with no
-    // shared mutable state, so they're marked `nonisolated` to opt out of the
-    // @MainActor isolation SwiftUI's `View` conformance would otherwise infer
-    // for the whole type. Without this, unit tests constructing/reading a
-    // `HealthGaugeView` synchronously off the main actor trip a Swift 6
-    // runtime isolation-assertion trap.
+    // Plain Sendable value-type properties (Double/CGFloat) with no shared
+    // mutable state, marked `nonisolated` to opt out of the @MainActor
+    // isolation SwiftUI's `View` conformance infers for the whole type, so the
+    // non-@MainActor unit tests can construct and read a `HealthGaugeView`
+    // synchronously under Swift 6.
 
     /// Disk usage 0-1 (drives the outer ring; thresholded color).
     public nonisolated let diskUsage: Double

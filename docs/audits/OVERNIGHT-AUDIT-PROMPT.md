@@ -45,7 +45,7 @@ linters, and launching the app are all expected and encouraged.
 
 ## Repo orientation (verify, don't trust)
 
-- Swift Package, `swift-tools-version: 5.10`, Swift 6.1 toolchain, macOS 14+.
+- Swift Package, `swift-tools-version: 6.0` (Swift 6 language mode), Swift 6.1 toolchain, macOS 14+.
   ~544 Swift source files, ~83k LOC, ~323 test files.
 - Six targets: `GargantuaCore` (the bulk), `Gargantua` (SwiftUI app),
   `GargantuaMCP` (local MCP server, stdio + localhost SSE on port 7493),

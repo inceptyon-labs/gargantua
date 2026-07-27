@@ -98,10 +98,9 @@ extension BackgroundItemsView {
     /// expand on a hit; on a miss, rescan once (the cached scan may predate
     /// the item) before declaring the path missing.
     ///
-    /// `nonisolated`: pure function over value types, no MainActor state —
-    /// opts out of the @MainActor isolation `View` conformance would
-    /// otherwise infer, which would trap at runtime when unit tests call it
-    /// synchronously off the main actor under Swift 6.
+    /// `nonisolated`: pure function over Sendable value types, no view state —
+    /// opts out of the @MainActor isolation `View` conformance infers, so the
+    /// non-@MainActor unit tests can call it synchronously under Swift 6.
     nonisolated static func preSelectionStep(
         matchFound: Bool,
         alreadyRescannedForPath: Bool

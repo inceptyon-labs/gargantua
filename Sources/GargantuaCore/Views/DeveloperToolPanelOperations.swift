@@ -87,10 +87,9 @@ extension DeveloperToolPanel {
     /// line (e.g. " · 3 formulae"). Empty for every other operation, and for
     /// autoremove itself when there are no orphans to report.
     ///
-    /// `nonisolated`: pure function over value types, no MainActor state —
-    /// opts out of the @MainActor isolation `View` conformance would
-    /// otherwise infer, which would trap at runtime when unit tests call it
-    /// synchronously off the main actor under Swift 6.
+    /// `nonisolated`: pure function over Sendable value types, no view state —
+    /// opts out of the @MainActor isolation `View` conformance infers, so the
+    /// non-@MainActor unit tests can call it synchronously under Swift 6.
     nonisolated static func autoremoveFormulaSuffix(
         _ operation: DeveloperToolCleanupOperation,
         preview: DeveloperToolPreview

@@ -1,4 +1,9 @@
 // swift-tools-version: 6.0
+//
+// Tools version 6.0 puts every Swift target — including the test targets — in
+// Swift 6 language mode by default, so data-race safety is a compile error
+// rather than a warning. No per-target `swiftLanguageMode` setting is needed;
+// adding one would be a no-op.
 
 import Foundation
 import PackageDescription
@@ -16,14 +21,6 @@ let licensingEnabled = Context.environment["GARGANTUA_LICENSING"] == "1"
 let licensingSwiftSettings: [SwiftSetting] = licensingEnabled
     ? [.define("GARGANTUA_LICENSING")]
     : []
-
-// Swift 6 language mode is enabled per-target: SwiftPM has no package-wide
-// swiftSettings hook, so every Swift target appends this array.
-let swift6SwiftSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
-
-// Precomputed rather than inlined at each call site — the manifest is a single
-// large expression and the type checker times out concatenating arrays inline.
-let licensingAndSwift6SwiftSettings: [SwiftSetting] = licensingSwiftSettings + swift6SwiftSettings
 
 let package = Package(
     name: "Gargantua",
@@ -54,7 +51,6 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/Gargantua",
-            swiftSettings: swift6SwiftSettings,
             plugins: [
                 "BuildMetallibPlugin"
             ]
@@ -72,15 +68,13 @@ let package = Package(
         .executableTarget(
             name: "GargantuaMCP",
             dependencies: ["GargantuaCore", "GargantuaLicensing"],
-            path: "Sources/GargantuaMCP",
-            swiftSettings: swift6SwiftSettings
+            path: "Sources/GargantuaMCP"
         ),
         .executableTarget(
             name: "GargantuaScheduler",
             dependencies: ["GargantuaCore"],
             path: "Sources/GargantuaScheduler",
             exclude: ["Info.plist"],
-            swiftSettings: swift6SwiftSettings,
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker",
@@ -97,8 +91,7 @@ let package = Package(
         .executableTarget(
             name: "GargantuaPrivilegedHelper",
             dependencies: ["GargantuaCore"],
-            path: "Sources/GargantuaPrivilegedHelper",
-            swiftSettings: swift6SwiftSettings
+            path: "Sources/GargantuaPrivilegedHelper"
         ),
         .target(
             name: "GargantuaCore",
@@ -118,13 +111,12 @@ let package = Package(
                 .copy("Resources/Brand"),
                 .copy("Resources/bin"),
                 .copy("Resources/rules-sync.json")
-            ],
-            swiftSettings: swift6SwiftSettings
+            ]
         ),
         .target(
             name: "GargantuaLicensing",
             path: "Sources/GargantuaLicensing",
-            swiftSettings: licensingAndSwift6SwiftSettings
+            swiftSettings: licensingSwiftSettings
         ),
         .testTarget(
             name: "GargantuaCoreTests",
@@ -133,14 +125,13 @@ let package = Package(
                 "GargantuaLicensing",
                 .product(name: "Tokenizers", package: "swift-transformers")
             ],
-            path: "Tests/GargantuaCoreTests",
-            swiftSettings: swift6SwiftSettings
+            path: "Tests/GargantuaCoreTests"
         ),
         .testTarget(
             name: "GargantuaLicensingTests",
             dependencies: ["GargantuaLicensing"],
             path: "Tests/GargantuaLicensingTests",
-            swiftSettings: licensingAndSwift6SwiftSettings
+            swiftSettings: licensingSwiftSettings
         )
     ]
 )

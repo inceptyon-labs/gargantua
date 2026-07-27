@@ -6,16 +6,9 @@ import SwiftUI
 private let executionLogger = Logger(subsystem: "com.gargantua.core", category: "DeveloperToolsView")
 
 extension DeveloperToolsView {
-    // These helpers are pure functions over value types — they read no
-    // MainActor-isolated state (no `session`, no view state) — so they are
-    // marked `nonisolated` to opt out of the @MainActor isolation SwiftUI's
-    // `View` conformance would otherwise infer for this extension. Without
-    // this, calling them from a non-MainActor context (as several unit
-    // tests do synchronously) trips a Swift 6 runtime isolation-assertion
-    // trap when swift-testing schedules that test off the main actor.
     /// Build the initial phase from availability results, seeding installed tools
     /// with `.loading` so the UI can show spinners while previews resolve.
-    nonisolated static func deriveInitialPhase(availabilities: [DeveloperToolAvailability]) -> Phase {
+    static func deriveInitialPhase(availabilities: [DeveloperToolAvailability]) -> Phase {
         let installed = availabilities.filter(\.isInstalled)
         if installed.isEmpty {
             return .empty(availabilities: availabilities)
@@ -27,6 +20,11 @@ extension DeveloperToolsView {
         return .ready(availabilities: availabilities, previews: previews)
     }
 
+    // The four helpers below are pure functions over Sendable value types and
+    // read no view state, so they are `nonisolated` to opt out of the
+    // @MainActor isolation SwiftUI's `View` conformance infers for the whole
+    // type. Their unit tests are not @MainActor; without this, calling them
+    // synchronously from those tests is a compile error under Swift 6.
     nonisolated static func operations(for preview: DeveloperToolPreview) -> [DeveloperToolCleanupOperation] {
         DeveloperToolCleanupOperation.allCases.filter {
             $0.tool == preview.tool && $0.isApplicable(to: preview)
@@ -117,7 +115,7 @@ extension DeveloperToolsView {
     }
 
     /// Fold a new per-tool preview result into the phase.
-    nonisolated static func applyPreviewResult(
+    static func applyPreviewResult(
         tool: DeveloperTool,
         result: Result<DeveloperToolPreview, Error>,
         to phase: Phase
