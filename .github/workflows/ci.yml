@@ -53,6 +53,23 @@ jobs:
     # 5.10 and fails dependency resolution.
     runs-on: macos-15
 
+    # SwiftUI's View conformance implicitly infers @MainActor for the whole
+    # conforming type, including its static helpers. View is
+    # @preconcurrency, so a non-@MainActor caller only downgrades that to a
+    # warning rather than an error — the build, and even a filtered test
+    # run, can stay green while a synchronous call from an off-actor test
+    # traps at runtime (SIGTRAP). ~61 static members on View/ViewModifier/
+    # Shape/App-conforming types under Sources/ are not yet marked
+    # `nonisolated` and are landmines for the next test written against one;
+    # see Sources/GargantuaCore/Views/HealthGaugeView.swift for the
+    # canonical explanation. This flag escalates [#ActorIsolatedCall] from a
+    # warning to a hard compiler error, so the violating caller fails the
+    # build instead of trapping in CI. It is a no-op today — the tree emits
+    # zero [#ActorIsolatedCall] diagnostics — so it can gate future callers
+    # without first fixing anything.
+    env:
+      ACTOR_ISOLATION_GATE: -Xswiftc -Werror -Xswiftc ActorIsolatedCall
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -84,10 +101,10 @@ jobs:
       # --enable-code-coverage matches the test step's flags so those build
       # products get reused.
       - name: Fail on compiler warnings under Sources/
-        run: Scripts/check-source-warnings.sh --enable-code-coverage
+        run: Scripts/check-source-warnings.sh --enable-code-coverage $ACTOR_ISOLATION_GATE
 
       - name: Test with coverage
-        run: swift test --enable-code-coverage
+        run: swift test --enable-code-coverage $ACTOR_ISOLATION_GATE
 
       - name: Export lcov
         run: |
@@ -117,7 +134,7 @@ jobs:
           # the block's last command, so without it a missing sentinel would
           # be shrugged off and the step would still exit on the scan's status.
           set -euo pipefail
-          GARGANTUA_LICENSING=1 swift test 2>&1 | tee licensed-test.log
+          GARGANTUA_LICENSING=1 swift test $ACTOR_ISOLATION_GATE 2>&1 | tee licensed-test.log
           # A licensing-only test has to appear in the output. Without this the
           # step would pass green if the flag never reached the compiler and the
           # unlicensed suite simply re-ran.
