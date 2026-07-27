@@ -9,17 +9,12 @@ import os
 /// instances — and separate processes like the app and the MCP server — can
 /// append to the same file without interleaving. Mutation that is *not* a plain
 /// append (`purgeEntries`, a read-modify-write ending in an atomic rename) is
-/// excluded against appends by an `flock` on the `audit.lock` sidecar. The
-/// in-process lock only orders this instance's own callers.
+/// excluded against appends by an `flock` on the `audit.lock` sidecar.
 public final class AuditWriter: Sendable {
     /// Directory containing the audit log.
     public let logDirectory: URL
     /// Full path to the audit log file.
     public let logFile: URL
-
-    /// Orders writes from *this* instance's callers. Cross-instance and
-    /// cross-process safety comes from `O_APPEND`, not this lock.
-    private let lock = OSAllocatedUnfairLock()
 
     /// Sidecar file whose inode never changes, used to coordinate log mutation.
     ///
@@ -28,23 +23,66 @@ public final class AuditWriter: Sendable {
     /// would be stranded on the now-unlinked inode and stop excluding anyone.
     private var lockFile: URL { logDirectory.appendingPathComponent("audit.lock") }
 
-    /// Run `body` holding an exclusive `flock` on the sidecar.
+    /// Take an exclusive `flock` on the sidecar, returning the locked descriptor.
     ///
-    /// This is what makes appends and retention rewrites safe against each
-    /// other across processes — the app and the MCP server both go through it.
-    /// `flock` conflicts between distinct open file descriptions, so it also
-    /// orders separate `AuditWriter` instances within one process.
-    private func withFileLock<T>(_ body: () throws -> T) throws -> T {
-        let fd = Darwin.open(lockFile.path, O_WRONLY | O_CREAT, 0o644)
+    /// `flock` conflicts between distinct open file descriptions, so this orders
+    /// separate processes — the app and the MCP server — and separate
+    /// `AuditWriter` instances within one process. It is NOT reentrant: each
+    /// call opens a fresh descriptor, so a nested call self-deadlocks against
+    /// the lock its own caller already holds.
+    private func acquireFileLock() throws -> Int32 {
+        // O_RDONLY, not O_WRONLY: flock works on a read-only descriptor, and
+        // opening for write fails with EACCES when the log directory is
+        // read-only, or when the sidecar was created by a differently
+        // privileged process (one `sudo` run leaves it root-owned).
+        let fd = Darwin.open(lockFile.path, O_RDONLY | O_CREAT, 0o644)
         guard fd >= 0 else { throw AuditWriteError.lockFailed(code: errno) }
+
+        // Poll rather than block: LOCK_EX alone has no timeout, and an
+        // unbounded wait on a peer process would hang the caller's thread.
+        let deadline = Date().addingTimeInterval(lockTimeout)
+        while flock(fd, LOCK_EX | LOCK_NB) != 0 {
+            let code = errno
+            if code == EINTR { continue }
+            guard code == EWOULDBLOCK, Date() < deadline else {
+                Darwin.close(fd)
+                throw AuditWriteError.lockFailed(code: code)
+            }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        return fd
+    }
+
+    /// Release a descriptor returned by `acquireFileLock`.
+    private func releaseFileLock(_ fd: Int32) {
+        _ = flock(fd, LOCK_UN)
+        Darwin.close(fd)
+    }
+
+    /// Append one already-encoded line via an `O_APPEND` descriptor.
+    ///
+    /// O_APPEND has the kernel seek to EOF and write as one atomic step, so a
+    /// concurrent writer — another instance, or another process — can't land
+    /// its bytes between our seek and our write and tear a line.
+    private func appendLine(_ lineData: Data) throws {
+        let fd = Darwin.open(logFile.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        guard fd >= 0 else {
+            throw AuditWriteError.openFailed(code: errno)
+        }
         defer { Darwin.close(fd) }
 
-        while flock(fd, LOCK_EX) != 0 {
-            guard errno == EINTR else { throw AuditWriteError.lockFailed(code: errno) }
+        try lineData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+            guard let base = buffer.baseAddress else { return }
+            var offset = 0
+            while offset < buffer.count {
+                let written = Darwin.write(fd, base + offset, buffer.count - offset)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw AuditWriteError.writeFailed(code: errno)
+                }
+                offset += written
+            }
         }
-        defer { _ = flock(fd, LOCK_UN) }
-
-        return try body()
     }
 
     private static let encoder: JSONEncoder = {
@@ -54,15 +92,23 @@ public final class AuditWriter: Sendable {
         return encoder
     }()
 
+    /// How long a caller waits for the sidecar before giving up.
+    ///
+    /// `flock(LOCK_EX)` blocks forever, and `write(_:)` runs on the main thread
+    /// from the Deep Clean confirmation path — a wedged peer process holding the
+    /// sidecar would beachball the app with no cancel. Bound the wait instead.
+    public let lockTimeout: TimeInterval
+
     /// Creates an AuditWriter targeting the given directory.
     ///
     /// Defaults to `~/Library/Logs/Gargantua/`.
-    public init(logDirectory: URL? = nil) {
+    public init(logDirectory: URL? = nil, lockTimeout: TimeInterval = 2) {
         let dir = logDirectory ?? FileManager.default
             .homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/Gargantua")
         self.logDirectory = dir
         self.logFile = dir.appendingPathComponent("audit.json")
+        self.lockTimeout = lockTimeout
     }
 
     /// Write an audit entry for a completed cleanup operation.
@@ -78,37 +124,21 @@ public final class AuditWriter: Sendable {
         line.append("\n")
         let lineData = Data(line.utf8)
 
-        try lock.withLock {
-            try FileManager.default.createDirectory(
-                at: logDirectory,
-                withIntermediateDirectories: true
-            )
+        try FileManager.default.createDirectory(
+            at: logDirectory,
+            withIntermediateDirectories: true
+        )
 
-            try withFileLock {
-                // O_APPEND has the kernel seek to EOF and write as one atomic
-                // step, so a concurrent writer can't tear a line. The sidecar
-                // lock additionally excludes a retention rewrite, whose atomic
-                // rename would otherwise discard the inode we just appended to.
-                let fd = Darwin.open(logFile.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
-                guard fd >= 0 else {
-                    throw AuditWriteError.openFailed(code: errno)
-                }
-                defer { Darwin.close(fd) }
+        // Losing an audit record is the failure this subsystem exists to
+        // prevent, so a sidecar we can't take is not a reason to drop the
+        // entry. Append anyway: the O_APPEND write is still kernel-atomic and
+        // still can't tear a line. All that's given up is exclusion against a
+        // retention rewrite — a window of milliseconds, only reachable when a
+        // peer is already wedged.
+        let fd = try? acquireFileLock()
+        defer { if let fd { releaseFileLock(fd) } }
 
-                try lineData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
-                    guard let base = buffer.baseAddress else { return }
-                    var offset = 0
-                    while offset < buffer.count {
-                        let written = Darwin.write(fd, base + offset, buffer.count - offset)
-                        if written < 0 {
-                            if errno == EINTR { continue }
-                            throw AuditWriteError.writeFailed(code: errno)
-                        }
-                        offset += written
-                    }
-                }
-            }
-        }
+        try appendLine(lineData)
     }
 
     /// Build an AuditEntry from a CleanupResult and write it.
@@ -284,58 +314,60 @@ public final class AuditWriter: Sendable {
     /// - Returns: The number of entries purged.
     @discardableResult
     public func purgeEntries(olderThanDays retentionDays: Int = 90, now: Date = Date()) throws -> Int {
-        try lock.withLock {
-            guard FileManager.default.fileExists(atPath: logFile.path) else { return 0 }
+        guard FileManager.default.fileExists(atPath: logFile.path) else { return 0 }
 
-            return try withFileLock {
-                let content = try String(contentsOf: logFile, encoding: .utf8)
-                let lines = content.split(separator: "\n")
-                let cutoff = now.addingTimeInterval(-Double(retentionDays) * 86400)
+        // Unlike write(_:), retention is deferrable — running the
+        // read-modify-write without the lock is the very hazard this guards, so
+        // a lock we can't take must fail the purge rather than proceed.
+        let fd = try acquireFileLock()
+        defer { releaseFileLock(fd) }
 
-                // Last line index per id. Anything earlier with the same id is the
-                // superseded intent record of an operation that finished; the
-                // reader already ignores it, so compaction drops it rather than
-                // letting the log carry two lines per operation forever.
-                var lastIndexByID: [UUID: Int] = [:]
-                for (index, line) in lines.enumerated() {
-                    if let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) {
-                        lastIndexByID[entry.id] = index
-                    }
-                }
+        let content = try String(contentsOf: logFile, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let cutoff = now.addingTimeInterval(-Double(retentionDays) * 86400)
 
-                var keptLines: [String] = []
-                var purgedCount = 0
-
-                for (index, line) in lines.enumerated() {
-                    guard let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) else {
-                        // Keep malformed lines to avoid silent data loss
-                        keptLines.append(String(line))
-                        continue
-                    }
-                    if lastIndexByID[entry.id] != index {
-                        continue
-                    }
-                    if entry.timestamp >= cutoff {
-                        keptLines.append(String(line))
-                    } else {
-                        purgedCount += 1
-                    }
-                }
-
-                // Only rewrite when retention actually removed something. Superseded
-                // intent lines are compacted opportunistically as part of that
-                // rewrite, never on their own: rewriting the whole log every time a
-                // completed operation exists — i.e. almost always — is pointless I/O
-                // in the hot path. The reader collapses superseded lines anyway, so
-                // leaving them on disk costs one ~300-byte line per operation.
-                if purgedCount > 0 {
-                    let newContent = keptLines.joined(separator: "\n") + (keptLines.isEmpty ? "" : "\n")
-                    try Data(newContent.utf8).write(to: logFile, options: .atomic)
-                }
-
-                return purgedCount
+        // Last line index per id. Anything earlier with the same id is the
+        // superseded intent record of an operation that finished; the
+        // reader already ignores it, so compaction drops it rather than
+        // letting the log carry two lines per operation forever.
+        var lastIndexByID: [UUID: Int] = [:]
+        for (index, line) in lines.enumerated() {
+            if let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) {
+                lastIndexByID[entry.id] = index
             }
         }
+
+        var keptLines: [String] = []
+        var purgedCount = 0
+
+        for (index, line) in lines.enumerated() {
+            guard let entry = try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8)) else {
+                // Keep malformed lines to avoid silent data loss
+                keptLines.append(String(line))
+                continue
+            }
+            if lastIndexByID[entry.id] != index {
+                continue
+            }
+            if entry.timestamp >= cutoff {
+                keptLines.append(String(line))
+            } else {
+                purgedCount += 1
+            }
+        }
+
+        // Only rewrite when retention actually removed something. Superseded
+        // intent lines are compacted opportunistically as part of that
+        // rewrite, never on their own: rewriting the whole log every time a
+        // completed operation exists — i.e. almost always — is pointless I/O
+        // in the hot path. The reader collapses superseded lines anyway, so
+        // leaving them on disk costs one ~300-byte line per operation.
+        if purgedCount > 0 {
+            let newContent = keptLines.joined(separator: "\n") + (keptLines.isEmpty ? "" : "\n")
+            try Data(newContent.utf8).write(to: logFile, options: .atomic)
+        }
+
+        return purgedCount
     }
 }
 

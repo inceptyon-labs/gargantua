@@ -161,7 +161,7 @@ extension AuditWriterTests {
         let dir = try makeTempDir()
         defer { cleanup(dir) }
 
-        let writer = AuditWriter(logDirectory: dir)
+        let writer = AuditWriter(logDirectory: dir, lockTimeout: 5)
         // Materialize the log and the sidecar before taking the lock.
         try writer.write(makeEntry(path: "/seed"))
 
@@ -194,7 +194,7 @@ extension AuditWriterTests {
         let dir = try makeTempDir()
         defer { cleanup(dir) }
 
-        let writer = AuditWriter(logDirectory: dir)
+        let writer = AuditWriter(logDirectory: dir, lockTimeout: 5)
         let now = Date()
         try writer.write(makeEntry(path: "/old", age: -100 * 86400, now: now))
 
@@ -224,26 +224,29 @@ extension AuditWriterTests {
         defer { cleanup(dir) }
 
         let now = Date()
-        let seed = AuditWriter(logDirectory: dir)
-        // Old entries give every purge round something to remove, so each one
-        // actually performs the inode-swapping rewrite.
+        let seed = AuditWriter(logDirectory: dir, lockTimeout: 5)
+        // Seed at staggered ages so each purge round below, with its
+        // progressively tighter retention window, has fresh entries to drop.
         let make = makeEntry
         for i in 0 ..< 60 {
-            try seed.write(make("/old\(i)", -100 * 86400, now))
+            try seed.write(make("/old\(i)", Double(-(200 - i)) * 86400, now))
         }
 
         let appendCount = 40
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 // A separate instance, standing in for the MCP server process.
-                let purger = AuditWriter(logDirectory: dir)
-                for _ in 0 ..< 20 {
-                    _ = try purger.purgeEntries(olderThanDays: 90, now: now)
+                let purger = AuditWriter(logDirectory: dir, lockTimeout: 5)
+                // Each round shrinks the retention window so it drops ~3 more of the
+                // staggered old entries — every round performs a real inode-swapping
+                // rewrite, rather than only the first one doing so.
+                for r in 0 ..< 20 {
+                    _ = try purger.purgeEntries(olderThanDays: 199 - r * 3, now: now)
                 }
             }
             for i in 0 ..< appendCount {
                 group.addTask {
-                    let writer = AuditWriter(logDirectory: dir)
+                    let writer = AuditWriter(logDirectory: dir, lockTimeout: 5)
                     try writer.write(make("/fresh\(i)", 0, Date()))
                 }
             }
@@ -254,5 +257,47 @@ extension AuditWriterTests {
         for i in 0 ..< appendCount {
             #expect(paths.contains("/fresh\(i)"), "append /fresh\(i) was lost across a concurrent purge")
         }
+    }
+
+    @Test("A purge fails rather than proceeding unlocked when the sidecar stays held")
+    func purgeFailsWhenSidecarLockTimesOut() throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let writer = AuditWriter(logDirectory: dir, lockTimeout: 0.2)
+        let now = Date()
+        try writer.write(makeEntry(path: "/old", age: -100 * 86400, now: now))
+
+        let held = holdSidecarLock(in: dir)
+        defer { _ = flock(held, LOCK_UN); Darwin.close(held) }
+
+        // Retention is deferrable; running the read-modify-write unlocked is
+        // the exact hazard the sidecar exists to prevent.
+        #expect(throws: AuditWriteError.self) {
+            _ = try writer.purgeEntries(olderThanDays: 90, now: now)
+        }
+
+        // The log must be untouched — a failed purge purges nothing.
+        let remaining = try writer.readEntries()
+        #expect(remaining.count == 1)
+    }
+
+    @Test("An append still lands when the sidecar stays held")
+    func writeFallsBackWhenSidecarLockTimesOut() throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let writer = AuditWriter(logDirectory: dir, lockTimeout: 0.2)
+        try writer.write(makeEntry(path: "/seed"))
+
+        let held = holdSidecarLock(in: dir)
+        defer { _ = flock(held, LOCK_UN); Darwin.close(held) }
+
+        // Dropping an audit record is worse than appending without exclusion:
+        // the O_APPEND write is still kernel-atomic, so the line lands whole.
+        try writer.write(makeEntry(path: "/fallback"))
+
+        let paths = try writer.readEntries().flatMap { $0.files.map(\.path) }
+        #expect(paths.contains("/fallback"))
     }
 }
