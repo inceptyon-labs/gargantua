@@ -196,11 +196,63 @@ struct MCPSSETransportTests {
         #expect(rpcResponse.result == .object(["ok": .bool(true)]))
     }
 
+    @Test("SSE responses keep sorted keys and unescaped slashes")
+    func sseResponsesKeepSortedKeysAndUnescapedSlashes() throws {
+        // Every other SSE assertion decodes the event payload, which
+        // normalizes away both `.sortedKeys` and `.withoutEscapingSlashes`.
+        // This test asserts on the raw event data so a dropped flag on the
+        // shared wire encoder actually fails a test — the stdio suite has the
+        // matching assertion in `encodedResponsesKeepSortedKeysAndUnescapedSlashes`.
+        let router = MCPSSERequestRouter(handler: Self.methodNotFoundHandler)
+        let recorder = EventRecorder()
+        let open = router.openStream(
+            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"]),
+            configuration: MCPSSEServerConfiguration(),
+            storedToken: nil,
+            eventSink: { recorder.append(event: $0, data: $1) }
+        )
+        guard case .opened(let sessionID, _) = open else {
+            Issue.record("expected stream to open")
+            return
+        }
+
+        _ = router.handleRequest(
+            MCPHTTPRequest(
+                method: "POST",
+                path: "/message",
+                query: ["sessionId": sessionID],
+                headers: ["Host": "127.0.0.1:7493"],
+                body: Data(#"{"jsonrpc":"2.0","id":42,"method":"tools/unknown"}"#.utf8)
+            ),
+            configuration: MCPSSEServerConfiguration(),
+            storedToken: nil
+        )
+
+        let events = recorder.events()
+        #expect(events.count == 1)
+
+        // Exact match, deliberately: `error` < `id` < `jsonrpc` is sorted
+        // order, and `tools/unknown` is unescaped.
+        #expect(
+            events.first?.data
+                == #"{"error":{"code":-32601,"message":"Method not found: tools/unknown"},"id":42,"jsonrpc":"2.0"}"#
+        )
+    }
+
     private static let echoHandler: MCPConnectionMessageHandler = { request, _ in
         guard !request.isNotification else { return nil }
         return .success(
             id: request.id ?? .null,
             result: .object(["ok": .bool(true)])
+        )
+    }
+
+    private static let methodNotFoundHandler: MCPConnectionMessageHandler = { request, _ in
+        guard !request.isNotification else { return nil }
+        return MCPResponse.failure(
+            id: request.id ?? .null,
+            code: MCPErrorCode.methodNotFound,
+            message: "Method not found: \(request.method)"
         )
     }
 
