@@ -68,15 +68,26 @@ jobs:
     # zero [#ActorIsolatedCall] diagnostics — so it can gate future callers
     # without first fixing anything.
     #
-    # The check-source-warnings.sh gate below does not cover this: it matches
-    # warnings whose path is under Sources/, and the offending caller is
-    # always under Tests/. Escalating one diagnostic group rather than
-    # turning on -warnings-as-errors package-wide, for the same
-    # BuildMetallibPlugin reason documented on that script.
+    # The check-source-warnings.sh gate below cannot cover this, and widening
+    # its path filter would not help: it matches warnings whose path is under
+    # Sources/, while the offending call is usually reported against a macro
+    # expansion buffer (`macro expansion #expect:1:51`) rather than any file
+    # path at all, because the call sits inside a swift-testing #expect.
+    # Escalating the diagnostic group is what catches it.
+    #
+    # Caveat: -Xswiftc applies to every target the build touches, including
+    # .build/checkouts/. Nothing there emits this diagnostic today, but a
+    # future dependency bump that introduces one would fail CI on code this
+    # repo cannot fix; the escape hatch is removing this var. The per-target
+    # form, .treatWarning("ActorIsolatedCall", as: .error) in Package.swift,
+    # would scope it properly but needs swift-tools-version 6.2 and the
+    # package is on 6.0 — revisit at that bump.
     #
     # Every Swift invocation below passes it identically — mismatched flags
     # would also cost the test step a full rebuild instead of reusing the
-    # warning gate's build products.
+    # warning gate's build products. `:?` so a rename that misses a call site
+    # fails the step rather than silently expanding to nothing and leaving
+    # that step ungated.
     env:
       ACTOR_ISOLATION_GATE: -Xswiftc -Werror -Xswiftc ActorIsolatedCall
 
@@ -108,13 +119,14 @@ jobs:
       # The gate below is scoped to Sources/ instead. It has to be the job's
       # first build — the compiler only emits warnings for files it actually
       # recompiles, so running it after a warm build would pass on anything.
-      # --enable-code-coverage matches the test step's flags so those build
-      # products get reused.
+      # --enable-code-coverage and ACTOR_ISOLATION_GATE both match the test
+      # step's flags so those build products get reused; any flag added to
+      # one of the two steps has to be added to the other.
       - name: Fail on compiler warnings under Sources/
-        run: Scripts/check-source-warnings.sh --enable-code-coverage $ACTOR_ISOLATION_GATE
+        run: Scripts/check-source-warnings.sh --enable-code-coverage ${ACTOR_ISOLATION_GATE:?}
 
       - name: Test with coverage
-        run: swift test --enable-code-coverage $ACTOR_ISOLATION_GATE
+        run: swift test --enable-code-coverage ${ACTOR_ISOLATION_GATE:?}
 
       - name: Export lcov
         run: |
@@ -144,7 +156,7 @@ jobs:
           # the block's last command, so without it a missing sentinel would
           # be shrugged off and the step would still exit on the scan's status.
           set -euo pipefail
-          GARGANTUA_LICENSING=1 swift test $ACTOR_ISOLATION_GATE 2>&1 | tee licensed-test.log
+          GARGANTUA_LICENSING=1 swift test ${ACTOR_ISOLATION_GATE:?} 2>&1 | tee licensed-test.log
           # A licensing-only test has to appear in the output. Without this the
           # step would pass green if the flag never reached the compiler and the
           # unlicensed suite simply re-ran.

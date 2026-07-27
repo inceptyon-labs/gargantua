@@ -7,7 +7,9 @@ Usage: Scripts/check-source-warnings.sh [swift build args...]
        Scripts/check-source-warnings.sh --check-log FILE
 
 Build the package (including tests) and fail if the compiler emits any
-warning from this repository's own Sources/ tree.
+warning from this repository's own Sources/ tree, or if any `-Werror <group>`
+flag names a group the compiler does not recognise (which would otherwise
+leave that escalation silently inert).
 
 Package-wide -warnings-as-errors is not usable here: the mlx.metallib build
 plugin carries pre-existing PackagePlugin Path -> URL deprecations that are
@@ -40,6 +42,29 @@ cd "$ROOT"
 # neuter the gate.
 check_log() {
     local log_file="$1"
+    local unknown_groups
+    # A `-Werror <group>` escalation is silently inert if the group name is
+    # wrong: the compiler reports `unknown warning group` and exits 0. That
+    # diagnostic is emitted at `<unknown>:0`, so the Sources/ prefilter below
+    # drops it and the gate it was meant to arm disappears with CI green. The
+    # toolchain floats (`xcode-version: latest-stable`), so a future compiler
+    # renaming a group would do exactly this. Checked first: an inert gate is
+    # worse than a warning, because it looks like coverage.
+    # `|| true`: grep exits 1 when it matches nothing, which under this
+    # script's `set -e` + pipefail would abort the clean case.
+    unknown_groups="$(grep -F '[#UnknownWarningGroup]' "$log_file" | sort -u || true)"
+
+    if [ -n "$unknown_groups" ]; then
+        echo ""
+        echo "Unknown warning group(s) — a -Werror escalation is not doing anything:"
+        echo ""
+        printf '%s\n' "$unknown_groups"
+        echo ""
+        echo "Fix the group name at the flag's call site (see ACTOR_ISOLATION_GATE in"
+        echo ".github/workflows/ci.yml), or drop the flag if the group is gone."
+        return 1
+    fi
+
     local offenders
     offenders="$(awk -v root="$ROOT/" '
         index($0, root) == 1 {
