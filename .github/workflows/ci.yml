@@ -66,6 +66,19 @@ jobs:
       - name: Install Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
 
+      # Swift 6 actor-isolation diagnostics are warnings, not errors, so a
+      # reverted Sendable conformance would regress with the build and the
+      # full suite still green. Package-wide -warnings-as-errors is not
+      # usable: the mlx.metallib build plugin carries pre-existing
+      # PackagePlugin Path -> URL deprecations that are their own migration.
+      # The gate below is scoped to Sources/ instead. It has to be the job's
+      # first build — the compiler only emits warnings for files it actually
+      # recompiles, so running it after a warm build would pass on anything.
+      # --enable-code-coverage matches the test step's flags so those build
+      # products get reused.
+      - name: Fail on compiler warnings under Sources/
+        run: Scripts/check-source-warnings.sh --enable-code-coverage
+
       - name: Test with coverage
         run: swift test --enable-code-coverage
 
