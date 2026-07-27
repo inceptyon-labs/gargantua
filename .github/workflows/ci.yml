@@ -37,6 +37,13 @@ jobs:
       - name: Run SwiftFormat (lint)
         run: swiftformat --lint .
 
+      # A pure text scan, so it belongs with the linters rather than the test
+      # job's cold-build sequence. `@unchecked Sendable` opts a type out of
+      # the compiler's data-race checking; this pins the count so new ones
+      # have to be justified in review rather than accumulating quietly.
+      - name: Guard @unchecked Sendable count under Sources/
+        run: Scripts/check-unchecked-sendable.sh
+
   test:
     name: Swift Tests
     # macos-15 with the latest stable Xcode is required: a transitive
