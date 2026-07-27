@@ -112,6 +112,10 @@ jobs:
           # step would pass green if the flag never reached the compiler and the
           # unlicensed suite simply re-ran.
           grep -q 'Every surface is denied authorization when the gate is blocked' licensed-test.log
+          # The gated build above never sets GARGANTUA_LICENSING, so warnings
+          # inside #if GARGANTUA_LICENSING branches are invisible to it. This
+          # log is from the build that does compile them.
+          Scripts/check-source-warnings.sh --check-log licensed-test.log
 
       - name: Enforce coverage floor (78%)
         run: Scripts/coverage-priorities.sh coverage.lcov --fail-under 78
