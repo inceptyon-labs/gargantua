@@ -6,8 +6,6 @@ import SwiftUI
 private let executionLogger = Logger(subsystem: "com.gargantua.core", category: "DeveloperToolsView")
 
 extension DeveloperToolsView {
-    /// Build the initial phase from availability results, seeding installed tools
-    /// with `.loading` so the UI can show spinners while previews resolve.
     // These helpers are pure functions over value types — they read no
     // MainActor-isolated state (no `session`, no view state) — so they are
     // marked `nonisolated` to opt out of the @MainActor isolation SwiftUI's
@@ -15,6 +13,8 @@ extension DeveloperToolsView {
     // this, calling them from a non-MainActor context (as several unit
     // tests do synchronously) trips a Swift 6 runtime isolation-assertion
     // trap when swift-testing schedules that test off the main actor.
+    /// Build the initial phase from availability results, seeding installed tools
+    /// with `.loading` so the UI can show spinners while previews resolve.
     nonisolated static func deriveInitialPhase(availabilities: [DeveloperToolAvailability]) -> Phase {
         let installed = availabilities.filter(\.isInstalled)
         if installed.isEmpty {
