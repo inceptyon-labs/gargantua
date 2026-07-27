@@ -20,11 +20,12 @@ extension DeveloperToolsView {
         return .ready(availabilities: availabilities, previews: previews)
     }
 
-    // The four helpers below are pure functions over Sendable value types and
+    // The three helpers below are pure functions over Sendable value types and
     // read no view state, so they are `nonisolated` to opt out of the
     // @MainActor isolation SwiftUI's `View` conformance infers for the whole
-    // type. Their unit tests are not @MainActor; without this, calling them
-    // synchronously from those tests is a compile error under Swift 6.
+    // type. Their unit tests are not @MainActor, and calling a MainActor
+    // member from one traps at runtime under Swift 6 — note this compiles
+    // either way, so the suite, not the build, is what catches a regression.
     nonisolated static func operations(for preview: DeveloperToolPreview) -> [DeveloperToolCleanupOperation] {
         DeveloperToolCleanupOperation.allCases.filter {
             $0.tool == preview.tool && $0.isApplicable(to: preview)
@@ -73,7 +74,10 @@ extension DeveloperToolsView {
         }
     }
 
-    nonisolated static func refreshFailureMessage(operation: DeveloperToolCleanupOperation, error: Error) -> String {
+    // Not `nonisolated`: no test calls this, and `error` is a non-Sendable
+    // existential — keeping it MainActor-isolated leaves the isolation
+    // question for `Error` where its only caller already is.
+    static func refreshFailureMessage(operation: DeveloperToolCleanupOperation, error: Error) -> String {
         let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         return "\(operation.label) completed, but the preview refresh failed: \(message)"
     }
