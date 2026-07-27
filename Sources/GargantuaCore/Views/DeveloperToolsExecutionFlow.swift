@@ -20,12 +20,11 @@ extension DeveloperToolsView {
         return .ready(availabilities: availabilities, previews: previews)
     }
 
-    // The three helpers below are pure functions over Sendable value types and
-    // read no view state, so they are `nonisolated` to opt out of the
-    // @MainActor isolation SwiftUI's `View` conformance infers for the whole
-    // type. Their unit tests are not @MainActor, and calling a MainActor
-    // member from one traps at runtime under Swift 6 — note this compiles
-    // either way, so the suite, not the build, is what catches a regression.
+    // The three helpers below are pure over Sendable value types and read no
+    // view state, so they are `nonisolated` to opt out of the @MainActor
+    // isolation SwiftUI's `View` conformance infers for the whole type. Their
+    // tests are not @MainActor. See HealthGaugeView for why the build alone
+    // won't catch a regression.
     nonisolated static func operations(for preview: DeveloperToolPreview) -> [DeveloperToolCleanupOperation] {
         DeveloperToolCleanupOperation.allCases.filter {
             $0.tool == preview.tool && $0.isApplicable(to: preview)

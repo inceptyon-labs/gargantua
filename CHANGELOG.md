@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings no longer describes the MCP SSE endpoint as exposing "read-only" tools; it exposes `clean`, which deletes files.
 - The README no longer claims exposing the destructive MCP registry requires opting in — the shipped binary registers both registries.
 - Dropped the unused `trivy.yaml`; the OSV dependency scanner it duplicated now runs in CI instead of only by hand.
+- The package builds in Swift 6 language mode. `swift-tools-version` moved from 5.10 to 6.0, which puts every target — including the test targets — under full data-race checking, so concurrency mistakes are compile errors rather than warnings. Contributors now need a Swift 6 toolchain, which the macOS 15 + latest-Xcode requirement already implied.
 
 ## [0.4.7] - 2026-07-11
 

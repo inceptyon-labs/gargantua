@@ -94,13 +94,12 @@ extension BackgroundItemsView {
         }
     }
 
+    // `nonisolated`: pure over Sendable value types, and its tests are not
+    // @MainActor. See HealthGaugeView for why the build alone won't catch a
+    // regression.
     /// What to do with a pending pre-selection given the current scan:
     /// expand on a hit; on a miss, rescan once (the cached scan may predate
     /// the item) before declaring the path missing.
-    ///
-    /// `nonisolated`: pure function over Sendable value types, no view state —
-    /// opts out of the @MainActor isolation `View` conformance infers, so the
-    /// non-@MainActor unit tests can call it synchronously under Swift 6.
     nonisolated static func preSelectionStep(
         matchFound: Bool,
         alreadyRescannedForPath: Bool

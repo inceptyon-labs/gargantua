@@ -14,7 +14,7 @@ let schedulerInfoPlistPath = URL(fileURLWithPath: #filePath)
     .path
 
 // GARGANTUA_LICENSING=1 in the environment turns on the commercial-licensing
-// build path (trial clock, license gate enforcement, FastSpring activation).
+// build path (trial clock, license gate enforcement, Polar.sh activation).
 // Off by default — `swift build` from a fresh clone produces a fully unlocked
 // AGPL binary. Release CI sets the env var; see Scripts/release/build.sh.
 let licensingEnabled = Context.environment["GARGANTUA_LICENSING"] == "1"

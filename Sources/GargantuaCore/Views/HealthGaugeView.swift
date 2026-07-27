@@ -38,6 +38,13 @@ public struct HealthGaugeView: View {
     // isolation SwiftUI's `View` conformance infers for the whole type, so the
     // non-@MainActor unit tests can construct and read a `HealthGaugeView`
     // synchronously under Swift 6.
+    //
+    // Dropping `nonisolated` from a helper like this still compiles: `View` is
+    // @preconcurrency, so the offending call is only a warning
+    // ([#ActorIsolatedCall]), not an error. It then traps at runtime (SIGTRAP)
+    // once the full suite runs the test off the main actor — and a filtered
+    // single-suite run can still pass. The full `swift test`, not the build,
+    // is the gate.
 
     /// Disk usage 0-1 (drives the outer ring; thresholded color).
     public nonisolated let diskUsage: Double

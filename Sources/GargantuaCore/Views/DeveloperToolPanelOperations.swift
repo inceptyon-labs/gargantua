@@ -83,13 +83,12 @@ extension DeveloperToolPanel {
         }
     }
 
+    // `nonisolated`: pure over Sendable value types, and its tests are not
+    // @MainActor. See HealthGaugeView for why the build alone won't catch a
+    // regression.
     /// Appends an orphan formula count to the `.homebrewAutoremove` estimate
     /// line (e.g. " · 3 formulae"). Empty for every other operation, and for
     /// autoremove itself when there are no orphans to report.
-    ///
-    /// `nonisolated`: pure function over Sendable value types, no view state —
-    /// opts out of the @MainActor isolation `View` conformance infers, so the
-    /// non-@MainActor unit tests can call it synchronously under Swift 6.
     nonisolated static func autoremoveFormulaSuffix(
         _ operation: DeveloperToolCleanupOperation,
         preview: DeveloperToolPreview

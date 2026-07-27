@@ -64,13 +64,12 @@ public struct CleanupSummaryView: View {
         case failed // zero succeeded, >0 failed
     }
 
+    // `nonisolated` here and on `mergeRetry`: both are pure over Sendable value
+    // types, and their tests are not @MainActor. See HealthGaugeView for why
+    // the build alone won't catch a regression.
     /// Classify a result for header presentation. A result with no items at
     /// all is treated as `.complete` to preserve the "nothing failed" framing
     /// the view showed historically.
-    ///
-    /// `nonisolated`: pure function over Sendable value types, no view state —
-    /// opts out of the @MainActor isolation `View` conformance infers, so the
-    /// non-@MainActor unit tests can call it synchronously under Swift 6.
     nonisolated static func outcome(for result: CleanupResult) -> SummaryOutcome {
         if result.failedItems.isEmpty {
             return .complete
