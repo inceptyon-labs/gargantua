@@ -51,12 +51,6 @@ public final class MCPStdioTransport: Sendable {
     private let handler: MCPMessageHandler
     private let log: MCPTransportLog?
 
-    // JSONEncoder/JSONDecoder are not Sendable, so storing them would block a
-    // checked `Sendable` conformance on this class. Building one per message is
-    // the honest alternative: MCP stdio traffic is request-paced, so the
-    // allocation is not on any hot path. The wire-format configuration itself
-    // lives in `MCPWireCoding`, shared with the SSE transport.
-
     public init(
         source: MCPMessageSource,
         sink: MCPMessageSink,
@@ -103,7 +97,7 @@ public final class MCPStdioTransport: Sendable {
 
         let request: MCPRequest
         do {
-            request = try MCPWireCoding.makeDecoder().decode(MCPRequest.self, from: data)
+            request = try MCPWireCoding.decoder.decode(MCPRequest.self, from: data)
         } catch {
             // On parse failure, try to salvage the request id so a misnamed
             // method (valid JSON, wrong shape) still gets a correlatable
@@ -158,7 +152,7 @@ public final class MCPStdioTransport: Sendable {
     @discardableResult
     private func writeEncoded(_ response: MCPResponse) -> Bool {
         do {
-            let data = try MCPWireCoding.makeEncoder().encode(response)
+            let data = try MCPWireCoding.encoder.encode(response)
             guard let line = String(data: data, encoding: .utf8) else {
                 log?("unable to decode response as UTF-8 string")
                 return false

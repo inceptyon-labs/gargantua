@@ -11,7 +11,7 @@ struct MCPWireCodingTests {
 
     @Test("wire encoder sorts keys and leaves slashes unescaped")
     func wireEncoderFormatting() throws {
-        let data = try MCPWireCoding.makeEncoder()
+        let data = try MCPWireCoding.encoder
             .encode(Payload(zulu: "tools/call", alpha: "1"))
 
         // Exact match, deliberately. `alpha` before `zulu` is `.sortedKeys`;
@@ -30,8 +30,8 @@ struct MCPWireCodingTests {
             code: MCPErrorCode.methodNotFound,
             message: "Method not found: tools/unknown"
         )
-        let data = try MCPWireCoding.makeEncoder().encode(response)
-        let decoded = try MCPWireCoding.makeDecoder().decode(MCPResponse.self, from: data)
+        let data = try MCPWireCoding.encoder.encode(response)
+        let decoded = try MCPWireCoding.decoder.decode(MCPResponse.self, from: data)
 
         #expect(decoded.id == .int(9))
         #expect(decoded.error?.code == MCPErrorCode.methodNotFound)

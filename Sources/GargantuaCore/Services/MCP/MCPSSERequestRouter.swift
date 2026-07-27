@@ -20,8 +20,6 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     private let handler: MCPConnectionMessageHandler
     private let log: MCPTransportLog?
     private let onClose: ConnectionCloseHandler?
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
     private let lock = NSLock()
     private var sessions: [String: EventSink] = [:]
 
@@ -34,8 +32,6 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         self.handler = handler
         self.log = log
         self.onClose = onClose
-        self.encoder = MCPWireCoding.makeEncoder()
-        self.decoder = MCPWireCoding.makeDecoder()
     }
 
     /// Opens a new SSE session if the request authorizes; otherwise returns a rejection response.
@@ -118,7 +114,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
 
         let rpcRequest: MCPRequest
         do {
-            rpcRequest = try decoder.decode(MCPRequest.self, from: request.body)
+            rpcRequest = try MCPWireCoding.decoder.decode(MCPRequest.self, from: request.body)
         } catch {
             log?("SSE JSON-RPC decode failed: \(error)")
             return .text(400, "Bad Request", "Invalid JSON-RPC request.")
@@ -186,7 +182,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     }
 
     private func encodedResponseLine(_ response: MCPResponse, fallbackID: MCPRequestID) -> String {
-        if let data = try? encoder.encode(response),
+        if let data = try? MCPWireCoding.encoder.encode(response),
            let line = String(data: data, encoding: .utf8) {
             return line
         }
@@ -195,7 +191,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
             code: MCPErrorCode.internalError,
             message: "Response payload failed to encode"
         )
-        let data = (try? encoder.encode(fallback)) ?? Data()
+        let data = (try? MCPWireCoding.encoder.encode(fallback)) ?? Data()
         return String(data: data, encoding: .utf8) ?? #"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Internal error"}}"#
     }
 
