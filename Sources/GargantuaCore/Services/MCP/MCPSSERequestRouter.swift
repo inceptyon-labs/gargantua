@@ -34,9 +34,8 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         self.handler = handler
         self.log = log
         self.onClose = onClose
-        self.encoder = JSONEncoder()
-        self.encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        self.decoder = JSONDecoder()
+        self.encoder = MCPWireCoding.makeEncoder()
+        self.decoder = MCPWireCoding.makeDecoder()
     }
 
     /// Opens a new SSE session if the request authorizes; otherwise returns a rejection response.
