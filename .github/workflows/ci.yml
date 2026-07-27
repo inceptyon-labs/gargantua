@@ -67,6 +67,16 @@ jobs:
     # build instead of trapping in CI. It is a no-op today — the tree emits
     # zero [#ActorIsolatedCall] diagnostics — so it can gate future callers
     # without first fixing anything.
+    #
+    # The check-source-warnings.sh gate below does not cover this: it matches
+    # warnings whose path is under Sources/, and the offending caller is
+    # always under Tests/. Escalating one diagnostic group rather than
+    # turning on -warnings-as-errors package-wide, for the same
+    # BuildMetallibPlugin reason documented on that script.
+    #
+    # Every Swift invocation below passes it identically — mismatched flags
+    # would also cost the test step a full rebuild instead of reusing the
+    # warning gate's build products.
     env:
       ACTOR_ISOLATION_GATE: -Xswiftc -Werror -Xswiftc ActorIsolatedCall
 
