@@ -14,4 +14,17 @@ struct AuditWriterTests {
     func cleanup(_ dir: URL) {
         try? FileManager.default.removeItem(at: dir)
     }
+
+    func makeEntry(path: String, age: TimeInterval = 0, now: Date = Date()) -> AuditEntry {
+        AuditEntry(
+            id: UUID(),
+            timestamp: now.addingTimeInterval(age),
+            tool: "native",
+            command: "clean",
+            files: [AuditFile(path: path, size: 100)],
+            safetyLevel: .safe,
+            confirmationMethod: .singleButton,
+            bytesFreed: 100
+        )
+    }
 }
