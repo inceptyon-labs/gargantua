@@ -28,15 +28,48 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
 fi
 
 # Raise only with a reviewed justification; lower whenever an opt-out goes away.
-BASELINE=64
+BASELINE=63
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# --include='*.swift' so a doc or fixture mentioning the attribute cannot
-# move the count. `|| true` because grep exits 1 on no matches, which is a
-# legitimate (if currently unreachable) state under `set -e`.
-occurrences="$(grep -rn --include='*.swift' '@unchecked Sendable' Sources/ | sort || true)"
+# A gate that fails open is worse than no gate, so bail loudly rather than
+# letting `set -e` surface this as a bare non-zero exit.
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "error: python3 is required by this gate but was not found" >&2
+    exit 2
+fi
+
+# Scanned in python rather than grep for two reasons a literal-string grep
+# gets wrong:
+#
+#   * `@unchecked` and `Sendable` are separate tokens, so Swift accepts any
+#     whitespace between them - including a newline. `: @unchecked\n Sendable`
+#     compiles, and no formatter here rejoins it, so a literal grep would miss
+#     a real opt-out.
+#   * A `///` comment *explaining* an opt-out is prose, not an opt-out. Counting
+#     it means comment edits move the number with no safety change.
+occurrences="$(python3 - <<'PY'
+import pathlib
+import re
+
+ATTRIBUTE = re.compile(r"@unchecked\s+Sendable")
+
+# Strips `//` line comments, which covers `///` doc comments too. A `/* */`
+# block comment mentioning the attribute would still count; that has not come
+# up in this tree and parsing for it costs more than it saves.
+LINE_COMMENT = re.compile(r"//.*")
+
+for path in sorted(pathlib.Path("Sources").rglob("*.swift")):
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    # Blank the comments in place rather than dropping the lines, so the line
+    # numbers reported below still match the file on disk.
+    code = "\n".join(LINE_COMMENT.sub("", line) for line in raw.split("\n"))
+    for match in ATTRIBUTE.finditer(code):
+        print(f"{path}:{code.count(chr(10), 0, match.start()) + 1}")
+PY
+)"
+
 count="$(printf '%s' "$occurrences" | grep -c . || true)"
 
 if [ "$count" -gt "$BASELINE" ]; then
