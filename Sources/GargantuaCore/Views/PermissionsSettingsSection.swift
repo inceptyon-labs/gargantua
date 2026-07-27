@@ -53,7 +53,7 @@ struct PermissionsSettingsSection: View {
         .onReceive(timer) { _ in
             hasFullDiskAccess = PermissionChecker.hasFullDiskAccess
             let polledStatus = SMAppServicePrivilegedHelperInstaller().status()
-            if polledStatus != helperStatus {
+            if Self.pollClearsRegisterError(previous: helperStatus, polled: polledStatus) {
                 // A stale `registerError` from an earlier failed `register()`
                 // call would otherwise outlive the condition it described —
                 // e.g. the user fixes things in System Settings and the row
@@ -74,6 +74,41 @@ struct PermissionsSettingsSection: View {
         case grantedBadge
         case registrationRetryButton
         case notBundledLabel
+    }
+
+    /// Outcome of retrying registration from the "Open Settings" button.
+    /// `register()` throwing most often means the status was `.notFound` —
+    /// deep-linking to Login Items & Extensions in that case would send the
+    /// user to hunt for a toggle that was never created, so the two outcomes
+    /// carry different behavior (open the pane vs. don't) in the type itself
+    /// rather than in a call site that could drift.
+    enum RegistrationRetryOutcome: Equatable {
+        case registered(PrivilegedHelperStatus)
+        case failed(String)
+    }
+
+    /// Re-registers the helper via `installer` and reports what happened,
+    /// without touching any `@State` — the view applies the result. Pure so
+    /// tests can drive both the success and throwing paths with a stub
+    /// installer.
+    static func registrationRetryOutcome(
+        installer: any PrivilegedUninstallHelperInstalling
+    ) -> RegistrationRetryOutcome {
+        do {
+            return .registered(try installer.register())
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    /// Whether a poll that saw `polled` after `previous` should drop a stale
+    /// `registerError`. Any status change means the world has moved since the
+    /// error was recorded, so it no longer describes the current state.
+    static func pollClearsRegisterError(
+        previous: PrivilegedHelperStatus,
+        polled: PrivilegedHelperStatus
+    ) -> Bool {
+        polled != previous
     }
 
     // Internal (not `private`) so tests can construct this view and assert it
@@ -118,12 +153,13 @@ struct PermissionsSettingsSection: View {
                     // actually succeeded. `.notFound` (the status `register()`
                     // most often fails from) would otherwise send the user to a
                     // toggle that was never created.
-                    do {
-                        helperStatus = try SMAppServicePrivilegedHelperInstaller().register()
+                    switch Self.registrationRetryOutcome(installer: SMAppServicePrivilegedHelperInstaller()) {
+                    case .registered(let status):
+                        helperStatus = status
                         registerError = nil
                         openURL(loginItemsURL)
-                    } catch {
-                        registerError = error.localizedDescription
+                    case .failed(let message):
+                        registerError = message
                     }
                 }
             case .notBundledLabel:

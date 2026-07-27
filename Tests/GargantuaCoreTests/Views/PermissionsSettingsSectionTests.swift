@@ -68,4 +68,76 @@ struct PermissionsSettingsSectionTests {
         #expect(view.helperTrailingAccessory == .registrationRetryButton)
         #expect(view.helperDetailColor == GargantuaColors.review)
     }
+
+    // MARK: - Registration retry outcome
+
+    //
+    // Issue #9: users hitting `.notFound` had `register()` fail and were sent
+    // to hunt for a Login Items toggle that was never created. These pin the
+    // decision (not just the button's inline closure, which tests can't
+    // drive) that a failed `register()` never yields the "open Login Items"
+    // outcome.
+
+    @Test("Successful registration reports the registered status")
+    func registrationRetrySucceeds() {
+        let installer = StubPrivilegedUninstallHelperInstaller(registerResult: .success(.enabled))
+
+        let outcome = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(outcome == .registered(.enabled))
+    }
+
+    @Test("Failed registration reports the error message and never the registered outcome")
+    func registrationRetryFails() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            registerResult: .failure(StubInstallerError(message: "boom"))
+        )
+
+        let outcome = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(outcome == .failed("boom"))
+        #expect(outcome != .registered(.enabled))
+    }
+
+    // MARK: - Poll clearing a stale registerError
+
+    @Test("Poll clears a stale registerError when the status changed")
+    func pollClearsErrorWhenStatusChanged() {
+        #expect(
+            PermissionsSettingsSection.pollClearsRegisterError(previous: .notFound, polled: .enabled)
+        )
+    }
+
+    @Test("Poll leaves registerError alone when the status is unchanged")
+    func pollKeepsErrorWhenStatusUnchanged() {
+        #expect(
+            !PermissionsSettingsSection.pollClearsRegisterError(previous: .notFound, polled: .notFound)
+        )
+    }
+}
+
+/// Test double for `PrivilegedUninstallHelperInstalling` whose `register()`
+/// result is fixed at construction, so tests can drive the success and
+/// throwing paths of `registrationRetryOutcome` without touching real
+/// `SMAppService` state.
+private struct StubPrivilegedUninstallHelperInstaller: PrivilegedUninstallHelperInstalling {
+    var statusResult: PrivilegedHelperStatus = .notFound
+    var registerResult: Result<PrivilegedHelperStatus, StubInstallerError>
+    var unregisterResult: Result<PrivilegedHelperStatus, StubInstallerError> = .success(.notRegistered)
+
+    func status() -> PrivilegedHelperStatus { statusResult }
+
+    func register() throws -> PrivilegedHelperStatus {
+        try registerResult.get()
+    }
+
+    func unregister() throws -> PrivilegedHelperStatus {
+        try unregisterResult.get()
+    }
+}
+
+private struct StubInstallerError: Error, LocalizedError {
+    let message: String
+
+    var errorDescription: String? { message }
 }
