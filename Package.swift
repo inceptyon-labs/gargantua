@@ -21,6 +21,10 @@ let licensingSwiftSettings: [SwiftSetting] = licensingEnabled
 // swiftSettings hook, so every Swift target appends this array.
 let swift6SwiftSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
 
+// Precomputed rather than inlined at each call site — the manifest is a single
+// large expression and the type checker times out concatenating arrays inline.
+let licensingAndSwift6SwiftSettings: [SwiftSetting] = licensingSwiftSettings + swift6SwiftSettings
+
 let package = Package(
     name: "Gargantua",
     platforms: [
@@ -50,6 +54,7 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/Gargantua",
+            swiftSettings: swift6SwiftSettings,
             plugins: [
                 "BuildMetallibPlugin"
             ]
@@ -67,13 +72,15 @@ let package = Package(
         .executableTarget(
             name: "GargantuaMCP",
             dependencies: ["GargantuaCore", "GargantuaLicensing"],
-            path: "Sources/GargantuaMCP"
+            path: "Sources/GargantuaMCP",
+            swiftSettings: swift6SwiftSettings
         ),
         .executableTarget(
             name: "GargantuaScheduler",
             dependencies: ["GargantuaCore"],
             path: "Sources/GargantuaScheduler",
             exclude: ["Info.plist"],
+            swiftSettings: swift6SwiftSettings,
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker",
@@ -90,7 +97,8 @@ let package = Package(
         .executableTarget(
             name: "GargantuaPrivilegedHelper",
             dependencies: ["GargantuaCore"],
-            path: "Sources/GargantuaPrivilegedHelper"
+            path: "Sources/GargantuaPrivilegedHelper",
+            swiftSettings: swift6SwiftSettings
         ),
         .target(
             name: "GargantuaCore",
@@ -116,7 +124,7 @@ let package = Package(
         .target(
             name: "GargantuaLicensing",
             path: "Sources/GargantuaLicensing",
-            swiftSettings: licensingSwiftSettings
+            swiftSettings: licensingAndSwift6SwiftSettings
         ),
         .testTarget(
             name: "GargantuaCoreTests",
@@ -132,7 +140,7 @@ let package = Package(
             name: "GargantuaLicensingTests",
             dependencies: ["GargantuaLicensing"],
             path: "Tests/GargantuaLicensingTests",
-            swiftSettings: licensingSwiftSettings
+            swiftSettings: licensingAndSwift6SwiftSettings
         )
     ]
 )
