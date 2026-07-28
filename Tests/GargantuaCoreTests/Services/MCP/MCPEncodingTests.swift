@@ -67,7 +67,7 @@ struct MCPEncodingTests {
         let wire = try MCPWireCoding.encoder.encode(response)
         let json = try #require(String(data: wire, encoding: .utf8))
         #expect(json.contains("\"\(Self.fixedISO)\""))
-        #expect(!json.contains("797610600"))  // reference-date seconds
+        #expect(!json.contains("797610600")) // reference-date seconds
     }
 
     @Test("tool arguments decode an ISO-8601 string into a Date field")
