@@ -5,9 +5,11 @@ import Testing
 /// End-to-end lifecycle coverage for `MCPSSETransport` over a real socket:
 /// open an SSE stream, sever the client connection, then drive it hard
 /// enough that `NWConnection` notices — and assert the session is cleaned up
-/// on the server side rather than leaked. Covers two ways a client can go
-/// away: an RST surfaced by a failed write after a `/message` POST, and a
-/// plain graceful FIN with no POST at all.
+/// on the server side rather than leaked. Covers three ways a client can go
+/// away: an RST surfaced by a failed write after a `/message` POST, a plain
+/// graceful FIN with no POST at all, and a graceful FIN after the client has
+/// written on the SSE socket — which is what forces the drain loop to re-arm
+/// rather than get by on its first receive.
 ///
 /// This is **not** a data-race regression test. It runs against a real
 /// listening socket in the order "open, then die," so the close is observed
@@ -135,6 +137,19 @@ struct MCPSSETransportLifecycleTests {
     /// connection is not reusable and the transport is right to discard
     /// whatever arrives. What is asserted is only that discarding it does not
     /// cost us the disconnect.
+    ///
+    /// Writing the byte and immediately closing would NOT prove anything: TCP
+    /// is free to carry that byte and the FIN in one segment, which the
+    /// transport sees as a single receive completion with both data and
+    /// `isComplete` — and that completion cancels the connection whether or
+    /// not the loop re-arms, so a broken re-arm would still pass. The POST
+    /// round trip below is the barrier that separates them, and it is
+    /// ordering, not timing: every connection callback runs on the transport's
+    /// one serial queue, so the receive completion carrying "X" is enqueued
+    /// (and run) before the POST's bytes can even be accepted on that same
+    /// queue. By the time the resulting `message` event arrives back here, the
+    /// drain loop has provably already decided whether to re-arm, and only
+    /// then does the client close.
     @Test("a client that writes on its SSE socket before disconnecting still closes its session")
     func writeThenDisconnectClosesItsSession() throws {
         let recorder = ConnectionCloseRecorder()
@@ -158,6 +173,14 @@ struct MCPSSETransportLifecycleTests {
         // Consume the receive armed after the `.opened` write. Only a re-armed
         // one can go on to observe the close below.
         try client.write("X")
+
+        // Barrier — see the note above. Reading this event proves the "X"
+        // receive completion has already run on the transport's serial queue,
+        // so the close below lands on a connection with either a re-armed
+        // receive or none at all, never on the same completion as the byte.
+        try Self.postMessage(port: port, sessionID: sessionID)
+        _ = try client.read(until: "\n\n")
+
         client.closeGracefully()
 
         let deadline = Date().addingTimeInterval(5)
