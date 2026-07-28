@@ -32,23 +32,44 @@ public final class AuditWriter: Sendable {
     /// Support is where this app already keeps durable state and no bundled
     /// rule reaches a file at its root.
     ///
-    /// This relocation is not coordinated across versions: `GargantuaMCP` is a
-    /// separately-launched, long-lived process that reads this path once at
-    /// startup, so an MCP server started before an upgrade keeps flocking the
-    /// old Logs path until its client restarts it, while the upgraded app
-    /// flocks the new Application Support path. During that window the two no
-    /// longer exclude each other, so an MCP append can land between an
-    /// in-app purge's read and its atomic rename and be silently discarded.
+    /// This relocation is not coordinated across versions — see `legacyLockFile`
+    /// for how that upgrade window is closed.
     public let lockFile: URL
 
-    /// Take an exclusive `flock` on the sidecar, returning the locked descriptor.
+    /// Sidecar the pre-relocation build locked, dual-locked during the upgrade
+    /// window so a peer still running that build keeps excluding us.
+    ///
+    /// `GargantuaMCP` is a separately-launched, long-lived process that resolves
+    /// its writer once at startup (`Sources/GargantuaMCP/main.swift`), so a server
+    /// started before the relocation keeps flocking
+    /// `~/Library/Logs/Gargantua/audit.lock` until its client restarts it. Taking
+    /// that lock too — always *before* `lockFile`, one fixed order for every
+    /// current build — restores the exclusion for that window. A pre-relocation
+    /// peer only ever takes this one lock, so it cannot be the other half of a
+    /// deadlock cycle.
+    ///
+    /// `nil` whenever there is nothing to migrate from. An explicit
+    /// `logDirectory` or `lockDirectory` never underwent the relocation, and a
+    /// legacy path that resolves to `lockFile` would self-deadlock:
+    /// `acquireDescriptor` opens a fresh descriptor per call and `flock`
+    /// conflicts between distinct open file descriptions, so the second
+    /// acquisition would block on the first until the timeout.
+    ///
+    /// Living under `~/Library/Logs` is tolerable here in a way it was not for
+    /// `lockFile`: if the upstream `*/Gargantua` exclusion on `system_logs` ever
+    /// narrows and a Deep Clean unlinks this sidecar, current builds still
+    /// exclude each other through `lockFile`. Remove one release after the
+    /// relocation ships.
+    public let legacyLockFile: URL?
+
+    /// Take an exclusive `flock` on one sidecar, returning the locked descriptor.
     ///
     /// `flock` conflicts between distinct open file descriptions, so this orders
     /// separate processes — the app and the MCP server — and separate
     /// `AuditWriter` instances within one process. It is NOT reentrant: each
-    /// call opens a fresh descriptor, so a nested call self-deadlocks against
-    /// the lock its own caller already holds.
-    private func acquireFileLock() throws -> Int32 {
+    /// call opens a fresh descriptor, so calling it twice for the same file
+    /// self-deadlocks until `deadline`.
+    private func acquireDescriptor(at url: URL, deadline: Date) throws -> Int32 {
         // The sidecar no longer necessarily lives in the log directory (see
         // `init`), and `open(O_CREAT)` will not create missing parents, so the
         // directory is created here first. The failure's POSIX errno is
@@ -63,7 +84,7 @@ public final class AuditWriter: Sendable {
         var lockDirectoryErrno: Int32?
         do {
             try FileManager.default.createDirectory(
-                at: lockFile.deletingLastPathComponent(),
+                at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
         } catch {
@@ -78,7 +99,7 @@ public final class AuditWriter: Sendable {
         // opening for write fails with EACCES when the log directory is
         // read-only, or when the sidecar was created by a differently
         // privileged process (one `sudo` run leaves it root-owned).
-        let fd = Darwin.open(lockFile.path, O_RDONLY | O_CREAT, 0o644)
+        let fd = Darwin.open(url.path, O_RDONLY | O_CREAT, 0o644)
         guard fd >= 0 else {
             let openErrno = errno
             if let lockDirectoryErrno, [ENOENT, ENOTDIR, EACCES].contains(openErrno) {
@@ -89,7 +110,6 @@ public final class AuditWriter: Sendable {
 
         // Poll rather than block: LOCK_EX alone has no timeout, and an
         // unbounded wait on a peer process would hang the caller's thread.
-        let deadline = Date().addingTimeInterval(lockTimeout)
         while flock(fd, LOCK_EX | LOCK_NB) != 0 {
             let code = errno
             guard code == EINTR || code == EWOULDBLOCK, Date() < deadline else {
@@ -103,10 +123,32 @@ public final class AuditWriter: Sendable {
         return fd
     }
 
-    /// Release a descriptor returned by `acquireFileLock`.
-    private func releaseFileLock(_ fd: Int32) {
-        _ = flock(fd, LOCK_UN)
-        Darwin.close(fd)
+    /// Take every sidecar this build must hold, legacy first.
+    ///
+    /// One shared deadline covers the whole set, so dual-locking does not double
+    /// the worst-case wait `write(_:)` imposes on the main thread. A failure
+    /// part-way through releases what was already taken rather than stranding it.
+    private func acquireFileLock() throws -> [Int32] {
+        let deadline = Date().addingTimeInterval(lockTimeout)
+        var acquired: [Int32] = []
+        do {
+            if let legacyLockFile {
+                acquired.append(try acquireDescriptor(at: legacyLockFile, deadline: deadline))
+            }
+            acquired.append(try acquireDescriptor(at: lockFile, deadline: deadline))
+        } catch {
+            releaseFileLock(acquired)
+            throw error
+        }
+        return acquired
+    }
+
+    /// Release descriptors returned by `acquireFileLock`, in reverse order.
+    private func releaseFileLock(_ fds: [Int32]) {
+        for fd in fds.reversed() {
+            _ = flock(fd, LOCK_UN)
+            Darwin.close(fd)
+        }
     }
 
     /// Append one already-encoded line via an `O_APPEND` descriptor.
@@ -166,9 +208,15 @@ public final class AuditWriter: Sendable {
     /// resolves symlinks and normalises `.`/`..`/trailing slashes, so a
     /// symlinked home directory still matches; it does not detect a
     /// case-variant spelling of the same path on a case-insensitive volume.
+    ///
+    /// `legacyLockDirectory` overrides where the pre-relocation sidecar is
+    /// sought (see `legacyLockFile`). It exists so tests can exercise the
+    /// upgrade window without touching the real home directory; production
+    /// callers should omit it and let the default production layout apply.
     public init(
         logDirectory: URL? = nil,
         lockDirectory: URL? = nil,
+        legacyLockDirectory: URL? = nil,
         lockTimeout: TimeInterval = 2
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -184,6 +232,21 @@ public final class AuditWriter: Sendable {
             : dir
         self.lockFile = (lockDirectory ?? defaultLockDir)
             .appendingPathComponent("audit.lock")
+
+        // Only the default production layout was ever relocated, so only it has
+        // a legacy sidecar to dual-lock. `legacyLockDirectory` exists so tests
+        // can exercise the upgrade window without touching the real home
+        // directory. Comparison mirrors the `usesProductionLogDirectory` check:
+        // resolve symlinks and normalise before deciding the paths coincide.
+        let legacyLockDir = legacyLockDirectory
+            ?? ((lockDirectory == nil && usesProductionLogDirectory) ? productionLogDirectory : nil)
+        let legacyLock = legacyLockDir?.appendingPathComponent("audit.lock")
+        let currentLock = self.lockFile
+        let coincidesWithCurrent = legacyLock.map {
+            $0.resolvingSymlinksInPath().standardizedFileURL
+                == currentLock.resolvingSymlinksInPath().standardizedFileURL
+        } ?? false
+        self.legacyLockFile = coincidesWithCurrent ? nil : legacyLock
 
         self.lockTimeout = lockTimeout.isFinite ? min(max(lockTimeout, 0), 60) : 60
     }
@@ -211,8 +274,8 @@ public final class AuditWriter: Sendable {
         // the rewrite is in flight, so an unlocked append would land on the
         // inode about to be discarded and vanish with a success return. A
         // reported failure the caller can log beats a silent loss.
-        let fd = try acquireFileLock()
-        defer { releaseFileLock(fd) }
+        let fds = try acquireFileLock()
+        defer { releaseFileLock(fds) }
 
         try appendLine(lineData)
     }
@@ -395,8 +458,8 @@ public final class AuditWriter: Sendable {
         // Unlike write(_:), retention is deferrable — running the
         // read-modify-write without the lock is the very hazard this guards, so
         // a lock we can't take must fail the purge rather than proceed.
-        let fd = try acquireFileLock()
-        defer { releaseFileLock(fd) }
+        let fds = try acquireFileLock()
+        defer { releaseFileLock(fds) }
 
         let content = try String(contentsOf: logFile, encoding: .utf8)
         let lines = content.split(separator: "\n")
