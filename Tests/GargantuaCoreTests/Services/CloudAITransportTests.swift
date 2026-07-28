@@ -94,24 +94,3 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 
     override func stopLoading() {}
 }
-
-// MARK: - Test utilities
-
-final class Counter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _value = 0
-
-    func increment() { lock.withLock { _value += 1 } }
-    var value: Int { lock.withLock { _value } }
-}
-
-final class UncheckedSendableBox<T>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _value: T
-
-    init(_ value: T) { _value = value }
-    var value: T {
-        get { lock.withLock { _value } }
-        set { lock.withLock { _value = newValue } }
-    }
-}
