@@ -58,90 +58,54 @@ public struct DefaultProcessRunner: ProcessRunner {
         }
 
         drain.startDraining()
+        let watchdog = ProcessTimeoutWatchdog(pid: pid, timeout: timeout)
 
-        let coordinator = ProcessRunnerTimeoutCoordinator()
-        var watchdog: DispatchWorkItem?
-        if let timeout, timeout > 0 {
-            let deadline = DispatchTime.now() + timeout
-            let item = DispatchWorkItem {
-                // Atomically claim the timeout state. If the main thread has
-                // already marked natural completion, bail — we lost the race.
-                guard coordinator.tryArmTimeout() else { return }
-
-                // We always have a process group now (posix_spawn guarantees
-                // it), so killpg is always the right call. killpg on a dead
-                // group returns ESRCH, which is harmless.
-                _ = killpg(pid, SIGTERM)
-
-                // Escalate to SIGKILL after a grace period — but only if the
-                // main thread hasn't already reaped the child. Without this
-                // gate, the 0.5s-delayed killpg could land on a pgid that was
-                // recycled after waitpid freed it, hitting an innocent
-                // process group.
-                let killDeadline = DispatchTime.now() + 0.5
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: killDeadline) {
-                    if coordinator.shouldEscalateKill() {
-                        _ = killpg(pid, SIGKILL)
-                    }
-                }
-            }
-            watchdog = item
-            // `.userInitiated` rather than `.utility`: same reasoning as the
-            // drain queue above. On the GitHub macos-15 runner, `.utility`
-            // tasks were starved long enough that the watchdog fired AFTER
-            // short-lived children (e.g. `sleep 10` with `timeout: 0.2`) had
-            // already exited naturally — `tryArmTimeout` then refused to
-            // arm because the child was already reaped, and the test saw a
-            // successful run instead of `ProcessRunnerError.timedOut`. The
-            // SIGKILL escalation queued in the watchdog above runs at the
-            // same QoS for the same reason.
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: deadline, execute: item)
+        let status: Int32
+        do {
+            status = try Self.waitForExit(pid: pid)
+        } catch {
+            watchdog.markReaped()
+            watchdog.cancel()
+            throw error
         }
-
-        // waitpid blocks until the child exits (or is killed). WUNTRACED/WCONTINUED
-        // are not set, so we only return for exit events. Retry on EINTR so a
-        // stray signal delivered to our thread doesn't leave the child
-        // un-reaped and our status word uninitialized.
-        var status: Int32 = 0
-        var waitResult: pid_t = 0
-        repeat {
-            waitResult = waitpid(pid, &status, 0)
-        } while waitResult == -1 && errno == EINTR
-        if waitResult == -1 {
-            // Bubble up to the caller rather than silently reporting exit 0.
-            // ECHILD/EINVAL here indicate serious process-accounting failure
-            // (child reaped by someone else, bad args) — masking it would
-            // give callers fake success.
-            let waitErrno = errno
-            coordinator.markReaped()
-            watchdog?.cancel()
-            throw ProcessRunnerError.waitFailed(errno: waitErrno)
-        }
-
-        // Tell any pending SIGKILL escalation that the child is already
-        // reaped and its pid is eligible for reuse — don't signal it.
-        coordinator.markReaped()
-        // DispatchWorkItem.cancel() prevents a *queued* item from running but
-        // does NOT interrupt one already executing. The coordinator serializes
-        // "natural exit" vs "timeout fired" under a single lock to close the
-        // race at the instant of deadline.
-        let timedOut = coordinator.markNaturalCompletion() == .timedOut
-        watchdog?.cancel()
+        watchdog.markReaped()
+        let timedOut = watchdog.resolveTimedOut()
 
         drain.finish()
 
         if timedOut, let timeout {
             throw ProcessRunnerError.timedOut(seconds: timeout)
         }
+        return drain.makeOutput(exitCode: Self.exitCode(fromWaitStatus: status))
+    }
 
-        // waitpid status word layout on Darwin:
-        //   low 7 bits = signal that killed the process (0 if normal exit)
-        //   next 8 bits = exit code (valid only on normal exit)
-        // This matches Foundation.Process.terminationStatus conventions:
-        // the exit code on normal exit, the signal number on signal exit.
+    /// Blocks until the child exits (or is killed). WUNTRACED/WCONTINUED are
+    /// not set, so we only return for exit events. Retry on EINTR so a stray
+    /// signal delivered to our thread doesn't leave the child un-reaped and the
+    /// status word uninitialized.
+    ///
+    /// A `waitpid` failure bubbles up rather than silently reporting exit 0:
+    /// ECHILD/EINVAL indicate serious process-accounting failure (child reaped
+    /// by someone else, bad args) and masking it would give callers fake success.
+    private static func waitForExit(pid: pid_t) throws -> Int32 {
+        var status: Int32 = 0
+        var waitResult: pid_t = 0
+        repeat {
+            waitResult = waitpid(pid, &status, 0)
+        } while waitResult == -1 && errno == EINTR
+        guard waitResult != -1 else {
+            throw ProcessRunnerError.waitFailed(errno: errno)
+        }
+        return status
+    }
+
+    /// waitpid status word layout on Darwin:
+    ///   low 7 bits = signal that killed the process (0 if normal exit)
+    ///   next 8 bits = exit code (valid only on normal exit)
+    /// This matches `Foundation.Process.terminationStatus` conventions: the
+    /// exit code on normal exit, the signal number on signal exit.
+    private static func exitCode(fromWaitStatus status: Int32) -> Int32 {
         let termSignal = status & 0x7F
-        let exitCode: Int32 = termSignal == 0 ? (status >> 8) & 0xFF : termSignal
-
-        return drain.makeOutput(exitCode: exitCode)
+        return termSignal == 0 ? (status >> 8) & 0xFF : termSignal
     }
 }
