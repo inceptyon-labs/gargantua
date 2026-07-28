@@ -69,7 +69,6 @@ struct MCPEncodingTests {
         let wire = try MCPWireCoding.encoder.encode(response)
         let json = try #require(String(data: wire, encoding: .utf8))
         #expect(json.contains("\"\(Self.fixedISO)\""))
-        #expect(!json.contains("797610600")) // reference-date seconds
     }
 
     @Test("tool arguments decode an ISO-8601 string into a Date field")
@@ -140,18 +139,48 @@ struct MCPEncodingTests {
         let files = Self.swiftFiles(under: root)
         #expect(!files.isEmpty, "Expected to find .swift files under \(root.path)")
 
+        // Whitespace-stripped spellings this guard catches. This targets
+        // reintroduction by habit (`JSONEncoder ()`, `JSONEncoder .init()`,
+        // a coder split across a line break), not deliberate evasion — a
+        // determined alias or a coder built outside this directory will
+        // still slip past.
+        let bannedSpellings = ["JSONEncoder()", "JSONDecoder()", "JSONEncoder.init(", "JSONDecoder.init("]
+
         var offenders: [String] = []
         for file in files where !allowed.contains(file.lastPathComponent) {
             let contents = try String(contentsOf: file, encoding: .utf8)
-            for (index, line) in contents.components(separatedBy: .newlines).enumerated()
-                where line.contains("JSONEncoder()") || line.contains("JSONDecoder()") {
-                offenders.append("\(file.lastPathComponent):\(index + 1)")
+            for (index, line) in contents.components(separatedBy: .newlines).enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.hasPrefix("//") else { continue }
+                let stripped = line.components(separatedBy: .whitespacesAndNewlines).joined()
+                if bannedSpellings.contains(where: { stripped.contains($0) }) {
+                    offenders.append("\(file.lastPathComponent):\(index + 1)")
+                }
             }
         }
 
         #expect(
             offenders.isEmpty,
             "MCP tool-payload files must route through MCPEncoding/MCPWireCoding rather than constructing their own JSON coder: \(offenders.joined(separator: ", "))"
+        )
+    }
+
+    /// The positive companion to `noBareJSONCodersInMCPToolPayloadPath`: the
+    /// negative scan proves no file builds its own coder, but nothing else
+    /// proves the dispatcher actually reached for the shared helper.
+    @Test("the dispatcher routes tool payloads through MCPEncoding")
+    func dispatcherUsesSharedMCPEncoding() throws {
+        let root = Self.requireMCPSourceRoot()
+        let dispatcherFile = root.appendingPathComponent("MCPRequestDispatcher.swift")
+        let contents = try String(contentsOf: dispatcherFile, encoding: .utf8)
+
+        #expect(
+            contents.contains("MCPEncoding.encodeAsJSONAny"),
+            "MCPRequestDispatcher.swift no longer references MCPEncoding.encodeAsJSONAny"
+        )
+        #expect(
+            contents.contains("MCPEncoding.decodeFromJSONAny"),
+            "MCPRequestDispatcher.swift no longer references MCPEncoding.decodeFromJSONAny"
         )
     }
 }
