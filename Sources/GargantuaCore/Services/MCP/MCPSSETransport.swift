@@ -15,6 +15,9 @@ public final class MCPSSETransport: @unchecked Sendable {
     private var listener: NWListener?
     private let connectionsLock = NSLock()
     private var acceptedConnections: [WeakConnection] = []
+    /// Set by `stop()` so a connection accepted mid-shutdown is cancelled
+    /// rather than started. Guarded by `connectionsLock`, like `listener`.
+    private var isStopped = false
 
     /// Weak handle to an accepted connection, so `stop()` can cancel what is
     /// still live without the registry itself keeping anything alive.
@@ -76,7 +79,13 @@ public final class MCPSSETransport: @unchecked Sendable {
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
         }
+        connectionsLock.lock()
+        isStopped = false
         self.listener = listener
+        connectionsLock.unlock()
+
+        // Started outside the lock so no framework call runs while `accept` on
+        // `queue` could be waiting on it.
         listener.start(queue: queue)
     }
 
@@ -90,11 +99,18 @@ public final class MCPSSETransport: @unchecked Sendable {
     /// observed it complete. The one production caller is a signal handler
     /// that calls `exit(0)` immediately after; blocking here to wait on the
     /// transport's own queue would risk deadlocking it for no gain.
+    ///
+    /// `isStopped` is what makes the guarantee hold against a connection
+    /// arriving mid-shutdown: `listener.cancel()` is asynchronous, so a
+    /// `newConnectionHandler` block dispatched before it took effect can still
+    /// reach `accept` after the snapshot below has been taken and cleared.
+    /// Such a connection would be in nobody's list, so `accept` cancels it
+    /// outright instead of starting it.
     public func stop() {
-        listener?.cancel()
-        listener = nil
-
         connectionsLock.lock()
+        isStopped = true
+        let stoppingListener = listener
+        listener = nil
         let live = acceptedConnections.compactMap(\.value)
         acceptedConnections.removeAll()
         connectionsLock.unlock()
@@ -103,26 +119,58 @@ public final class MCPSSETransport: @unchecked Sendable {
         // `onConnectionClose` consumers, which take the router and dispatcher
         // locks. Nesting those under ours would invert the lock order the
         // router documents on `closeStream`.
+        stoppingListener?.cancel()
         for connection in live {
             connection.cancel()
         }
     }
 
     private func accept(_ connection: NWConnection) {
-        trackForShutdown(connection)
+        guard trackForShutdown(connection) else {
+            // `stop()` has already taken its snapshot, so nothing else holds a
+            // handle to this connection and nothing else would ever cancel it.
+            connection.cancel()
+            return
+        }
         connection.start(queue: queue)
         readRequest(from: connection, buffer: Data())
     }
 
     /// Records a connection so `stop()` can find it, dropping any entries
-    /// whose connection has already gone away. Pruning here — on the one path
-    /// that adds entries — keeps the array at roughly the live-connection
-    /// count without any teardown-side bookkeeping.
-    private func trackForShutdown(_ connection: NWConnection) {
+    /// whose connection has already gone away, and reports whether the
+    /// transport is still running.
+    ///
+    /// Pruning here — on the one path that adds entries — keeps the array at
+    /// roughly the live-connection count without any teardown-side
+    /// bookkeeping. Returns `false` once `stop()` has run so the caller can
+    /// cancel rather than start; see `stop()` for why that window exists.
+    ///
+    /// A connection tracked here can still be cancelled by `stop()` in the
+    /// moment before `accept` calls `start(queue:)` on it. Starting an
+    /// already-cancelled `NWConnection` is harmless — its receive completes
+    /// with an error and `readRequest` tears it down — so that ordering is
+    /// left alone rather than held under the lock across a framework call.
+    private func trackForShutdown(_ connection: NWConnection) -> Bool {
         connectionsLock.lock()
+        defer { connectionsLock.unlock() }
+        guard !isStopped else { return false }
         acceptedConnections.removeAll { $0.value == nil }
         acceptedConnections.append(WeakConnection(connection))
-        connectionsLock.unlock()
+        return true
+    }
+
+    /// Number of connections currently tracked for shutdown, counting any
+    /// whose connection has gone away but whose box has not been pruned yet.
+    ///
+    /// Internal purely so `MCPSSETransportLifecycleTests` can assert the
+    /// registry never becomes a second leak. Both properties that prevent it —
+    /// the boxes being weak, and the prune in `trackForShutdown` — are
+    /// invisible from outside this type, and removing either one leaves the
+    /// entire suite green.
+    var trackedConnectionCount: Int {
+        connectionsLock.lock()
+        defer { connectionsLock.unlock() }
+        return acceptedConnections.count
     }
 
     private func readRequest(from connection: NWConnection, buffer: Data) {

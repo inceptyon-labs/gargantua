@@ -228,20 +228,85 @@ struct MCPSSETransportLifecycleTests {
             "expected the SSE stream to open and return a session id"
         )
 
-        // The client is deliberately left connected and untouched — `client`
-        // stays in scope, so nothing here severs the socket. Only the
-        // transport's own shutdown can close this session.
-        transport.stop()
+        // The client is deliberately left connected and untouched, and the
+        // lifetime has to be made explicit: `client`'s last use is the read
+        // above, so ARC is free to release it here. Its `deinit` closes the
+        // socket, which the drain loop would observe as EOF and close the
+        // session on its own — the assertion below would then pass against a
+        // transport whose `stop()` did nothing at all.
+        withExtendedLifetime(client) {
+            transport.stop()
 
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline && !recorder.contains("sse:\(sessionID)") {
-            usleep(20_000)
+            let deadline = Date().addingTimeInterval(5)
+            while Date() < deadline && !recorder.contains("sse:\(sessionID)") {
+                usleep(20_000)
+            }
+
+            #expect(
+                recorder.contains("sse:\(sessionID)"),
+                "stop() left the connected client's SSE session standing (leaked)"
+            )
+        }
+    }
+
+    /// Guards the two properties that keep the shutdown registry from becoming
+    /// a second leak in place of the one this file's other tests cover: the
+    /// boxes are weak, and `trackForShutdown` prunes dead ones. Neither is
+    /// observable through the transport's behaviour — make the box strong, or
+    /// delete the prune, and every other test in the suite still passes while
+    /// the registry grows once per connection for the process lifetime.
+    ///
+    /// Counting is the only available signal, hence the internal
+    /// `trackedConnectionCount`. The bound is loose on purpose: a connection
+    /// whose session has just closed may not have deallocated yet, so one or
+    /// two live boxes are expected. Either mutant lands at `clientCount + 2`,
+    /// far outside it.
+    @Test("the shutdown registry does not accumulate connections that have gone away")
+    func shutdownRegistryPrunesDeadConnections() throws {
+        let clientCount = 6
+        let recorder = ConnectionCloseRecorder()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
+                tokenProvider: { nil },
+                handler: MCPSSETransportTestSupport.echoHandler,
+                onConnectionClose: { connection in recorder.record(connection) }
+            )
+        }
+        defer { transport.stop() }
+
+        for _ in 0 ..< clientCount {
+            let client = try TCPClient(port: Int(port))
+            try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            let response = try client.read(until: "\n\n")
+            let sessionID = try #require(
+                MCPSSETransportTestSupport.extractSessionID(from: response),
+                "expected the SSE stream to open and return a session id"
+            )
+            client.closeGracefully()
+
+            // Wait for the server to observe this disconnect before opening
+            // the next client, so each iteration leaves a dead connection
+            // behind for the following accept to prune.
+            let deadline = Date().addingTimeInterval(5)
+            while Date() < deadline && !recorder.contains("sse:\(sessionID)") {
+                usleep(20_000)
+            }
+            #expect(recorder.contains("sse:\(sessionID)"), "client's session never closed")
         }
 
-        #expect(
-            recorder.contains("sse:\(sessionID)"),
-            "stop() left the connected client's SSE session standing (leaked)"
-        )
+        // One more accept, purely to run the prune after the last client died.
+        let probe = try TCPClient(port: Int(port))
+        try probe.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        _ = try probe.read(until: "\n\n")
+
+        withExtendedLifetime(probe) {
+            let tracked = transport.trackedConnectionCount
+            #expect(
+                tracked <= 3,
+                "the shutdown registry held \(tracked) entries after \(clientCount) clients came and went; dead connections are accumulating instead of being pruned"
+            )
+        }
     }
 
     /// Opens an SSE stream over a real socket, reads the initial `endpoint`
