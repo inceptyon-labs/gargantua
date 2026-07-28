@@ -13,6 +13,26 @@ public final class MCPSSETransport: @unchecked Sendable {
     private let log: MCPTransportLog?
     private let queue: DispatchQueue
     private var listener: NWListener?
+    private let connectionsLock = NSLock()
+    private var acceptedConnections: [WeakConnection] = []
+
+    /// Weak handle to an accepted connection, so `stop()` can cancel what is
+    /// still live without the registry itself keeping anything alive.
+    ///
+    /// Deliberately weak rather than strong: a strong registry would need a
+    /// deregistration hook on every terminal path or it would become a second
+    /// leak, and `handle(_:on:)` *replaces* `stateUpdateHandler` on the SSE
+    /// path — so a deregistering handler installed in `accept` would be
+    /// silently clobbered there, leaving two places that both have to remember
+    /// to deregister. A weak box needs none of that: a connection that goes
+    /// away nils its own entry, and `trackForShutdown` prunes the corpses.
+    private final class WeakConnection {
+        weak var value: NWConnection?
+
+        init(_ value: NWConnection) {
+            self.value = value
+        }
+    }
 
     /// Creates a transport, wiring router, token provider, and dispatch queue.
     public init(
@@ -60,15 +80,49 @@ public final class MCPSSETransport: @unchecked Sendable {
         listener.start(queue: queue)
     }
 
-    /// Cancels the listener and stops accepting new connections.
+    /// Cancels the listener and every connection still live, so no accepted
+    /// connection — and no SSE session behind one — outlives the transport.
+    ///
+    /// Cancelling is what evicts the sessions: `.cancelled` reaches the
+    /// `stateUpdateHandler` installed in `handle(_:on:)`, which calls
+    /// `router.closeStream(sessionID:)`. That delivery is asynchronous on
+    /// `queue`, so this returns having *requested* teardown, not having
+    /// observed it complete. The one production caller is a signal handler
+    /// that calls `exit(0)` immediately after; blocking here to wait on the
+    /// transport's own queue would risk deadlocking it for no gain.
     public func stop() {
         listener?.cancel()
         listener = nil
+
+        connectionsLock.lock()
+        let live = acceptedConnections.compactMap(\.value)
+        acceptedConnections.removeAll()
+        connectionsLock.unlock()
+
+        // Cancel outside the lock: each cancel can reach `closeStream` and the
+        // `onConnectionClose` consumers, which take the router and dispatcher
+        // locks. Nesting those under ours would invert the lock order the
+        // router documents on `closeStream`.
+        for connection in live {
+            connection.cancel()
+        }
     }
 
     private func accept(_ connection: NWConnection) {
+        trackForShutdown(connection)
         connection.start(queue: queue)
         readRequest(from: connection, buffer: Data())
+    }
+
+    /// Records a connection so `stop()` can find it, dropping any entries
+    /// whose connection has already gone away. Pruning here — on the one path
+    /// that adds entries — keeps the array at roughly the live-connection
+    /// count without any teardown-side bookkeeping.
+    private func trackForShutdown(_ connection: NWConnection) {
+        connectionsLock.lock()
+        acceptedConnections.removeAll { $0.value == nil }
+        acceptedConnections.append(WeakConnection(connection))
+        connectionsLock.unlock()
     }
 
     private func readRequest(from connection: NWConnection, buffer: Data) {

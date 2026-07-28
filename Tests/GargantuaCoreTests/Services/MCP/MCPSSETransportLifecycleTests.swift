@@ -9,7 +9,8 @@ import Testing
 /// away: an RST surfaced by a failed write after a `/message` POST, a plain
 /// graceful FIN with no POST at all, and a graceful FIN after the client has
 /// written on the SSE socket — which is what forces the drain loop to re-arm
-/// rather than get by on its first receive.
+/// rather than get by on its first receive. Also covers the server-initiated
+/// case: the client stays connected and the transport itself is stopped.
 ///
 /// This is **not** a data-race regression test. It runs against a real
 /// listening socket in the order "open, then die," so the close is observed
@@ -191,6 +192,55 @@ struct MCPSSETransportLifecycleTests {
         #expect(
             recorder.contains("sse:\(sessionID)"),
             "the session leaked: the drain loop did not re-arm after the client's write"
+        )
+    }
+
+    /// The server-initiated counterpart to the three tests above, which all
+    /// cover the *client* going away. Here the client stays put and the
+    /// transport is stopped underneath it: `stop()` used to cancel only the
+    /// `NWListener`, so a connected client's `NWConnection` and its entry in
+    /// `router.sessions` both survived the transport that owned them.
+    ///
+    /// Cancelling the connection is what evicts the session — it reaches the
+    /// same `stateUpdateHandler` the client-disconnect tests rely on — so this
+    /// asserts on the recorder rather than on the socket.
+    @Test("stopping the transport closes the session of a client still connected")
+    func stopClosesLiveSessions() throws {
+        let recorder = ConnectionCloseRecorder()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
+                tokenProvider: { nil },
+                handler: MCPSSETransportTestSupport.echoHandler,
+                onConnectionClose: { connection in recorder.record(connection) }
+            )
+        }
+        // Still deferred even though the body stops it: a `#require` failure
+        // below would otherwise leave the listener bound. Stopping twice is a
+        // no-op — the listener is already nil and the registry already empty.
+        defer { transport.stop() }
+
+        let client = try TCPClient(port: Int(port))
+        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        let response = try client.read(until: "\n\n")
+        let sessionID = try #require(
+            MCPSSETransportTestSupport.extractSessionID(from: response),
+            "expected the SSE stream to open and return a session id"
+        )
+
+        // The client is deliberately left connected and untouched — `client`
+        // stays in scope, so nothing here severs the socket. Only the
+        // transport's own shutdown can close this session.
+        transport.stop()
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline && !recorder.contains("sse:\(sessionID)") {
+            usleep(20_000)
+        }
+
+        #expect(
+            recorder.contains("sse:\(sessionID)"),
+            "stop() left the connected client's SSE session standing (leaked)"
         )
     }
 
