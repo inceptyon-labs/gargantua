@@ -295,18 +295,40 @@ struct MCPSSETransportLifecycleTests {
             #expect(recorder.contains("sse:\(sessionID)"), "client's session never closed")
         }
 
-        // One more accept, purely to run the prune after the last client died.
-        let probe = try TCPClient(port: Int(port))
-        try probe.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-        _ = try probe.read(until: "\n\n")
-
-        withExtendedLifetime(probe) {
-            let tracked = transport.trackedConnectionCount
-            #expect(
-                tracked <= 3,
-                "the shutdown registry held \(tracked) entries after \(clientCount) clients came and went; dead connections are accumulating instead of being pruned"
+        // Only an accept runs the prune, and deallocation is not synchronized
+        // with `onConnectionClose` — the framework can hold a just-closed
+        // connection's receive closure a moment longer — so a single probe
+        // could sample before the last corpses are collectable and report a
+        // high count on a loaded machine. Drive prune passes until the count
+        // settles instead of trusting one shot.
+        //
+        // This converges rather than merely retrying: with the registry
+        // working, each pass reaps the previous pass's probe and the count
+        // stays at one or two. With a strong box or no prune, every pass adds
+        // an entry and the count only climbs, so the loop runs out the clock
+        // and fails — which is the behaviour being guarded.
+        let bound = 3
+        var tracked = transport.trackedConnectionCount
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline && tracked > bound {
+            let probe = try TCPClient(port: Int(port))
+            try probe.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            let probeResponse = try probe.read(until: "\n\n")
+            let probeSessionID = try #require(
+                MCPSSETransportTestSupport.extractSessionID(from: probeResponse),
+                "expected the probe's SSE stream to open and return a session id"
             )
+            probe.closeGracefully()
+            while Date() < deadline && !recorder.contains("sse:\(probeSessionID)") {
+                usleep(20_000)
+            }
+            tracked = transport.trackedConnectionCount
         }
+
+        #expect(
+            tracked <= bound,
+            "the shutdown registry held \(tracked) entries after \(clientCount) clients came and went; dead connections are accumulating instead of being pruned"
+        )
     }
 
     /// Opens an SSE stream over a real socket, reads the initial `endpoint`
