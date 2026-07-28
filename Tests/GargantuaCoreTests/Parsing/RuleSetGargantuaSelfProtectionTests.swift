@@ -34,26 +34,47 @@ struct RuleSetGargantuaSelfProtectionTests {
         )
     }
 
-    /// Concrete things Gargantua keeps in its own state directory. Patterns are
-    /// checked against these rather than against a prefix string, because the
-    /// rule set reaches app directories through wildcards like
-    /// `~/Library/Application Support/*/logs` that a prefix test cannot see.
-    private static let protectedPaths = [
-        "~/Library/Application Support/Gargantua",
-        "~/Library/Application Support/Gargantua/audit.lock",
-        "~/Library/Application Support/Gargantua/rules",
-        "~/Library/Application Support/Gargantua/models",
-        "~/Library/Application Support/Gargantua/organizer-undo.json",
+    /// The state root Gargantua keeps its own data under.
+    private static let protectedRoot = "~/Library/Application Support/Gargantua"
+
+    /// Concrete things Gargantua keeps directly in its state root. Used only
+    /// by the wildcard-ancestor clause below — never as the sole reach of the
+    /// guard — because a rule like `~/Library/Application Support/*/models`
+    /// wildcards the `Gargantua` segment itself, so no literal prefix match
+    /// against `protectedRoot` is possible; fnmatch against representative
+    /// children is the only way to catch it.
+    private static let protectedSamples = [
+        protectedRoot,
+        "\(protectedRoot)/audit.lock",
+        "\(protectedRoot)/rules",
+        "\(protectedRoot)/models",
+        "\(protectedRoot)/organizer-undo.json",
     ]
 
-    /// A rule path is an offender against a protected path when either the
-    /// path's wildcard pattern matches the protected path, or the protected
-    /// path sits literally underneath the rule path (the rule names an
-    /// ancestor directory outright, no wildcard involved).
-    private static func offends(rulePath: String, protectedPath: String) -> Bool {
-        NativeScanAdapter.fnmatch(pattern: rulePath, name: protectedPath)
-            || protectedPath == rulePath
-            || protectedPath.hasPrefix(rulePath + "/")
+    /// A rule path offends the protected state root when either:
+    ///
+    /// 1. Ignoring any wildcard suffix, it literally names the root or
+    ///    anything beneath it. This is generic: it covers arbitrary depth and
+    ///    arbitrary filenames with no sample list needed — a deep path like
+    ///    `.../Gargantua/models/*.bin`, a brand-new state file like
+    ///    `.../Gargantua/some-future-state.db`, or a templated path like
+    ///    `.../Gargantua/{bundleID}` are all caught because `protectedRoot`
+    ///    is a literal prefix of each.
+    /// 2. Its ANCESTOR segments are wildcarded (e.g.
+    ///    `~/Library/Application Support/*/models`), so clause 1's literal
+    ///    prefix check cannot see it — `*` is not literally `Gargantua`. This
+    ///    clause is necessarily sample-based, and therefore INCOMPLETE: an
+    ///    upstream rule wildcarding onto a state filename Gargantua adds
+    ///    later, and not yet in `protectedSamples`, would not be caught until
+    ///    that name is added here. It is a bounded, known limitation, not
+    ///    full coverage.
+    private static func offends(rulePath: String) -> Bool {
+        if rulePath == protectedRoot || rulePath.hasPrefix(protectedRoot + "/") {
+            return true
+        }
+        return protectedSamples.contains { sample in
+            NativeScanAdapter.fnmatch(pattern: rulePath, name: sample)
+        }
     }
 
     @Test("no bundled rule targets Gargantua's Application Support directory")
@@ -61,38 +82,52 @@ struct RuleSetGargantuaSelfProtectionTests {
         var offenders: [String] = []
 
         // cleanup_rules
-        let cleanupResult = try RuleLoader().loadRules(from: RuleDirectoryResolver.resolve()!)
+        let cleanupDirectory = try #require(
+            RuleDirectoryResolver.resolve(),
+            "cleanup_rules not resolvable via RuleDirectoryResolver — SPM resource wiring broken"
+        )
+        let cleanupResult = try RuleLoader().loadRules(from: cleanupDirectory)
         for rule in cleanupResult.rules {
-            for path in rule.paths {
-                for protectedPath in Self.protectedPaths where Self.offends(rulePath: path, protectedPath: protectedPath) {
-                    offenders.append("cleanup_rules/\(rule.id) → \(path)")
-                }
+            for path in rule.paths where Self.offends(rulePath: path) {
+                offenders.append("cleanup_rules/\(rule.id) → \(path)")
             }
         }
 
-        // uninstall_rules — skip templated paths ({appName}, {bundleID},
-        // {appNameVariant}): those legitimately resolve onto Gargantua's own
-        // Application Support folder only when the user is deliberately
-        // uninstalling Gargantua itself, which is intended behaviour, not the
-        // Deep Clean hazard this guard is protecting against.
-        let uninstallDirectory = Bundle.module.url(forResource: "uninstall_rules", withExtension: nil)!
+        // uninstall_rules — skip a templated path ({appName}, {bundleID},
+        // {appNameVariant}) UNLESS it literally names Gargantua. The generic
+        // template `~/Library/Application Support/{appName}` legitimately
+        // resolves onto Gargantua's own Application Support folder only when
+        // the user is deliberately uninstalling Gargantua itself, which is
+        // intended behaviour, not the Deep Clean hazard this guard protects
+        // against. But a template that literally contains `Gargantua` (e.g.
+        // `~/Library/Application Support/Gargantua/{bundleID}`) is targeting
+        // us specifically regardless of templating, and must still be
+        // flagged.
+        let uninstallDirectory = try #require(
+            Bundle.module.url(forResource: "uninstall_rules", withExtension: nil),
+            "uninstall_rules resource not resolvable via Bundle.module — SPM resource wiring broken"
+        )
         let uninstallResult = try RemnantRuleLoader().loadRules(from: uninstallDirectory)
         for rule in uninstallResult.rules {
-            for path in rule.pathTemplates where !path.contains("{") {
-                for protectedPath in Self.protectedPaths where Self.offends(rulePath: path, protectedPath: protectedPath) {
+            for path in rule.pathTemplates {
+                if path.contains("{") && !path.contains("Gargantua") {
+                    continue
+                }
+                if Self.offends(rulePath: path) {
                     offenders.append("uninstall_rules/\(rule.id) → \(path)")
                 }
             }
         }
 
         // command_rules
-        let commandDirectory = CommandActionRuleDirectoryResolver.resolve()!
+        let commandDirectory = try #require(
+            CommandActionRuleDirectoryResolver.resolve(),
+            "command_rules not resolvable via CommandActionRuleDirectoryResolver — SPM resource wiring broken"
+        )
         let commandResult = try CommandActionRuleLoader().loadRules(from: commandDirectory)
         for rule in commandResult.rules {
-            for path in rule.affectedRoots {
-                for protectedPath in Self.protectedPaths where Self.offends(rulePath: path, protectedPath: protectedPath) {
-                    offenders.append("command_rules/\(rule.id) → \(path)")
-                }
+            for path in rule.affectedRoots where Self.offends(rulePath: path) {
+                offenders.append("command_rules/\(rule.id) → \(path)")
             }
         }
 
