@@ -52,6 +52,10 @@ struct ProcessOutputDrain {
     /// these would leave the drain reads blocked forever. Then drain each pipe
     /// on a dedicated background task with bounded chunk reads.
     ///
+    /// EOF requires every writer to the pipe to close — normally just the
+    /// child, but a descendant that inherits and keeps the fd open could delay
+    /// or prevent it. That is what the grace period in `finish()` bounds.
+    ///
     /// This is deliberately simpler than a readabilityHandler + post-exit
     /// readDataToEndOfFile pair: that approach can race because setting the
     /// handler to nil is not documented to block for in-flight invocations, so
@@ -63,8 +67,8 @@ struct ProcessOutputDrain {
     /// critical path of returning correct stdout to the caller. Under heavy
     /// parallel subprocess load (10+ concurrent runners), `.utility` tasks
     /// could be starved long enough for the grace-period force-close to fire
-    /// before `readToEnd()` was ever scheduled, returning empty output for a
-    /// child that had cleanly produced bytes.
+    /// before the first chunk read was ever scheduled, returning empty output
+    /// for a child that had cleanly produced bytes.
     ///
     /// - Precondition: the child must already be spawned — the write ends have
     ///   to stay open through `posix_spawn` for the child to inherit them.

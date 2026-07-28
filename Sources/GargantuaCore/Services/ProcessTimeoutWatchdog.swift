@@ -58,7 +58,8 @@ struct ProcessTimeoutWatchdog {
 
     /// Tell any pending SIGKILL escalation that the child is already reaped and
     /// its pid is eligible for reuse — don't signal it. Call immediately after
-    /// `waitpid` returns, including on error.
+    /// `waitpid` returns, including on error, before anything else can let the
+    /// escalation land on a recycled pgid.
     func markReaped() {
         coordinator.markReaped()
     }
@@ -69,10 +70,14 @@ struct ProcessTimeoutWatchdog {
         item?.cancel()
     }
 
-    /// Record natural completion and report whether the watchdog beat us to it.
-    /// The coordinator serializes "natural exit" vs "timeout fired" under a
-    /// single lock to close the race at the instant of the deadline.
-    func resolveTimedOut() -> Bool {
+    /// Disarm after a successful `waitpid` and report whether the watchdog beat
+    /// us to it. Marks the child reaped *first* so a pending SIGKILL escalation
+    /// can never target the recycled pgid — the whole point of doing this in one
+    /// call rather than leaving the order to each caller. The coordinator then
+    /// serializes "natural exit" vs "timeout fired" under a single lock, closing
+    /// the race at the instant of the deadline.
+    func reap() -> Bool {
+        markReaped()
         let timedOut = coordinator.markNaturalCompletion() == .timedOut
         cancel()
         return timedOut

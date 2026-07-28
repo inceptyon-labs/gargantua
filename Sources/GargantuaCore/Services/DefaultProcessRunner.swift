@@ -68,8 +68,7 @@ public struct DefaultProcessRunner: ProcessRunner {
             watchdog.cancel()
             throw error
         }
-        watchdog.markReaped()
-        let timedOut = watchdog.resolveTimedOut()
+        let timedOut = watchdog.reap()
 
         drain.finish()
 
