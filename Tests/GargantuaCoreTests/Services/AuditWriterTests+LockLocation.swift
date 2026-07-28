@@ -74,7 +74,7 @@ extension AuditWriterTests {
         #expect(FileManager.default.fileExists(atPath: lockDir.appendingPathComponent("audit.lock").path))
     }
 
-    @Test("a non-writable lock parent reports the directory as the obstacle, not a generic missing-file error")
+    @Test("a non-writable lock parent reports EACCES, not the generic ENOENT open would otherwise report")
     func lockDirectoryPermissionDeniedIsDiagnosable() throws {
         let parentDir = try makeTempDir()
         defer { cleanup(parentDir) }
@@ -97,10 +97,10 @@ extension AuditWriterTests {
         do {
             try writer.write(makeEntry(path: "/denied"))
             Issue.record("expected write(_:) to throw when the lock directory can't be created")
-        } catch let AuditWriteError.lockDirectoryUnavailable(description) {
-            #expect(!description.isEmpty)
+        } catch let AuditWriteError.lockFailed(code) {
+            #expect(code == EACCES)
         } catch {
-            Issue.record("expected .lockDirectoryUnavailable, got \(error)")
+            Issue.record("expected .lockFailed(code: EACCES), got \(error)")
         }
     }
 
