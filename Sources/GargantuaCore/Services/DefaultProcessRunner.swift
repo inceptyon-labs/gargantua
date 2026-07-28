@@ -43,66 +43,21 @@ public struct DefaultProcessRunner: ProcessRunner {
         timeout: TimeInterval?,
         maxCapturedBytes: Int
     ) throws -> ProcessOutput {
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        let outHandle = outPipe.fileHandleForReading
-        let errHandle = errPipe.fileHandleForReading
-        let outBuffer = ProcessOutputBuffer(limit: maxCapturedBytes)
-        let errBuffer = ProcessOutputBuffer(limit: maxCapturedBytes)
+        let drain = ProcessOutputDrain(maxCapturedBytes: maxCapturedBytes)
 
         let pid: pid_t
         do {
             pid = try ProcessSpawner.spawnInNewProcessGroup(
                 executable: executable,
                 arguments: arguments,
-                stdoutPipe: outPipe,
-                stderrPipe: errPipe
+                stdoutPipe: drain.stdoutPipe,
+                stderrPipe: drain.stderrPipe
             )
         } catch let ProcessSpawnerError.spawnFailed(errnoVal) {
             throw ProcessRunnerError.spawnFailed(errno: errnoVal)
         }
 
-        // Close the write ends in the parent so EOF on the read ends happens
-        // when the child exits (if no descendant inherited them). Failing to
-        // close these would leave the drain reads blocked forever.
-        try? outPipe.fileHandleForWriting.close()
-        try? errPipe.fileHandleForWriting.close()
-
-        // Drain each pipe on a dedicated background queue with a single
-        // blocking `readToEnd()`. This is deliberately simpler than a
-        // readabilityHandler + post-exit readDataToEndOfFile pair: that
-        // approach can race because setting the handler to nil is not
-        // documented to block for in-flight invocations, so a late handler
-        // chunk can interleave with the final drain. Here, exactly one read
-        // per pipe returns all bytes up to EOF. EOF requires every writer to
-        // the pipe to close — normally just the child, but a descendant that
-        // inherits and keeps the fd open could delay or prevent EOF.
-        // To harden against inherited-fd hangs, we bound the drain wait with
-        // a grace period, closing the pipe fds if drain doesn't finish.
-        // Draining concurrently on both pipes also prevents a full 64K buffer
-        // on one stream from blocking the child while we sit on waitpid.
-        let drainGroup = DispatchGroup()
-        // `.userInitiated` rather than `.utility`: the drain reads are on the
-        // critical path of returning correct stdout to the caller. Under heavy
-        // parallel subprocess load (10+ concurrent runners), `.utility` tasks
-        // could be starved long enough for the grace-period force-close below
-        // to fire before `readToEnd()` was ever scheduled, returning empty
-        // output for a child that had cleanly produced bytes.
-        let drainQueue = DispatchQueue.global(qos: .userInitiated)
-        // Read in bounded chunks rather than `readToEnd()`: the latter
-        // allocates one `Data` for the entire stream, defeating the byte cap.
-        // The throwing `read(upToCount:)` returns empty Data on EOF and
-        // throws when the force-close path below closes the fd out from
-        // under a blocking read (legacy `availableData` would raise an
-        // NSException and crash the process). The buffer drops bytes past
-        // its cap but we keep pulling chunks out of the pipe so the child
-        // never blocks on a full kernel buffer.
-        drainQueue.async(group: drainGroup) {
-            Self.drainPipe(handle: outHandle, into: outBuffer)
-        }
-        drainQueue.async(group: drainGroup) {
-            Self.drainPipe(handle: errHandle, into: errBuffer)
-        }
+        drain.startDraining()
 
         let coordinator = ProcessRunnerTimeoutCoordinator()
         var watchdog: DispatchWorkItem?
@@ -173,26 +128,7 @@ public struct DefaultProcessRunner: ProcessRunner {
         let timedOut = coordinator.markNaturalCompletion() == .timedOut
         watchdog?.cancel()
 
-        // Pipe ends close on child exit, so the blocking reads should return
-        // shortly after waitpid. However, if a descendant inherited the fd
-        // and is still writing, the read could hang indefinitely. Use a fixed
-        // 1s grace: the child has already exited, so drain budget has no
-        // relationship to the original wall-clock timeout. Previous
-        // `timeout * 0.1` scaling gave 0.5s for a 5s timeout which, under
-        // heavy parallel load, wasn't enough for the `.userInitiated` drain
-        // tasks to even schedule before the force-close fired. 1s is long
-        // enough to drain bounded kernel pipe buffers under load, short
-        // enough to keep run() bounded when a descendant genuinely holds
-        // the inherited fd.
-        let drainResult = drainGroup.wait(timeout: DispatchTime.now() + 1.0)
-        if drainResult == .timedOut {
-            // Force-close the pipe file descriptors to unblock the pending reads.
-            // This prevents an indefinite hang if a descendant inherited the fds.
-            try? outHandle.close()
-            try? errHandle.close()
-            // Wait a bit longer for the drain tasks to finish after we've closed the fds.
-            _ = drainGroup.wait(timeout: DispatchTime.now() + 0.1)
-        }
+        drain.finish()
 
         if timedOut, let timeout {
             throw ProcessRunnerError.timedOut(seconds: timeout)
@@ -206,40 +142,6 @@ public struct DefaultProcessRunner: ProcessRunner {
         let termSignal = status & 0x7F
         let exitCode: Int32 = termSignal == 0 ? (status >> 8) & 0xFF : termSignal
 
-        // Use lossy UTF-8 decode: truncation at the cap can slice a multi-byte
-        // codepoint, and `String(data:, encoding: .utf8)` returns nil in that
-        // case — the `?? ""` fallback would throw away the entire (otherwise
-        // useful) prefix. `String(decoding:as:)` substitutes U+FFFD for the
-        // partial sequence and preserves the rest.
-        // swiftlint:disable optional_data_string_conversion
-        let stdout = String(decoding: outBuffer.snapshot(), as: UTF8.self)
-        let stderr = String(decoding: errBuffer.snapshot(), as: UTF8.self)
-        // swiftlint:enable optional_data_string_conversion
-
-        return ProcessOutput(
-            stdout: stdout,
-            stderr: stderr,
-            exitCode: exitCode,
-            stdoutTruncated: outBuffer.wasTruncated(),
-            stderrTruncated: errBuffer.wasTruncated()
-        )
-    }
-
-    /// Pulls bytes from `handle` in bounded chunks until EOF or the handle
-    /// is closed. `buffer` may drop bytes past its cap; we still keep reading
-    /// to avoid blocking the child on a full kernel pipe buffer.
-    private static func drainPipe(handle: FileHandle, into buffer: ProcessOutputBuffer) {
-        let chunkSize = 16 * 1024
-        while true {
-            let chunk: Data?
-            do {
-                chunk = try handle.read(upToCount: chunkSize)
-            } catch {
-                // Force-close path closed the fd out from under us; treat as EOF.
-                return
-            }
-            guard let chunk, !chunk.isEmpty else { return }
-            buffer.append(chunk)
-        }
+        return drain.makeOutput(exitCode: exitCode)
     }
 }
