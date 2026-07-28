@@ -222,7 +222,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         // version negotiation is deferred to a follow-up.
         let parsed: InitializeParams
         do {
-            parsed = try decodeFromJSONAny(InitializeParams.self, from: params)
+            parsed = try MCPEncoding.decodeFromJSONAny(InitializeParams.self, from: params)
         } catch {
             throw MCPDispatchError.invalidParams(
                 "initialize params malformed: \(describe(error))"
@@ -274,7 +274,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         // on the wire with the same key order/structure as the descriptor
         // types define.
         let entries = tools.map(ToolListEntry.init)
-        let encoded = try encodeAsJSONAny(entries)
+        let encoded = try MCPEncoding.encodeAsJSONAny(entries)
         return .object(["tools": encoded])
     }
 
@@ -284,7 +284,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         }
         let call: ToolCallParams
         do {
-            call = try decodeFromJSONAny(ToolCallParams.self, from: params)
+            call = try MCPEncoding.decodeFromJSONAny(ToolCallParams.self, from: params)
         } catch {
             throw MCPDispatchError.invalidParams(
                 "tools/call params malformed: \(describe(error))"
@@ -350,7 +350,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
             log?("tool \(toolName.rawValue) threw unexpected error: \(error)")
             throw MCPDispatchError.internalError("Tool execution failed")
         }
-        return try encodeAsJSONAny(toolResult)
+        return try MCPEncoding.encodeAsJSONAny(toolResult)
     }
 }
 
@@ -449,23 +449,7 @@ private enum MCPDispatchError: Error {
     }
 }
 
-// MARK: - Codable ↔ MCPJSONAny bridges
-
-/// Re-encodes any `Encodable` through `MCPJSONAny` so dispatcher results can
-/// be stitched into the `MCPResponse.result` value. Using JSONEncoder keeps
-/// the on-wire shape identical to the source type's Codable contract.
-private func encodeAsJSONAny<T: Encodable>(_ value: T) throws -> MCPJSONAny {
-    let encoder = JSONEncoder()
-    let data = try encoder.encode(value)
-    return try JSONDecoder().decode(MCPJSONAny.self, from: data)
-}
-
-/// Inverse of `encodeAsJSONAny`. Lets the dispatcher decode strongly-typed
-/// params out of the untyped `MCPJSONAny` payload.
-private func decodeFromJSONAny<T: Decodable>(_ type: T.Type, from any: MCPJSONAny) throws -> T {
-    let data = try JSONEncoder().encode(any)
-    return try JSONDecoder().decode(type, from: data)
-}
+// MARK: - Error description helper
 
 /// Produces a compact one-line description of a decoding error. Avoids the
 /// multi-line Swift error descriptions that would muddy JSON-RPC messages.
