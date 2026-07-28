@@ -39,8 +39,8 @@ struct MCPEncodingTests {
         #expect(decoded == DateBearingPayload(label: "scan", recordedAt: Self.fixedDate))
     }
 
-    @Test("a Date-bearing tool payload survives dispatch as an ISO-8601 string")
-    func datePayloadSurvivesDispatch() throws {
+    @Test("a handler's ISO-8601 date payload reaches the wire unmangled")
+    func handlerDatePayloadReachesWireUnmangled() throws {
         let dispatcher = MCPRequestDispatcher(
             serverInfo: MCPServerInfo(name: "gargantua", version: "0.0.1"),
             tools: MCPPhase2Tools.all
@@ -61,9 +61,11 @@ struct MCPEncodingTests {
             )
         )
         #expect(response.error == nil)
-        // Assert on the bytes a client actually receives, not on the
-        // intermediate MCPJSONAny — the regression this guards is a wire-format
-        // one.
+        // End-to-end shape check only: `structuredContent` is typed
+        // `MCPJSONAny`, which has no `Date` case, so the handler has already
+        // stringified the date before the dispatcher's encoder ever sees it.
+        // This test therefore cannot fail on a dispatcher date-strategy
+        // regression — `noBareJSONCodersInMCPToolPayloadPath` is that guard.
         let wire = try MCPWireCoding.encoder.encode(response)
         let json = try #require(String(data: wire, encoding: .utf8))
         #expect(json.contains("\"\(Self.fixedISO)\""))
@@ -78,5 +80,78 @@ struct MCPEncodingTests {
         ])
         let decoded = try args.decode(DateBearingPayload.self)
         #expect(decoded.recordedAt == Self.fixedDate)
+    }
+
+    private static var mcpSourceRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // MCP
+            .deletingLastPathComponent() // Services
+            .deletingLastPathComponent() // GargantuaCoreTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // repo root
+            .appendingPathComponent("Sources/GargantuaCore/Services/MCP")
+    }
+
+    /// Fails loudly (rather than vacuously passing on an empty scan) when the
+    /// path arithmetic above stops landing on the real MCP sources directory.
+    private static func requireMCPSourceRoot() -> URL {
+        let root = mcpSourceRoot
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory)
+        #expect(exists && isDirectory.boolValue, "Expected an MCP sources directory at \(root.path)")
+        return root
+    }
+
+    private static func swiftFiles(under root: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            Issue.record("Could not enumerate \(root.path)")
+            return []
+        }
+
+        var files: [URL] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            files.append(url)
+        }
+        return files
+    }
+
+    /// The regression guard for the dispatcher's date strategy. It cannot be
+    /// written behaviourally (see `handlerDatePayloadReachesWireUnmangled`),
+    /// so it is enforced structurally: every MCP tool-payload file routes
+    /// through `MCPEncoding` or `MCPWireCoding` rather than building its own
+    /// coder, because a bare `JSONEncoder()` silently reverts dates to
+    /// numeric seconds since the Foundation reference date.
+    @Test("no MCP tool-payload file constructs its own JSON coder")
+    func noBareJSONCodersInMCPToolPayloadPath() throws {
+        // The two sanctioned coder owners, plus files outside the tool-payload
+        // path entirely (on-disk status persistence and transport settings).
+        let allowed: Set<String> = [
+            "MCPEncoding.swift",
+            "MCPWireCoding.swift",
+            "MCPServerStatusPersistence.swift",
+            "MCPTransportSettings.swift",
+        ]
+
+        let root = Self.requireMCPSourceRoot()
+        let files = Self.swiftFiles(under: root)
+        #expect(!files.isEmpty, "Expected to find .swift files under \(root.path)")
+
+        var offenders: [String] = []
+        for file in files where !allowed.contains(file.lastPathComponent) {
+            let contents = try String(contentsOf: file, encoding: .utf8)
+            for (index, line) in contents.components(separatedBy: .newlines).enumerated()
+                where line.contains("JSONEncoder()") || line.contains("JSONDecoder()") {
+                offenders.append("\(file.lastPathComponent):\(index + 1)")
+            }
+        }
+
+        #expect(
+            offenders.isEmpty,
+            "MCP tool-payload files must route through MCPEncoding/MCPWireCoding rather than constructing their own JSON coder: \(offenders.joined(separator: ", "))"
+        )
     }
 }

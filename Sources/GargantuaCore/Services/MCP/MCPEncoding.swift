@@ -25,15 +25,14 @@ enum MCPEncoding {
     }
 
     /// Inverse of `encodeAsJSONAny`: pulls a strongly-typed value back out of
-    /// the untyped `MCPJSONAny` shape. Dates are read as ISO-8601 strings so
-    /// the round-trip is symmetric with `encodeAsJSONAny`.
+    /// the untyped `MCPJSONAny` shape, reading ISO-8601 strings as `Date`.
+    /// The intermediate encode needs no date strategy — `MCPJSONAny` has no
+    /// `Date` case, so by that point a date is already a string.
     static func decodeFromJSONAny<T: Decodable>(
         _ type: T.Type,
         from any: MCPJSONAny
     ) throws -> T {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(any)
+        let data = try JSONEncoder().encode(any)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(type, from: data)
