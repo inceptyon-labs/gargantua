@@ -62,14 +62,11 @@ public final class AuditWriter: Sendable {
     /// relocation ships. Tracked by #gargantua-0r0r.
     let legacyLockFile: URL?
 
-    /// Take an exclusive `flock` on one sidecar, returning the locked descriptor.
+    /// Open the sidecar for locking, creating it and its parent if needed.
     ///
-    /// `flock` conflicts between distinct open file descriptions, so this orders
-    /// separate processes — the app and the MCP server — and separate
-    /// `AuditWriter` instances within one process. It is NOT reentrant: each
-    /// call opens a fresh descriptor, so calling it twice for the same file
-    /// self-deadlocks until `deadline`.
-    private func acquireDescriptor(at url: URL, deadline: Date) throws -> Int32 {
+    /// Split out from the `flock` phase so a caller can compare the opened
+    /// descriptor against one it already holds before deciding to lock it.
+    private func openDescriptor(at url: URL) throws -> Int32 {
         // The sidecar no longer necessarily lives in the log directory (see
         // `init`), and `open(O_CREAT)` will not create missing parents, so the
         // directory is created here first. The failure's POSIX errno is
@@ -107,9 +104,15 @@ public final class AuditWriter: Sendable {
             }
             throw AuditWriteError.lockFailed(code: openErrno)
         }
+        return fd
+    }
 
-        // Poll rather than block: LOCK_EX alone has no timeout, and an
-        // unbounded wait on a peer process would hang the caller's thread.
+    /// Poll `flock` on an already-open descriptor until it succeeds or `deadline` passes.
+    ///
+    /// Poll rather than block: `LOCK_EX` alone has no timeout, and an
+    /// unbounded wait on a peer process would hang the caller's thread. Closes the
+    /// descriptor on failure so the caller never has to.
+    private func lockDescriptor(_ fd: Int32, deadline: Date) throws -> Int32 {
         while flock(fd, LOCK_EX | LOCK_NB) != 0 {
             let code = errno
             guard code == EINTR || code == EWOULDBLOCK, Date() < deadline else {
@@ -121,6 +124,17 @@ public final class AuditWriter: Sendable {
             if code == EWOULDBLOCK { Thread.sleep(forTimeInterval: 0.01) }
         }
         return fd
+    }
+
+    /// Open and exclusively `flock` one sidecar, returning the locked descriptor.
+    ///
+    /// `flock` conflicts between distinct open file descriptions, so this orders
+    /// separate processes — the app and the MCP server — and separate
+    /// `AuditWriter` instances within one process. It is NOT reentrant: each
+    /// call opens a fresh descriptor, so calling it twice for the same file
+    /// self-deadlocks until `deadline`.
+    private func acquireDescriptor(at url: URL, deadline: Date) throws -> Int32 {
+        try lockDescriptor(openDescriptor(at: url), deadline: deadline)
     }
 
     /// Take every sidecar this build must hold, legacy first.
@@ -135,16 +149,21 @@ public final class AuditWriter: Sendable {
             if let legacyLockFile {
                 acquired.append(try acquireDescriptor(at: legacyLockFile, deadline: deadline))
             }
-            // Identity, not spelling: if the legacy sidecar we just locked IS
-            // the current one by inode, we already hold it and a second
-            // acquisition would block against ourselves until the deadline,
-            // turning every audit write into a timeout. Checking here rather
-            // than in `init` also closes the time-of-check/time-of-use gap a
-            // path comparison inherently has.
-            if let held = acquired.first, isSameFile(descriptor: held, asPathOf: lockFile) {
+            // Identity, not spelling: open the current sidecar before deciding
+            // whether we already hold it. If it is the legacy inode under
+            // another name, a second `flock` would block against ourselves
+            // until the deadline and turn every audit write into a timeout.
+            // Opening first — and comparing two live descriptors — leaves no
+            // window for the path to be swapped between the check and the open.
+            let currentFd = try openDescriptor(at: lockFile)
+            if let held = acquired.first, isSameFile(held, currentFd) {
+                // Closing this descriptor does not disturb the lock held on the
+                // other one: `flock` binds to the open file description, not
+                // the inode.
+                Darwin.close(currentFd)
                 return acquired
             }
-            acquired.append(try acquireDescriptor(at: lockFile, deadline: deadline))
+            acquired.append(try lockDescriptor(currentFd, deadline: deadline))
         } catch {
             releaseFileLock(acquired)
             throw error
@@ -160,19 +179,18 @@ public final class AuditWriter: Sendable {
         }
     }
 
-    /// Whether an already-locked descriptor and a path name the same inode.
+    /// Whether two open descriptors name the same inode.
     ///
-    /// Path spelling can't answer this: a hardlink, a symlink planted after
-    /// `init` ran, or a case-variant spelling on a case-insensitive volume all
-    /// make two different paths name one file. `stat` rather than `open`, so a
-    /// missing current sidecar stays missing and is created by the acquisition
-    /// that follows.
-    private func isSameFile(descriptor fd: Int32, asPathOf url: URL) -> Bool {
-        var heldStat = stat()
-        guard fstat(fd, &heldStat) == 0 else { return false }
-        var candidateStat = stat()
-        guard stat(url.path, &candidateStat) == 0 else { return false }
-        return heldStat.st_dev == candidateStat.st_dev && heldStat.st_ino == candidateStat.st_ino
+    /// Path spelling can't answer this: a hardlink, a symlink, or a case-variant
+    /// spelling on a case-insensitive volume all make two different paths name
+    /// one file. Comparing descriptors rather than a descriptor and a path also
+    /// leaves no window in which the path could be swapped for a link to the
+    /// inode we already hold.
+    private func isSameFile(_ lhs: Int32, _ rhs: Int32) -> Bool {
+        var lhsStat = stat()
+        var rhsStat = stat()
+        guard fstat(lhs, &lhsStat) == 0, fstat(rhs, &rhsStat) == 0 else { return false }
+        return lhsStat.st_dev == rhsStat.st_dev && lhsStat.st_ino == rhsStat.st_ino
     }
 
     /// Append one already-encoded line via an `O_APPEND` descriptor.

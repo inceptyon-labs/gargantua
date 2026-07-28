@@ -120,7 +120,7 @@ extension AuditWriterTests {
         #expect(try writer.readEntries().count == 1)
     }
 
-    @Test("dual-locking shares one deadline rather than doubling the wait")
+    @Test("dual-locking shares one deadline rather than giving each sidecar its own")
     func dualLockSharesOneDeadline() throws {
         let logDir = try makeTempDir()
         let lockDir = try makeTempDir()
@@ -131,19 +131,29 @@ extension AuditWriterTests {
             logDirectory: logDir,
             lockDirectory: lockDir,
             legacyLockDirectory: legacyDir,
-            lockTimeout: 0.5
+            lockTimeout: 1.0
         )
         try writer.write(makeEntry(path: "/seed"))
 
-        // A peer holds BOTH sidecars, so neither acquisition can succeed.
-        var held: [Int32] = []
-        for dir in [legacyDir, lockDir] {
-            let fd = Darwin.open(dir.appendingPathComponent("audit.lock").path, O_RDONLY | O_CREAT, 0o644)
-            #expect(fd >= 0)
-            #expect(flock(fd, LOCK_EX) == 0)
-            held.append(fd)
+        // A peer holds both sidecars, then hands back only the legacy one
+        // half-way through the budget. The current sidecar is never released,
+        // so the acquisition still fails — what's under test is WHEN.
+        let legacyHeld = Darwin.open(legacyDir.appendingPathComponent("audit.lock").path,
+                                     O_RDONLY | O_CREAT, 0o644)
+        #expect(legacyHeld >= 0)
+        #expect(flock(legacyHeld, LOCK_EX) == 0)
+        let currentHeld = Darwin.open(lockDir.appendingPathComponent("audit.lock").path,
+                                      O_RDONLY | O_CREAT, 0o644)
+        #expect(currentHeld >= 0)
+        #expect(flock(currentHeld, LOCK_EX) == 0)
+        defer { _ = flock(currentHeld, LOCK_UN); Darwin.close(currentHeld) }
+
+        let releaser = Thread {
+            Thread.sleep(forTimeInterval: 0.5)
+            _ = flock(legacyHeld, LOCK_UN)
+            Darwin.close(legacyHeld)
         }
-        defer { for fd in held { _ = flock(fd, LOCK_UN); Darwin.close(fd) } }
+        releaser.start()
 
         let start = Date()
         #expect(throws: (any Error).self) {
@@ -151,9 +161,11 @@ extension AuditWriterTests {
         }
         let elapsed = Date().timeIntervalSince(start)
 
-        // Two independent per-sidecar budgets would take ~1.0s.
-        #expect(elapsed >= 0.4, "gave up before the single budget was spent: \(elapsed)s")
-        #expect(elapsed < 0.9, "wait doubled — each sidecar got its own budget: \(elapsed)s")
+        // Shared budget: 0.5s waiting for the legacy sidecar, then the ~0.5s
+        // that remains on the same deadline. A per-sidecar budget would restart
+        // the clock and land near 1.5s.
+        #expect(elapsed >= 0.9, "gave up before the shared budget was spent: \(elapsed)s")
+        #expect(elapsed < 1.3, "the clock restarted — each sidecar got its own budget: \(elapsed)s")
     }
 
     @Test("the legacy sidecar is acquired before the current one")
