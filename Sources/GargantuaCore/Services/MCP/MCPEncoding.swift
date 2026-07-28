@@ -10,6 +10,10 @@ import Foundation
 /// which a generic MCP client wouldn't parse as a timestamp. Even handlers
 /// whose current output shape has no `Date` field use this helper so adding a
 /// date later doesn't require remembering to switch strategies.
+///
+/// The same applies in reverse: `decodeFromJSONAny` reads ISO-8601 strings
+/// back into `Date`, so a handler that declares a date-typed argument gets
+/// the value a client actually sent rather than a decode failure.
 enum MCPEncoding {
     /// Round-trips an `Encodable` through JSON into the untyped `MCPJSONAny`
     /// shape. Dates are encoded as ISO-8601 strings.
@@ -18,6 +22,21 @@ enum MCPEncoding {
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(value)
         return try JSONDecoder().decode(MCPJSONAny.self, from: data)
+    }
+
+    /// Inverse of `encodeAsJSONAny`: pulls a strongly-typed value back out of
+    /// the untyped `MCPJSONAny` shape. Dates are read as ISO-8601 strings so
+    /// the round-trip is symmetric with `encodeAsJSONAny`.
+    static func decodeFromJSONAny<T: Decodable>(
+        _ type: T.Type,
+        from any: MCPJSONAny
+    ) throws -> T {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(any)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(type, from: data)
     }
 
     /// Client-safe message for an error propagated to the MCP client. Only
