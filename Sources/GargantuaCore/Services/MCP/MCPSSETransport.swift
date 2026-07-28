@@ -117,8 +117,24 @@ public final class MCPSSETransport: @unchecked Sendable {
     /// whatever it gets makes EOF (or a read error) reach us, and the
     /// `cancel()` below is what drives the transition that tears the session
     /// down.
+    ///
+    /// Re-arming after each non-terminal completion is load-bearing, not
+    /// bookkeeping: a single byte from the client consumes a one-shot receive,
+    /// and without the re-arm that connection is back to having none pending —
+    /// its later FIN would go unobserved exactly as before this method existed.
+    ///
+    /// `isComplete` is also true when the client has only shut down its write
+    /// side while still reading, so a half-closing client is treated as gone
+    /// and its session torn down. That is deliberate: HTTP has no way to
+    /// resume such a connection, and no MCP client half-closes.
     private func drainClientBytes(on connection: NWConnection) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { [weak self] _, _, isComplete, error in
+            if let error {
+                // `readRequest` logs the same failure class; without this, a
+                // client that vanished cleanly and a socket that errored are
+                // indistinguishable in the log when sessions start dropping.
+                self?.log?("SSE stream read failed: \(error)")
+            }
             guard let self, error == nil, !isComplete else {
                 connection.cancel()
                 return

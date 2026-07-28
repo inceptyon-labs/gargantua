@@ -121,6 +121,56 @@ struct MCPSSETransportLifecycleTests {
         )
     }
 
+    /// Guards the *re-arm* arm of the transport's drain loop, which the test
+    /// above cannot reach: it never writes on the SSE socket, so one receive
+    /// is enough to see its FIN. A client that sends anything at all after the
+    /// handshake consumes that receive, and if the loop does not arm another
+    /// the connection is back to having none pending — its later FIN goes
+    /// unobserved and the session leaks exactly as it did before the drain
+    /// loop existed. Without this test, deleting the recursive re-arm leaves
+    /// the whole SSE suite green.
+    ///
+    /// The byte written is deliberately not a valid HTTP request: the SSE
+    /// response has no `Content-Length` and an unterminated body, so the
+    /// connection is not reusable and the transport is right to discard
+    /// whatever arrives. What is asserted is only that discarding it does not
+    /// cost us the disconnect.
+    @Test("a client that writes on its SSE socket before disconnecting still closes its session")
+    func writeThenDisconnectClosesItsSession() throws {
+        let recorder = ConnectionCloseRecorder()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
+                tokenProvider: { nil },
+                handler: MCPSSETransportTestSupport.echoHandler,
+                onConnectionClose: { connection in recorder.record(connection) }
+            )
+        }
+        defer { transport.stop() }
+
+        let client = try TCPClient(port: Int(port))
+        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        let response = try client.read(until: "\n\n")
+        let sessionID = try #require(
+            MCPSSETransportTestSupport.extractSessionID(from: response),
+            "expected the SSE stream to open and return a session id"
+        )
+        // Consume the receive armed after the `.opened` write. Only a re-armed
+        // one can go on to observe the close below.
+        try client.write("X")
+        client.closeGracefully()
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline && !recorder.contains("sse:\(sessionID)") {
+            usleep(20_000)
+        }
+
+        #expect(
+            recorder.contains("sse:\(sessionID)"),
+            "the session leaked: the drain loop did not re-arm after the client's write"
+        )
+    }
+
     /// Opens an SSE stream over a real socket, reads the initial `endpoint`
     /// event to learn the session id, then severs the client connection.
     /// Returns the session id, or `nil` if the stream never opened.

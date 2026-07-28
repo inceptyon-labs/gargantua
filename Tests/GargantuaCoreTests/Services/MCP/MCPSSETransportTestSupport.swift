@@ -258,8 +258,10 @@ enum MCPSSETransportTestSupport {
         /// that makes the observed disconnect dependent on network-stack
         /// timing. Forcing an RST here makes the peer's next write fail
         /// deterministically. Only tests that specifically need that
-        /// guarantee should call this; everything else keeps the graceful
-        /// close via `deinit`.
+        /// guarantee should call this; everything else takes the graceful
+        /// close — either implicitly via `deinit`, or by calling
+        /// `closeGracefully()` directly when the close has to happen at a
+        /// specific point rather than whenever the client leaves scope.
         ///
         /// Throws rather than silently degrading to a graceful close if any
         /// step fails (no `socketNativeHandle` property, a too-small handle,
