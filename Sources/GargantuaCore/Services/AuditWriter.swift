@@ -9,7 +9,8 @@ import os
 /// instances — and separate processes like the app and the MCP server — can
 /// append to the same file without interleaving. Mutation that is *not* a plain
 /// append (`purgeEntries`, a read-modify-write ending in an atomic rename) is
-/// excluded against appends by an `flock` on the `audit.lock` sidecar.
+/// excluded against appends by an `flock` on the `audit.lock` sidecar — see
+/// `lockFile` for why that sidecar does not live beside the log by default.
 public final class AuditWriter: Sendable {
     /// Directory containing the audit log.
     public let logDirectory: URL
@@ -21,7 +22,16 @@ public final class AuditWriter: Sendable {
     /// The lock cannot live on `audit.json`: `purgeEntries` finishes with an
     /// atomic rename that swaps that file's inode, so an `flock` taken on it
     /// would be stranded on the now-unlinked inode and stop excluding anyone.
-    private var lockFile: URL { logDirectory.appendingPathComponent("audit.lock") }
+    ///
+    /// It also cannot live in `~/Library/Logs/Gargantua`: the bundled
+    /// `system_logs` rule sweeps `~/Library/Logs`, and the only thing sparing
+    /// our directory is an `exclude` line owned by the upstream rules repo. If
+    /// that exclusion ever narrows, a Deep Clean would unlink the sidecar out
+    /// from under a process holding `flock` on it, the next writer would create
+    /// a fresh inode, and the two would proceed unsynchronised. Application
+    /// Support is where this app already keeps durable state and no bundled
+    /// rule reaches a file at its root.
+    public let lockFile: URL
 
     /// Take an exclusive `flock` on the sidecar, returning the locked descriptor.
     ///
@@ -35,6 +45,15 @@ public final class AuditWriter: Sendable {
         // opening for write fails with EACCES when the log directory is
         // read-only, or when the sidecar was created by a differently
         // privileged process (one `sudo` run leaves it root-owned).
+        // The sidecar no longer necessarily lives in the log directory (see
+        // `init`), and `open(O_CREAT)` will not create missing parents. Ignore
+        // the result: if the directory genuinely can't be made, the `open`
+        // below fails and reports the real errno as `lockFailed`.
+        try? FileManager.default.createDirectory(
+            at: lockFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
         let fd = Darwin.open(lockFile.path, O_RDONLY | O_CREAT, 0o644)
         guard fd >= 0 else { throw AuditWriteError.lockFailed(code: errno) }
 
@@ -104,13 +123,27 @@ public final class AuditWriter: Sendable {
 
     /// Creates an AuditWriter targeting the given directory.
     ///
-    /// Defaults to `~/Library/Logs/Gargantua/`.
-    public init(logDirectory: URL? = nil, lockTimeout: TimeInterval = 2) {
-        let dir = logDirectory ?? FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/Gargantua")
+    /// Defaults: log in `~/Library/Logs/Gargantua/`, sidecar in
+    /// `~/Library/Application Support/Gargantua/`. A caller that names its own
+    /// `logDirectory` — every test, and any embedder — gets the sidecar
+    /// alongside its log instead, so two writers pointed at one directory still
+    /// exclude each other without contending on a process-wide shared path.
+    public init(
+        logDirectory: URL? = nil,
+        lockDirectory: URL? = nil,
+        lockTimeout: TimeInterval = 2
+    ) {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let dir = logDirectory ?? home.appendingPathComponent("Library/Logs/Gargantua")
         self.logDirectory = dir
         self.logFile = dir.appendingPathComponent("audit.json")
+
+        let defaultLockDir = logDirectory == nil
+            ? home.appendingPathComponent("Library/Application Support/Gargantua")
+            : dir
+        self.lockFile = (lockDirectory ?? defaultLockDir)
+            .appendingPathComponent("audit.lock")
+
         self.lockTimeout = lockTimeout.isFinite ? min(max(lockTimeout, 0), 60) : 60
     }
 
