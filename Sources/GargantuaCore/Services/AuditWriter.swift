@@ -31,6 +31,14 @@ public final class AuditWriter: Sendable {
     /// a fresh inode, and the two would proceed unsynchronised. Application
     /// Support is where this app already keeps durable state and no bundled
     /// rule reaches a file at its root.
+    ///
+    /// This relocation is not coordinated across versions: `GargantuaMCP` is a
+    /// separately-launched, long-lived process that reads this path once at
+    /// startup, so an MCP server started before an upgrade keeps flocking the
+    /// old Logs path until its client restarts it, while the upgraded app
+    /// flocks the new Application Support path. During that window the two no
+    /// longer exclude each other, so an MCP append can land between an
+    /// in-app purge's read and its atomic rename and be silently discarded.
     public let lockFile: URL
 
     /// Take an exclusive `flock` on the sidecar, returning the locked descriptor.
@@ -41,21 +49,34 @@ public final class AuditWriter: Sendable {
     /// call opens a fresh descriptor, so a nested call self-deadlocks against
     /// the lock its own caller already holds.
     private func acquireFileLock() throws -> Int32 {
+        // The sidecar no longer necessarily lives in the log directory (see
+        // `init`), and `open(O_CREAT)` will not create missing parents, so the
+        // directory is created here first. The failure is captured rather than
+        // discarded: a root-owned or read-only parent (one `sudo` run, or a
+        // read-only volume) makes this fail every time, and if it were
+        // ignored the `open` below would report ENOENT — pointing at a
+        // missing file rather than the real permissions problem.
+        var lockDirectoryError: String?
+        do {
+            try FileManager.default.createDirectory(
+                at: lockFile.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+        } catch {
+            lockDirectoryError = error.localizedDescription
+        }
+
         // O_RDONLY, not O_WRONLY: flock works on a read-only descriptor, and
         // opening for write fails with EACCES when the log directory is
         // read-only, or when the sidecar was created by a differently
         // privileged process (one `sudo` run leaves it root-owned).
-        // The sidecar no longer necessarily lives in the log directory (see
-        // `init`), and `open(O_CREAT)` will not create missing parents. Ignore
-        // the result: if the directory genuinely can't be made, the `open`
-        // below fails and reports the real errno as `lockFailed`.
-        try? FileManager.default.createDirectory(
-            at: lockFile.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
         let fd = Darwin.open(lockFile.path, O_RDONLY | O_CREAT, 0o644)
-        guard fd >= 0 else { throw AuditWriteError.lockFailed(code: errno) }
+        guard fd >= 0 else {
+            if let lockDirectoryError {
+                throw AuditWriteError.lockDirectoryUnavailable(description: lockDirectoryError)
+            }
+            throw AuditWriteError.lockFailed(code: errno)
+        }
 
         // Poll rather than block: LOCK_EX alone has no timeout, and an
         // unbounded wait on a peer process would hang the caller's thread.
@@ -128,17 +149,24 @@ public final class AuditWriter: Sendable {
     /// `logDirectory` — every test, and any embedder — gets the sidecar
     /// alongside its log instead, so two writers pointed at one directory still
     /// exclude each other without contending on a process-wide shared path.
+    /// The one exception: a `logDirectory` that resolves to the production
+    /// `~/Library/Logs/Gargantua` — the same directory `AuditWriter()` would
+    /// pick by default — is treated exactly like omitting `logDirectory`, so
+    /// the sidecar still lands in Application Support rather than silently
+    /// falling back into the directory `system_logs` sweeps.
     public init(
         logDirectory: URL? = nil,
         lockDirectory: URL? = nil,
         lockTimeout: TimeInterval = 2
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let dir = logDirectory ?? home.appendingPathComponent("Library/Logs/Gargantua")
+        let productionLogDirectory = home.appendingPathComponent("Library/Logs/Gargantua")
+        let dir = logDirectory ?? productionLogDirectory
         self.logDirectory = dir
         self.logFile = dir.appendingPathComponent("audit.json")
 
-        let defaultLockDir = logDirectory == nil
+        let usesProductionLogDirectory = dir.standardizedFileURL == productionLogDirectory.standardizedFileURL
+        let defaultLockDir = usesProductionLogDirectory
             ? home.appendingPathComponent("Library/Application Support/Gargantua")
             : dir
         self.lockFile = (lockDirectory ?? defaultLockDir)
@@ -412,6 +440,11 @@ public enum AuditWriteError: Error, LocalizedError {
     case openFailed(code: Int32)
     case writeFailed(code: Int32)
     case lockFailed(code: Int32)
+    /// The sidecar's parent directory could not be created — e.g. a
+    /// root-owned or read-only ancestor. `description` is the underlying
+    /// `createDirectory` error, captured so this doesn't read as the
+    /// unrelated "missing file" error `open(O_CREAT)` would otherwise report.
+    case lockDirectoryUnavailable(description: String)
 
     public var errorDescription: String? {
         switch self {
@@ -419,6 +452,8 @@ public enum AuditWriteError: Error, LocalizedError {
         case let .openFailed(code): "Failed to open audit log for appending (errno \(code))"
         case let .writeFailed(code): "Failed to append to audit log (errno \(code))"
         case let .lockFailed(code): "Failed to lock the audit log for exclusive access (errno \(code))"
+        case let .lockDirectoryUnavailable(description):
+            "Failed to create the audit lock directory: \(description)"
         }
     }
 }

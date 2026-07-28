@@ -73,4 +73,45 @@ extension AuditWriterTests {
 
         #expect(FileManager.default.fileExists(atPath: lockDir.appendingPathComponent("audit.lock").path))
     }
+
+    @Test("a non-writable lock parent reports the directory as the obstacle, not a generic missing-file error")
+    func lockDirectoryPermissionDeniedIsDiagnosable() throws {
+        let parentDir = try makeTempDir()
+        defer { cleanup(parentDir) }
+        // 0o555: read + execute only. mkdir inside it fails with EACCES even
+        // though withIntermediateDirectories is true, because the immediate
+        // parent itself can't be written to.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: parentDir.path)
+        defer {
+            // Restore before `cleanup(parentDir)` runs, or the temp directory
+            // can't be removed.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parentDir.path)
+        }
+
+        let logDir = try makeTempDir()
+        defer { cleanup(logDir) }
+        let lockDir = parentDir.appendingPathComponent("not-yet-created")
+
+        let writer = AuditWriter(logDirectory: logDir, lockDirectory: lockDir)
+
+        do {
+            try writer.write(makeEntry(path: "/denied"))
+            Issue.record("expected write(_:) to throw when the lock directory can't be created")
+        } catch let AuditWriteError.lockDirectoryUnavailable(description) {
+            #expect(!description.isEmpty)
+        } catch {
+            Issue.record("expected .lockDirectoryUnavailable, got \(error)")
+        }
+    }
+
+    @Test("an explicit logDirectory equal to the production Logs directory still gets the Application Support sidecar")
+    func explicitProductionLogDirectoryStillUsesApplicationSupport() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let productionLogDirectory = home.appendingPathComponent("Library/Logs/Gargantua")
+
+        let writer = AuditWriter(logDirectory: productionLogDirectory)
+
+        #expect(writer.lockFile.path.hasSuffix("Library/Application Support/Gargantua/audit.lock"))
+        #expect(!writer.lockFile.path.contains("/Library/Logs/"))
+    }
 }
