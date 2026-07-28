@@ -107,9 +107,8 @@ public struct MCPToolArguments: Sendable, Equatable {
     /// failures to `MCPToolError.invalidParams` so the dispatcher reports
     /// them as JSON-RPC `-32602`.
     public func decode<T: Decodable>(_ type: T.Type) throws -> T {
-        let data = try JSONEncoder().encode(MCPJSONAny.object(raw))
         do {
-            return try JSONDecoder().decode(type, from: data)
+            return try MCPEncoding.decodeFromJSONAny(type, from: .object(raw))
         } catch {
             throw MCPToolError.invalidParams("Invalid arguments: \(Self.describe(error))")
         }

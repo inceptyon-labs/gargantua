@@ -69,4 +69,14 @@ struct MCPEncodingTests {
         #expect(json.contains("\"\(Self.fixedISO)\""))
         #expect(!json.contains("797610600"))  // reference-date seconds
     }
+
+    @Test("tool arguments decode an ISO-8601 string into a Date field")
+    func toolArgumentsDecodeISO8601Date() throws {
+        let args = MCPToolArguments([
+            "label": .string("scan"),
+            "recordedAt": .string(Self.fixedISO),
+        ])
+        let decoded = try args.decode(DateBearingPayload.self)
+        #expect(decoded.recordedAt == Self.fixedDate)
+    }
 }
