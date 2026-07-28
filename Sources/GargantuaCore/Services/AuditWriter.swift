@@ -59,8 +59,8 @@ public final class AuditWriter: Sendable {
     /// `lockFile`: if the upstream `*/Gargantua` exclusion on `system_logs` ever
     /// narrows and a Deep Clean unlinks this sidecar, current builds still
     /// exclude each other through `lockFile`. Remove one release after the
-    /// relocation ships.
-    public let legacyLockFile: URL?
+    /// relocation ships. Tracked by #gargantua-0r0r.
+    let legacyLockFile: URL?
 
     /// Take an exclusive `flock` on one sidecar, returning the locked descriptor.
     ///
@@ -135,6 +135,15 @@ public final class AuditWriter: Sendable {
             if let legacyLockFile {
                 acquired.append(try acquireDescriptor(at: legacyLockFile, deadline: deadline))
             }
+            // Identity, not spelling: if the legacy sidecar we just locked IS
+            // the current one by inode, we already hold it and a second
+            // acquisition would block against ourselves until the deadline,
+            // turning every audit write into a timeout. Checking here rather
+            // than in `init` also closes the time-of-check/time-of-use gap a
+            // path comparison inherently has.
+            if let held = acquired.first, isSameFile(descriptor: held, asPathOf: lockFile) {
+                return acquired
+            }
             acquired.append(try acquireDescriptor(at: lockFile, deadline: deadline))
         } catch {
             releaseFileLock(acquired)
@@ -149,6 +158,21 @@ public final class AuditWriter: Sendable {
             _ = flock(fd, LOCK_UN)
             Darwin.close(fd)
         }
+    }
+
+    /// Whether an already-locked descriptor and a path name the same inode.
+    ///
+    /// Path spelling can't answer this: a hardlink, a symlink planted after
+    /// `init` ran, or a case-variant spelling on a case-insensitive volume all
+    /// make two different paths name one file. `stat` rather than `open`, so a
+    /// missing current sidecar stays missing and is created by the acquisition
+    /// that follows.
+    private func isSameFile(descriptor fd: Int32, asPathOf url: URL) -> Bool {
+        var heldStat = stat()
+        guard fstat(fd, &heldStat) == 0 else { return false }
+        var candidateStat = stat()
+        guard stat(url.path, &candidateStat) == 0 else { return false }
+        return heldStat.st_dev == candidateStat.st_dev && heldStat.st_ino == candidateStat.st_ino
     }
 
     /// Append one already-encoded line via an `O_APPEND` descriptor.
@@ -184,7 +208,7 @@ public final class AuditWriter: Sendable {
         return encoder
     }()
 
-    /// How long a caller waits for the sidecar before giving up.
+    /// How long a caller waits for the whole set of sidecars before giving up.
     ///
     /// `flock(LOCK_EX)` blocks forever, and `write(_:)` runs on the main thread
     /// from the Deep Clean confirmation path — a wedged peer process holding the
@@ -208,15 +232,27 @@ public final class AuditWriter: Sendable {
     /// resolves symlinks and normalises `.`/`..`/trailing slashes, so a
     /// symlinked home directory still matches; it does not detect a
     /// case-variant spelling of the same path on a case-insensitive volume.
-    ///
+    public convenience init(
+        logDirectory: URL? = nil,
+        lockDirectory: URL? = nil,
+        lockTimeout: TimeInterval = 2
+    ) {
+        self.init(
+            logDirectory: logDirectory,
+            lockDirectory: lockDirectory,
+            legacyLockDirectory: nil,
+            lockTimeout: lockTimeout
+        )
+    }
+
     /// `legacyLockDirectory` overrides where the pre-relocation sidecar is
     /// sought (see `legacyLockFile`). It exists so tests can exercise the
     /// upgrade window without touching the real home directory; production
     /// callers should omit it and let the default production layout apply.
-    public init(
+    init(
         logDirectory: URL? = nil,
         lockDirectory: URL? = nil,
-        legacyLockDirectory: URL? = nil,
+        legacyLockDirectory: URL?,
         lockTimeout: TimeInterval = 2
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser
