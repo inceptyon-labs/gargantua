@@ -168,22 +168,17 @@ enum MCPSSETransportTestSupport {
     /// giving up.
     ///
     /// Session-isolation note: `waitUntilAcceptingConnections` opens a real
-    /// `GET /sse` against the transport under construction, which does
-    /// register a session with `MCPSSETransport` the same as any other
-    /// client. That session cannot be observed by a test's own
-    /// `onConnectionClose` recorder (e.g.
-    /// `MCPSSETransportLifecycleTests.ConnectionCloseRecorder`), for two
-    /// independent reasons: (1) the probe closes gracefully, never POSTs to
-    /// `/message`, and `MCPSSETransport.handle` never re-arms a receive on
-    /// an SSE connection after writing its `.opened` response — so the
-    /// transport never observes the probe's disconnect and never invokes
-    /// `onConnectionClose` for it at all (the same pre-existing "no receive
-    /// re-armed" gap noted in `MCPSSETransport.swift`); and (2) even if it
-    /// did, every recorder-based assertion in this suite is a `contains(_:)`
-    /// check for one specific session id, not an exhaustive count, so an
-    /// incidental extra entry could not flip a passing assertion to a
-    /// failing one. No reordering of construction vs. probing was needed as
-    /// a result.
+    /// `GET /sse` against the transport under construction, which registers a
+    /// session with `MCPSSETransport` the same as any other client. Because
+    /// the transport arms a receive on an opened SSE connection, the probe's
+    /// graceful close *is* observed, so a test's own `onConnectionClose`
+    /// recorder (e.g.
+    /// `MCPSSETransportLifecycleTests.ConnectionCloseRecorder`) will see the
+    /// probe's session id alongside the one the test opened itself. That is
+    /// harmless: every recorder-based assertion in this suite is a
+    /// `contains(_:)` check for one specific session id, never an exhaustive
+    /// count, so an incidental extra entry cannot flip a passing assertion to
+    /// a failing one.
     static func startTransport(
         attempts: Int = 3,
         readinessTimeout: TimeInterval = 5,
@@ -246,7 +241,7 @@ enum MCPSSETransportTestSupport {
             closeGracefully()
         }
 
-        private func closeGracefully() {
+        func closeGracefully() {
             guard !isClosed else { return }
             isClosed = true
             input.close()

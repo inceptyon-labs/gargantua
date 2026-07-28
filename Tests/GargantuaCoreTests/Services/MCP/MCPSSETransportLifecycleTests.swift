@@ -5,7 +5,9 @@ import Testing
 /// End-to-end lifecycle coverage for `MCPSSETransport` over a real socket:
 /// open an SSE stream, sever the client connection, then drive it hard
 /// enough that `NWConnection` notices — and assert the session is cleaned up
-/// on the server side rather than leaked.
+/// on the server side rather than leaked. Covers two ways a client can go
+/// away: an RST surfaced by a failed write after a `/message` POST, and a
+/// plain graceful FIN with no POST at all.
 ///
 /// This is **not** a data-race regression test. It runs against a real
 /// listening socket in the order "open, then die," so the close is observed
@@ -74,6 +76,49 @@ struct MCPSSETransportLifecycleTests {
         }
 
         #expect(recorder.contains("sse:\(sessionID)"), "the failed connection's SSE session was never closed (leaked)")
+    }
+
+    /// The companion to the test above, for the case where *nothing* ever
+    /// writes to the connection again: a client GETs `/sse`, reads its
+    /// endpoint event, and closes the socket without ever POSTing to
+    /// `/message`. Only a receive armed on the SSE connection can observe that
+    /// FIN — with none outstanding, `NWConnection` never transitions,
+    /// `stateUpdateHandler` never fires, and both the router session and the
+    /// connection leak for the process lifetime.
+    @Test("a client that disconnects without posting still closes its session")
+    func disconnectWithoutPostClosesItsSession() throws {
+        let recorder = ConnectionCloseRecorder()
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
+                tokenProvider: { nil },
+                handler: MCPSSETransportTestSupport.echoHandler,
+                onConnectionClose: { connection in recorder.record(connection) }
+            )
+        }
+        defer { transport.stop() }
+
+        let client = try TCPClient(port: Int(port))
+        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        let response = try client.read(until: "\n\n")
+        let sessionID = try #require(
+            MCPSSETransportTestSupport.extractSessionID(from: response),
+            "expected the SSE stream to open and return a session id"
+        )
+        // A plain graceful close (FIN), deliberately — unlike the RST forced
+        // by the test above. This is how a client ordinarily goes away, and
+        // nothing else will ever touch this connection to surface it.
+        client.closeGracefully()
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline && !recorder.contains("sse:\(sessionID)") {
+            usleep(20_000)
+        }
+
+        #expect(
+            recorder.contains("sse:\(sessionID)"),
+            "the disconnected client's SSE session was never closed (leaked)"
+        )
     }
 
     /// Opens an SSE stream over a real socket, reads the initial `endpoint`

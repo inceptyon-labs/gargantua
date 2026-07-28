@@ -103,6 +103,30 @@ public final class MCPSSETransport: @unchecked Sendable {
         }
     }
 
+    /// Keeps a receive outstanding on an opened SSE stream so the peer going
+    /// away is actually observed.
+    ///
+    /// From here on the connection is write-only — the client has no further
+    /// requests to make on this socket — so there is nothing left to parse.
+    /// But an `NWConnection` with no pending receive does not transition to
+    /// `.cancelled`/`.failed` when the peer sends FIN, so the
+    /// `stateUpdateHandler` installed in `handle(_:on:)` would never fire and
+    /// `router.closeStream` would never run: the session stays in the routing
+    /// table and the connection stays alive for the process lifetime, and both
+    /// grow unbounded on a long-lived daemon. Arming a receive that discards
+    /// whatever it gets makes EOF (or a read error) reach us, and the
+    /// `cancel()` below is what drives the transition that tears the session
+    /// down.
+    private func drainClientBytes(on connection: NWConnection) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { [weak self] _, _, isComplete, error in
+            guard let self, error == nil, !isComplete else {
+                connection.cancel()
+                return
+            }
+            self.drainClientBytes(on: connection)
+        }
+    }
+
     private func handle(_ request: MCPHTTPRequest, on connection: NWConnection) {
         let storedToken = (try? tokenProvider())
         if request.method == "GET", request.path == "/sse" {
@@ -161,6 +185,7 @@ public final class MCPSSETransport: @unchecked Sendable {
                     connection.cancel()
                 default:
                     write(response, to: connection, closeAfterWrite: false)
+                    drainClientBytes(on: connection)
                 }
             case .rejected(let response):
                 write(response, to: connection, closeAfterWrite: true)
