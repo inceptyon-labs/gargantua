@@ -59,7 +59,11 @@ public final class PersistedProfile {
 @Model
 public final class PersistedAuditEntry {
     /// Stable audit entry identifier.
-    public var entryID: UUID
+    ///
+    /// Unique so one operation is one row at the schema level, not merely by
+    /// `recordAuditEntry` convention — and so its upsert lookup hits an index
+    /// instead of scanning the table on every audit write.
+    @Attribute(.unique) public var entryID: UUID
     /// Time when the audited action occurred.
     public var timestamp: Date
     /// Tool or subsystem that produced the audit entry.

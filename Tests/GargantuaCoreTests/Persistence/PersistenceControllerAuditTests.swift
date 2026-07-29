@@ -503,6 +503,39 @@ extension PersistenceControllerAuditTests {
         #expect(fetched[0].status == .completed)
     }
 
+    @Test("The store itself keeps one row per entryID, not just recordAuditEntry")
+    func entryIDUniquenessIsEnforcedByTheStore() throws {
+        let ctrl = try makeController()
+        let id = UUID()
+
+        func makeRow(path: String, bytes: Int64, status: AuditEntryStatus) -> PersistedAuditEntry {
+            PersistedAuditEntry(
+                from: AuditEntry(
+                    id: id,
+                    timestamp: Date(),
+                    tool: "native",
+                    command: "clean",
+                    files: [AuditFile(path: path, size: 10)],
+                    safetyLevel: .safe,
+                    confirmationMethod: .singleButton,
+                    bytesFreed: bytes,
+                    status: status
+                )
+            )
+        }
+
+        // Bypass recordAuditEntry's upsert entirely — insert two raw rows.
+        ctrl.context.insert(makeRow(path: "/first", bytes: 0, status: .attempted))
+        try ctrl.context.save()
+        ctrl.context.insert(makeRow(path: "/second", bytes: 100, status: .completed))
+        try ctrl.context.save()
+
+        let rows = try ctrl.context.fetch(FetchDescriptor<PersistedAuditEntry>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.statusRaw == "completed")
+        #expect(rows.first?.bytesFreed == 100)
+    }
+
     // MARK: - Scan History
 
     @Test("Record and fetch scan history")
