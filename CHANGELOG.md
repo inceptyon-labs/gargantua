@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-07-29
+
+### Added
+
+- **Two-phase audit trail for destructive developer-tool actions.** Cleanup and cache-purge operations now record an "attempted" audit entry before touching disk and a "completed" entry after, so a crash or force-quit mid-operation still leaves forensic evidence instead of vanishing without a trace.
+- **Self-service reactivation for orphaned licenses.** A persistent "Manage activated devices" link in the Activate card points to the Polar customer portal, so a reinstalled or replaced Mac can free its own stale activation slot without contacting support.
+- **Clearer helper-registration failures.** Settings now distinguishes a helper that isn't bundled from one macOS actively refuses to register, and offers a retry when registration fails.
+
+### Fixed
+
+- **Failed actions no longer look successful.** A crashed Dashboard triage scan used to render a green "No triage groups found" instead of an error, and failed Duplicate Finder deletes vanished with no summary; these, along with license activation, audit-trail access, Disk Explorer trash actions, Mac deactivation, and bundled-rules loading, now surface their real failure instead of silently succeeding.
+- **Disk Explorer navigation.** Escape now backs out one level instead of resetting the whole session and forcing a full rescan, ⌘[ has a visible breadcrumb control, and the treemap's "Others" rollup tile now opens the list view instead of being a dead end.
+- **pnpm cache preview.** Spawned developer tools now run from the home directory instead of a read-only working directory, fixing "Preview failed" for pnpm store previews.
+- **MCP server stream stability.** SSE sessions are synchronized to stop a stream leak, re-arm correctly when a peer disconnects, and are cancelled cleanly when the transport stops.
+- **Singular byte counts.** File sizes of exactly 1 byte now read "1 byte" instead of "1 bytes".
+- **License key entry link styling.** The "Already bought? Enter your key" link no longer wraps to two lines or grabs the default focus ring on the unlock sheet.
+- **Stale helper registration record.** Settings now clears an orphaned Background Task Management record before retrying helper registration, instead of retrying into the same broken state.
+
+### Security
+
+- **Hardened the local MCP server against browser-based attacks.** The SSE endpoint now validates the Host header against loopback-only requests to stop DNS rebinding, shards its clean rate limit per connection instead of per client-supplied name, and fails closed on unattended cleans unless explicitly allowed.
+
 ## [Unreleased]
 
 ### Fixed
