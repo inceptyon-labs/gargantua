@@ -80,7 +80,10 @@ struct PermissionsSettingsSectionTests {
 
     @Test("Successful registration reports the registered status")
     func registrationRetrySucceeds() {
-        let installer = StubPrivilegedUninstallHelperInstaller(registerResult: .success(.enabled))
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .notRegistered,
+            registerResult: .success(.enabled)
+        )
 
         let outcome = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
 
@@ -90,6 +93,7 @@ struct PermissionsSettingsSectionTests {
     @Test("Failed registration reports the error message and never the registered outcome")
     func registrationRetryFails() {
         let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .notRegistered,
             registerResult: .failure(StubInstallerError(message: "boom"))
         )
 
@@ -97,6 +101,91 @@ struct PermissionsSettingsSectionTests {
 
         #expect(outcome == .failed("boom"))
         #expect(outcome != .registered(.enabled))
+    }
+
+    // MARK: - Clearing a stale Background Task Management record
+
+    //
+    // Issue #9 again: the reporter's helper was bundled, signed and notarized,
+    // the app was in /Applications, and `register()` still failed — macOS was
+    // holding an orphaned BTM record from an earlier copy. `register()` alone
+    // walks back into that record, so `.notFound` has to unregister first.
+
+    @Test("Not found unregisters before registering so the stale record is dropped")
+    func notFoundUnregistersBeforeRegistering() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .notFound,
+            registerResult: .success(.requiresApproval)
+        )
+
+        let outcome = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(installer.calls == [.status, .unregister, .register])
+        #expect(outcome == .registered(.requiresApproval))
+    }
+
+    @Test("An unregister that throws still lets the retry register")
+    func failedUnregisterStillRegisters() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .notFound,
+            registerResult: .success(.requiresApproval),
+            unregisterResult: .failure(StubInstallerError(message: "nothing to remove"))
+        )
+
+        let outcome = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(installer.calls == [.status, .unregister, .register])
+        #expect(outcome == .registered(.requiresApproval))
+    }
+
+    @Test("A register that fails after the unregister surfaces the register error")
+    func registerErrorWinsOverUnregisterError() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .notFound,
+            registerResult: .failure(StubInstallerError(message: "register boom")),
+            unregisterResult: .failure(StubInstallerError(message: "unregister boom"))
+        )
+
+        let outcome = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(installer.calls == [.status, .unregister, .register])
+        #expect(outcome == .failed("register boom"))
+    }
+
+    @Test("Requires approval registers without unregistering the pending entry")
+    func requiresApprovalDoesNotUnregister() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .requiresApproval,
+            registerResult: .success(.requiresApproval)
+        )
+
+        _ = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(!installer.calls.contains(.unregister))
+    }
+
+    @Test("Not registered registers without unregistering")
+    func notRegisteredDoesNotUnregister() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .notRegistered,
+            registerResult: .success(.enabled)
+        )
+
+        _ = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(!installer.calls.contains(.unregister))
+    }
+
+    @Test("Unknown status registers without unregistering")
+    func unknownStatusDoesNotUnregister() {
+        let installer = StubPrivilegedUninstallHelperInstaller(
+            statusResult: .unknown(99),
+            registerResult: .success(.enabled)
+        )
+
+        _ = PermissionsSettingsSection.registrationRetryOutcome(installer: installer)
+
+        #expect(!installer.calls.contains(.unregister))
     }
 
     // MARK: - Poll clearing a stale registerError
@@ -116,23 +205,47 @@ struct PermissionsSettingsSectionTests {
     }
 }
 
-/// Test double for `PrivilegedUninstallHelperInstalling` whose `register()`
-/// result is fixed at construction, so tests can drive the success and
-/// throwing paths of `registrationRetryOutcome` without touching real
-/// `SMAppService` state.
-private struct StubPrivilegedUninstallHelperInstaller: PrivilegedUninstallHelperInstalling {
-    var statusResult: PrivilegedHelperStatus = .notFound
-    var registerResult: Result<PrivilegedHelperStatus, StubInstallerError>
-    var unregisterResult: Result<PrivilegedHelperStatus, StubInstallerError> = .success(.notRegistered)
+/// Test double for `PrivilegedUninstallHelperInstalling` whose results are
+/// fixed at construction, so tests can drive the success and throwing paths of
+/// `registrationRetryOutcome` without touching real `SMAppService` state.
+/// A class rather than a struct so the recorded call order survives being
+/// passed into the (non-`inout`) helper under test.
+private final class StubPrivilegedUninstallHelperInstaller: PrivilegedUninstallHelperInstalling,
+    @unchecked Sendable {
+    enum Call: Equatable {
+        case status
+        case register
+        case unregister
+    }
 
-    func status() -> PrivilegedHelperStatus { statusResult }
+    let statusResult: PrivilegedHelperStatus
+    let registerResult: Result<PrivilegedHelperStatus, StubInstallerError>
+    let unregisterResult: Result<PrivilegedHelperStatus, StubInstallerError>
+    private(set) var calls: [Call] = []
+
+    init(
+        statusResult: PrivilegedHelperStatus = .notFound,
+        registerResult: Result<PrivilegedHelperStatus, StubInstallerError>,
+        unregisterResult: Result<PrivilegedHelperStatus, StubInstallerError> = .success(.notRegistered)
+    ) {
+        self.statusResult = statusResult
+        self.registerResult = registerResult
+        self.unregisterResult = unregisterResult
+    }
+
+    func status() -> PrivilegedHelperStatus {
+        calls.append(.status)
+        return statusResult
+    }
 
     func register() throws -> PrivilegedHelperStatus {
-        try registerResult.get()
+        calls.append(.register)
+        return try registerResult.get()
     }
 
     func unregister() throws -> PrivilegedHelperStatus {
-        try unregisterResult.get()
+        calls.append(.unregister)
+        return try unregisterResult.get()
     }
 }
 

@@ -91,9 +91,30 @@ struct PermissionsSettingsSection: View {
     /// without touching any `@State` — the view applies the result. Pure so
     /// tests can drive both the success and throwing paths with a stub
     /// installer.
+    ///
+    /// A `.notFound` status on a bundle that ships the helper is the signature
+    /// of a stale Background Task Management record: macOS is holding an
+    /// orphaned entry for an earlier translocated or differently-signed copy of
+    /// the app and keeps declining to register this one (issue #9, still
+    /// reproducing after a clean reinstall into `/Applications`). `register()`
+    /// on its own walks straight back into that record and fails again, so drop
+    /// it first — that is why the manual reset sequence starts with an
+    /// unregister too.
+    ///
+    /// The status is re-read here rather than taken from the row's `@State`,
+    /// which the 2s poll can leave up to a poll stale at the moment of the tap.
+    /// Only `.notFound` gets the unregister: `.requiresApproval` means the entry
+    /// exists and is waiting on the user, and tearing it down would throw away
+    /// an approval decision macOS is already tracking.
     static func registrationRetryOutcome(
         installer: any PrivilegedUninstallHelperInstalling
     ) -> RegistrationRetryOutcome {
+        if installer.status() == .notFound {
+            // Ignored: there may be nothing registered to remove, which is not a
+            // reason to skip the retry. If registration still fails, the error
+            // that reaches the user is the one from `register()`.
+            _ = try? installer.unregister()
+        }
         do {
             return .registered(try installer.register())
         } catch {
