@@ -11,6 +11,10 @@ extension PersistenceController {
     /// process died mid-act leaves its row at `.attempted` — that surviving
     /// intent record is the forensic signal, and nothing overwrites it.
     ///
+    /// Recording an `.attempted` entry for an id already stored as `.completed`
+    /// is a no-op: the outcome is terminal, so a reused id can't downgrade a
+    /// finished operation into a false crash record.
+    ///
     /// The JSONL log written by `AuditWriter` stays append-only: it cannot
     /// safely rewrite a line mid-crash, so it collapses pairs on read instead.
     public func recordAuditEntry(_ entry: AuditEntry) throws {
@@ -20,6 +24,12 @@ extension PersistenceController {
         )
         descriptor.fetchLimit = 1
         if let existing = try context.fetch(descriptor).first {
+            // The outcome is terminal. An `.attempted` entry arriving for an id
+            // already recorded as `.completed` means the id was reused, not that
+            // the finished operation restarted — overwriting would replace a real
+            // forensic record with a false crash signal, so drop the write.
+            guard !(existing.statusRaw == AuditEntryStatus.completed.rawValue
+                && entry.status == .attempted) else { return }
             existing.update(from: entry)
         } else {
             context.insert(PersistedAuditEntry(from: entry))

@@ -189,11 +189,12 @@ struct PersistenceControllerAuditTests {
         #expect(fetched[0].bytesFreed == 100)
     }
 
-    @Test("Recording the outcome updates the intent row instead of adding one")
+    @Test("Recording the outcome updates every field of the intent row in place")
     func outcomeUpsertsRatherThanInsertingASecondRow() throws {
         let ctrl = try makeController()
         let id = UUID()
         let start = Date().addingTimeInterval(-60)
+        let outcomeStamp = start.addingTimeInterval(5)
 
         try ctrl.recordAuditEntry(
             AuditEntry(
@@ -201,10 +202,17 @@ struct PersistenceControllerAuditTests {
                 timestamp: start,
                 tool: "native",
                 command: "clean",
-                files: [AuditFile(path: "/upsert", size: 100)],
+                files: [AuditFile(path: "/intent", size: 1)],
                 safetyLevel: .safe,
                 confirmationMethod: .singleButton,
+                cleanupMethod: .trash,
                 bytesFreed: 0,
+                transport: nil,
+                clientID: nil,
+                kind: .path,
+                commandToolVersion: nil,
+                commandExitCode: nil,
+                commandArguments: nil,
                 status: .attempted
             )
         )
@@ -212,23 +220,52 @@ struct PersistenceControllerAuditTests {
         #expect(afterIntent.count == 1)
         #expect(afterIntent.first?.statusRaw == "attempted")
 
+        // Every field differs from the intent line, so a missing assignment in
+        // update(from:) leaves an observable stale value.
         try ctrl.recordAuditEntry(
             AuditEntry(
                 id: id,
-                timestamp: start.addingTimeInterval(5),
-                tool: "native",
-                command: "clean",
-                files: [AuditFile(path: "/upsert", size: 100)],
-                safetyLevel: .safe,
-                confirmationMethod: .singleButton,
+                timestamp: outcomeStamp,
+                tool: "xcodebuild",
+                command: "purge",
+                files: [AuditFile(path: "/outcome", size: 2)],
+                safetyLevel: .review,
+                confirmationMethod: .summaryDialog,
+                cleanupMethod: .toolNative,
                 bytesFreed: 100,
+                transport: "mcp",
+                clientID: "test-client",
+                kind: .command,
+                commandToolVersion: "Xcode 16.2",
+                commandExitCode: 3,
+                commandArguments: ["simctl", "delete"],
                 status: .completed
             )
         )
-        let afterOutcome = try ctrl.context.fetch(FetchDescriptor<PersistedAuditEntry>())
-        #expect(afterOutcome.count == 1)
-        #expect(afterOutcome.first?.statusRaw == "completed")
-        #expect(afterOutcome.first?.bytesFreed == 100)
+
+        let rows = try ctrl.context.fetch(FetchDescriptor<PersistedAuditEntry>())
+        #expect(rows.count == 1)
+        let row = try #require(rows.first)
+        #expect(row.entryID == id)
+        #expect(abs(row.timestamp.timeIntervalSince(outcomeStamp)) < 0.001)
+        #expect(row.tool == "xcodebuild")
+        #expect(row.command == "purge")
+        #expect(row.safetyLevel == "review")
+        #expect(row.confirmationMethod == "summaryDialog")
+        #expect(row.cleanupMethod == "tool_native")
+        #expect(row.bytesFreed == 100)
+        #expect(row.transport == "mcp")
+        #expect(row.clientID == "test-client")
+        #expect(row.kindRaw == "command")
+        #expect(row.commandToolVersion == "Xcode 16.2")
+        #expect(row.commandExitCode == 3)
+        #expect(row.statusRaw == "completed")
+
+        // filesData and commandArgumentsData are JSON blobs — assert through the
+        // domain round-trip so the encoding is exercised too.
+        let domain = try #require(row.toDomain())
+        #expect(domain.files.map(\.path) == ["/outcome"])
+        #expect(domain.commandArguments == ["simctl", "delete"])
     }
 
     @Test("An orphaned attempted entry survives collapse")
@@ -290,6 +327,48 @@ struct PersistenceControllerAuditTests {
 // as part of the same "PersistenceController audit entries and scan history"
 // suite.
 extension PersistenceControllerAuditTests {
+
+    @Test("A reused id cannot downgrade a completed record back to attempted")
+    func completedRecordIsNotDowngradedByAReusedID() throws {
+        let ctrl = try makeController()
+        let id = UUID()
+        let start = Date().addingTimeInterval(-60)
+
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: start,
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/finished", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 100,
+                status: .completed
+            )
+        )
+        // Same id reused for a fresh operation's intent line.
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: start.addingTimeInterval(30),
+                tool: "native",
+                command: "purge",
+                files: [AuditFile(path: "/reused", size: 7)],
+                safetyLevel: .review,
+                confirmationMethod: .summaryDialog,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].status == .completed)
+        #expect(fetched[0].command == "clean")
+        #expect(fetched[0].bytesFreed == 100)
+        #expect(fetched[0].files.first?.path == "/finished")
+    }
 
     @Test("Paging across a stored pair skips no entries")
     func pagingAcrossAPairSkipsNoEntries() throws {
