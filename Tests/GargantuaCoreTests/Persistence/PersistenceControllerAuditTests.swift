@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 @testable import GargantuaCore
 
@@ -188,6 +189,48 @@ struct PersistenceControllerAuditTests {
         #expect(fetched[0].bytesFreed == 100)
     }
 
+    @Test("Recording the outcome updates the intent row instead of adding one")
+    func outcomeUpsertsRatherThanInsertingASecondRow() throws {
+        let ctrl = try makeController()
+        let id = UUID()
+        let start = Date().addingTimeInterval(-60)
+
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: start,
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/upsert", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+        let afterIntent = try ctrl.context.fetch(FetchDescriptor<PersistedAuditEntry>())
+        #expect(afterIntent.count == 1)
+        #expect(afterIntent.first?.statusRaw == "attempted")
+
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: start.addingTimeInterval(5),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/upsert", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 100,
+                status: .completed
+            )
+        )
+        let afterOutcome = try ctrl.context.fetch(FetchDescriptor<PersistedAuditEntry>())
+        #expect(afterOutcome.count == 1)
+        #expect(afterOutcome.first?.statusRaw == "completed")
+        #expect(afterOutcome.first?.bytesFreed == 100)
+    }
+
     @Test("An orphaned attempted entry survives collapse")
     func orphanedAttemptedEntrySurvives() throws {
         let ctrl = try makeController()
@@ -248,31 +291,32 @@ struct PersistenceControllerAuditTests {
 // suite.
 extension PersistenceControllerAuditTests {
 
-    @Test("A pair straddling a page boundary does not surface on both pages")
-    func pairStraddlingPageBoundaryAppearsOnce() throws {
+    @Test("Paging across a stored pair skips no entries")
+    func pagingAcrossAPairSkipsNoEntries() throws {
         let ctrl = try makeController()
         let now = Date()
         let pairID = UUID()
 
-        // Rows newest-first: row-0 … row-3, then the pair, then row-6 … row-9.
-        for offset in 0 ..< 4 {
+        // Nine operations, newest first: row-0 … row-3, the pair, row-5 … row-8.
+        for index in 0 ..< 4 {
             try ctrl.recordAuditEntry(
                 AuditEntry(
                     id: UUID(),
-                    timestamp: now.addingTimeInterval(-Double(offset) * 60),
+                    timestamp: now.addingTimeInterval(-Double(index) * 60),
                     tool: "native",
                     command: "clean",
-                    files: [AuditFile(path: "/row-\(offset)", size: 1)],
+                    files: [AuditFile(path: "/row-\(index)", size: 1)],
                     safetyLevel: .safe,
                     confirmationMethod: .singleButton,
                     bytesFreed: 1
                 )
             )
         }
+        // A two-phase pair recorded as intent then outcome under one id.
         try ctrl.recordAuditEntry(
             AuditEntry(
                 id: pairID,
-                timestamp: now.addingTimeInterval(-5 * 60),
+                timestamp: now.addingTimeInterval(-4 * 60 - 30),
                 tool: "native",
                 command: "clean",
                 files: [AuditFile(path: "/pair", size: 100)],
@@ -285,7 +329,7 @@ extension PersistenceControllerAuditTests {
         try ctrl.recordAuditEntry(
             AuditEntry(
                 id: pairID,
-                timestamp: now.addingTimeInterval(-4 * 60),
+                timestamp: now.addingTimeInterval(-4 * 60 - 20),
                 tool: "native",
                 command: "clean",
                 files: [AuditFile(path: "/pair", size: 100)],
@@ -295,14 +339,14 @@ extension PersistenceControllerAuditTests {
                 status: .completed
             )
         )
-        for offset in 6 ..< 10 {
+        for index in 5 ..< 9 {
             try ctrl.recordAuditEntry(
                 AuditEntry(
                     id: UUID(),
-                    timestamp: now.addingTimeInterval(-Double(offset) * 60),
+                    timestamp: now.addingTimeInterval(-Double(index) * 60),
                     tool: "native",
                     command: "clean",
-                    files: [AuditFile(path: "/row-\(offset)", size: 1)],
+                    files: [AuditFile(path: "/row-\(index)", size: 1)],
                     safetyLevel: .safe,
                     confirmationMethod: .singleButton,
                     bytesFreed: 1
@@ -310,13 +354,23 @@ extension PersistenceControllerAuditTests {
             )
         }
 
-        let page1 = try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 5, offset: 0)
-        let page2 = try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 5, offset: 5)
+        // Walk every page and prove the union is the whole store, with no
+        // duplicates and nothing skipped.
+        var paged: [AuditEntry] = []
+        for offset in stride(from: 0, to: 9, by: 3) {
+            paged += try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 3, offset: offset)
+        }
 
-        let pairOccurrences = (page1 + page2).filter { $0.id == pairID }
-        #expect(pairOccurrences.count == 1)
-        #expect(pairOccurrences.first?.status == .completed)
-        #expect(pairOccurrences.first?.bytesFreed == 100)
+        #expect(paged.count == 9)
+        #expect(Set(paged.map(\.id)).count == 9)
+
+        let allAtOnce = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(allAtOnce.count == 9)
+        #expect(paged.map(\.id) == allAtOnce.map(\.id))
+
+        let pairRow = allAtOnce.first { $0.id == pairID }
+        #expect(pairRow?.status == .completed)
+        #expect(pairRow?.bytesFreed == 100)
     }
 
     @Test("A legacy row with no status reads back as completed")
@@ -368,45 +422,6 @@ extension PersistenceControllerAuditTests {
         let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
         #expect(fetched.count == 1)
         #expect(fetched[0].status == .completed)
-    }
-
-    @Test("A pair with identical timestamps still collapses to the outcome line")
-    func pairWithTiedTimestampsKeepsOutcome() throws {
-        let ctrl = try makeController()
-        let id = UUID()
-        let stamp = Date()
-
-        try ctrl.recordAuditEntry(
-            AuditEntry(
-                id: id,
-                timestamp: stamp,
-                tool: "native",
-                command: "clean",
-                files: [AuditFile(path: "/tied", size: 100)],
-                safetyLevel: .safe,
-                confirmationMethod: .singleButton,
-                bytesFreed: 0,
-                status: .attempted
-            )
-        )
-        try ctrl.recordAuditEntry(
-            AuditEntry(
-                id: id,
-                timestamp: stamp,
-                tool: "native",
-                command: "clean",
-                files: [AuditFile(path: "/tied", size: 100)],
-                safetyLevel: .safe,
-                confirmationMethod: .singleButton,
-                bytesFreed: 100,
-                status: .completed
-            )
-        )
-
-        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
-        #expect(fetched.count == 1)
-        #expect(fetched[0].status == .completed)
-        #expect(fetched[0].bytesFreed == 100)
     }
 
     // MARK: - Scan History

@@ -119,6 +119,29 @@ public final class PersistedAuditEntry {
         self.statusRaw = entry.status.rawValue
     }
 
+    /// Overwrite this row from a later entry sharing the same `id`.
+    ///
+    /// A destructive operation records an `.attempted` row before it acts and a
+    /// `.completed` row after; both carry one `id` and the later one wins, so
+    /// the outcome overwrites the intent in place rather than adding a row.
+    public func update(from entry: AuditEntry) {
+        self.timestamp = entry.timestamp
+        self.tool = entry.tool
+        self.command = entry.command
+        self.filesData = (try? JSONEncoder().encode(entry.files)) ?? Data()
+        self.safetyLevel = entry.safetyLevel.rawValue
+        self.confirmationMethod = entry.confirmationMethod.rawValue
+        self.cleanupMethod = entry.cleanupMethod.rawValue
+        self.bytesFreed = entry.bytesFreed
+        self.transport = entry.transport
+        self.clientID = entry.clientID
+        self.kindRaw = entry.kind.rawValue
+        self.commandToolVersion = entry.commandToolVersion
+        self.commandExitCode = entry.commandExitCode
+        self.commandArgumentsData = entry.commandArguments.flatMap { try? JSONEncoder().encode($0) }
+        self.statusRaw = entry.status.rawValue
+    }
+
     /// Convert back to domain model.
     public func toDomain() -> AuditEntry? {
         guard let safety = SafetyLevel(rawValue: safetyLevel),

@@ -2,9 +2,28 @@ import Foundation
 import SwiftData
 
 extension PersistenceController {
-    /// Record an audit entry to the SwiftData store.
+    /// Record an audit entry to the SwiftData store, upserting on `id`.
+    ///
+    /// A destructive operation records an `.attempted` entry before it acts and
+    /// a `.completed` entry after, both carrying the same `id`. The store keeps
+    /// one row per operation and the later entry overwrites the earlier one, so
+    /// callers never see a two-phase pair as two rows. An operation whose
+    /// process died mid-act leaves its row at `.attempted` — that surviving
+    /// intent record is the forensic signal, and nothing overwrites it.
+    ///
+    /// The JSONL log written by `AuditWriter` stays append-only: it cannot
+    /// safely rewrite a line mid-crash, so it collapses pairs on read instead.
     public func recordAuditEntry(_ entry: AuditEntry) throws {
-        context.insert(PersistedAuditEntry(from: entry))
+        let entryID = entry.id
+        var descriptor = FetchDescriptor<PersistedAuditEntry>(
+            predicate: #Predicate { $0.entryID == entryID }
+        )
+        descriptor.fetchLimit = 1
+        if let existing = try context.fetch(descriptor).first {
+            existing.update(from: entry)
+        } else {
+            context.insert(PersistedAuditEntry(from: entry))
+        }
         try context.save()
     }
 
@@ -15,12 +34,9 @@ extension PersistenceController {
     /// query. `offset` lets callers paginate when they need a sliding view
     /// instead of the most-recent batch.
     ///
-    /// Two-phase intent+outcome pairs sharing an `id` collapse to one row,
-    /// keeping the later line — the same rule `AuditWriter.readEntries()`
-    /// applies to the JSONL path. Collapsing happens across the whole prefix
-    /// up to the requested page's end, before `offset`/`limit` are applied, so
-    /// a pair straddling a page boundary can't surface on both pages. A page
-    /// whose prefix contained pairs may return fewer than `limit` rows.
+    /// The store holds one row per operation — `recordAuditEntry` upserts on
+    /// `id` — so pagination here is exact: no pair-collapsing happens on read,
+    /// and every page returns exactly `limit` rows while rows remain.
     public func fetchAuditEntries(
         from startDate: Date,
         to endDate: Date = Date(),
@@ -32,29 +48,11 @@ extension PersistenceController {
         }
         var descriptor = FetchDescriptor(
             predicate: predicate,
-            sortBy: [
-                SortDescriptor(\.timestamp, order: .reverse),
-                // Tiebreaker: on an exact timestamp tie SwiftData's row order is
-                // arbitrary, and the collapse would otherwise be free to keep the
-                // intent line. Reverse string order puts "completed" ahead of
-                // "attempted" here, which the chronological flip turns into
-                // "completed" winning the collapse.
-                SortDescriptor(\.statusRaw, order: .reverse),
-            ]
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
-        // Fetch the whole prefix up to the requested page's end, not just the
-        // page: a pair's `.completed` line is newer than its `.attempted` one,
-        // so it always sits at a smaller index here. Collapsing the prefix
-        // therefore always sees the outcome line before the intent line it
-        // supersedes. Slicing first would strand an `.attempted` row at the top
-        // of the next page and report a finished operation as a crashed one.
-        descriptor.fetchLimit = offset + limit
-        descriptor.fetchOffset = 0
-        let rows = try context.fetch(descriptor).compactMap { $0.toDomain() }
-        // collapsingByID expects chronological order and keeps the last line
-        // per id; the descriptor sorts newest-first, so flip in and back out.
-        let collapsed = Array(AuditWriter.collapsingByID(Array(rows.reversed())).reversed())
-        return Array(collapsed.dropFirst(offset).prefix(limit))
+        descriptor.fetchLimit = limit
+        descriptor.fetchOffset = offset
+        return try context.fetch(descriptor).compactMap { $0.toDomain() }
     }
 
     /// Purge audit entries older than the configured retention period.
