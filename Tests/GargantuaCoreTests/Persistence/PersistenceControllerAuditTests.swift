@@ -149,6 +149,85 @@ struct PersistenceControllerAuditTests {
         #expect(fetched[0].status == .completed)
     }
 
+    @Test("A two-phase pair fetches back as one row carrying the outcome")
+    func twoPhasePairCollapsesToOneRow() throws {
+        let ctrl = try makeController()
+        let id = UUID()
+        let start = Date().addingTimeInterval(-60)
+
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: start,
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/pair", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: start.addingTimeInterval(5),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/pair", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 100,
+                status: .completed
+            )
+        )
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].status == .completed)
+        #expect(fetched[0].bytesFreed == 100)
+    }
+
+    @Test("An orphaned attempted entry survives collapse")
+    func orphanedAttemptedEntrySurvives() throws {
+        let ctrl = try makeController()
+        let crashed = UUID()
+        let finished = UUID()
+        let start = Date().addingTimeInterval(-120)
+
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: crashed,
+                timestamp: start,
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/crashed", size: 50)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: finished,
+                timestamp: start.addingTimeInterval(10),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/finished", size: 50)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 50,
+                status: .completed
+            )
+        )
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 2)
+        #expect(fetched.first { $0.id == crashed }?.status == .attempted)
+        #expect(fetched.first { $0.id == finished }?.status == .completed)
+    }
+
     // MARK: - Scan History
 
     @Test("Record and fetch scan history")

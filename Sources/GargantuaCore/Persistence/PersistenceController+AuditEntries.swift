@@ -14,6 +14,11 @@ extension PersistenceController {
     /// date window on a populated audit log can't stall an interactive
     /// query. `offset` lets callers paginate when they need a sliding view
     /// instead of the most-recent batch.
+    ///
+    /// Two-phase intent+outcome pairs sharing an `id` collapse to one row,
+    /// keeping the later line — the same rule `AuditWriter.readEntries()`
+    /// applies to the JSONL path. Collapsing runs after `limit`/`offset`, so a
+    /// page containing a pair returns fewer than `limit` rows.
     public func fetchAuditEntries(
         from startDate: Date,
         to endDate: Date = Date(),
@@ -29,7 +34,11 @@ extension PersistenceController {
         )
         descriptor.fetchLimit = limit
         descriptor.fetchOffset = offset
-        return try context.fetch(descriptor).compactMap { $0.toDomain() }
+        let rows = try context.fetch(descriptor).compactMap { $0.toDomain() }
+        // collapsingByID expects chronological order and keeps the last line
+        // per id; the descriptor sorts newest-first, so flip in and back out.
+        let collapsed = AuditWriter.collapsingByID(Array(rows.reversed()))
+        return Array(collapsed.reversed())
     }
 
     /// Purge audit entries older than the configured retention period.
