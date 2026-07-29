@@ -107,6 +107,48 @@ struct PersistenceControllerAuditTests {
         #expect(paged.first?.files[0].path == "/row-5")
     }
 
+    @Test("An attempted entry round-trips through SwiftData without becoming completed")
+    func attemptedStatusSurvivesRoundTrip() throws {
+        let ctrl = try makeController()
+        let entry = AuditEntry(
+            id: UUID(),
+            timestamp: Date(),
+            tool: "native",
+            command: "clean",
+            files: [AuditFile(path: "/attempted", size: 10)],
+            safetyLevel: .safe,
+            confirmationMethod: .singleButton,
+            bytesFreed: 10,
+            status: .attempted
+        )
+        try ctrl.recordAuditEntry(entry)
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].status == .attempted)
+    }
+
+    @Test("A completed entry round-trips as completed")
+    func completedStatusSurvivesRoundTrip() throws {
+        let ctrl = try makeController()
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: UUID(),
+                timestamp: Date(),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/completed", size: 10)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 10,
+                status: .completed
+            )
+        )
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched[0].status == .completed)
+    }
+
     // MARK: - Scan History
 
     @Test("Record and fetch scan history")

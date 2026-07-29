@@ -94,6 +94,10 @@ public final class PersistedAuditEntry {
     public var commandExitCode: Int32?
     /// JSON-encoded argument list. Empty for non-command entries.
     public var commandArgumentsData: Data?
+    /// Whether the row records the attempt or the outcome (`"attempted"` /
+    /// `"completed"`). Optional so rows written before the two-phase shape
+    /// existed read back as `.completed` under lightweight migration.
+    public var statusRaw: String?
 
     /// Creates a persisted audit entry from the domain model.
     public init(from entry: AuditEntry) {
@@ -112,6 +116,7 @@ public final class PersistedAuditEntry {
         self.commandToolVersion = entry.commandToolVersion
         self.commandExitCode = entry.commandExitCode
         self.commandArgumentsData = entry.commandArguments.flatMap { try? JSONEncoder().encode($0) }
+        self.statusRaw = entry.status.rawValue
     }
 
     /// Convert back to domain model.
@@ -128,6 +133,10 @@ public final class PersistedAuditEntry {
         let commandArguments: [String]? = commandArgumentsData.flatMap {
             try? JSONDecoder().decode([String].self, from: $0)
         }
+        // Default to .completed so legacy rows lacking the discriminator read
+        // back as finished operations. Unknown raw values fall back the same
+        // way rather than dropping the row.
+        let status = statusRaw.flatMap(AuditEntryStatus.init(rawValue:)) ?? .completed
         return AuditEntry(
             id: entryID,
             timestamp: timestamp,
@@ -143,7 +152,8 @@ public final class PersistedAuditEntry {
             kind: kind,
             commandToolVersion: commandToolVersion,
             commandExitCode: commandExitCode,
-            commandArguments: commandArguments
+            commandArguments: commandArguments,
+            status: status
         )
     }
 }
