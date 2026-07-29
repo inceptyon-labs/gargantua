@@ -211,6 +211,19 @@ struct PersistenceControllerAuditTests {
         try ctrl.recordAuditEntry(
             AuditEntry(
                 id: finished,
+                timestamp: start.addingTimeInterval(8),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/finished", size: 50)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: finished,
                 timestamp: start.addingTimeInterval(10),
                 tool: "native",
                 command: "clean",
@@ -226,6 +239,174 @@ struct PersistenceControllerAuditTests {
         #expect(fetched.count == 2)
         #expect(fetched.first { $0.id == crashed }?.status == .attempted)
         #expect(fetched.first { $0.id == finished }?.status == .completed)
+    }
+}
+
+// Split from the main suite body to stay under SwiftLint's type_body_length
+// threshold; Swift Testing still discovers @Test methods in this extension
+// as part of the same "PersistenceController audit entries and scan history"
+// suite.
+extension PersistenceControllerAuditTests {
+
+    @Test("A pair straddling a page boundary does not surface on both pages")
+    func pairStraddlingPageBoundaryAppearsOnce() throws {
+        let ctrl = try makeController()
+        let now = Date()
+        let pairID = UUID()
+
+        // Rows newest-first: row-0 … row-3, then the pair, then row-6 … row-9.
+        for offset in 0 ..< 4 {
+            try ctrl.recordAuditEntry(
+                AuditEntry(
+                    id: UUID(),
+                    timestamp: now.addingTimeInterval(-Double(offset) * 60),
+                    tool: "native",
+                    command: "clean",
+                    files: [AuditFile(path: "/row-\(offset)", size: 1)],
+                    safetyLevel: .safe,
+                    confirmationMethod: .singleButton,
+                    bytesFreed: 1
+                )
+            )
+        }
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: pairID,
+                timestamp: now.addingTimeInterval(-5 * 60),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/pair", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: pairID,
+                timestamp: now.addingTimeInterval(-4 * 60),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/pair", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 100,
+                status: .completed
+            )
+        )
+        for offset in 6 ..< 10 {
+            try ctrl.recordAuditEntry(
+                AuditEntry(
+                    id: UUID(),
+                    timestamp: now.addingTimeInterval(-Double(offset) * 60),
+                    tool: "native",
+                    command: "clean",
+                    files: [AuditFile(path: "/row-\(offset)", size: 1)],
+                    safetyLevel: .safe,
+                    confirmationMethod: .singleButton,
+                    bytesFreed: 1
+                )
+            )
+        }
+
+        let page1 = try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 5, offset: 0)
+        let page2 = try ctrl.fetchAuditEntries(from: Date.distantPast, limit: 5, offset: 5)
+
+        let pairOccurrences = (page1 + page2).filter { $0.id == pairID }
+        #expect(pairOccurrences.count == 1)
+        #expect(pairOccurrences.first?.status == .completed)
+        #expect(pairOccurrences.first?.bytesFreed == 100)
+    }
+
+    @Test("A legacy row with no status reads back as completed")
+    func legacyRowWithoutStatusReadsAsCompleted() throws {
+        let ctrl = try makeController()
+        let row = PersistedAuditEntry(
+            from: AuditEntry(
+                id: UUID(),
+                timestamp: Date(),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/legacy", size: 10)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 10,
+                status: .attempted
+            )
+        )
+        // Simulate a row written before the two-phase shape existed.
+        row.statusRaw = nil
+        ctrl.context.insert(row)
+        try ctrl.context.save()
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].status == .completed)
+    }
+
+    @Test("A row with an unrecognized status reads back as completed rather than dropping")
+    func unknownStatusRawReadsAsCompleted() throws {
+        let ctrl = try makeController()
+        let row = PersistedAuditEntry(
+            from: AuditEntry(
+                id: UUID(),
+                timestamp: Date(),
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/unknown", size: 10)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 10,
+                status: .attempted
+            )
+        )
+        row.statusRaw = "not-a-real-status"
+        ctrl.context.insert(row)
+        try ctrl.context.save()
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].status == .completed)
+    }
+
+    @Test("A pair with identical timestamps still collapses to the outcome line")
+    func pairWithTiedTimestampsKeepsOutcome() throws {
+        let ctrl = try makeController()
+        let id = UUID()
+        let stamp = Date()
+
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: stamp,
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/tied", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                status: .attempted
+            )
+        )
+        try ctrl.recordAuditEntry(
+            AuditEntry(
+                id: id,
+                timestamp: stamp,
+                tool: "native",
+                command: "clean",
+                files: [AuditFile(path: "/tied", size: 100)],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 100,
+                status: .completed
+            )
+        )
+
+        let fetched = try ctrl.fetchAuditEntries(from: Date.distantPast)
+        #expect(fetched.count == 1)
+        #expect(fetched[0].status == .completed)
+        #expect(fetched[0].bytesFreed == 100)
     }
 
     // MARK: - Scan History
