@@ -15,6 +15,15 @@ extension PersistenceController {
     /// is a no-op: the outcome is terminal, so a reused id can't downgrade a
     /// finished operation into a false crash record.
     ///
+    /// The guard is per-process, not atomic across processes. `entryID` is
+    /// `@Attribute(.unique)`, and SwiftData resolves a unique collision by
+    /// silently overwriting rather than throwing, so two processes writing one
+    /// `entryID` concurrently would let the loser's row win without this guard
+    /// ever running. The scheduler, the MCP server, and the app each open their
+    /// own controller against the same store, so anything wiring this surface
+    /// to more than one of them needs a single-writer path or a transactional
+    /// re-check — today nothing calls this method in production.
+    ///
     /// The JSONL log written by `AuditWriter` stays append-only: it cannot
     /// safely rewrite a line mid-crash, so it collapses pairs on read instead.
     public func recordAuditEntry(_ entry: AuditEntry) throws {
