@@ -186,8 +186,7 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
                     trashPath: trashURL.path
                 )
             case .deleteFromTrash:
-                let url = try validateTrashChild(item, invokingUserID: invokingUserID)
-                try FileManager.default.removeItem(at: url)
+                try deleteFromTrash(item, invokingUserID: invokingUserID)
                 // Permanently removed (it was already in the Trash) — no trashPath.
                 return PrivilegedUninstallItemResult(id: item.id, path: item.path, succeeded: true)
             }
@@ -201,101 +200,97 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
         }
     }
 
-    /// Validate that `item.path` is a direct child of the invoking user's own
-    /// `~/.Trash`, the only place `deleteFromTrash` is permitted to act. The
-    /// Trash directory is resolved from the UID via `getpwuid` (not a caller-
-    /// supplied path), and the entry is removed as-is — a symlink entry is
-    /// unlinked, never followed — so this can't be tricked into deleting outside
-    /// the user's Trash.
-    private func validateTrashChild(
+    /// Permanently remove a direct child of the invoking user's own `~/.Trash`.
+    ///
+    /// The Trash directory is pinned by descriptor (`getpwuid` for the home, then
+    /// `O_NOFOLLOW` on `.Trash`), and the removal runs with `unlinkat` relative
+    /// to that descriptor. So even if the user replaces `~/.Trash` with a symlink
+    /// to a system directory, root cannot be tricked into deleting outside the
+    /// real Trash — the pinned fd never traverses the swapped link, and a
+    /// symlink entry is unlinked as the link, never followed.
+    private func deleteFromTrash(
         _ item: PrivilegedUninstallItem,
         invokingUserID: UInt32?
-    ) throws -> URL {
+    ) throws {
         guard let uid = invokingUserID, let pw = getpwuid(uid) else {
             throw PrivilegedHelperError.rejectedPath(item.path)
         }
         let home = String(cString: pw.pointee.pw_dir)
-        let trashDir = URL(fileURLWithPath: home, isDirectory: true)
+        let trashPath = URL(fileURLWithPath: home, isDirectory: true)
             .appendingPathComponent(".Trash", isDirectory: true)
-            .standardizedFileURL
+            .standardizedFileURL.path
 
         let standardized = URL(fileURLWithPath: item.path).standardizedFileURL
-        guard PrivilegedRemovabilityPolicy.canonical(standardized.path)
-            == PrivilegedRemovabilityPolicy.canonical(item.path) else {
+        // Lexical guard for a clear error; the pinned-fd unlinkat below is what
+        // actually confines the removal to the real Trash.
+        guard standardized.deletingLastPathComponent().standardizedFileURL.path == trashPath else {
             throw PrivilegedHelperError.rejectedPath(item.path)
         }
-        guard standardized.deletingLastPathComponent().standardizedFileURL.path == trashDir.path else {
-            throw PrivilegedHelperError.rejectedPath(item.path)
-        }
-        guard FileManager.default.fileExists(atPath: standardized.path) else {
+
+        let trashFd = SecureTrashFileOps.openTrashDirectory(home: home)
+        guard trashFd >= 0 else { throw PrivilegedHelperError.symlinkRejected("\(home)/.Trash") }
+        defer { close(trashFd) }
+
+        let leaf = standardized.lastPathComponent
+        var info = stat()
+        guard fstatat(trashFd, leaf, &info, AT_SYMLINK_NOFOLLOW) == 0 else {
             throw PrivilegedHelperError.missingPath(item.path)
         }
-        return standardized
+        guard SecureTrashFileOps.removeTree(inDirFd: trashFd, name: leaf) else {
+            throw PrivilegedHelperError.rejectedPath(item.path)
+        }
     }
 
-    /// Move `url` into the invoking user's Trash and hand them ownership, so the
-    /// removed item is visible and restorable in Finder and they can empty it
-    /// without another auth prompt. Falls back to the root Trash (`trashItem`)
-    /// when the user can't be resolved — same as the prior behavior.
+    /// Move `url` into the invoking user's Trash so the removed item is visible
+    /// and restorable in Finder.
+    ///
+    /// Both the source and the destination are resolved without following any
+    /// symlink an unprivileged user could plant: the destination is a pinned
+    /// `~/.Trash` descriptor (`O_NOFOLLOW` on `.Trash`), and the source parent is
+    /// opened with an `O_NOFOLLOW` component walk of its real `/private` path, so
+    /// a user who controls an intermediate component under a world-writable root
+    /// can't swap it for a symlink to redirect the rename. The move is atomic and
+    /// exclusive (`renameatx_np`/`RENAME_EXCL`).
+    ///
+    /// The moved item is **not** chowned to the user: transferring ownership of a
+    /// moved inode is unsafe when it may be hard-linked to a root-owned file
+    /// outside the Trash. It stays root-owned in the user's Trash. A missing
+    /// invoking uid fails closed rather than moving to the root Trash.
     private func moveToTrash(_ url: URL, invokingUserID: UInt32?) throws -> URL {
         guard let uid = invokingUserID, let pw = getpwuid(uid) else {
-            var trashURL: NSURL?
-            try FileManager.default.trashItem(at: url, resultingItemURL: &trashURL)
-            return (trashURL as URL?) ?? url
+            throw PrivilegedHelperError.rejectedPath(url.path)
         }
         let home = String(cString: pw.pointee.pw_dir)
-        let gid = pw.pointee.pw_gid
-        let trashDir = URL(fileURLWithPath: home, isDirectory: true)
+
+        let trashFd = SecureTrashFileOps.openTrashDirectory(home: home)
+        guard trashFd >= 0 else { throw PrivilegedHelperError.symlinkRejected("\(home)/.Trash") }
+        defer { close(trashFd) }
+
+        // The source parent is validated as an allowlisted system root, but open
+        // it via an O_NOFOLLOW component walk of its real /private path so a
+        // swapped intermediate component (under a world-writable root) can't
+        // redirect the rename. renameatx_np then acts only on the leaf name.
+        let parentPath = PrivilegedRemovabilityPolicy.firmlinkResolved(
+            url.deletingLastPathComponent().path
+        )
+        let leaf = url.lastPathComponent
+        let parentFd = SecureTrashFileOps.openDirectoryNoFollow(path: parentPath)
+        guard parentFd >= 0 else { throw PrivilegedHelperError.missingPath(parentPath) }
+        defer { close(parentFd) }
+
+        guard let destName = SecureTrashFileOps.moveIntoTrash(
+            sourceParentFd: parentFd,
+            leaf: leaf,
+            trashFd: trashFd
+        ) else {
+            // Same-volume by construction (Trash and system roots share the APFS
+            // Data volume), so a move failure is a real error, not EXDEV.
+            throw PrivilegedHelperError.rejectedPath(url.path)
+        }
+
+        return URL(fileURLWithPath: home, isDirectory: true)
             .appendingPathComponent(".Trash", isDirectory: true)
-        try FileManager.default.createDirectory(at: trashDir, withIntermediateDirectories: true)
-
-        let destination = collisionFreeDestination(for: url, in: trashDir)
-        try FileManager.default.moveItem(at: url, to: destination)
-        chownRecursively(destination, uid: uid, gid: gid)
-        return destination
-    }
-
-    private func collisionFreeDestination(for url: URL, in directory: URL) -> URL {
-        let fm = FileManager.default
-        let first = directory.appendingPathComponent(url.lastPathComponent)
-        guard fm.fileExists(atPath: first.path) else { return first }
-
-        let base = url.deletingPathExtension().lastPathComponent
-        let ext = url.pathExtension
-        var index = 1
-        while true {
-            let name = ext.isEmpty ? "\(base) \(index)" : "\(base) \(index).\(ext)"
-            let candidate = directory.appendingPathComponent(name)
-            if !fm.fileExists(atPath: candidate.path) { return candidate }
-            index += 1
-        }
-    }
-
-    /// `lchown` the moved item (and every descendant) to the user. `lchown` does
-    /// not follow symlinks, so a symlink in the tree can't redirect ownership of
-    /// a file outside it. A multiply-linked regular file is skipped: `validate`
-    /// already rejects a hard-linked top-level file, but a moved *directory*
-    /// could still contain one (planted inside a world-writable allowlisted
-    /// tree), and chowning it would transfer ownership of the linked-to inode.
-    private func chownRecursively(_ url: URL, uid: UInt32, gid: UInt32) {
-        chownIfSingleLink(url.path, uid: uid, gid: gid)
-        guard let enumerator = FileManager.default.enumerator(
-            at: url,
-            includingPropertiesForKeys: nil,
-            options: []
-        ) else { return }
-        for case let child as URL in enumerator {
-            chownIfSingleLink(child.path, uid: uid, gid: gid)
-        }
-    }
-
-    /// `lchown` unless the path is a regular file with more than one hard link.
-    private func chownIfSingleLink(_ path: String, uid: UInt32, gid: UInt32) {
-        if PrivilegedRemovabilityPolicy.shared.isMultiplyLinkedRegularFile(path: path) {
-            HelperLog.write("skipped chown of multiply-linked file: \(path)")
-            return
-        }
-        lchown(path, uid, gid)
+            .appendingPathComponent(destName)
     }
 
     private func validate(_ item: PrivilegedUninstallItem) throws -> URL {
@@ -325,14 +320,13 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
         }
 
         // A regular file with more than one hard link is never a legitimate
-        // cleanup target here. The move-to-Trash below preserves the inode
-        // (same volume) and `chownRecursively` then `lchown`s it to the invoking
-        // user — so a second link into a root-owned file (e.g. an unprivileged
-        // user hardlinking /etc/sudoers into world-writable /private/tmp, which
-        // this helper's allowlist covers) would transfer ownership of that
-        // inode to the user. The symlink guard above does not catch this: a hard
-        // link is not a symlink, so `resolvingSymlinksInPath` leaves it
-        // unchanged. Genuine regenerable temp/cache files have `st_nlink == 1`.
+        // cleanup target here, so refuse to move it at all. Defense in depth:
+        // the move no longer transfers ownership, so a hard link alone can't
+        // escalate, but rejecting a multiply-linked temp/cache file (a genuine
+        // one has `st_nlink == 1`) keeps the helper from relocating a second
+        // name for an unrelated root-owned file into the user's Trash. The
+        // symlink guard above does not catch this: a hard link is not a symlink,
+        // so `resolvingSymlinksInPath` leaves it unchanged.
         if !isDirectory.boolValue,
            PrivilegedRemovabilityPolicy.shared.isMultiplyLinkedRegularFile(path: standardized.path) {
             throw PrivilegedHelperError.hardlinkRejected(item.path)

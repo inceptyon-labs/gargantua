@@ -69,6 +69,20 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
         return path
     }
 
+    /// The real on-disk directory for a firmlink alias — the inverse of
+    /// `canonical`. macOS's `/tmp`, `/var`, and `/etc` are symlinks into
+    /// `/private`, so an `O_NOFOLLOW` component walk must be given the
+    /// `/private/...` form or it would reject the leading symlink. Paths without
+    /// an alias prefix (e.g. `/Library/...`, already-`/private/...`) are returned
+    /// unchanged.
+    public static func firmlinkResolved(_ path: String) -> String {
+        for (alias, real) in [("/tmp", "/private/tmp"), ("/var", "/private/var"), ("/etc", "/private/etc")] {
+            if path == alias { return real }
+            if path.hasPrefix(alias + "/") { return real + String(path.dropFirst(alias.count)) }
+        }
+        return path
+    }
+
     /// Whether the privileged helper may remove `path`. Accepts either the
     /// `/private/var` or the canonical `/var` form (and likewise tmp/etc).
     /// `isDirectory` distinguishes the app-bundle and launch-daemon-plist rules.
