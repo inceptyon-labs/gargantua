@@ -14,7 +14,6 @@ public final class PersistenceController {
     /// All persisted model types registered with the container.
     public static let modelTypes: [any PersistentModel.Type] = [
         PersistedProfile.self,
-        PersistedAuditEntry.self,
         PersistedSettings.self,
         PersistedScanHistory.self,
         PersistedWhitelistEntry.self,
