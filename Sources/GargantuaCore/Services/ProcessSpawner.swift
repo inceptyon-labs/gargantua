@@ -152,8 +152,14 @@ enum ProcessSpawner {
         try check(posix_spawnattr_setpgroup(&attrs, 0))
     }
 
-    /// Build the child's environment, prepending the executable's own
-    /// directory to `PATH`.
+    /// Build the child's environment: the parent's, minus dynamic-linker
+    /// overrides, with the executable's own directory prepended to `PATH`.
+    ///
+    /// `DYLD_*` variables (`DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, …)
+    /// let whoever set them load code into every child we spawn. The
+    /// hardened runtime strips them from the app's own environment, but a
+    /// `swift build` binary or an inherited shell environment can still carry
+    /// them, and nothing we run needs them.
     ///
     /// When Gargantua is launched from Finder/Dock it inherits launchd's
     /// minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`). We resolve developer
@@ -172,6 +178,7 @@ enum ProcessSpawner {
     /// actually lives, while `~/.local/bin` holds only the shim.
     static func childEnvironment(for executable: URL) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
+            .filter { !$0.key.hasPrefix("DYLD_") }
 
         let candidateDirs = [
             executable.deletingLastPathComponent().path,

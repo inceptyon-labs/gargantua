@@ -51,6 +51,23 @@ struct ProcessSpawnerEnvironmentTests {
         #expect(path.split(separator: ":").contains(Substring(shimBin.path)))
     }
 
+    @Test("strips DYLD_* overrides from the child environment")
+    func stripsDyldOverrides() throws {
+        // The variable is set on this process for the duration of the test;
+        // `childEnvironment` reads `ProcessInfo.processInfo.environment`,
+        // which reflects `setenv` on Darwin.
+        let key = "DYLD_INSERT_LIBRARIES"
+        setenv(key, "/tmp/evil.dylib", 1)
+        defer { unsetenv(key) }
+        #expect(ProcessInfo.processInfo.environment[key] == "/tmp/evil.dylib")
+
+        let env = ProcessSpawner.childEnvironment(for: URL(fileURLWithPath: "/bin/sh"))
+
+        #expect(env[key] == nil)
+        #expect(env.keys.contains { $0.hasPrefix("DYLD_") } == false)
+        #expect(env["PATH"] != nil)
+    }
+
     @Test("end-to-end: a node-shim-style sibling resolves via env")
     func siblingResolvesViaEnv() throws {
         let fm = FileManager.default

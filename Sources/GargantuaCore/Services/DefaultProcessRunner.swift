@@ -43,6 +43,17 @@ public struct DefaultProcessRunner: ProcessRunner {
         timeout: TimeInterval?,
         maxCapturedBytes: Int
     ) throws -> ProcessOutput {
+        // Every developer-tool exec funnels through here, so this is the one
+        // place the check cannot be bypassed by a resolver taking a shortcut.
+        do {
+            try ExecutableTrustPolicy.verify(executable)
+        } catch let violation as ExecutableTrustPolicy.Violation {
+            throw ProcessRunnerError.untrustedExecutable(
+                path: executable.path,
+                reason: violation.errorDescription ?? String(describing: violation)
+            )
+        }
+
         let drain = ProcessOutputDrain(maxCapturedBytes: maxCapturedBytes)
 
         let pid: pid_t
