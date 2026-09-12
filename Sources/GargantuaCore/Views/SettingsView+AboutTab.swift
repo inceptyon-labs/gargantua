@@ -69,6 +69,46 @@ extension SettingsView {
         }
     }
 
+    // MARK: - Audit retention
+
+    private var auditRetentionRow: some View {
+        HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "clock", size: 14)
+
+            SettingsRowText(
+                title: "Audit retention",
+                detail: "Audit entries older than this are purged at launch and when the window changes."
+            )
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Picker("Audit retention", selection: auditRetentionBinding) {
+                ForEach(AuditRetention.options, id: \.self) { days in
+                    Text(days == 365 ? "1 yr" : "\(days) d").tag(days)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 200)
+        }
+        .help("How long destructive-action audit entries are kept in audit.json")
+    }
+
+    private var auditRetentionBinding: Binding<Int> {
+        Binding(
+            get: { settings?.retentionDays ?? 90 },
+            set: { days in
+                do {
+                    try persistence.updateSettings { $0.retentionDays = days }
+                    settings = try persistence.fetchSettings()
+                    AuditRetention.purgeInBackground(retentionDays: days)
+                } catch {
+                    PersistenceDiagnostics.logFailure("updateSettings(retentionDays)", error: error)
+                }
+            }
+        )
+    }
+
     // MARK: - About Section
 
     var aboutSection: some View {
@@ -84,12 +124,7 @@ extension SettingsView {
                 value: settings?.activeProfileID ?? "developer",
                 monoValue: false
             )
-            SettingsValueRow(
-                icon: "clock",
-                label: "Audit retention",
-                value: "\(settings?.retentionDays ?? 90) days",
-                monoValue: true
-            )
+            auditRetentionRow
 
             if let lastScan = settings?.lastScanDate {
                 SettingsValueRow(

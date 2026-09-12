@@ -87,30 +87,11 @@ extension MainContentView {
         }
 
         persistence = controller
-        purgeExpiredAuditEntries(using: controller)
-    }
 
-    /// Apply the persisted "Audit retention" window to `audit.json`, once per
-    /// launch. This is the only consumer of that setting: without it the row
-    /// in Settings → About describes a purge that never runs.
-    ///
-    /// Off the main thread because the purge takes the audit lock and
-    /// rewrites the file. A failure is logged and otherwise ignored: the log
-    /// growing for one more launch is not worth blocking the app over.
-    private func purgeExpiredAuditEntries(using controller: PersistenceController) {
+        // Apply the "Audit retention" window once per launch; Settings → About
+        // re-runs it when the user changes the window.
         let retentionDays = (try? controller.fetchSettings().retentionDays) ?? 90
-        Task.detached(priority: .utility) {
-            do {
-                let purged = try AuditWriter().purgeEntries(olderThanDays: retentionDays)
-                if purged > 0 {
-                    FileHandle.standardError.write(
-                        Data("audit retention: purged \(purged) entries older than \(retentionDays) days\n".utf8)
-                    )
-                }
-            } catch {
-                FileHandle.standardError.write(Data("audit retention purge failed: \(error)\n".utf8))
-            }
-        }
+        AuditRetention.purgeInBackground(retentionDays: retentionDays)
     }
 
     /// Reconcile the long-lived AI service with the persisted preference and

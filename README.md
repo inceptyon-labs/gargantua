@@ -170,7 +170,7 @@ In all engines: **AI can explain a classification but cannot lower it.** A `prot
 ### About (Settings → About)
 
 - **Updates**: Sparkle feed host, last check, channel (`stable` / `beta`), automatic checks, automatic downloads.
-- **Audit retention**: how long destructive-attempt audit entries are kept (default 90 days).
+- **Audit retention**: how long destructive-attempt audit entries are kept in `audit.json` — 30, 90 (default), 180 or 365 days. The purge runs at launch and whenever the window changes.
 
 ## MCP Server
 
