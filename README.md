@@ -194,7 +194,7 @@ Run both transports:
 swift run GargantuaMCP -- --transport both
 ```
 
-SSE binds to `127.0.0.1` by default. Binding to LAN uses `--bind lan` or the app's Settings → Network pane and **requires** a bearer token stored in Keychain or supplied with `--token`. The SSE endpoint is:
+SSE binds to `127.0.0.1` by default and **requires a bearer token on every bind, localhost included**. Generate one in the app's Settings → MCP Transport pane (it is stored in Keychain) or pass `--token`; the server refuses to start without one. Binding to LAN uses `--bind lan` or the same pane. The SSE endpoint is:
 
 ```text
 http://127.0.0.1:7493/sse
@@ -222,7 +222,7 @@ Clients connect to the HTTPS proxy endpoint:
 https://gargantua.example.lan/sse
 ```
 
-If you choose `--bind lan`, treat it as an advanced trusted-network mode: Gargantua still requires a bearer token, but it does not terminate TLS itself. Put a TLS reverse proxy in front of the port before exposing it beyond the local machine.
+If you choose `--bind lan`, treat it as an advanced trusted-network mode: the same bearer token applies, but Gargantua does not terminate TLS itself. Put a TLS reverse proxy in front of the port before exposing it beyond the local machine.
 
 ### Client configuration
 
@@ -241,13 +241,16 @@ If you choose `--bind lan`, treat it as an advanced trusted-network mode: Gargan
 {
   "mcpServers": {
     "gargantua": {
-      "url": "http://127.0.0.1:7493/sse"
+      "url": "http://127.0.0.1:7493/sse",
+      "headers": {
+        "Authorization": "Bearer gtua_…"
+      }
     }
   }
 }
 ```
 
-For Claude Desktop, Cursor, or Claude Code, use the first shape when the client launches the server process and the second shape when the client connects to a separately running SSE server.
+For Claude Desktop, Cursor, or Claude Code, use the first shape when the client launches the server process and the second shape when the client connects to a separately running SSE server. The SSE shape needs the bearer token from Settings → MCP Transport; without it every request gets a `401`.
 
 ### Tools
 
@@ -273,7 +276,7 @@ Destructive:
 - Every non-dry-run attempt writes an audit entry with the client identifier to `~/Library/Logs/Gargantua/audit.json`.
 - A local notification with a short cancel window appears before files move. This needs a bundled launch; a server started with `swift run` cannot post notifications, so it refuses destructive cleans instead of proceeding unprompted. Pass `--allow-unattended-clean` to accept that trade.
 
-Over SSE, requests must also carry a loopback `Host` header when the server is bound to localhost. That is the standard DNS-rebinding defense: without it a hostile web page whose DNS is re-pointed at `127.0.0.1` would reach the endpoint as same-origin, and a localhost bind requires no bearer token.
+Over SSE, every request must carry the bearer token, and on a localhost bind it must also carry a loopback `Host` header. The token is what keeps another process running as you from driving `clean` through `127.0.0.1`; the `Host` check is the standard DNS-rebinding defense on top of it, so a hostile web page whose DNS is re-pointed at `127.0.0.1` never reaches the endpoint as same-origin even to read the challenge.
 
 The read-only and destructive tools live in separate registries in code (`MCPPhase2Tools` / `MCPPhase3Tools`), so a fork or an embedding host can register only the read-only set. The bundled `GargantuaMCP` binary registers both. See [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
 
@@ -284,7 +287,7 @@ Gargantua runs with elevated trust on a user's machine. Defenses are layered:
 - **Trust layer**: every finding gets a `safe`/`review`/`protected` classification before any UI sees it. Destructive flows hard-reject `protected`.
 - **Bundled protected roots**: `protected_roots.yaml` blocks cleanup at filesystem roots regardless of rule classification. Users can extend it but cannot remove bundled entries.
 - **Privileged helper**: operations needing elevated trust are routed through `GargantuaPrivilegedHelper`, registered via SMAppService and reached over XPC. The app never calls `sudo` directly.
-- **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, loopback `Host` validation on localhost binds, per-connection rate limit, hard `protected` reject, license gate on destructive tools, audit log, and a cancel-notification grace period that fails closed when it cannot be shown.
+- **MCP guardrails**: bearer-token auth (Keychain-backed) on every SSE bind, loopback included, plus loopback `Host` validation on localhost binds, per-connection rate limit, hard `protected` reject, license gate on destructive tools, audit log, and a cancel-notification grace period that fails closed when it cannot be shown.
 - **Keychain-only secret storage**: cloud API keys (Anthropic and OpenAI-compatible, in separate Keychain accounts) and the MCP bearer token live in Keychain, never on disk in plaintext. A presence check never decrypts the key, so it stays sealed until an actual request needs it.
 - **Cloud AI redaction**: outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
 - **Hardened runtime + notarization**: release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.

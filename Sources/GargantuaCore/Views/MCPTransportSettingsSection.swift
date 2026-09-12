@@ -3,7 +3,7 @@ import SwiftUI
 
 struct MCPTransportSettingsSection: View {
     @State var configuration = MCPSSEServerConfiguration()
-    @State var tokenStatus = "Token not generated"
+    @State var tokenStatus = "MCP transport needs a bearer token before it can start"
     @State var generatedToken: String?
     @State var hasBearerToken = false
     @State var pendingDestructive: DestructiveAction?
@@ -17,6 +17,7 @@ struct MCPTransportSettingsSection: View {
             "MCP Transport",
             subtitle: "Local Server-Sent Events endpoint for MCP clients. Exposes the scan and "
                 + "analysis tools plus the guarded `clean` tool, which can delete files. "
+                + "Every client must present the bearer token, localhost included. "
                 + "Protected items are always rejected."
         ) {
             statusHeader

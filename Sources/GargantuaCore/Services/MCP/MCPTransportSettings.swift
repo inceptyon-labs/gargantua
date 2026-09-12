@@ -25,7 +25,7 @@ public enum MCPServerBindScope: String, Codable, Sendable, CaseIterable, Identif
         case .localhost:
             return "Binds to 127.0.0.1 only."
         case .lan:
-            return "Binds to all interfaces; use a bearer token and TLS reverse proxy for remote clients."
+            return "Binds to all interfaces; put a TLS reverse proxy in front for remote clients."
         }
     }
 
@@ -65,8 +65,6 @@ public struct MCPSSEServerConfiguration: Codable, Sendable, Equatable {
 
     /// Host string derived from the selected bind scope.
     public var bindHost: String { bindScope.bindHost }
-    /// Whether incoming requests must present a bearer token.
-    public var requiresBearerToken: Bool { bindScope == .lan }
 
     /// Clamps a port to the valid TCP port range.
     public static func normalizedPort(_ port: Int) -> Int {
@@ -74,11 +72,16 @@ public struct MCPSSEServerConfiguration: Codable, Sendable, Equatable {
     }
 
     /// Validates that the configuration can safely start.
+    ///
+    /// A bearer token is required on every bind, loopback included. Without
+    /// one, any process running as the user could POST to `127.0.0.1` and
+    /// drive the destructive `clean` tool; the loopback `Host` check only
+    /// keeps browsers out, not native code.
     public func validate(hasBearerToken: Bool) throws {
         guard Self.validPortRange.contains(port) else {
             throw MCPSSEConfigurationError.invalidPort(port)
         }
-        if requiresBearerToken && !hasBearerToken {
+        guard hasBearerToken else {
             throw MCPSSEConfigurationError.missingBearerToken
         }
     }
@@ -88,7 +91,7 @@ public struct MCPSSEServerConfiguration: Codable, Sendable, Equatable {
 public enum MCPSSEConfigurationError: Error, LocalizedError, Equatable, Sendable {
     /// The configured TCP port is outside the valid range.
     case invalidPort(Int)
-    /// LAN binding was requested without a stored bearer token.
+    /// The server was asked to start without a stored bearer token.
     case missingBearerToken
 
     /// Localized user-facing error description.
@@ -97,7 +100,7 @@ public enum MCPSSEConfigurationError: Error, LocalizedError, Equatable, Sendable
         case .invalidPort(let port):
             return "MCP SSE port \(port) is outside the valid TCP port range."
         case .missingBearerToken:
-            return "LAN MCP SSE requires a bearer token before it can start."
+            return "MCP SSE requires a bearer token before it can start. Generate one in Settings → MCP Transport."
         }
     }
 }
@@ -361,13 +364,12 @@ public enum MCPSSEAuthorization {
         return token.isEmpty ? nil : token
     }
 
-    /// Returns whether the request is authorized for the supplied configuration.
+    /// Returns whether the request presents the stored bearer token. Every
+    /// bind requires one; there is no loopback exemption.
     public static func isAuthorized(
         authorizationHeader: String?,
-        configuration: MCPSSEServerConfiguration,
         storedToken: String?
     ) -> Bool {
-        guard configuration.requiresBearerToken else { return true }
         guard let storedToken,
               let presented = bearerToken(from: authorizationHeader)
         else {

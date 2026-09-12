@@ -56,7 +56,7 @@ struct MCPSSETransportLifecycleTests {
         let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { nil },
+                tokenProvider: { MCPSSETransportTestSupport.bearerToken },
                 handler: MCPSSETransportTestSupport.echoHandler,
                 onConnectionClose: { connection in recorder.record(connection) }
             )
@@ -94,7 +94,7 @@ struct MCPSSETransportLifecycleTests {
         let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { nil },
+                tokenProvider: { MCPSSETransportTestSupport.bearerToken },
                 handler: MCPSSETransportTestSupport.echoHandler,
                 onConnectionClose: { connection in recorder.record(connection) }
             )
@@ -102,7 +102,7 @@ struct MCPSSETransportLifecycleTests {
         defer { transport.stop() }
 
         let client = try TCPClient(port: Int(port))
-        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        try client.write(MCPSSETransportTestSupport.authorizedSSEOpen)
         let response = try client.read(until: "\n\n")
         let sessionID = try #require(
             MCPSSETransportTestSupport.extractSessionID(from: response),
@@ -157,7 +157,7 @@ struct MCPSSETransportLifecycleTests {
         let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { nil },
+                tokenProvider: { MCPSSETransportTestSupport.bearerToken },
                 handler: MCPSSETransportTestSupport.echoHandler,
                 onConnectionClose: { connection in recorder.record(connection) }
             )
@@ -165,7 +165,7 @@ struct MCPSSETransportLifecycleTests {
         defer { transport.stop() }
 
         let client = try TCPClient(port: Int(port))
-        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        try client.write(MCPSSETransportTestSupport.authorizedSSEOpen)
         let response = try client.read(until: "\n\n")
         let sessionID = try #require(
             MCPSSETransportTestSupport.extractSessionID(from: response),
@@ -210,7 +210,7 @@ struct MCPSSETransportLifecycleTests {
         let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { nil },
+                tokenProvider: { MCPSSETransportTestSupport.bearerToken },
                 handler: MCPSSETransportTestSupport.echoHandler,
                 onConnectionClose: { connection in recorder.record(connection) }
             )
@@ -221,7 +221,7 @@ struct MCPSSETransportLifecycleTests {
         defer { transport.stop() }
 
         let client = try TCPClient(port: Int(port))
-        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        try client.write(MCPSSETransportTestSupport.authorizedSSEOpen)
         let response = try client.read(until: "\n\n")
         let sessionID = try #require(
             MCPSSETransportTestSupport.extractSessionID(from: response),
@@ -268,7 +268,7 @@ struct MCPSSETransportLifecycleTests {
         let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { nil },
+                tokenProvider: { MCPSSETransportTestSupport.bearerToken },
                 handler: MCPSSETransportTestSupport.echoHandler,
                 onConnectionClose: { connection in recorder.record(connection) }
             )
@@ -277,7 +277,7 @@ struct MCPSSETransportLifecycleTests {
 
         for _ in 0 ..< clientCount {
             let client = try TCPClient(port: Int(port))
-            try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            try client.write(MCPSSETransportTestSupport.authorizedSSEOpen)
             let response = try client.read(until: "\n\n")
             let sessionID = try #require(
                 MCPSSETransportTestSupport.extractSessionID(from: response),
@@ -312,7 +312,7 @@ struct MCPSSETransportLifecycleTests {
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline && tracked > bound {
             let probe = try TCPClient(port: Int(port))
-            try probe.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            try probe.write(MCPSSETransportTestSupport.authorizedSSEOpen)
             let probeResponse = try probe.read(until: "\n\n")
             let probeSessionID = try #require(
                 MCPSSETransportTestSupport.extractSessionID(from: probeResponse),
@@ -336,7 +336,7 @@ struct MCPSSETransportLifecycleTests {
     /// Returns the session id, or `nil` if the stream never opened.
     private static func openSSEStreamThenDisconnect(port: UInt16) throws -> String? {
         let client = try TCPClient(port: Int(port))
-        try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        try client.write(MCPSSETransportTestSupport.authorizedSSEOpen)
         let response = try client.read(until: "\n\n")
         // A plain close is a half-close (TCP FIN): the server's next write
         // can still land, so whether it observes the disconnect depends on
@@ -355,7 +355,9 @@ struct MCPSSETransportLifecycleTests {
         let body = #"{"jsonrpc":"2.0","id":1,"method":"ping"}"#
         try client.write(
             "POST /message?sessionId=\(sessionID) HTTP/1.1\r\n"
-                + "Host: 127.0.0.1\r\nContent-Length: \(body.utf8.count)\r\n\r\n\(body)"
+                + "Host: 127.0.0.1\r\n"
+                + "Authorization: Bearer \(MCPSSETransportTestSupport.bearerToken)\r\n"
+                + "Content-Length: \(body.utf8.count)\r\n\r\n\(body)"
         )
         _ = try? client.read(until: "\r\n\r\n")
     }
