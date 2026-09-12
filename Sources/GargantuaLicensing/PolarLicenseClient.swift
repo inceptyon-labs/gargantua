@@ -38,15 +38,18 @@ public protocol PolarLicenseValidating: Sendable {
 public struct PolarLicenseClient: PolarLicenseValidating {
     private let baseURL: URL
     private let organizationID: String
+    private let apiVersion: String
     private let session: URLSession
 
     public init(
         baseURL: URL = LicensePolarConfig.apiBaseURL,
         organizationID: String = LicensePolarConfig.organizationID,
+        apiVersion: String = LicensePolarConfig.apiVersion,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
         self.organizationID = organizationID
+        self.apiVersion = apiVersion
         self.session = session
     }
 
@@ -98,6 +101,7 @@ public struct PolarLicenseClient: PolarLicenseValidating {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(apiVersion, forHTTPHeaderField: "Polar-Version")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
     }

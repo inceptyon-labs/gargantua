@@ -12,6 +12,14 @@ public enum LicensePolarConfig {
     /// against Polar's isolated sandbox environment.
     public static let apiBaseURL = URL(string: "https://api.polar.sh/v1")!
 
+    /// Pinned Polar API version, sent as `Polar-Version` on every request.
+    /// Unpinned requests follow whichever version Polar currently calls
+    /// "Current", which rolls over each quarter — a shipped build would then
+    /// silently move to a contract it was never compiled against. Polar keeps
+    /// a version usable for roughly nine months, so this needs a bump (and a
+    /// release) before the pinned version is removed.
+    public static let apiVersion = "2026-04"
+
     /// Hosted checkout link for the Gargantua product. Opened by the "Buy" CTA.
     public static let checkoutURL = URL(
         string: "https://buy.polar.sh/polar_cl_NrgUcsS3Cz6LespqGpiQ42pYnpdo8vi345tYG0uglbC"
