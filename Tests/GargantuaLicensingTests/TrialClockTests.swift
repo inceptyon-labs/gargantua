@@ -112,4 +112,31 @@ struct TrialClockTests {
         #expect(clock.firstLaunchDate() == frozen)
         #expect(primary.readFirstLaunchDate() == frozen)
     }
+
+    /// A primary store whose writes silently fail (a locked/erroring Keychain).
+    private final class WriteDroppingTrialClockStorage: TrialClockStorage, @unchecked Sendable {
+        func readFirstLaunchDate() -> Date? { nil }
+        func writeFirstLaunchDate(_ date: Date) {}
+        func clear() {}
+    }
+
+    @Test("A failed primary write keeps the legacy stamp and does not reset an expired trial")
+    func failedPrimaryWriteDoesNotResetTrial() {
+        let expiredStart = Date(timeIntervalSince1970: 1_600_000_000)
+        let primary = WriteDroppingTrialClockStorage()
+        let legacy = InMemoryTrialClockStorage(initialDate: expiredStart)
+        let storage = MigratingTrialClockStorage(primary: primary, legacy: legacy)
+
+        // Migration attempt returns the real (expired) start date, but because
+        // the primary write did not stick, the legacy stamp is NOT cleared.
+        #expect(storage.readFirstLaunchDate() == expiredStart)
+        #expect(legacy.readFirstLaunchDate() == expiredStart)
+
+        // The clock keeps reading the expired date across launches — it never
+        // falls through to seeding a fresh `now()`-based 14-day trial.
+        let wellPastExpiry = expiredStart.addingTimeInterval(365 * 24 * 60 * 60)
+        let clock = TrialClock(storage: storage, now: { wellPastExpiry })
+        #expect(clock.daysRemaining() == 0)
+        #expect(clock.isExpired())
+    }
 }

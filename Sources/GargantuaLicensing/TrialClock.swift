@@ -38,7 +38,15 @@ public struct MigratingTrialClockStorage: TrialClockStorage {
             return nil
         }
         primary.writeFirstLaunchDate(migrated)
-        legacy.clear()
+        // Retire the resettable plaintext key ONLY once the primary store
+        // actually holds a value. If the primary write silently failed (e.g. a
+        // Keychain error), clearing the legacy stamp would leave neither store
+        // populated and the next read would seed a brand-new trial — turning an
+        // expired trial back into a fresh 14 days. Confirming persistence first
+        // keeps the legacy stamp as the fallback until the migration sticks.
+        if primary.readFirstLaunchDate() != nil {
+            legacy.clear()
+        }
         return migrated
     }
 
@@ -84,7 +92,14 @@ public struct KeychainTrialClockStorage: TrialClockStorage {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // Only a definitive success yields a date. `errSecItemNotFound` is a
+        // genuine absence; any other status (locked keychain, interaction not
+        // allowed, I/O error) is a *failure to read*, not proof of absence —
+        // both return nil here, but the create-only `writeFirstLaunchDate` below
+        // guarantees a subsequent seed can't overwrite an existing item that a
+        // transient read error hid, so a read hiccup can never reset the trial.
+        guard status == errSecSuccess,
               let data = result as? Data,
               let string = String(data: data, encoding: .utf8),
               let epoch = TimeInterval(string)
@@ -94,21 +109,20 @@ public struct KeychainTrialClockStorage: TrialClockStorage {
         return Date(timeIntervalSince1970: epoch)
     }
 
+    /// Create-only. The trial start is written once and never overwritten: if an
+    /// item already exists — including one a transient read error made look
+    /// absent — `SecItemAdd` returns `errSecDuplicateItem` and the existing
+    /// stamp is kept, so a re-seed can't reset an in-progress or expired trial.
+    /// A deliberate reset goes through `clear()` first.
     public func writeFirstLaunchDate(_ date: Date) {
         let data = Data(String(date.timeIntervalSince1970).utf8)
-        let lookup: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-        ]
-        let attributes: [String: Any] = [
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: data,
         ]
-        if SecItemUpdate(lookup as CFDictionary, attributes as CFDictionary) == errSecSuccess {
-            return
-        }
-        let query = lookup.merging(attributes) { _, new in new }
         _ = SecItemAdd(query as CFDictionary, nil)
     }
 
