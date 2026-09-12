@@ -140,6 +140,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         }
         guard MCPSSEAuthorization.isAuthorized(
             authorizationHeader: request.header("authorization"),
+            configuration: configuration,
             storedToken: storedToken
         ) else {
             return Self.unauthorizedResponse()
@@ -149,16 +150,16 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
 
     /// DNS-rebinding defense for localhost binds.
     ///
-    /// Every bind is bearer-token gated, so a rebound web page cannot drive
-    /// the tools without the token. This check still runs first, as
-    /// defense-in-depth: rejecting CORS preflight is not enough on its own,
-    /// because an attacker who re-points their own hostname's DNS record at
-    /// 127.0.0.1 makes the browser treat the request as *same-origin*, so no
-    /// preflight happens and even the 401 challenge is fully readable. The
-    /// one field that still carries the attacker's name is `Host`, and a
-    /// genuine local client always sends a loopback literal there.
+    /// A localhost bind requires no bearer token, and rejecting CORS preflight
+    /// is not enough on its own: an attacker who re-points their own hostname's
+    /// DNS record at 127.0.0.1 makes the browser treat the request as
+    /// *same-origin*, so no preflight happens and the response — including the
+    /// `endpoint` event carrying the session id — is fully readable. The one
+    /// field that still carries the attacker's name is `Host`, and a genuine
+    /// local client always sends a loopback literal there.
     ///
-    /// LAN binds are exempt: they are reached by hostname on purpose.
+    /// LAN binds are exempt: they are reached by hostname on purpose and are
+    /// already bearer-token gated.
     static func hasAllowedHost(
         _ request: MCPHTTPRequest,
         configuration: MCPSSEServerConfiguration

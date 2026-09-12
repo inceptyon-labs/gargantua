@@ -69,9 +69,13 @@ extension MCPTransportSettingsSection {
     func refreshTokenStatus() {
         do {
             hasBearerToken = try tokenManager.hasToken()
-            tokenStatus = hasBearerToken
-                ? "Token stored in Keychain"
-                : "MCP transport needs a bearer token before it can start"
+            if hasBearerToken {
+                tokenStatus = "Token stored in Keychain"
+            } else if configuration.requiresBearerToken {
+                tokenStatus = "LAN binding needs a bearer token"
+            } else {
+                tokenStatus = "Token not generated"
+            }
         } catch {
             tokenStatus = error.localizedDescription
         }

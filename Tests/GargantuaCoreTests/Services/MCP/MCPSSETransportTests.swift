@@ -22,10 +22,6 @@ struct MCPSSETransportTests {
     }
 
     private static let validToken = "gtua_test_token_12345678901234567890"
-    private static let authorizedHeaders = [
-        "Host": "127.0.0.1:7493",
-        "Authorization": "Bearer \(validToken)",
-    ]
 
     @Test("default SSE configuration is localhost on port 7493")
     func defaultConfiguration() {
@@ -35,6 +31,7 @@ struct MCPSSETransportTests {
         #expect(configuration.port == 7_493)
         #expect(configuration.bindScope == .localhost)
         #expect(configuration.bindHost == "127.0.0.1")
+        #expect(configuration.requiresBearerToken == false)
     }
 
     @Test("configuration store normalizes out-of-range ports")
@@ -51,54 +48,37 @@ struct MCPSSETransportTests {
         #expect(loaded.bindScope == .lan)
     }
 
-    @Test("authorization requires the configured bearer token; no bind scope is exempt")
-    func authorizationRequiresBearerToken() {
+    @Test("LAN authorization requires the configured bearer token")
+    func lanAuthorizationRequiresBearerToken() {
+        let configuration = MCPSSEServerConfiguration(isEnabled: true, bindScope: .lan)
+
         #expect(!MCPSSEAuthorization.isAuthorized(
             authorizationHeader: nil,
+            configuration: configuration,
             storedToken: Self.validToken
         ))
         #expect(!MCPSSEAuthorization.isAuthorized(
             authorizationHeader: "Bearer wrong-token",
+            configuration: configuration,
             storedToken: Self.validToken
-        ))
-        #expect(!MCPSSEAuthorization.isAuthorized(
-            authorizationHeader: "Bearer \(Self.validToken)",
-            storedToken: nil
         ))
         #expect(MCPSSEAuthorization.isAuthorized(
             authorizationHeader: "Bearer \(Self.validToken)",
+            configuration: configuration,
             storedToken: Self.validToken
         ))
     }
 
-    @Test("localhost SSE stream rejects a missing token with a bearer challenge")
-    func localhostStreamRejectsMissingToken() {
-        let router = MCPSSERequestRouter(handler: Self.echoHandler)
-        let result = router.openStream(
-            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"]),
-            configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken,
-            eventSink: { _, _ in }
-        )
-
-        guard case .rejected(let response) = result else {
-            Issue.record("expected a localhost stream without a token to reject")
-            return
-        }
-        #expect(response.statusCode == 401)
-        #expect(response.headers["WWW-Authenticate"]?.contains("Bearer") == true)
-    }
-
-    @Test("localhost SSE stream opens with the token and does not emit CORS headers")
-    func localhostStreamOpensWithToken() throws {
+    @Test("localhost SSE stream opens without token and does not emit CORS headers")
+    func localhostStreamOpensWithoutToken() throws {
         let router = MCPSSERequestRouter(handler: Self.echoHandler)
         let recorder = EventRecorder()
-        let request = MCPHTTPRequest(method: "GET", path: "/sse", headers: Self.authorizedHeaders)
+        let request = MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"])
 
         let result = router.openStream(
             request: request,
             configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken,
+            storedToken: nil,
             eventSink: { recorder.append(event: $0, data: $1) }
         )
 
@@ -123,7 +103,7 @@ struct MCPSSETransportTests {
         let response = router.handleRequest(
             MCPHTTPRequest(method: "OPTIONS", path: "/message"),
             configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken
+            storedToken: nil
         )
 
         #expect(response.statusCode == 403)
@@ -180,9 +160,9 @@ struct MCPSSETransportTests {
         let router = MCPSSERequestRouter(handler: Self.echoHandler)
         let recorder = EventRecorder()
         let open = router.openStream(
-            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: Self.authorizedHeaders),
+            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"]),
             configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken,
+            storedToken: nil,
             eventSink: { recorder.append(event: $0, data: $1) }
         )
         guard case .opened(let sessionID, _) = open else {
@@ -196,11 +176,11 @@ struct MCPSSETransportTests {
                 method: "POST",
                 path: "/message",
                 query: ["sessionId": sessionID],
-                headers: Self.authorizedHeaders,
+                headers: ["Host": "127.0.0.1:7493"],
                 body: requestBody
             ),
             configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken
+            storedToken: nil
         )
 
         #expect(response.statusCode == 202)
@@ -226,9 +206,9 @@ struct MCPSSETransportTests {
         let router = MCPSSERequestRouter(handler: Self.methodNotFoundHandler)
         let recorder = EventRecorder()
         let open = router.openStream(
-            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: Self.authorizedHeaders),
+            request: MCPHTTPRequest(method: "GET", path: "/sse", headers: ["Host": "127.0.0.1:7493"]),
             configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken,
+            storedToken: nil,
             eventSink: { recorder.append(event: $0, data: $1) }
         )
         guard case .opened(let sessionID, _) = open else {
@@ -241,11 +221,11 @@ struct MCPSSETransportTests {
                 method: "POST",
                 path: "/message",
                 query: ["sessionId": sessionID],
-                headers: Self.authorizedHeaders,
+                headers: ["Host": "127.0.0.1:7493"],
                 body: Data(#"{"jsonrpc":"2.0","id":42,"method":"tools/unknown"}"#.utf8)
             ),
             configuration: MCPSSEServerConfiguration(),
-            storedToken: Self.validToken
+            storedToken: nil
         )
 
         let events = recorder.events()

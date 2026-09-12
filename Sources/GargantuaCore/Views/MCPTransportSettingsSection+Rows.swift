@@ -179,7 +179,7 @@ extension MCPTransportSettingsSection {
             || tokenStatus.contains("failed") {
             return .protected
         }
-        if tokenStatus.contains("needs a bearer token") {
+        if tokenStatus.contains("LAN binding needs") {
             return .review
         }
         if tokenStatus.contains("Keychain")
@@ -191,7 +191,9 @@ extension MCPTransportSettingsSection {
     }
 
     var statusColor: Color {
-        guard hasBearerToken else { return GargantuaColors.review }
+        if configuration.requiresBearerToken {
+            return hasBearerToken ? GargantuaColors.safe : GargantuaColors.review
+        }
         return configuration.isEnabled ? GargantuaColors.safe : GargantuaColors.ink4
     }
 }

@@ -126,7 +126,7 @@ private func printRuntimeHelp() {
       --both                       Shortcut for --transport both.
       --port 7493                  Override the SSE port.
       --bind localhost|lan         Bind SSE to 127.0.0.1 or all interfaces.
-      --token TOKEN                Bearer token override (SSE requires one on every bind).
+      --token TOKEN                Bearer token override for LAN SSE.
       --allow-unattended-clean     Permit `clean` when the process cannot post the
                                    consent notification (an unbundled launch such as
                                    `swift run`). Off by default: without it, `clean`

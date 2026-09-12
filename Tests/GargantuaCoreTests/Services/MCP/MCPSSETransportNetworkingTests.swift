@@ -40,14 +40,14 @@ struct MCPSSETransportNetworkingTests {
         let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
             MCPSSETransport(
                 configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { Self.validToken },
+                tokenProvider: { nil },
                 handler: MCPSSETransportTestSupport.echoHandler
             )
         }
         defer { transport.stop() }
 
         let sse = try TCPClient(port: Int(port))
-        try sse.write(MCPSSETransportTestSupport.authorizedSSEOpen)
+        try sse.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         let openResponse = try sse.read(until: "\n\n")
 
         #expect(openResponse.contains("HTTP/1.1 200 OK"))
@@ -59,7 +59,6 @@ struct MCPSSETransportNetworkingTests {
         try post.write(
             "POST /message?sessionId=\(sessionID) HTTP/1.1\r\n"
                 + "Host: 127.0.0.1\r\n"
-                + "Authorization: Bearer \(Self.validToken)\r\n"
                 + "Content-Type: application/json\r\n"
                 + "Content-Length: \(body.utf8.count)\r\n"
                 + "\r\n"
@@ -72,43 +71,6 @@ struct MCPSSETransportNetworkingTests {
         #expect(eventResponse.contains("event: message"))
         #expect(eventResponse.contains(#""id":"socket""#))
         #expect(eventResponse.contains(#""ok":true"#))
-    }
-
-    @Test("running localhost transport enforces bearer token at endpoint")
-    func runningLocalhostTransportEnforcesToken() throws {
-        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
-            MCPSSETransport(
-                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port)),
-                tokenProvider: { Self.validToken },
-                handler: MCPSSETransportTestSupport.echoHandler
-            )
-        }
-        defer { transport.stop() }
-
-        let denied = try TCPClient(port: Int(port))
-        try denied.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-        let deniedResponse = try denied.read(until: "\r\n\r\n")
-        #expect(deniedResponse.contains("HTTP/1.1 401 Unauthorized"))
-        #expect(deniedResponse.contains("WWW-Authenticate: Bearer"))
-
-        let allowed = try TCPClient(port: Int(port))
-        try allowed.write(MCPSSETransportTestSupport.authorizedSSEOpen)
-        let allowedResponse = try allowed.read(until: "\n\n")
-        #expect(allowedResponse.contains("HTTP/1.1 200 OK"))
-        #expect(allowedResponse.contains("event: endpoint"))
-    }
-
-    @Test("a localhost transport refuses to start without a bearer token")
-    func localhostTransportRefusesToStartWithoutToken() throws {
-        let transport = MCPSSETransport(
-            configuration: MCPSSEServerConfiguration(isEnabled: true, port: 7_493),
-            tokenProvider: { nil },
-            handler: MCPSSETransportTestSupport.echoHandler
-        )
-
-        #expect(throws: MCPSSEConfigurationError.missingBearerToken) {
-            try transport.start()
-        }
     }
 
     @Test("running LAN transport enforces bearer token at endpoint")

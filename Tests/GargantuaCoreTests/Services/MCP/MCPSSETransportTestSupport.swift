@@ -23,15 +23,6 @@ enum MCPSSETransportTestSupport {
         case closeAbortivelyFailed(String)
     }
 
-    /// Bearer token every socket-driven suite configures on its transport
-    /// and presents on its requests. A token is required on every bind, so a
-    /// request without `authorizedSSEOpen`'s header is refused with 401.
-    static let bearerToken = "gtua_test_token_12345678901234567890"
-
-    /// A complete, authorized `GET /sse` request for a localhost transport.
-    static let authorizedSSEOpen =
-        "GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer \(bearerToken)\r\n\r\n"
-
     /// Shared echo handler: replies to every non-notification JSON-RPC
     /// request with `{"ok": true}`. Used by every test suite in this file
     /// group that just needs *a* working handler and doesn't care about its
@@ -108,11 +99,11 @@ enum MCPSSETransportTestSupport {
     /// identically. Speaking the actual protocol (an unauthenticated `GET
     /// /sse`) and requiring one of our router's two possible replies to it
     /// proves the peer is our router, not just something squatting the
-    /// port: a `WWW-Authenticate: Bearer` 401, since every bind requires a
-    /// token this unauthenticated probe deliberately doesn't send (the
-    /// `event: endpoint` preamble is still accepted should that ever
-    /// change). Both strings are specific to `MCPSSERequestRouter`'s wire
-    /// format; no squatter produces either one.
+    /// port: either the `event: endpoint` SSE preamble (localhost bind, or
+    /// LAN bind with no token configured), or a `WWW-Authenticate: Bearer`
+    /// 401 (LAN bind that requires a token this unauthenticated probe
+    /// doesn't send). Both strings are specific to
+    /// `MCPSSERequestRouter`'s wire format; no squatter produces either one.
     ///
     /// Uses `TCPClient`, whose connect is `CFStream`-backed and therefore
     /// asynchronous: a connection that cannot succeed (nothing listening,
@@ -176,12 +167,18 @@ enum MCPSSETransportTestSupport {
     /// retries with a freshly allocated port up to `attempts` times before
     /// giving up.
     ///
-    /// Session-isolation note: `waitUntilAcceptingConnections` sends an
-    /// unauthenticated `GET /sse`, which the router refuses before any
-    /// session is registered, so the probe leaves nothing behind for a
-    /// test's own `onConnectionClose` recorder to see. Every recorder-based
-    /// assertion in this suite is a `contains(_:)` check for one specific
-    /// session id in any case, never an exhaustive count.
+    /// Session-isolation note: `waitUntilAcceptingConnections` opens a real
+    /// `GET /sse` against the transport under construction, which registers a
+    /// session with `MCPSSETransport` the same as any other client. Because
+    /// the transport arms a receive on an opened SSE connection, the probe's
+    /// graceful close *is* observed, so a test's own `onConnectionClose`
+    /// recorder (e.g.
+    /// `MCPSSETransportLifecycleTests.ConnectionCloseRecorder`) will see the
+    /// probe's session id alongside the one the test opened itself. That is
+    /// harmless: every recorder-based assertion in this suite is a
+    /// `contains(_:)` check for one specific session id, never an exhaustive
+    /// count, so an incidental extra entry cannot flip a passing assertion to
+    /// a failing one.
     static func startTransport(
         attempts: Int = 3,
         readinessTimeout: TimeInterval = 5,
