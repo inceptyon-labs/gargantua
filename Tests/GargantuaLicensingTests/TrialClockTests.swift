@@ -66,4 +66,50 @@ struct TrialClockTests {
         #expect(clock.daysRemaining() == 0)
         #expect(clock.isExpired())
     }
+
+    // MARK: - Migration off the resettable plaintext stamp (N4)
+
+    @Test("Migrating storage adopts the legacy start date and retires the legacy key")
+    func migrationAdoptsLegacyDateAndClearsIt() {
+        let legacyStart = Date(timeIntervalSince1970: 1_750_000_000)
+        let primary = InMemoryTrialClockStorage()
+        let legacy = InMemoryTrialClockStorage(initialDate: legacyStart)
+        let storage = MigratingTrialClockStorage(primary: primary, legacy: legacy)
+
+        // First read migrates: the original start date is preserved (the trial
+        // does not restart), copied into primary, and the legacy key is cleared.
+        #expect(storage.readFirstLaunchDate() == legacyStart)
+        #expect(primary.readFirstLaunchDate() == legacyStart)
+        #expect(legacy.readFirstLaunchDate() == nil)
+
+        // A later reset of the legacy (plaintext) stamp no longer matters —
+        // primary is authoritative.
+        legacy.writeFirstLaunchDate(Date(timeIntervalSince1970: 9_999_999_999))
+        #expect(storage.readFirstLaunchDate() == legacyStart)
+    }
+
+    @Test("Migrating storage prefers primary and ignores legacy when primary is set")
+    func primaryWinsOverLegacy() {
+        let primaryStart = Date(timeIntervalSince1970: 1_700_000_000)
+        let legacyStart = Date(timeIntervalSince1970: 1_600_000_000)
+        let primary = InMemoryTrialClockStorage(initialDate: primaryStart)
+        let legacy = InMemoryTrialClockStorage(initialDate: legacyStart)
+        let storage = MigratingTrialClockStorage(primary: primary, legacy: legacy)
+
+        #expect(storage.readFirstLaunchDate() == primaryStart)
+        // Legacy is left untouched when no migration was needed.
+        #expect(legacy.readFirstLaunchDate() == legacyStart)
+    }
+
+    @Test("Fresh install with no legacy stamp seeds normally through the clock")
+    func freshInstallSeedsThroughMigratingStorage() {
+        let primary = InMemoryTrialClockStorage()
+        let legacy = InMemoryTrialClockStorage()
+        let storage = MigratingTrialClockStorage(primary: primary, legacy: legacy)
+        let frozen = Date(timeIntervalSince1970: 1_750_000_000)
+        let clock = TrialClock(storage: storage, now: { frozen })
+
+        #expect(clock.firstLaunchDate() == frozen)
+        #expect(primary.readFirstLaunchDate() == frozen)
+    }
 }
