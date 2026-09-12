@@ -98,4 +98,38 @@ struct PrivilegedRemovabilityPolicyTests {
         // Prefix-trap guard: /Library/CachesEvil must not match /Library/Caches.
         #expect(!policy.allows(path: "/Library/CachesEvil/x", isDirectory: false))
     }
+
+    // MARK: - Hard-link guard (H1 local-privilege-escalation defense)
+
+    @Test("A regular file with more than one hard link is flagged; a single-link file is not")
+    func multiplyLinkedRegularFileFlagged() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("gtua-hlguard-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A plain regenerable file — the legitimate cleanup case.
+        let single = dir.appendingPathComponent("cache.bin")
+        try Data("x".utf8).write(to: single)
+        #expect(!policy.isMultiplyLinkedRegularFile(path: single.path))
+
+        // Add a second hard link (the attack primitive: a second name for the
+        // same inode). Both names now report st_nlink == 2.
+        let secondName = dir.appendingPathComponent("planted")
+        #expect(link(single.path, secondName.path) == 0)
+        #expect(policy.isMultiplyLinkedRegularFile(path: single.path))
+        #expect(policy.isMultiplyLinkedRegularFile(path: secondName.path))
+
+        // Directories carry st_nlink >= 2 by nature and must NOT be flagged.
+        #expect(!policy.isMultiplyLinkedRegularFile(path: dir.path))
+
+        // A symlink is inspected as the link (lstat), not its multiply-linked
+        // target, so it is not flagged as a multiply-linked regular file.
+        let symlink = dir.appendingPathComponent("alias")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: single)
+        #expect(!policy.isMultiplyLinkedRegularFile(path: symlink.path))
+
+        // A path that does not exist reads as false (existence is a separate guard).
+        #expect(!policy.isMultiplyLinkedRegularFile(path: dir.appendingPathComponent("gone").path))
+    }
 }

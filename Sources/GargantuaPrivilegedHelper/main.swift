@@ -273,17 +273,29 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
 
     /// `lchown` the moved item (and every descendant) to the user. `lchown` does
     /// not follow symlinks, so a symlink in the tree can't redirect ownership of
-    /// a file outside it.
+    /// a file outside it. A multiply-linked regular file is skipped: `validate`
+    /// already rejects a hard-linked top-level file, but a moved *directory*
+    /// could still contain one (planted inside a world-writable allowlisted
+    /// tree), and chowning it would transfer ownership of the linked-to inode.
     private func chownRecursively(_ url: URL, uid: UInt32, gid: UInt32) {
-        lchown(url.path, uid, gid)
+        chownIfSingleLink(url.path, uid: uid, gid: gid)
         guard let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: nil,
             options: []
         ) else { return }
         for case let child as URL in enumerator {
-            lchown(child.path, uid, gid)
+            chownIfSingleLink(child.path, uid: uid, gid: gid)
         }
+    }
+
+    /// `lchown` unless the path is a regular file with more than one hard link.
+    private func chownIfSingleLink(_ path: String, uid: UInt32, gid: UInt32) {
+        if PrivilegedRemovabilityPolicy.shared.isMultiplyLinkedRegularFile(path: path) {
+            HelperLog.write("skipped chown of multiply-linked file: \(path)")
+            return
+        }
+        lchown(path, uid, gid)
     }
 
     private func validate(_ item: PrivilegedUninstallItem) throws -> URL {
@@ -310,6 +322,20 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: standardized.path, isDirectory: &isDirectory) else {
             throw PrivilegedHelperError.missingPath(item.path)
+        }
+
+        // A regular file with more than one hard link is never a legitimate
+        // cleanup target here. The move-to-Trash below preserves the inode
+        // (same volume) and `chownRecursively` then `lchown`s it to the invoking
+        // user — so a second link into a root-owned file (e.g. an unprivileged
+        // user hardlinking /etc/sudoers into world-writable /private/tmp, which
+        // this helper's allowlist covers) would transfer ownership of that
+        // inode to the user. The symlink guard above does not catch this: a hard
+        // link is not a symlink, so `resolvingSymlinksInPath` leaves it
+        // unchanged. Genuine regenerable temp/cache files have `st_nlink == 1`.
+        if !isDirectory.boolValue,
+           PrivilegedRemovabilityPolicy.shared.isMultiplyLinkedRegularFile(path: standardized.path) {
+            throw PrivilegedHelperError.hardlinkRejected(item.path)
         }
 
         guard isAllowed(standardized, isDirectory: isDirectory.boolValue) else {
@@ -339,6 +365,7 @@ private enum PrivilegedHelperError: Error, LocalizedError {
     case unsupportedOperation(String)
     case rejectedPath(String)
     case symlinkRejected(String)
+    case hardlinkRejected(String)
     case missingPath(String)
 
     var errorDescription: String? {
@@ -349,6 +376,8 @@ private enum PrivilegedHelperError: Error, LocalizedError {
             "Privileged helper rejected path: \(path)"
         case .symlinkRejected(let path):
             "Privileged helper rejected symlink path: \(path)"
+        case .hardlinkRejected(let path):
+            "Privileged helper rejected multiply-linked file: \(path)"
         case .missingPath(let path):
             "Privileged helper path does not exist: \(path)"
         }

@@ -105,6 +105,24 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
         return false
     }
 
+    /// True when `path` is a regular file carrying more than one hard link.
+    ///
+    /// Such a file is unsafe for the privileged helper to remove: the move into
+    /// the user's Trash preserves the inode (same volume) and the helper then
+    /// `lchown`s it to the invoking user, so a second link pointing into a
+    /// root-owned file — e.g. an unprivileged user hardlinking `/etc/sudoers`
+    /// into world-writable `/private/tmp`, which `subtreeRoots` covers — would
+    /// hand that inode's ownership to the user. The helper's symlink guard does
+    /// not catch this because a hard link is not a symlink. Genuine regenerable
+    /// temp/cache files have `st_nlink == 1`. Uses `lstat`, so a final symlink
+    /// is inspected as the link, not its target; a missing path reads as `false`
+    /// (the existence check is a separate guard).
+    public func isMultiplyLinkedRegularFile(path: String) -> Bool {
+        var info = stat()
+        guard lstat(path, &info) == 0 else { return false }
+        return (info.st_mode & S_IFMT) == S_IFREG && info.st_nlink > 1
+    }
+
     private func isDirectChild(_ path: String, of parent: String) -> Bool {
         URL(fileURLWithPath: path).deletingLastPathComponent().path == parent
     }
