@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.9] - 2026-09-12
+
+### Added
+
+- **Adjustable audit retention.** The About tab's retention row is now a 30/90/180/365-day picker that persists immediately and purges `audit.json` on the spot, no relaunch needed.
+
+### Fixed
+
+- **Audit retention now actually takes effect.** The persisted retention setting had no code path to enforce it since the SwiftData days; `audit.json` is now purged on every launch per the configured window, run off the main thread and non-fatal on lock contention.
+- **Removed a multi-process audit log corruption hazard.** Dropped the never-wired SwiftData audit mirror and the transitional dual-lock left over from last release's lock relocation, closing a possible overwrite path.
+- **Hardened Trash operations against symlink and race exploits.** Deep Clean's privileged file removal now performs all Trash moves and deletes via descriptor-based, symlink-safe operations and no longer transfers ownership of moved items, closing several local-privilege-escalation paths found in review.
+- **Dev-tool binaries are now trust-checked before execution.** `brew`, `npm`, `docker`, and similar tools are verified against ownership/permission rules before being spawned, and child processes no longer inherit `DYLD_*` environment overrides.
+
 ## [0.4.8] - 2026-07-29
 
 ### Added
