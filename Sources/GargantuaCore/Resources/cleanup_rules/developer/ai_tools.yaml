@@ -499,3 +499,81 @@ rules:
       - developer
       - ai_history
       - review
+
+  # --- Agent history for tools verified against their own storage code ---------
+  #
+  # Every path below was read out of the tool's path-building source or its
+  # vendor docs, not inferred from a directory name. Tools whose layout could
+  # only be sourced from third-party bug reports are deliberately absent.
+
+  - id: qwen_code_shell_history
+    name: Qwen Code Shell History
+    paths:
+      - "~/.qwen/tmp/*/shell_history"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 72
+    explanation: "Shell commands Qwen Code ran for one project, kept for history recall. It is a record of your own commands, so it is surfaced for review; credentials and settings elsewhere under ~/.qwen are not matched."
+    source:
+      name: Qwen Code
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: gemini_cli_shell_history
+    name: Gemini CLI Shell History
+    paths:
+      - "~/.gemini/tmp/*/shell_history"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 72
+    explanation: "Shell commands Gemini CLI ran for one project, kept for history recall. It is a record of your own commands, so it is surfaced for review; credentials and settings elsewhere under ~/.gemini are not matched."
+    source:
+      name: Gemini CLI
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: goose_legacy_sessions
+    name: Goose Legacy Session Records
+    paths:
+      - "~/.local/share/goose/sessions"
+    pattern: "*.jsonl"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 70
+    explanation: "Goose session transcripts in the pre-1.10 JSONL format. Goose moved sessions into sessions.db and, by its own documentation, no longer manages these files. Treat them as the only copy of that conversation unless you know the import succeeded. Only .jsonl files are matched, never sessions.db."
+    source:
+      name: Goose
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: continue_logs
+    name: Continue Logs
+    paths:
+      - "~/.continue/logs/core.log"
+      - "~/.continue/logs/prompt.log"
+    safety: safe
+    confidence: 92
+    explanation: "The two log files Continue writes. Recreated on the next run; sessions and configuration are not matched."
+    source:
+      name: Continue
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - logs
