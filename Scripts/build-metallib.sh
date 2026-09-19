@@ -101,6 +101,13 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 METAL_FLAGS=(
     -x metal
+    # Pin the language standard. Xcode 27's metal defaults to Metal 4.x, which
+    # enforces address-space rules that mlx-swift's steel_attention shaders
+    # predate: without this the build dies with 15 errors in steel/attn/mma.h
+    # ("binding reference of type 'const thread vec<...>' ... changes address
+    # space"). MLX targets Metal 3.x, so this compiles them as written rather
+    # than patching vendored sources. Revisit on an mlx-swift bump.
+    -std=metal3.1
     -Wall
     -Wextra
     -fno-fast-math
