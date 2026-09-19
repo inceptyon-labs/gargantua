@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.10] - 2026-09-19
+
+### Added
+
+- **AI tool history cleanup.** Deep Clean now finds the chat transcripts, agent logs, generated images and per-project state that AI coding tools leave behind, including session stores for projects that no longer exist. Caches the tools rebuild are marked safe; anything holding conversations or output is age-gated and left for you to review.
+- **Session stores for deleted projects.** Gargantua reads each store's original project path and proposes it for removal only when the project is definitely gone. Nothing is proposed when the path is unreadable, implausible, or on an unmounted drive.
+- **More agent history covered.** Shell history for Qwen Code and Gemini CLI, legacy Goose session files, and Continue's logs are now recognized. Goose's live `sessions.db` is never matched.
+
+### Fixed
+
+- **Live agent scratchpads no longer offered as safe deletions.** The `/tmp` rule stopped listing Claude Code's active scratchpad as a single "safe" item, and now excludes Homebrew build trees that the dedicated Homebrew rule already handles. Stale scratchpads are proposed one session at a time, and only when nothing inside has changed, and no matching transcript has been written, in seven days.
+- **Safer scratchpad detection.** The scratchpad root and each session must be a real directory owned by you, so a planted symlink in `/private/tmp` can't make another folder look like a session. Activity checks now look inside app bundles and stop at the first unreadable subtree instead of assuming it is idle.
+- **Correct age for Claude Code transcripts.** Each transcript is aged by its own modification time rather than its project folder's, which had made resumed projects look up to six months stale.
+- **Gemini CLI and Codex rules narrowed.** Saved Gemini chats are now review-only and age-gated instead of safe, Codex's installed plugins and marketplaces are no longer treated as scratch, and pasted text and images are no longer treated as cache.
+- **Antigravity browser cleanup limited to caches.** Cookies, accounts and client certificates in its Chromium profile are no longer targeted.
+- **Fewer false removals of live projects.** A project under a protected or unreadable folder is no longer mistaken for a deleted one, and the unmounted-drive check now confirms the path is a real mount point.
+- **Transcript scanning with emoji.** Transcripts containing multi-byte characters such as emoji are now read correctly when the scan reaches its size cap.
+- **Build on Xcode 27.** `swift build` no longer fails because of the Metal shader compiler's new default language standard.
+
 ## [Unreleased]
 
 ### Added
