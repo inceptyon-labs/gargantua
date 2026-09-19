@@ -6,6 +6,7 @@ import Testing
 /// an agent session is handed under `/private/tmp/claude-<uid>`.
 @Suite("AISessionScanAdapter: agent scratchpads")
 struct AISessionScratchpadTests {
+
     // MARK: - Agent scratchpads
 
     @Test("scratchpad untouched past the window surfaces as review")
@@ -182,6 +183,7 @@ struct AISessionScratchpadTests {
     }
 
     // MARK: - Guards, tested directly
+
     //
     // The integration tests above can't isolate these: FileManager independently
     // refuses to enumerate through a symlinked directory URL, and a stopped walk

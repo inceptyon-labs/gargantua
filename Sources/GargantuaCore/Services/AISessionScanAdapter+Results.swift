@@ -5,6 +5,7 @@ import Foundation
 /// Split out so the adapter file stays within the project's type-body limit;
 /// these are pure functions of a finding and touch no adapter state.
 extension AISessionScanAdapter {
+
     // MARK: - Result mapping
 
     static func makeScanResult(_ finding: AISessionFinding) -> ScanResult {

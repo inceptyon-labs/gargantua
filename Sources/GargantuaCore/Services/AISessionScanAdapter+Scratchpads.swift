@@ -6,6 +6,7 @@ import Foundation
 /// Split from the main adapter file to stay within the project's type-body
 /// limit; the logic is unchanged.
 extension AISessionScanAdapter {
+
     // MARK: - Agent scratchpads
 
     /// Surfaces `<store>/<project-slug>/<session-id>` directories that nothing
