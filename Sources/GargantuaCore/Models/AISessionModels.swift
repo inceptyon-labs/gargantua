@@ -14,6 +14,21 @@ public enum AISessionStoreKind: String, Sendable, Equatable, Codable {
     /// state per project. The project path is recorded as a `file://` URI in
     /// `workspace.json`.
     case editorWorkspaceStorage
+
+    /// `/private/tmp/claude-<uid>/<project-slug>/<session-id>/` — the working
+    /// directory an agent session is given for scratch files. Nested one level
+    /// deeper than the other kinds, and judged by inactivity rather than by a
+    /// missing project, since the slug cannot be decoded back to a path
+    /// unambiguously.
+    case agentScratchpad
+}
+
+/// Why a session store was surfaced.
+public enum AISessionStaleReason: Sendable, Equatable {
+    /// The project the store belongs to is gone from disk.
+    case projectMissing(projectPath: String)
+    /// Nothing anywhere inside the store has been written for this long.
+    case inactive(days: Int)
 }
 
 /// One directory an AI tool fills with per-project session state.
@@ -43,6 +58,11 @@ public struct AISessionScanPolicy: Sendable {
     /// How many leading bytes of a transcript to read looking for the project
     /// path. Bounded so a multi-hundred-megabyte transcript is never loaded.
     public let transcriptProbeByteLimit: Int
+    /// How long a scratchpad must go completely untouched before it is
+    /// surfaced. Measured against the newest file *anywhere inside* it, not
+    /// the directory's own timestamp — writing a file does not update its
+    /// parent's mtime, and on a real machine that gap reached four days.
+    public let scratchpadStaleAfter: TimeInterval
     /// Where removable volumes are mounted. A seam for tests; in production
     /// this is always `/Volumes`.
     public let volumesDirectory: URL
@@ -52,12 +72,14 @@ public struct AISessionScanPolicy: Sendable {
         excludedPaths: Set<String> = [],
         protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy(entries: []),
         transcriptProbeByteLimit: Int = 256 * 1024,
+        scratchpadStaleAfter: TimeInterval = 7 * 24 * 60 * 60,
         volumesDirectory: URL = URL(fileURLWithPath: "/Volumes", isDirectory: true)
     ) {
         self.stores = stores
         self.excludedPaths = excludedPaths
         self.protectedRoots = protectedRoots
         self.transcriptProbeByteLimit = transcriptProbeByteLimit
+        self.scratchpadStaleAfter = scratchpadStaleAfter
         self.volumesDirectory = volumesDirectory
     }
 
@@ -86,16 +108,16 @@ public struct AISessionScanPolicy: Sendable {
     }
 }
 
-/// A per-project session store whose owning project is gone from disk.
-public struct AISessionOrphan: Sendable, Equatable {
+/// A session store entry that nothing is going to reopen.
+public struct AISessionFinding: Sendable, Equatable {
     /// Attribution for the tool that wrote the store.
     public let toolName: String
-    /// How the project path was recorded.
+    /// The shape of store this came from.
     public let kind: AISessionStoreKind
     /// The store entry on disk — the directory that would be removed.
     public let path: String
-    /// The project this entry belongs to, which no longer exists.
-    public let projectPath: String
+    /// What makes it reviewable.
+    public let reason: AISessionStaleReason
     /// Recursive size of the store entry, in bytes.
     public let size: Int64
     /// Newest modification timestamp inside the entry.
@@ -105,14 +127,14 @@ public struct AISessionOrphan: Sendable, Equatable {
         toolName: String,
         kind: AISessionStoreKind,
         path: String,
-        projectPath: String,
+        reason: AISessionStaleReason,
         size: Int64,
         lastActivity: Date?
     ) {
         self.toolName = toolName
         self.kind = kind
         self.path = path
-        self.projectPath = projectPath
+        self.reason = reason
         self.size = size
         self.lastActivity = lastActivity
     }

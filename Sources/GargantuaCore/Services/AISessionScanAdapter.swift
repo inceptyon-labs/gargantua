@@ -22,6 +22,7 @@ public struct AISessionScanAdapter: ScanAdapter {
 
     private let policy: AISessionScanPolicy
     private let categories: Set<String>?
+    private let now: @Sendable () -> Date
     // FileManager isn't Sendable, but this adapter only issues read-only,
     // thread-safe queries against it (and defaults to the shared instance).
     nonisolated(unsafe) private let fileManager: FileManager
@@ -29,27 +30,29 @@ public struct AISessionScanAdapter: ScanAdapter {
     public init(
         policy: AISessionScanPolicy,
         categories: Set<String>? = nil,
+        now: @escaping @Sendable () -> Date = { Date() },
         fileManager: FileManager = .default
     ) {
         self.policy = policy
         self.categories = categories
+        self.now = now
         self.fileManager = fileManager
     }
 
     public func scan(progress: ScanProgress?) async throws -> [ScanResult] {
         guard categories == nil || categories?.contains(Self.category) == true else { return [] }
-        return discoverOrphans().map(Self.makeScanResult)
+        return discoverFindings().map(Self.makeScanResult)
     }
 
-    /// Walks every configured store and returns the entries whose project is gone.
-    public func discoverOrphans() -> [AISessionOrphan] {
+    /// Walks every configured store and returns the entries nothing will reopen.
+    public func discoverFindings() -> [AISessionFinding] {
         var seen = Set<String>()
-        var discovered: [AISessionOrphan] = []
+        var discovered: [AISessionFinding] = []
 
         for store in policy.stores {
-            for orphan in orphans(in: store) {
-                guard seen.insert(AISessionScanPolicy.normalizedPath(orphan.path)).inserted else { continue }
-                discovered.append(orphan)
+            for finding in findings(in: store) {
+                guard seen.insert(AISessionScanPolicy.normalizedPath(finding.path)).inserted else { continue }
+                discovered.append(finding)
             }
         }
 
@@ -57,13 +60,22 @@ public struct AISessionScanAdapter: ScanAdapter {
             if lhs.toolName != rhs.toolName {
                 return lhs.toolName.localizedStandardCompare(rhs.toolName) == .orderedAscending
             }
-            return lhs.projectPath.localizedStandardCompare(rhs.projectPath) == .orderedAscending
+            return lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
         }
     }
 
     // MARK: - Per-store discovery
 
-    private func orphans(in store: AISessionStore) -> [AISessionOrphan] {
+    private func findings(in store: AISessionStore) -> [AISessionFinding] {
+        switch store.kind {
+        case .claudeCodeProject, .editorWorkspaceStorage:
+            return orphans(in: store)
+        case .agentScratchpad:
+            return staleScratchpads(in: store)
+        }
+    }
+
+    private func orphans(in store: AISessionStore) -> [AISessionFinding] {
         guard let entries = try? fileManager.contentsOfDirectory(
             at: store.url,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -87,15 +99,92 @@ public struct AISessionScanAdapter: ScanAdapter {
             let size = DirectorySizeScanner.directorySize(at: entry.path).totalSize
             guard size > 0 else { return nil }
 
-            return AISessionOrphan(
+            return AISessionFinding(
                 toolName: store.toolName,
                 kind: store.kind,
                 path: entry.path,
-                projectPath: projectPath,
+                reason: .projectMissing(projectPath: projectPath),
                 size: size,
                 lastActivity: newestModification(in: entry)
             )
         }
+    }
+
+    // MARK: - Agent scratchpads
+
+    /// Surfaces `<store>/<project-slug>/<session-id>` directories that nothing
+    /// has written to in `scratchpadStaleAfter`.
+    ///
+    /// The unit is the whole session directory, and its age is the newest file
+    /// found anywhere inside it. Both matter: a scratchpad holds one session's
+    /// working files, so removing part of it is meaningless, and writing a file
+    /// does not touch its parent directory's timestamp — on a real machine a
+    /// session directory read four days stale while its contents were eight
+    /// hours old.
+    private func staleScratchpads(in store: AISessionStore) -> [AISessionFinding] {
+        var out: [AISessionFinding] = []
+
+        for project in childDirectories(of: store.url) {
+            for session in childDirectories(of: project) {
+                guard policy.protectionReason(for: session.path) == nil,
+                      !policy.isExcluded(path: session.path) else { continue }
+
+                let metrics = contentMetrics(of: session)
+                guard let newest = metrics.newestModification, metrics.size > 0 else { continue }
+
+                let idle = now().timeIntervalSince(newest)
+                guard idle >= policy.scratchpadStaleAfter else { continue }
+
+                out.append(AISessionFinding(
+                    toolName: store.toolName,
+                    kind: store.kind,
+                    path: session.path,
+                    reason: .inactive(days: Int(idle / 86_400)),
+                    size: metrics.size,
+                    lastActivity: newest
+                ))
+            }
+        }
+
+        return out
+    }
+
+    /// Total size and newest modification date under `url`, in one walk.
+    ///
+    /// A scratchpad can hold tens of thousands of files — a session on the
+    /// authoring machine held 21,446 — so size and age are collected together
+    /// rather than by walking the tree twice.
+    private func contentMetrics(of url: URL) -> (size: Int64, newestModification: Date?) {
+        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: keys,
+            options: [.skipsPackageDescendants]
+        ) else {
+            return (0, nil)
+        }
+
+        var size: Int64 = 0
+        var newest: Date?
+        for case let child as URL in enumerator {
+            guard let values = try? child.resourceValues(forKeys: Set(keys)) else { continue }
+            if values.isRegularFile == true {
+                size += Int64(values.fileSize ?? 0)
+            }
+            if let modified = values.contentModificationDate, modified > newest ?? .distantPast {
+                newest = modified
+            }
+        }
+        return (size, newest)
+    }
+
+    private func childDirectories(of url: URL) -> [URL] {
+        let children = (try? fileManager.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return children.filter(isDirectory).sorted { $0.path < $1.path }
     }
 
     private func projectPath(forEntry entry: URL, kind: AISessionStoreKind) -> String? {
@@ -104,6 +193,9 @@ public struct AISessionScanAdapter: ScanAdapter {
             return transcriptWorkingDirectory(in: entry)
         case .editorWorkspaceStorage:
             return workspaceFolderPath(in: entry)
+        case .agentScratchpad:
+            // Scratchpads are judged by inactivity, never routed through here.
+            return nil
         }
     }
 
@@ -321,47 +413,5 @@ public struct AISessionScanAdapter: ScanAdapter {
     private func isDirectory(_ url: URL) -> Bool {
         var isDir: ObjCBool = false
         return fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
-    }
-
-    // MARK: - Result mapping
-
-    private static func makeScanResult(_ orphan: AISessionOrphan) -> ScanResult {
-        let what: String
-        switch orphan.kind {
-        case .claudeCodeProject:
-            what = "Conversation transcripts \(orphan.toolName) kept for \(orphan.projectPath)."
-        case .editorWorkspaceStorage:
-            what = "Per-workspace editor and AI assistant state \(orphan.toolName) kept for \(orphan.projectPath)."
-        }
-
-        return ScanResult(
-            id: resultIDPrefix + sanitizedID(orphan.path),
-            name: "\(orphan.toolName) session store — \(URL(fileURLWithPath: orphan.projectPath).lastPathComponent)",
-            path: orphan.path,
-            size: orphan.size,
-            safety: .review,
-            confidence: 76,
-            explanation: [
-                what,
-                "That project folder no longer exists on disk, so nothing will reopen this store.",
-                "It still holds your own conversation history, and a missing folder can mean a move rather than a",
-                "deletion, so Gargantua marks this review and keeps removal behind confirmation.",
-            ].joined(separator: " "),
-            source: SourceAttribution(name: orphan.toolName),
-            lastAccessed: orphan.lastActivity,
-            category: category,
-            tags: ["ai_history", "developer", tag, "review"].sorted(),
-            regenerates: false
-        )
-    }
-
-    private static func sanitizedID(_ raw: String) -> String {
-        let mapped = raw.unicodeScalars.map { scalar -> Character in
-            CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : "-"
-        }
-        return String(mapped)
-            .split(separator: "-")
-            .joined(separator: "-")
-            .lowercased()
     }
 }

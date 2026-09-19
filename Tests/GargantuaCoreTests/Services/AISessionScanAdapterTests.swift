@@ -6,7 +6,7 @@ import Testing
 struct AISessionScanAdapterTests {
     @Test("Claude Code project whose cwd is gone surfaces as review")
     func orphanedClaudeProjectSurfaces() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         try fixture.addClaudeProject(slug: "-Users-someone-gone", cwd: fixture.root.appendingPathComponent("gone/acme").path)
 
         let results = try await fixture.makeAdapter().scan(progress: nil)
@@ -23,7 +23,7 @@ struct AISessionScanAdapterTests {
 
     @Test("Claude Code project whose cwd still exists is left alone")
     func liveClaudeProjectIgnored() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         let live = fixture.root.appendingPathComponent("live/acme", isDirectory: true)
         try FileManager.default.createDirectory(at: live, withIntermediateDirectories: true)
         try fixture.addClaudeProject(slug: "-Users-someone-live", cwd: live.path)
@@ -35,7 +35,7 @@ struct AISessionScanAdapterTests {
 
     @Test("transcript with no cwd record is never proposed")
     func missingCwdRecordIgnored() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         try fixture.addClaudeProject(slug: "-Users-someone-unknown", cwd: nil)
 
         let results = try await fixture.makeAdapter().scan(progress: nil)
@@ -45,7 +45,7 @@ struct AISessionScanAdapterTests {
 
     @Test("workspaceStorage entry whose folder is gone surfaces as review")
     func orphanedWorkspaceStorageSurfaces() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         try fixture.addWorkspaceStorage(hash: "abc123", key: "folder", folder: fixture.root.appendingPathComponent("gone/widget"))
 
         let results = try await fixture.makeAdapter().scan(progress: nil)
@@ -59,7 +59,7 @@ struct AISessionScanAdapterTests {
 
     @Test("multi-root workspace file URI is read from the workspace key")
     func multiRootWorkspaceKeyRead() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         try fixture.addWorkspaceStorage(hash: "def456", key: "workspace", folder: fixture.root.appendingPathComponent("gone/team.code-workspace"))
 
         let results = try await fixture.makeAdapter().scan(progress: nil)
@@ -69,7 +69,7 @@ struct AISessionScanAdapterTests {
 
     @Test("percent-encoded folder URI resolves to the decoded path")
     func percentEncodedFolderDecoded() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         let live = fixture.root.appendingPathComponent("live/My Project", isDirectory: true)
         try FileManager.default.createDirectory(at: live, withIntermediateDirectories: true)
         try fixture.addWorkspaceStorage(hash: "ghi789", key: "folder", folder: live)
@@ -83,7 +83,7 @@ struct AISessionScanAdapterTests {
 
     @Test("project on an unmounted volume is treated as absent hardware, not junk")
     func unmountedVolumeIgnored() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         try fixture.addClaudeProject(
             slug: "-Volumes-Ext-acme",
             cwd: fixture.volumes.appendingPathComponent("NotMounted/acme").path
@@ -96,7 +96,7 @@ struct AISessionScanAdapterTests {
 
     @Test("store entry under a protected root is skipped")
     func protectedEntrySkipped() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         let slug = "-Users-someone-gone"
         try fixture.addClaudeProject(slug: slug, cwd: fixture.root.appendingPathComponent("gone/acme").path)
 
@@ -113,7 +113,7 @@ struct AISessionScanAdapterTests {
 
     @Test("excluded store entry is never proposed")
     func excludedEntrySkipped() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         let slug = "-Users-someone-gone"
         try fixture.addClaudeProject(slug: slug, cwd: fixture.root.appendingPathComponent("gone/acme").path)
 
@@ -126,7 +126,7 @@ struct AISessionScanAdapterTests {
 
     @Test("category gate excludes the adapter when dev_artifacts is absent")
     func categoryGate() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         try fixture.addClaudeProject(slug: "-Users-someone-gone", cwd: fixture.root.appendingPathComponent("gone/acme").path)
 
         let adapter = fixture.makeAdapter(categories: ["browser_cache"])
@@ -153,7 +153,7 @@ struct AISessionScanAdapterTests {
 
     @Test("bounded read still resolves cwd when the cap falls mid-character")
     func boundedReadResolvesCwdPastSplitCharacter() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         let gone = fixture.root.appendingPathComponent("gone/acme").path
         // Emoji padding guarantees the byte cap lands inside a character.
         try fixture.addClaudeProject(
@@ -173,7 +173,7 @@ struct AISessionScanAdapterTests {
         // Running as root bypasses the permission bits this relies on.
         try #require(getuid() != 0)
 
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         let vault = fixture.root.appendingPathComponent("vault", isDirectory: true)
         let project = vault.appendingPathComponent("acme", isDirectory: true)
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -188,7 +188,7 @@ struct AISessionScanAdapterTests {
 
     @Test("a leftover mount-point directory does not count as a mounted volume")
     func staleMountPointDirectoryIgnored() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         // An empty /Volumes/<name> left behind by an unclean eject: present on
         // disk, but part of the boot volume rather than its own volume root.
         let mountPoint = fixture.volumes.appendingPathComponent("Ext", isDirectory: true)
@@ -203,7 +203,7 @@ struct AISessionScanAdapterTests {
 
     @Test("a project reached through a symlink into an unmounted volume is not an orphan")
     func symlinkedVolumePathIgnored() async throws {
-        let fixture = try FixtureTree()
+        let fixture = try AISessionFixtureTree()
         // ~/external -> /Volumes/Drive, with Drive unplugged.
         let link = fixture.root.appendingPathComponent("external")
         try FileManager.default.createSymbolicLink(
@@ -222,81 +222,5 @@ struct AISessionScanAdapterTests {
     func nestedPayloadCwdRead() {
         let text = "{\"type\":\"session_meta\",\"payload\":{\"cwd\":\"/tmp/hal\"}}\n"
         #expect(AISessionScanAdapter.workingDirectory(inJSONLines: text) == "/tmp/hal")
-    }
-
-    // MARK: - Helpers
-
-    private final class FixtureTree {
-        let root: URL
-        let claudeProjects: URL
-        let workspaceStorage: URL
-        /// Stands in for `/Volumes` so the mount guard can be exercised without
-        /// mounting anything.
-        let volumes: URL
-        private let fm = FileManager.default
-
-        init() throws {
-            root = FileManager.default.temporaryDirectory
-                .appendingPathComponent("AISessionScanAdapterTests-\(UUID().uuidString)", isDirectory: true)
-            claudeProjects = root.appendingPathComponent("claude/projects", isDirectory: true)
-            workspaceStorage = root.appendingPathComponent("Code/User/workspaceStorage", isDirectory: true)
-            volumes = root.appendingPathComponent("Volumes", isDirectory: true)
-            try fm.createDirectory(at: claudeProjects, withIntermediateDirectories: true)
-            try fm.createDirectory(at: workspaceStorage, withIntermediateDirectories: true)
-            try fm.createDirectory(at: volumes, withIntermediateDirectories: true)
-        }
-
-        deinit { try? fm.removeItem(at: root) }
-
-        /// Writes `<projects>/<slug>/session.jsonl`, optionally recording `cwd`.
-        /// `padding` is appended as a trailing record so the transcript can be
-        /// pushed past a probe limit.
-        func addClaudeProject(slug: String, cwd: String?, padding: String = "") throws {
-            let dir = claudeProjects.appendingPathComponent(slug, isDirectory: true)
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-            var lines = ["{\"type\":\"summary\"}"]
-            if let cwd {
-                lines.append("{\"type\":\"user\",\"cwd\":\"\(cwd)\"}")
-            }
-            if !padding.isEmpty {
-                lines.append("{\"type\":\"user\",\"text\":\"\(padding)\"}")
-            }
-            try (lines.joined(separator: "\n") + "\n")
-                .write(to: dir.appendingPathComponent("session.jsonl"), atomically: true, encoding: .utf8)
-        }
-
-        /// Writes `<workspaceStorage>/<hash>/workspace.json` pointing at `folder`.
-        func addWorkspaceStorage(hash: String, key: String, folder: URL) throws {
-            let dir = workspaceStorage.appendingPathComponent(hash, isDirectory: true)
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-            let uri = folder.absoluteString
-            try "{\"\(key)\": \"\(uri)\"}"
-                .write(to: dir.appendingPathComponent("workspace.json"), atomically: true, encoding: .utf8)
-            // Give the entry non-zero size so it isn't filtered as empty.
-            try Data(repeating: 0x1, count: 64).write(to: dir.appendingPathComponent("state.vscdb"))
-        }
-
-        func makeAdapter(
-            categories: Set<String>? = ["dev_artifacts"],
-            excludedPaths: Set<String> = [],
-            protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy(entries: []),
-            transcriptProbeByteLimit: Int = 256 * 1024
-        ) -> AISessionScanAdapter {
-            AISessionScanAdapter(
-                policy: AISessionScanPolicy(
-                    stores: [
-                        AISessionStore(toolName: "Claude Code", kind: .claudeCodeProject, url: claudeProjects),
-                        AISessionStore(toolName: "VS Code", kind: .editorWorkspaceStorage, url: workspaceStorage),
-                    ],
-                    excludedPaths: excludedPaths,
-                    protectedRoots: protectedRoots,
-                    transcriptProbeByteLimit: transcriptProbeByteLimit,
-                    volumesDirectory: volumes
-                ),
-                categories: categories
-            )
-        }
     }
 }

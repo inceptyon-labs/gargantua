@@ -4,10 +4,15 @@ rules:
     paths:
       - "/tmp"
     exclude:
-      - "/tmp/homebrew-*"
+      # Excludes are matched against each child's NAME (or its fully resolved
+      # path). "/tmp" resolves to "/private/tmp" while enumerating, so a
+      # "/tmp/..."-prefixed pattern here can never match and silently does
+      # nothing. Name form only.
+      - "homebrew-*"
+      - "claude-*"
     safety: safe
     confidence: 90
-    explanation: "System temporary directory. Contents are transient by design."
+    explanation: "System temporary directory. Contents are transient by design. Homebrew build trees and AI agent scratchpads are matched by their own rules instead, which understand when those are still in use."
     source:
       name: macOS
     regenerates: true

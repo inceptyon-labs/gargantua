@@ -34,6 +34,14 @@ extension AISessionScanAdapter {
                 )
             }
 
+        // The scratchpad root is per-uid: /private/tmp/claude-<uid>. Only this
+        // user's is ever scanned.
+        stores.append(AISessionStore(
+            toolName: "Claude Code",
+            kind: .agentScratchpad,
+            url: URL(fileURLWithPath: "/private/tmp/claude-\(getuid())", isDirectory: true)
+        ))
+
         return stores.filter { store in
             var isDir: ObjCBool = false
             return fileManager.fileExists(atPath: store.url.path, isDirectory: &isDir) && isDir.boolValue
