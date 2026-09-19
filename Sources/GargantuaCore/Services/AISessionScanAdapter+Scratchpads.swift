@@ -119,13 +119,13 @@ extension AISessionScanAdapter {
         guard var newest = modificationDate(url) else { return nil }
 
         let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-        let failed = ReadFailureFlag()
+        var failed = false
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: keys,
             options: [],
             errorHandler: { _, _ in
-                failed.tripped = true
+                failed = true
                 return false
             }
         ) else {
@@ -144,13 +144,8 @@ extension AISessionScanAdapter {
                 newest = modified
             }
         }
-        guard !failed.tripped else { return nil }
+        guard !failed else { return nil }
         return (size, newest)
-    }
-
-    /// Box for the enumerator's error handler, which must escape.
-    final class ReadFailureFlag: @unchecked Sendable {
-        var tripped = false
     }
 
     private func childDirectories(of url: URL) -> [URL] {
