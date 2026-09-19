@@ -20,12 +20,12 @@ public struct AISessionScanAdapter: ScanAdapter {
     public static let tag = "ai-session-orphan"
     public static let category = "dev_artifacts"
 
-    private let policy: AISessionScanPolicy
+    let policy: AISessionScanPolicy
     private let categories: Set<String>?
-    private let now: @Sendable () -> Date
+    let now: @Sendable () -> Date
     // FileManager isn't Sendable, but this adapter only issues read-only,
     // thread-safe queries against it (and defaults to the shared instance).
-    nonisolated(unsafe) private let fileManager: FileManager
+    nonisolated(unsafe) let fileManager: FileManager
 
     public init(
         policy: AISessionScanPolicy,
@@ -108,83 +108,6 @@ public struct AISessionScanAdapter: ScanAdapter {
                 lastActivity: newestModification(in: entry)
             )
         }
-    }
-
-    // MARK: - Agent scratchpads
-
-    /// Surfaces `<store>/<project-slug>/<session-id>` directories that nothing
-    /// has written to in `scratchpadStaleAfter`.
-    ///
-    /// The unit is the whole session directory, and its age is the newest file
-    /// found anywhere inside it. Both matter: a scratchpad holds one session's
-    /// working files, so removing part of it is meaningless, and writing a file
-    /// does not touch its parent directory's timestamp — on a real machine a
-    /// session directory read four days stale while its contents were eight
-    /// hours old.
-    private func staleScratchpads(in store: AISessionStore) -> [AISessionFinding] {
-        var out: [AISessionFinding] = []
-
-        for project in childDirectories(of: store.url) {
-            for session in childDirectories(of: project) {
-                guard policy.protectionReason(for: session.path) == nil,
-                      !policy.isExcluded(path: session.path) else { continue }
-
-                let metrics = contentMetrics(of: session)
-                guard let newest = metrics.newestModification, metrics.size > 0 else { continue }
-
-                let idle = now().timeIntervalSince(newest)
-                guard idle >= policy.scratchpadStaleAfter else { continue }
-
-                out.append(AISessionFinding(
-                    toolName: store.toolName,
-                    kind: store.kind,
-                    path: session.path,
-                    reason: .inactive(days: Int(idle / 86_400)),
-                    size: metrics.size,
-                    lastActivity: newest
-                ))
-            }
-        }
-
-        return out
-    }
-
-    /// Total size and newest modification date under `url`, in one walk.
-    ///
-    /// A scratchpad can hold tens of thousands of files — a session on the
-    /// authoring machine held 21,446 — so size and age are collected together
-    /// rather than by walking the tree twice.
-    private func contentMetrics(of url: URL) -> (size: Int64, newestModification: Date?) {
-        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-        guard let enumerator = fileManager.enumerator(
-            at: url,
-            includingPropertiesForKeys: keys,
-            options: [.skipsPackageDescendants]
-        ) else {
-            return (0, nil)
-        }
-
-        var size: Int64 = 0
-        var newest: Date?
-        for case let child as URL in enumerator {
-            guard let values = try? child.resourceValues(forKeys: Set(keys)) else { continue }
-            if values.isRegularFile == true {
-                size += Int64(values.fileSize ?? 0)
-            }
-            if let modified = values.contentModificationDate, modified > newest ?? .distantPast {
-                newest = modified
-            }
-        }
-        return (size, newest)
-    }
-
-    private func childDirectories(of url: URL) -> [URL] {
-        let children = (try? fileManager.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-        return children.filter(isDirectory).sorted { $0.path < $1.path }
     }
 
     private func projectPath(forEntry entry: URL, kind: AISessionStoreKind) -> String? {
@@ -406,11 +329,11 @@ public struct AISessionScanAdapter: ScanAdapter {
         return (children + [entry]).compactMap(modificationDate).max()
     }
 
-    private func modificationDate(_ url: URL) -> Date? {
+    func modificationDate(_ url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
-    private func isDirectory(_ url: URL) -> Bool {
+    func isDirectory(_ url: URL) -> Bool {
         var isDir: ObjCBool = false
         return fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
     }

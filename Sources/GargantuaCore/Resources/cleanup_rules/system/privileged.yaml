@@ -25,6 +25,11 @@ rules:
     paths:
       - "/private/tmp/*"
       - "/private/var/tmp/*"
+    exclude:
+      # An agent scratchpad root is one directory holding every project's
+      # sessions, and its own mtime says nothing about the sessions inside it.
+      # Matched per session by the AI session scanner instead.
+      - "claude-*"
     match_filters:
       - "mtime > 7d"
     safety: review

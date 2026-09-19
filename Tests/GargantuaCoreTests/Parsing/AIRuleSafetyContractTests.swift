@@ -4,12 +4,16 @@ import Testing
 
 /// Mechanical checks on the safety contract the AI tool rules are written to.
 ///
-/// Two review rounds on those rules produced the same class of defect twice: a
+/// Three review rounds on those rules produced the same classes of defect: a
 /// path that looked disposable by its name but held conversation history or
-/// credentials, and an age gate pointed at something whose timestamp doesn't
-/// move when the content does. These assert the invariants that came out of
-/// those rounds against the whole bundled rule set, so the next rule that
-/// breaks one fails here rather than on a user's disk.
+/// credentials, an age gate pointed at something whose timestamp doesn't move
+/// when the content does, and a live database sitting beside the files being
+/// matched. These assert those invariants across the whole bundled rule set.
+///
+/// Each check models what the engine actually does with a rule: a rule with a
+/// `pattern` enumerates the children of each declared path, and a rule without
+/// one emits the declared path itself. Checking only one of those shapes is how
+/// an earlier version of this file let a whole-directory rule through.
 @Suite("AI rule safety contract")
 struct AIRuleSafetyContractTests {
     let loader = RuleLoader()
@@ -21,62 +25,92 @@ struct AIRuleSafetyContractTests {
         return url
     }
 
-    /// Directories that hold an AI tool's credentials, tokens or settings
-    /// alongside whatever else is in them. A rule may reach *into* these for a
-    /// specific child, but must never enumerate one, because `pattern` would
-    /// sweep the secrets up with the history.
+    /// Files that hold an AI tool's credentials, tokens or settings. No rule may
+    /// emit one, emit a directory containing one, or enumerate its parent with a
+    /// pattern that matches it.
     ///
-    /// Sources: `~/.qwen` and `~/.gemini` hold `oauth_creds.json` and
-    /// `mcp-oauth-tokens.json` (both projects' `config/storage.ts`);
-    /// `~/.cline/data/settings/providers.json` holds API keys (Cline config
-    /// docs); `~/.aws` holds `credentials` and `config`.
-    private static let credentialBearingRoots = [
-        "~/.qwen",
-        "~/.gemini",
-        "~/.claude",
-        "~/.codex",
-        "~/.aws",
-        "~/.cline",
-        "~/.cline/data",
-        "~/.cline/data/settings",
-        "~/.continue",
+    /// Sources: `oauth_creds.json` and `mcp-oauth-tokens.json` in both Qwen
+    /// Code's and Gemini CLI's `config/storage.ts`; `providers.json` ("API keys
+    /// and provider credentials") in Cline's config docs; `~/.aws/credentials`.
+    private static let protectedFiles = [
+        "~/.qwen/oauth_creds.json",
+        "~/.qwen/mcp-oauth-tokens.json",
+        "~/.qwen/settings.json",
+        "~/.gemini/oauth_creds.json",
+        "~/.gemini/settings.json",
+        "~/.claude/settings.json",
+        "~/.claude/.credentials.json",
+        "~/.codex/auth.json",
+        "~/.aws/credentials",
+        "~/.aws/config",
+        "~/.cline/data/settings/providers.json",
+        "~/.continue/config.yaml",
+        "~/.local/share/goose/sessions/sessions.db",
     ]
 
-    @Test("No rule enumerates a directory that holds AI tool credentials")
-    func noRuleEnumeratesCredentialBearingRoot() throws {
+    /// Live databases that sit in the same directories these rules work in.
+    ///
+    /// Checked as full paths, not bare names: a `pattern: "*"` rule is only a
+    /// hazard where a database actually lives, and flagging every such rule
+    /// everywhere would be noise rather than a contract.
+    private static let protectedDatabases = [
+        "~/.local/share/goose/sessions/sessions.db",
+        "~/.local/share/goose/sessions/sessions.db-wal",
+        "~/.local/share/goose/sessions/sessions.db-shm",
+        "~/.cline/data/db/cron.db",
+        "~/Library/Application Support/Code/User/globalStorage/github.copilot-chat/session-store.db",
+        "~/Library/Application Support/Code/User/workspaceStorage/abc123/state.vscdb",
+    ]
+
+    /// Filename suffixes no rule may declare directly, wherever it is anchored.
+    private static let databaseSuffixes = [".db", ".db-wal", ".db-shm", ".sqlite", ".sqlite3", ".vscdb"]
+
+    @Test("No rule can reach a credential, settings file, or live database")
+    func noRuleReachesProtectedFile() throws {
         let rules = try loader.loadRules(from: rulesDirectory).rules
 
-        for rule in rules where rule.pattern != nil {
-            for path in rule.paths {
-                let normalized = Self.normalized(path)
-                #expect(
-                    !Self.credentialBearingRoots.contains(normalized),
+        for rule in rules {
+            for declared in rule.paths {
+                let path = Self.normalized(declared)
+                for protectedFile in Self.protectedFiles + Self.protectedDatabases {
+                    if let pattern = rule.pattern {
+                        // The rule enumerates this directory's children.
+                        let parent = Self.normalized((protectedFile as NSString).deletingLastPathComponent)
+                        let name = (protectedFile as NSString).lastPathComponent
+                        #expect(
+                            !(path == parent && Self.matches(pattern, name)),
+                            "Rule \(rule.id) enumerates \(declared) with pattern \(pattern), which selects \(protectedFile)"
+                        )
+                    } else {
+                        // The rule emits this path itself, taking everything under it.
+                        #expect(
+                            !Self.isAncestorOrSelf(path, of: protectedFile),
+                            "Rule \(rule.id) emits \(declared), which would remove \(protectedFile)"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("No rule declares a database path directly")
+    func noRuleDeclaresDatabasePath() throws {
+        let rules = try loader.loadRules(from: rulesDirectory).rules
+
+        for rule in rules {
+            for declared in rule.paths where Self.databaseSuffixes.contains(where: declared.hasSuffix) {
+                Issue.record(
                     """
-                    Rule \(rule.id) enumerates \(path) with pattern \(rule.pattern ?? "") — \
-                    that directory holds credentials or settings, so a child glob can match them. \
-                    Target the specific history subdirectory instead.
+                    Rule \(rule.id) targets \(declared). Removing a live database without its \
+                    -wal/-shm sidecars can corrupt the owning tool, and the running-process \
+                    guard only sees GUI apps, so a CLI cannot be guarded.
                     """
                 )
             }
         }
     }
 
-    @Test("Goose session rule cannot match the SQLite store that shares its directory")
-    func gooseRuleExcludesSessionDatabase() throws {
-        let rules = try loader.loadRules(from: rulesDirectory).rules
-        let goose = try #require(rules.first { $0.id == "goose_legacy_sessions" })
-        let pattern = try #require(goose.pattern)
-
-        // `~/.local/share/goose/sessions/` holds both the legacy transcripts
-        // and goose's live sessions.db. Matching the database — or its -wal and
-        // -shm sidecars — would corrupt goose's current state.
-        #expect(Self.matches(pattern, "20260101_120000.jsonl"))
-        #expect(!Self.matches(pattern, "sessions.db"))
-        #expect(!Self.matches(pattern, "sessions.db-wal"))
-        #expect(!Self.matches(pattern, "sessions.db-shm"))
-    }
-
-    @Test("Every ai_history rule is age-gated")
+    @Test("Every ai_history rule is gated on a minimum age, not merely on some filter")
     func aiHistoryRulesAreAgeGated() throws {
         let rules = try loader.loadRules(from: rulesDirectory).rules
         let history = rules.filter { $0.tags.contains("ai_history") }
@@ -84,40 +118,31 @@ struct AIRuleSafetyContractTests {
         #expect(!history.isEmpty, "Expected the bundle to carry ai_history rules")
         for rule in history {
             #expect(
-                !rule.matchFilters.isEmpty,
+                rule.matchFilters.contains(where: Self.isMinimumAgeFilter),
                 """
-                Rule \(rule.id) is tagged ai_history but carries no match_filters. \
-                Anything holding conversation or generated output must be age-gated \
-                so a session in active use is never proposed.
+                Rule \(rule.id) is tagged ai_history but has no minimum-age filter \
+                (\(rule.matchFilters)). It needs one of the form "mtime > Nd" so content \
+                in active use is never proposed — a "<" filter selects the recent items instead.
                 """
             )
         }
     }
 
-    @Test("Every ai_history rule is review, never safe")
-    func aiHistoryRulesAreReview() throws {
+    @Test("No ai_history rule is safe, and none is promoted to safe by an override")
+    func aiHistoryRulesAreReviewInEveryProfile() throws {
         let rules = try loader.loadRules(from: rulesDirectory).rules
 
         for rule in rules where rule.tags.contains("ai_history") {
             #expect(
                 rule.safety == .review,
-                "Rule \(rule.id) is tagged ai_history but classified \(rule.safety.rawValue) — conversation content is never safe"
+                "Rule \(rule.id) is tagged ai_history but classified \(rule.safety.rawValue)"
             )
-        }
-    }
-
-    @Test("No rule targets a SQLite database")
-    func noRuleTargetsSQLiteDatabase() throws {
-        let rules = try loader.loadRules(from: rulesDirectory).rules
-        let databaseSuffixes = [".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm"]
-
-        for rule in rules {
-            for path in rule.paths where databaseSuffixes.contains(where: path.hasSuffix) {
-                Issue.record(
+            for override in rule.safetyOverrides {
+                #expect(
+                    override.safety != .safe,
                     """
-                    Rule \(rule.id) targets \(path). Removing a live database without its \
-                    -wal/-shm sidecars can corrupt the owning tool, and the running-process \
-                    guard only sees GUI apps, so a CLI cannot be guarded.
+                    Rule \(rule.id) is tagged ai_history but its override "\(override.condition)" \
+                    promotes it to safe, which lets conversation content be bulk-selected.
                     """
                 )
             }
@@ -132,6 +157,25 @@ struct AIRuleSafetyContractTests {
             trimmed.removeLast()
         }
         return trimmed
+    }
+
+    /// Whether `ancestor` is `path` or a directory containing it. Glob segments
+    /// are compared segment-wise so `~/.qwen/tmp/*` is recognised as covering
+    /// `~/.qwen/tmp/anything/file`.
+    private static func isAncestorOrSelf(_ ancestor: String, of path: String) -> Bool {
+        let a = normalized(ancestor).split(separator: "/").map(String.init)
+        let b = normalized(path).split(separator: "/").map(String.init)
+        guard a.count <= b.count else { return false }
+        return zip(a, b).allSatisfy { matches($0, $1) }
+    }
+
+    /// True for a filter that establishes a *minimum* age, e.g. "mtime > 30d".
+    private static func isMinimumAgeFilter(_ filter: String) -> Bool {
+        let parts = filter.split(separator: ">", maxSplits: 1).map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+        guard parts.count == 2, ["mtime", "atime", "age"].contains(parts[0]) else { return false }
+        return parts[1].hasSuffix("d") || parts[1].hasSuffix("h")
     }
 
     private static func matches(_ pattern: String, _ name: String) -> Bool {

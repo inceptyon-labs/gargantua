@@ -42,9 +42,14 @@ extension AISessionScanAdapter {
             url: URL(fileURLWithPath: "/private/tmp/claude-\(getuid())", isDirectory: true)
         ))
 
+        // lstat, and an ownership check: /private/tmp is world-writable with the
+        // sticky bit, so any user can create the predictable claude-<uid> name
+        // before the real one exists. fileExists follows symlinks, which would
+        // let a planted link stand in for the scratchpad root.
         return stores.filter { store in
-            var isDir: ObjCBool = false
-            return fileManager.fileExists(atPath: store.url.path, isDirectory: &isDir) && isDir.boolValue
+            var info = stat()
+            guard lstat(store.url.path, &info) == 0 else { return false }
+            return (info.st_mode & S_IFMT) == S_IFDIR && info.st_uid == getuid()
         }
     }
 

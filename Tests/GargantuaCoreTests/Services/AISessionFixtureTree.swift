@@ -106,6 +106,83 @@ final class AISessionFixtureTree {
         }
     }
 
+    /// Writes a transcript for `session` under `project`, the way Claude Code
+    /// names them: `~/.claude/projects/<slug>/<session-id>.jsonl`.
+    func addTranscript(project: String, session: String, age: TimeInterval) throws {
+        let dir = claudeProjects.appendingPathComponent(project, isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("\(session).jsonl")
+        try "{\"type\":\"summary\"}\n".write(to: file, atomically: true, encoding: .utf8)
+        try fm.setAttributes(
+            [.modificationDate: AISessionFixtureTree.now.addingTimeInterval(-age)],
+            ofItemAtPath: file.path
+        )
+    }
+
+    /// Replaces a project entry with a symlink pointing somewhere else.
+    func linkProject(named name: String, to destination: URL) throws {
+        let link = scratchpadRoot.appendingPathComponent(name)
+        try? fm.removeItem(at: link)
+        try fm.createSymbolicLink(at: link, withDestinationURL: destination)
+    }
+
+    /// Adds a `.app` bundle inside a session's scratchpad with a file in it.
+    func addPackage(project: String, session: String, contentAge: TimeInterval) throws {
+        let bundle = scratchpadRoot
+            .appendingPathComponent(project, isDirectory: true)
+            .appendingPathComponent(session, isDirectory: true)
+            .appendingPathComponent("scratchpad/Product.app/Contents", isDirectory: true)
+        try fm.createDirectory(at: bundle, withIntermediateDirectories: true)
+        let binary = bundle.appendingPathComponent("Info.plist")
+        try Data(repeating: 0x3, count: 4_096).write(to: binary)
+        try fm.setAttributes(
+            [.modificationDate: AISessionFixtureTree.now.addingTimeInterval(-contentAge)],
+            ofItemAtPath: binary.path
+        )
+    }
+
+    /// Makes a subdirectory of a session's scratchpad unreadable, ageing every
+    /// directory on the way so nothing but the read failure can make the
+    /// session look active.
+    func denyRead(project: String, session: String, subdirectory: String, age: TimeInterval) throws -> URL {
+        let sessionDir = scratchpadRoot
+            .appendingPathComponent(project, isDirectory: true)
+            .appendingPathComponent(session, isDirectory: true)
+        let scratch = sessionDir.appendingPathComponent("scratchpad", isDirectory: true)
+        let dir = scratch.appendingPathComponent(subdirectory, isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data(repeating: 0x4, count: 64).write(to: dir.appendingPathComponent("hidden.bin"))
+
+        // Ages first: chmod 0o000 still allows the owner to set times, but doing
+        // it in this order keeps the intent obvious.
+        try self.age([dir, scratch, sessionDir], by: age)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: dir.path)
+        return dir
+    }
+
+    /// Backdates each of `urls` by `age`, deepest first.
+    func age(_ urls: URL..., by age: TimeInterval) throws {
+        try self.age(urls, by: age)
+    }
+
+    func age(_ urls: [URL], by age: TimeInterval) throws {
+        let date = AISessionFixtureTree.now.addingTimeInterval(-age)
+        for url in urls.sorted(by: { $0.pathComponents.count > $1.pathComponents.count }) {
+            try fm.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        }
+    }
+
+    /// Sets a session directory's own mtime without touching its contents.
+    func touchSessionDirectory(project: String, session: String, age: TimeInterval) throws {
+        let dir = scratchpadRoot
+            .appendingPathComponent(project, isDirectory: true)
+            .appendingPathComponent(session, isDirectory: true)
+        try fm.setAttributes(
+            [.modificationDate: AISessionFixtureTree.now.addingTimeInterval(-age)],
+            ofItemAtPath: dir.path
+        )
+    }
+
     func makeAdapter(
         categories: Set<String>? = ["dev_artifacts"],
         excludedPaths: Set<String> = [],
