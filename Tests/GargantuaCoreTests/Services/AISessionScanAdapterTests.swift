@@ -34,7 +34,7 @@ struct AISessionScanAdapterTests {
     }
 
     @Test("transcript with no cwd record is never proposed")
-    func unreadableProjectPathIgnored() async throws {
+    func missingCwdRecordIgnored() async throws {
         let fixture = try FixtureTree()
         try fixture.addClaudeProject(slug: "-Users-someone-unknown", cwd: nil)
 
@@ -84,7 +84,10 @@ struct AISessionScanAdapterTests {
     @Test("project on an unmounted volume is treated as absent hardware, not junk")
     func unmountedVolumeIgnored() async throws {
         let fixture = try FixtureTree()
-        try fixture.addClaudeProject(slug: "-Volumes-Ext-acme", cwd: "/Volumes/GargantuaTestsNotMounted/acme")
+        try fixture.addClaudeProject(
+            slug: "-Volumes-Ext-acme",
+            cwd: fixture.volumes.appendingPathComponent("NotMounted/acme").path
+        )
 
         let results = try await fixture.makeAdapter().scan(progress: nil)
 
@@ -138,6 +141,83 @@ struct AISessionScanAdapterTests {
         #expect(AISessionScanAdapter.workingDirectory(inJSONLines: text) == nil)
     }
 
+    @Test("a probe cut through a multi-byte character keeps the complete earlier records")
+    func splitCodepointKeepsEarlierRecords() {
+        // Decoding the window before trimming would return nil for the whole
+        // buffer and silently lose the cwd on the first line.
+        var bytes = Array("{\"cwd\":\"/tmp/hal\"}\n".utf8)
+        bytes += Array("{\"text\":\"🙂".utf8).dropLast(2)
+        let text = AISessionScanAdapter.decodeCompleteLines(Data(bytes))
+        #expect(AISessionScanAdapter.workingDirectory(inJSONLines: text) == "/tmp/hal")
+    }
+
+    @Test("bounded read still resolves cwd when the cap falls mid-character")
+    func boundedReadResolvesCwdPastSplitCharacter() async throws {
+        let fixture = try FixtureTree()
+        let gone = fixture.root.appendingPathComponent("gone/acme").path
+        // Emoji padding guarantees the byte cap lands inside a character.
+        try fixture.addClaudeProject(
+            slug: "-Users-someone-gone",
+            cwd: gone,
+            padding: String(repeating: "🙂", count: 2_000)
+        )
+
+        let adapter = fixture.makeAdapter(transcriptProbeByteLimit: 1_024)
+        let results = try await adapter.scan(progress: nil)
+
+        #expect(results.count == 1)
+    }
+
+    @Test("an unreadable project path is not evidence of deletion")
+    func unreadableProjectPathIsIndeterminate() async throws {
+        // Running as root bypasses the permission bits this relies on.
+        try #require(getuid() != 0)
+
+        let fixture = try FixtureTree()
+        let vault = fixture.root.appendingPathComponent("vault", isDirectory: true)
+        let project = vault.appendingPathComponent("acme", isDirectory: true)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: vault.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: vault.path) }
+
+        #expect(AISessionScanAdapter.existence(of: project.path) == .indeterminate)
+
+        try fixture.addClaudeProject(slug: "-Users-someone-vaulted", cwd: project.path)
+        #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
+    }
+
+    @Test("a leftover mount-point directory does not count as a mounted volume")
+    func staleMountPointDirectoryIgnored() async throws {
+        let fixture = try FixtureTree()
+        // An empty /Volumes/<name> left behind by an unclean eject: present on
+        // disk, but part of the boot volume rather than its own volume root.
+        let mountPoint = fixture.volumes.appendingPathComponent("Ext", isDirectory: true)
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+        try fixture.addClaudeProject(
+            slug: "-Volumes-Ext-acme",
+            cwd: mountPoint.appendingPathComponent("acme").path
+        )
+
+        #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
+    }
+
+    @Test("a project reached through a symlink into an unmounted volume is not an orphan")
+    func symlinkedVolumePathIgnored() async throws {
+        let fixture = try FixtureTree()
+        // ~/external -> /Volumes/Drive, with Drive unplugged.
+        let link = fixture.root.appendingPathComponent("external")
+        try FileManager.default.createSymbolicLink(
+            at: link,
+            withDestinationURL: fixture.volumes.appendingPathComponent("Drive", isDirectory: true)
+        )
+        try fixture.addClaudeProject(
+            slug: "-Users-someone-external-acme",
+            cwd: link.appendingPathComponent("acme").path
+        )
+
+        #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
+    }
+
     @Test("cwd nested under payload is read")
     func nestedPayloadCwdRead() {
         let text = "{\"type\":\"session_meta\",\"payload\":{\"cwd\":\"/tmp/hal\"}}\n"
@@ -150,6 +230,9 @@ struct AISessionScanAdapterTests {
         let root: URL
         let claudeProjects: URL
         let workspaceStorage: URL
+        /// Stands in for `/Volumes` so the mount guard can be exercised without
+        /// mounting anything.
+        let volumes: URL
         private let fm = FileManager.default
 
         init() throws {
@@ -157,20 +240,27 @@ struct AISessionScanAdapterTests {
                 .appendingPathComponent("AISessionScanAdapterTests-\(UUID().uuidString)", isDirectory: true)
             claudeProjects = root.appendingPathComponent("claude/projects", isDirectory: true)
             workspaceStorage = root.appendingPathComponent("Code/User/workspaceStorage", isDirectory: true)
+            volumes = root.appendingPathComponent("Volumes", isDirectory: true)
             try fm.createDirectory(at: claudeProjects, withIntermediateDirectories: true)
             try fm.createDirectory(at: workspaceStorage, withIntermediateDirectories: true)
+            try fm.createDirectory(at: volumes, withIntermediateDirectories: true)
         }
 
         deinit { try? fm.removeItem(at: root) }
 
         /// Writes `<projects>/<slug>/session.jsonl`, optionally recording `cwd`.
-        func addClaudeProject(slug: String, cwd: String?) throws {
+        /// `padding` is appended as a trailing record so the transcript can be
+        /// pushed past a probe limit.
+        func addClaudeProject(slug: String, cwd: String?, padding: String = "") throws {
             let dir = claudeProjects.appendingPathComponent(slug, isDirectory: true)
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
             var lines = ["{\"type\":\"summary\"}"]
             if let cwd {
                 lines.append("{\"type\":\"user\",\"cwd\":\"\(cwd)\"}")
+            }
+            if !padding.isEmpty {
+                lines.append("{\"type\":\"user\",\"text\":\"\(padding)\"}")
             }
             try (lines.joined(separator: "\n") + "\n")
                 .write(to: dir.appendingPathComponent("session.jsonl"), atomically: true, encoding: .utf8)
@@ -191,7 +281,8 @@ struct AISessionScanAdapterTests {
         func makeAdapter(
             categories: Set<String>? = ["dev_artifacts"],
             excludedPaths: Set<String> = [],
-            protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy(entries: [])
+            protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy(entries: []),
+            transcriptProbeByteLimit: Int = 256 * 1024
         ) -> AISessionScanAdapter {
             AISessionScanAdapter(
                 policy: AISessionScanPolicy(
@@ -200,7 +291,9 @@ struct AISessionScanAdapterTests {
                         AISessionStore(toolName: "VS Code", kind: .editorWorkspaceStorage, url: workspaceStorage),
                     ],
                     excludedPaths: excludedPaths,
-                    protectedRoots: protectedRoots
+                    protectedRoots: protectedRoots,
+                    transcriptProbeByteLimit: transcriptProbeByteLimit,
+                    volumesDirectory: volumes
                 ),
                 categories: categories
             )

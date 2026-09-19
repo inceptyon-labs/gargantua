@@ -101,7 +101,7 @@ Gargantua's trust layer uses three safety levels:
 
 Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships five evidence shapes:
 
-- **Path-based cleanup rules**: 51 files / 305 rules across apps, browsers, developer tools, and system locations.
+- **Path-based cleanup rules**: 51 files / 306 rules across apps, browsers, developer tools, and system locations.
 - **Path-based remnant rules**: 2 generic files / 28 rules plus 7 app-pack files / 63 app-specific rules for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
 - **Command-action rules**: 4 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, `go clean -modcache`) recorded with tool version, exit code, and arguments per run. Advanced commands are isolated in an opt-in profile with explicit consequence copy.
 - **Code-native orphaned AI session discovery**: Claude Code project transcripts and VS Code-family `workspaceStorage` entries whose project folder no longer exists, resolved by reading the project path back out of the store (`cwd` in a transcript, the `folder`/`workspace` URI in `workspace.json`) rather than guessing from the directory name. Review-only, and skipped when the project simply lives on an unmounted volume.

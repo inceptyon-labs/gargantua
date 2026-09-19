@@ -79,8 +79,8 @@ public struct AISessionScanAdapter: ScanAdapter {
 
             guard let projectPath = projectPath(forEntry: entry, kind: store.kind),
                   isPlausibleProjectPath(projectPath),
-                  isVolumeMounted(for: projectPath),
-                  !fileManager.fileExists(atPath: projectPath) else {
+                  isVolumeAvailable(for: projectPath),
+                  Self.existence(of: projectPath) == .absent else {
                 return nil
             }
 
@@ -153,18 +153,36 @@ public struct AISessionScanAdapter: ScanAdapter {
         return nil
     }
 
-    /// The leading bytes of a file, truncated at the last complete line so a
-    /// record split by the byte cap is never handed to the JSON parser.
+    /// The leading bytes of a file, truncated at the last complete line.
+    ///
+    /// The truncation happens on the raw bytes, not on a decoded string: a
+    /// newline is a single byte and can never be part of a multi-byte
+    /// character, so cutting there leaves valid UTF-8. Decoding first would
+    /// throw away the whole probe whenever the byte cap happened to split a
+    /// character — and a transcript full of emoji makes that the common case,
+    /// not the edge case.
     private func head(of url: URL) -> String {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
         defer { try? handle.close() }
 
-        let data = handle.readData(ofLength: policy.transcriptProbeByteLimit)
-        guard var text = String(data: data, encoding: .utf8) else { return "" }
-        if data.count == policy.transcriptProbeByteLimit, let lastNewline = text.lastIndex(of: "\n") {
-            text = String(text[text.startIndex ..< lastNewline])
+        guard let data = try? handle.read(upToCount: policy.transcriptProbeByteLimit), !data.isEmpty else {
+            return ""
         }
-        return text
+        return Self.decodeCompleteLines(data)
+    }
+
+    /// Decodes `data` up to its last newline, dropping any trailing partial record.
+    static func decodeCompleteLines(_ data: Data) -> String {
+        guard let lastNewline = data.lastIndex(of: UInt8(ascii: "\n")) else {
+            // No complete record in the window — decoding it could only yield a
+            // truncated one, which the JSON parser would reject anyway.
+            return ""
+        }
+        // Deliberately the non-failable initializer. `String(bytes:encoding:)`
+        // returns nil on a single malformed byte and would throw away an
+        // otherwise readable window — the failure this method exists to avoid.
+        // swiftlint:disable:next optional_data_string_conversion
+        return String(decoding: data[..<lastNewline], as: UTF8.self)
     }
 
     // MARK: - Editor workspace storage
@@ -198,12 +216,91 @@ public struct AISessionScanAdapter: ScanAdapter {
     /// True unless the project lives on a volume that is currently unmounted.
     ///
     /// An unplugged external drive makes every project under it look deleted.
-    /// Checking that `/Volumes/<name>` is present keeps those stores off the
-    /// list until the drive comes back.
-    private func isVolumeMounted(for path: String) -> Bool {
-        let components = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-        guard components.count >= 2, components[0] == "Volumes" else { return true }
-        return isDirectory(URL(fileURLWithPath: "/Volumes/\(components[1])"))
+    /// Two things make that harder to detect than a `/Volumes` prefix check:
+    /// the project may be reached through a symlink (`~/external` →
+    /// `/Volumes/Drive`), and macOS can leave an empty `/Volumes/<name>`
+    /// directory behind after an unclean eject. So the path is resolved through
+    /// its deepest existing ancestor first, and the mount point is confirmed by
+    /// asking the filesystem which volume it belongs to rather than by its
+    /// mere presence.
+    private func isVolumeAvailable(for path: String) -> Bool {
+        let resolved = resolvedThroughExistingAncestors(path)
+        let volumes = AISessionScanPolicy.canonicalPath(policy.volumesDirectory.path)
+        guard resolved.hasPrefix(volumes + "/") else { return true }
+
+        let tail = resolved.dropFirst(volumes.count + 1)
+        guard let volumeName = tail.split(separator: "/", omittingEmptySubsequences: true).first else {
+            return true
+        }
+        let mountPoint = URL(fileURLWithPath: volumes).appendingPathComponent(String(volumeName), isDirectory: true)
+        guard isDirectory(mountPoint) else { return false }
+        // A real mount is its own volume root. A leftover empty directory
+        // reports the boot volume instead.
+        guard let volumeRoot = try? mountPoint.resourceValues(forKeys: [.volumeURLKey]).volume else {
+            return false
+        }
+        return AISessionScanPolicy.canonicalPath(volumeRoot.path)
+            == AISessionScanPolicy.canonicalPath(mountPoint.path)
+    }
+
+    /// Resolves symlinks in the longest prefix of `path` that exists, then
+    /// re-appends the missing tail. `resolvingSymlinksInPath()` alone leaves a
+    /// path whose leaf is already gone untouched, which is exactly the case
+    /// this adapter is looking at.
+    private func resolvedThroughExistingAncestors(_ path: String) -> String {
+        var missing: [String] = []
+        var cursor = URL(fileURLWithPath: path).standardizedFileURL
+
+        while cursor.path != "/" {
+            // lstat, not fileExists: a symlink pointing into an unmounted
+            // volume is dangling, and fileExists reports it as absent — which
+            // would walk straight past the one link worth following.
+            if Self.existence(of: cursor.path) != .absent {
+                let base = resolvedSymlinkChain(cursor)
+                return missing.reversed().reduce(base) { $0.appendingPathComponent($1) }.path
+            }
+            missing.append(cursor.lastPathComponent)
+            cursor = cursor.deletingLastPathComponent()
+        }
+        return path
+    }
+
+    /// Follows a symlink chain by hand, including links whose destination does
+    /// not exist. `resolvingSymlinksInPath()` gives up on a dangling link and
+    /// returns it unchanged.
+    private func resolvedSymlinkChain(_ url: URL, depth: Int = 0) -> URL {
+        guard depth < 16,
+              let destination = try? fileManager.destinationOfSymbolicLink(atPath: url.path) else {
+            return url.resolvingSymlinksInPath()
+        }
+        let target = destination.hasPrefix("/")
+            ? URL(fileURLWithPath: destination)
+            : url.deletingLastPathComponent().appendingPathComponent(destination)
+        return resolvedSymlinkChain(target.standardizedFileURL, depth: depth + 1)
+    }
+
+    /// Whether a path is definitively gone, definitively there, or unknowable.
+    enum Existence: Equatable {
+        case present
+        case absent
+        /// The filesystem refused to answer — no traversal permission, a TCC
+        /// denial, an I/O error. Never evidence that anything was deleted.
+        case indeterminate
+    }
+
+    /// Distinguishes "this path is gone" from "this path could not be
+    /// inspected". `FileManager.fileExists` collapses both into `false`, which
+    /// would let a project under a TCC-protected or unreadable directory be
+    /// proposed for removal while it is still very much there.
+    static func existence(of path: String) -> Existence {
+        var info = stat()
+        if lstat(path, &info) == 0 { return .present }
+        switch errno {
+        case ENOENT, ENOTDIR, ENAMETOOLONG:
+            return .absent
+        default:
+            return .indeterminate
+        }
     }
 
     // MARK: - Filesystem helpers

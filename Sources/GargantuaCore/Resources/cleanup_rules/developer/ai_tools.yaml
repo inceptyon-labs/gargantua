@@ -132,13 +132,11 @@ rules:
     name: Claude Code Caches
     paths:
       - "~/.claude/cache"
-      - "~/.claude/image-cache"
-      - "~/.claude/paste-cache"
       - "~/.claude/statsig"
       - "~/.claude/ide"
     safety: safe
     confidence: 93
-    explanation: "Claude Code CLI scratch caches, pasted-content staging, telemetry cache, and IDE handshake lockfiles. Rebuilt on the next session; settings, skills, commands, agents, and plugins are not matched."
+    explanation: "Claude Code CLI scratch cache, telemetry cache, and IDE handshake lockfiles. Rebuilt on the next session; settings, skills, commands, agents, and plugins are not matched."
     source:
       name: Claude Code
     regenerates: true
@@ -167,16 +165,36 @@ rules:
       - ai
       - cache
 
-  - id: claude_code_project_transcripts
-    name: Claude Code Project Transcripts
+  - id: claude_code_pasted_content
+    name: Claude Code Pasted Content
     paths:
-      - "~/.claude/projects"
+      - "~/.claude/paste-cache"
+      - "~/.claude/image-cache"
     pattern: "*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 72
+    explanation: "Text and images you pasted into a Claude Code session, stored outside the transcript that references them. Removing an entry leaves the matching paste unreadable in that old session."
+    source:
+      name: Claude Code
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: claude_code_project_transcripts
+    name: Claude Code Session Transcripts
+    paths:
+      - "~/.claude/projects/*"
+    pattern: "*.jsonl"
     match_filters:
       - "mtime > 60d"
     safety: review
     confidence: 74
-    explanation: "Full conversation transcripts for one project, kept so sessions can be resumed with --resume. Removing them frees space but permanently drops that project's session history."
+    explanation: "One conversation transcript, kept so the session can be resumed with --resume. Age is measured per transcript because resuming appends to an existing file without touching its project folder. Removing it permanently drops that session's history."
     source:
       name: Claude Code
     regenerates: false
@@ -224,15 +242,14 @@ rules:
       - ai_history
       - review
 
-  - id: codex_temp_and_cache
-    name: Codex Temp and Cache
+  - id: codex_cache
+    name: Codex Cache
     paths:
-      - "~/.codex/.tmp"
       - "~/.codex/cache"
       - "~/.codex/models_cache.json"
     safety: safe
     confidence: 92
-    explanation: "Codex scratch directory, on-disk cache, and cached model catalog. Recreated on the next run."
+    explanation: "Codex on-disk cache and cached model catalog. Recreated on the next run. The .tmp directory is not matched — despite the name it holds installed plugins and marketplaces."
     source:
       name: Codex
     regenerates: true
@@ -280,37 +297,51 @@ rules:
       - ai_history
       - review
 
-  - id: gemini_cli_temp
-    name: Gemini CLI Temp
+  - id: gemini_cli_chat_history
+    name: Gemini CLI Chat History
     paths:
-      - "~/.gemini/tmp"
-    safety: safe
-    confidence: 92
-    explanation: "Gemini CLI scratch directory. Recreated on the next run; credentials and settings are not matched."
+      - "~/.gemini/tmp/*/chats"
+    pattern: "*"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 72
+    explanation: "A saved Gemini CLI conversation for one project. Despite living under tmp/ these are full session records, not scratch files, so they are surfaced for review rather than cleared."
     source:
       name: Gemini CLI
-    regenerates: true
+    regenerates: false
     category: dev_artifacts
     tags:
       - developer
-      - ai
-      - cache
+      - ai_history
+      - review
 
-  - id: antigravity_browser_profile
-    name: Antigravity Browser Profile
+  - id: antigravity_browser_caches
+    name: Antigravity Browser Caches
     paths:
-      - "~/.gemini/antigravity-browser-profile"
-    safety: review
-    confidence: 66
-    explanation: "Chromium profile Antigravity drives for browser automation. It is rebuilt on demand, but it can hold cookies and signed-in sessions, so removing it signs those out."
+      - "~/.gemini/antigravity-browser-profile/Default/Cache"
+      - "~/.gemini/antigravity-browser-profile/Default/Code Cache"
+      - "~/.gemini/antigravity-browser-profile/Default/GPUCache"
+      - "~/.gemini/antigravity-browser-profile/Default/DawnGraphiteCache"
+      - "~/.gemini/antigravity-browser-profile/Default/DawnWebGPUCache"
+      - "~/.gemini/antigravity-browser-profile/Default/Service Worker/CacheStorage"
+      - "~/.gemini/antigravity-browser-profile/Default/Service Worker/ScriptCache"
+      - "~/.gemini/antigravity-browser-profile/GraphiteDawnCache"
+      - "~/.gemini/antigravity-browser-profile/GrShaderCache"
+      - "~/.gemini/antigravity-browser-profile/ShaderCache"
+      - "~/.gemini/antigravity-browser-profile/component_crx_cache"
+      - "~/.gemini/antigravity-browser-profile/extensions_crx_cache"
+    safety: safe
+    confidence: 94
+    explanation: "Chromium cache directories inside the profile Antigravity drives for browser automation. The profile root is not matched — it holds cookies, accounts, and client certificates."
     source:
       name: Antigravity
     regenerates: true
     category: dev_artifacts
     tags:
       - developer
-      - ai_history
-      - review
+      - ai
+      - cache
 
   - id: vscode_family_local_history
     name: Editor Local File History

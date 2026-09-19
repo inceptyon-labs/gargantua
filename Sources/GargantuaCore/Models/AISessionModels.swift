@@ -43,17 +43,22 @@ public struct AISessionScanPolicy: Sendable {
     /// How many leading bytes of a transcript to read looking for the project
     /// path. Bounded so a multi-hundred-megabyte transcript is never loaded.
     public let transcriptProbeByteLimit: Int
+    /// Where removable volumes are mounted. A seam for tests; in production
+    /// this is always `/Volumes`.
+    public let volumesDirectory: URL
 
     public init(
         stores: [AISessionStore],
         excludedPaths: Set<String> = [],
         protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy(entries: []),
-        transcriptProbeByteLimit: Int = 256 * 1024
+        transcriptProbeByteLimit: Int = 256 * 1024,
+        volumesDirectory: URL = URL(fileURLWithPath: "/Volumes", isDirectory: true)
     ) {
         self.stores = stores
         self.excludedPaths = excludedPaths
         self.protectedRoots = protectedRoots
         self.transcriptProbeByteLimit = transcriptProbeByteLimit
+        self.volumesDirectory = volumesDirectory
     }
 
     /// Exclusions are compared in canonical form so a path the user recorded
