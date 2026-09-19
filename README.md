@@ -78,6 +78,7 @@ The features that don't exist anywhere else in this category:
 - **Duplicate Finder**: duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
 - **File Health**: empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
 - **Disk Explorer**: interactive treemap and directory drill-down for understanding where space goes before cleaning.
+- **AI tool cleanup**: agent caches, session transcripts, generated images, and editor local file history left behind by Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Continue, and Aider — regenerating caches classified safe, anything holding conversation or output age-gated and review-only. Orphaned per-project session stores are surfaced separately once their project folder is gone.
 - **AI Models cleanup**: dedicated profile for downloaded LLM and diffusion model storage, with review-only duplicate/orphan model-file intelligence since re-downloading is expensive.
 - **Cleanup Profiles**: built-in (`Developer`, `Light Cleanup`, `Deep Clean`, `Dev Purge`, `AI Models`) and custom profiles that decide which rule categories run and which safety overrides apply.
 - **Explainability**: per-item explanations sourced from rules, metadata, and optional local or cloud model inference.
@@ -100,9 +101,10 @@ Gargantua's trust layer uses three safety levels:
 
 Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships five evidence shapes:
 
-- **Path-based cleanup rules**: 51 files / 287 rules across apps, browsers, developer tools, and system locations.
+- **Path-based cleanup rules**: 51 files / 305 rules across apps, browsers, developer tools, and system locations.
 - **Path-based remnant rules**: 2 generic files / 28 rules plus 7 app-pack files / 63 app-specific rules for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
 - **Command-action rules**: 4 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, `go clean -modcache`) recorded with tool version, exit code, and arguments per run. Advanced commands are isolated in an opt-in profile with explicit consequence copy.
+- **Code-native orphaned AI session discovery**: Claude Code project transcripts and VS Code-family `workspaceStorage` entries whose project folder no longer exists, resolved by reading the project path back out of the store (`cwd` in a transcript, the `folder`/`workspace` URI in `workspace.json`) rather than guessing from the directory name. Review-only, and skipped when the project simply lives on an unmounted volume.
 - **Code-native stale-version discovery**: Xcode DeviceSupport and JetBrains Toolbox version directories grouped by product/family/version with keep-latest, current-version, and pinned-path guards.
 - **Dynamic `pkgutil` receipt evidence**: Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.
 

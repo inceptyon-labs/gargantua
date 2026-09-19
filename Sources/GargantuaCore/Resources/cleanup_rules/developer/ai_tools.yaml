@@ -119,3 +119,352 @@ rules:
       - developer
       - ai
       - cache
+
+  # --- Agent session history, transcripts, and per-project state ---------------
+  #
+  # AI coding agents keep a per-project record of every conversation: JSONL
+  # transcripts, generated images, screenshots, and edit-undo stores. None of it
+  # is needed to run the tool, but it is user-authored content, so anything that
+  # holds conversation or output is `review` and age-gated. Only the caches the
+  # tool rebuilds on its own are `safe`.
+
+  - id: claude_code_caches
+    name: Claude Code Caches
+    paths:
+      - "~/.claude/cache"
+      - "~/.claude/image-cache"
+      - "~/.claude/paste-cache"
+      - "~/.claude/statsig"
+      - "~/.claude/ide"
+    safety: safe
+    confidence: 93
+    explanation: "Claude Code CLI scratch caches, pasted-content staging, telemetry cache, and IDE handshake lockfiles. Rebuilt on the next session; settings, skills, commands, agents, and plugins are not matched."
+    source:
+      name: Claude Code
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: claude_code_shell_snapshots
+    name: Claude Code Shell Snapshots
+    paths:
+      - "~/.claude/shell-snapshots"
+    pattern: "*"
+    match_filters:
+      - "mtime > 7d"
+    safety: safe
+    confidence: 90
+    explanation: "Snapshots of your shell environment captured so a session can reproduce it. Claude Code writes a fresh one per session; snapshots older than a week belong to sessions that have ended."
+    source:
+      name: Claude Code
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: claude_code_project_transcripts
+    name: Claude Code Project Transcripts
+    paths:
+      - "~/.claude/projects"
+    pattern: "*"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 74
+    explanation: "Full conversation transcripts for one project, kept so sessions can be resumed with --resume. Removing them frees space but permanently drops that project's session history."
+    source:
+      name: Claude Code
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: claude_code_file_history
+    name: Claude Code Edit History
+    paths:
+      - "~/.claude/file-history"
+    pattern: "*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 70
+    explanation: "Pre-edit copies of files Claude Code changed, used to rewind edits. Removing an entry gives up the ability to undo that session's edits."
+    source:
+      name: Claude Code
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: codex_session_rollouts
+    name: Codex Session Rollouts
+    paths:
+      - "~/.codex/sessions/*/*"
+      - "~/.codex/archived_sessions"
+    match_filters:
+      - "mtime > 90d"
+    safety: review
+    confidence: 74
+    explanation: "Codex rollout transcripts, filed by year and month. They are the record of past Codex conversations and are only needed to resume or re-read an old thread."
+    source:
+      name: Codex
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: codex_temp_and_cache
+    name: Codex Temp and Cache
+    paths:
+      - "~/.codex/.tmp"
+      - "~/.codex/cache"
+      - "~/.codex/models_cache.json"
+    safety: safe
+    confidence: 92
+    explanation: "Codex scratch directory, on-disk cache, and cached model catalog. Recreated on the next run."
+    source:
+      name: Codex
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: codex_computer_use_screenshots
+    name: Codex Computer-Use Screenshots
+    paths:
+      - "~/.codex/computer-use"
+    pattern: "*"
+    match_filters:
+      - "mtime > 14d"
+    safety: safe
+    confidence: 88
+    explanation: "Screenshots Codex captured while driving the screen. Captured fresh each run and not referenced once the turn is over."
+    source:
+      name: Codex
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: codex_generated_images
+    name: Codex Generated Images
+    paths:
+      - "~/.codex/generated_images"
+    pattern: "*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 68
+    explanation: "Images Codex generated during past sessions. These are outputs you may still want, so they are surfaced for review rather than cleared automatically."
+    source:
+      name: Codex
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: gemini_cli_temp
+    name: Gemini CLI Temp
+    paths:
+      - "~/.gemini/tmp"
+    safety: safe
+    confidence: 92
+    explanation: "Gemini CLI scratch directory. Recreated on the next run; credentials and settings are not matched."
+    source:
+      name: Gemini CLI
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: antigravity_browser_profile
+    name: Antigravity Browser Profile
+    paths:
+      - "~/.gemini/antigravity-browser-profile"
+    safety: review
+    confidence: 66
+    explanation: "Chromium profile Antigravity drives for browser automation. It is rebuilt on demand, but it can hold cookies and signed-in sessions, so removing it signs those out."
+    source:
+      name: Antigravity
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: vscode_family_local_history
+    name: Editor Local File History
+    paths:
+      - "~/Library/Application Support/Code/User/History"
+      - "~/Library/Application Support/Cursor/User/History"
+      - "~/Library/Application Support/Windsurf/User/History"
+      - "~/Library/Application Support/VSCodium/User/History"
+    pattern: "*"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 72
+    explanation: "Local file history the editor keeps so you can restore an earlier version of a file, including versions an AI assistant overwrote. Removing an entry gives up those restore points."
+    source:
+      name: VS Code
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - editor
+      - ai_history
+      - review
+
+  - id: windsurf_caches
+    name: Windsurf Caches and Logs
+    paths:
+      - "~/Library/Application Support/Windsurf/Cache"
+      - "~/Library/Application Support/Windsurf/CachedData"
+      - "~/Library/Application Support/Windsurf/CachedExtensionVSIXs"
+      - "~/Library/Application Support/Windsurf/Code Cache"
+      - "~/Library/Application Support/Windsurf/GPUCache"
+      - "~/Library/Application Support/Windsurf/DawnGraphiteCache"
+      - "~/Library/Application Support/Windsurf/DawnWebGPUCache"
+      - "~/Library/Application Support/Windsurf/logs"
+      - "~/Library/Caches/Windsurf"
+    safety: safe
+    confidence: 94
+    explanation: "Windsurf runtime, extension-package, GPU, and log caches. Recreated by the editor; user settings and workspaces are not matched."
+    source:
+      name: Windsurf
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - editor
+      - ai
+      - cache
+
+  - id: cursor_logs_and_crash_reports
+    name: Cursor Logs and Crash Reports
+    paths:
+      - "~/Library/Application Support/Cursor/logs"
+      - "~/Library/Application Support/Cursor/Crashpad/completed"
+      - "~/Library/Application Support/Cursor/blob_storage"
+    safety: safe
+    confidence: 93
+    explanation: "Cursor session logs, submitted crash reports, and transient blob storage. Recreated by the editor as needed."
+    source:
+      name: Cursor
+      bundle_id: com.todesktop.230313mzl4w4u92
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - editor
+      - ai
+      - logs
+
+  - id: continue_index
+    name: Continue Codebase Index
+    paths:
+      - "~/.continue/index"
+    safety: safe
+    confidence: 90
+    explanation: "Continue's local codebase index and embeddings. Rebuilt by re-indexing the workspace."
+    source:
+      name: Continue
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: continue_sessions
+    name: Continue Chat Sessions
+    paths:
+      - "~/.continue/sessions"
+    pattern: "*"
+    match_filters:
+      - "mtime > 90d"
+    safety: review
+    confidence: 72
+    explanation: "Saved Continue chat sessions. Removing them permanently drops that conversation history."
+    source:
+      name: Continue
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: aider_project_caches
+    name: Aider Repo Map Cache
+    paths:
+      - "**/.aider.tags.cache.v3"
+    safety: safe
+    confidence: 93
+    explanation: "Aider's per-repository tag cache used to build its repo map. Rebuilt on the next aider run in that project."
+    source:
+      name: Aider
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: aider_project_chat_history
+    name: Aider Project Chat History
+    paths:
+      - "**/.aider.chat.history.md"
+      - "**/.aider.input.history"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 70
+    explanation: "Aider's per-project transcript and prompt history. Removing them drops that project's aider conversation record."
+    source:
+      name: Aider
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
+  - id: specstory_history
+    name: SpecStory Session History
+    paths:
+      - "**/.specstory/history"
+    pattern: "*"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 70
+    explanation: "SpecStory's exported AI chat history for a project. Removing an entry drops that saved conversation."
+    source:
+      name: SpecStory
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review

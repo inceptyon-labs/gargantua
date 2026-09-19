@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **AI tool cleanup.** 20 new rules cover what AI coding tools leave behind beyond their Electron caches: Claude Code transcripts, shell snapshots and edit history; Codex session rollouts, generated images, computer-use screenshots, temp and cache; Gemini CLI temp; the Antigravity browser profile; VS Code-family local file history; Windsurf and Cursor caches and logs; Continue's index and saved sessions; Aider's repo-map cache and per-project chat history; SpecStory history. Regenerating caches are `safe`; anything holding conversation or generated output is `review` and age-gated, and no config, credential, skill, command, agent, or plugin path is matched.
+- **Orphaned AI session stores.** A new scan finds Claude Code project directories and VS Code-family `workspaceStorage` entries whose project folder no longer exists, reading the project path back out of the store itself instead of guessing from the directory name. Review-only, and skipped when the project merely lives on an unmounted volume. Results group under a new "AI sessions" bucket in Dev Artifacts, kept separate from "AI / Models" so a model download and a chat log aren't reviewed on the same row.
+
 ## [0.4.9] - 2026-09-12
 
 ### Added

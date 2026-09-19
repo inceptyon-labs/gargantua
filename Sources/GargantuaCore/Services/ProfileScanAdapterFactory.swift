@@ -29,6 +29,7 @@ public enum ProfileScanAdapterFactory {
                     categories: categories,
                     scanRoots: scanRoots
                 ),
+                AISessionScanAdapter.loadDefaults(categories: categories),
             ]
         )
     }

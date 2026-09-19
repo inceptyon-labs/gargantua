@@ -97,6 +97,14 @@ struct DevArtifactBucketTests {
         #expect(aiCount == 1)
     }
 
+    @Test("ai_history tag routes to AI sessions, not AI/Models")
+    func aiHistoryRoutesToAISessions() {
+        let result = Self.makeResult(tags: ["developer", "ai_history", "review"])
+        let buckets = DevArtifactBucket.derive(from: result)
+        #expect(buckets.contains(where: { $0.id == "ai_sessions" }))
+        #expect(!buckets.contains(where: { $0.id == "ai_models" }))
+    }
+
     @Test("tests tag adds Tests cross-cutting bucket")
     func testsTagAddsTests() {
         let result = Self.makeResult(tags: ["developer", "tests"])

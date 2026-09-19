@@ -61,6 +61,7 @@ extension DevArtifactBucket {
         DevArtifactBucket(id: "build_cache", label: "Build caches", icon: "wrench.and.screwdriver", tier: .crossCutting, priority: 10),
         DevArtifactBucket(id: "logs", label: "Logs", icon: "doc.text.below.ecg", tier: .crossCutting, priority: 20),
         DevArtifactBucket(id: "ai_models", label: "AI / Models", icon: "brain", tier: .crossCutting, priority: 30),
+        DevArtifactBucket(id: "ai_sessions", label: "AI sessions", icon: "bubble.left.and.text.bubble.right", tier: .crossCutting, priority: 35),
         DevArtifactBucket(id: "tests", label: "Tests", icon: "checkmark.seal", tier: .crossCutting, priority: 40),
         DevArtifactBucket(id: "stale_versions", label: "Stale versions", icon: "clock.arrow.circlepath", tier: .crossCutting, priority: 50),
     ]
@@ -112,6 +113,10 @@ public enum DevArtifactBucketRouting {
         "logs": "logs",
         "ai": "ai_models",
         "models": "ai_models",
+        // Conversation transcripts and per-project agent state. Kept out of
+        // "AI / Models" so a 40 GB model download and a 3 MB chat log don't
+        // share a row — they are reviewed on completely different grounds.
+        "ai_history": "ai_sessions",
         "tests": "tests",
         "stale_versions": "stale_versions",
     ]
