@@ -6,7 +6,8 @@ enum LicenseErrorCopy {
     static func message(for error: PolarLicenseError) -> String {
         switch error {
         case .activationLimitReached:
-            return "You've activated on the maximum of 3 Macs. Deactivate one on that Mac, or use Manage Devices below to remove one you no longer have, then try again."
+            return "You've activated on the maximum of 3 Macs. Deactivate one on that Mac, "
+                + "or use Manage Devices below to remove one you no longer have, then try again."
         case .notFound:
             return "That license key wasn't found. Check the key from your purchase email and try again."
         case .network:

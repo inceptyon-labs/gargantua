@@ -127,7 +127,7 @@ struct UserRuleSanitizerTests {
         let bundled = [scanRule(id: "bundled_a", safety: .safe)]
         let user = [
             scanRule(id: "user_a", safety: .safe),
-            scanRule(id: "user_a", safety: .safe) // internal duplicate
+            scanRule(id: "user_a", safety: .safe), // internal duplicate
         ]
         let result = UserRuleSanitizer.merge(bundled: bundled, user: user, sanitizing: UserRuleSanitizer.sanitize)
 
