@@ -46,7 +46,7 @@ extension DiskExplorerView {
 
     @ViewBuilder
     var permissionBanner: some View {
-        if !DiskExplorerTrashPolicy.isInsideHome(state.currentPath) {
+        if !DiskExplorerTrashPolicy.isLexicallyInsideHome(state.currentPath) {
             PermissionBannerView(
                 message: "Read-only outside your Home folder. Some folders need Full Disk Access to be sized.",
                 settingsURL: PermissionBannerView.fullDiskAccess.settingsURL
@@ -73,7 +73,7 @@ extension DiskExplorerView {
 
     var scanningView: some View {
         let primary = loadingMessage
-        let folderName = state.pathStack.last?.name ?? "Home"
+        let folderName = state.pathStack.last?.name ?? state.scanRoot.name
         return VStack(spacing: GargantuaSpacing.space4) {
             AccretionDiskView(activityRate: 18, size: 64, color: GargantuaColors.accent)
 
@@ -96,7 +96,7 @@ extension DiskExplorerView {
 
     @ViewBuilder
     var emptyState: some View {
-        if !FileManager.default.isReadableFile(atPath: state.currentPath) {
+        if state.unreadablePaths.contains(state.currentPath) {
             unreadableFolderState
         } else {
             VStack(spacing: GargantuaSpacing.space2) {

@@ -84,8 +84,8 @@ struct DiskExplorerTrashPolicyTests {
         #expect(DiskExplorerTrashPolicy.canTrash(path: insideLink.path, home: home.path))
     }
 
-    @Test("A parent-chain symlink outside Home that resolves into Home is trashable")
-    func parentChainSymlinkResolvesIntoHome() throws {
+    @Test("A parent-chain symlink outside Home that resolves into Home is not trashable (lexical pre-check fails closed)")
+    func parentChainSymlinkResolvesIntoHomeIsNotTrashable() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let home = root.appendingPathComponent("home")
@@ -97,7 +97,23 @@ struct DiskExplorerTrashPolicyTests {
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: dir)
         let target = alias.appendingPathComponent("file.txt")
 
-        #expect(DiskExplorerTrashPolicy.canTrash(path: target.path, home: home.path))
+        #expect(!DiskExplorerTrashPolicy.canTrash(path: target.path, home: home.path))
+    }
+
+    @Test("A symlink inside Home pointing out of Home makes a path through it non-trashable")
+    func pathThroughSymlinkInsideHomePointingOut() throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = root.appendingPathComponent("home")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let outsideTarget = root.appendingPathComponent("outsideTarget")
+        try FileManager.default.createDirectory(at: outsideTarget, withIntermediateDirectories: true)
+        let link = home.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideTarget)
+        let child = link.appendingPathComponent("child")
+        FileManager.default.createFile(atPath: outsideTarget.appendingPathComponent("child").path, contents: Data())
+
+        #expect(!DiskExplorerTrashPolicy.canTrash(path: child.path, home: home.path))
     }
 
     @Test("A mount root under Home, and anything under it, is not trashable")
@@ -132,8 +148,44 @@ struct DiskExplorerTrashPolicyTests {
         #expect(!DiskExplorerTrashPolicy.canTrash(path: file.path, home: home.path, isMountRoot: { _ in nil }))
     }
 
-    @Test("isInsideHome covers Home, descendants, prefix siblings, and root")
-    func isInsideHome() throws {
+    @Test("recycle(path:) refuses root and never trashes anything")
+    @MainActor
+    func recycleRefusesRoot() async {
+        let error = await withCheckedContinuation { (continuation: CheckedContinuation<Error?, Never>) in
+            DiskExplorerTrashPolicy.recycle(path: "/") { error in
+                continuation.resume(returning: error)
+            }
+        }
+
+        #expect(error != nil)
+    }
+
+    @Test("recycle(path:) refuses a path outside the real Home and leaves the file in place")
+    @MainActor
+    func recycleRefusesPathOutsideRealHome() async throws {
+        let outside = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DiskExplorerTrashPolicyTests-recycle-\(UUID().uuidString)")
+        FileManager.default.createFile(atPath: outside.path, contents: Data())
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        guard !DiskExplorerTrashPolicy.isLexicallyInsideHome(outside.path) else {
+            // This machine's temp directory happens to live under the real
+            // Home; the outside-Home premise doesn't hold, so skip.
+            return
+        }
+
+        let error = await withCheckedContinuation { (continuation: CheckedContinuation<Error?, Never>) in
+            DiskExplorerTrashPolicy.recycle(path: outside.path) { error in
+                continuation.resume(returning: error)
+            }
+        }
+
+        #expect(error != nil)
+        #expect(FileManager.default.fileExists(atPath: outside.path))
+    }
+
+    @Test("isLexicallyInsideHome covers Home, descendants, prefix siblings, and root")
+    func isLexicallyInsideHome() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let home = root.appendingPathComponent("home")
@@ -145,9 +197,9 @@ struct DiskExplorerTrashPolicyTests {
         )
         FileManager.default.createFile(atPath: prefixSibling.path, contents: Data())
 
-        #expect(DiskExplorerTrashPolicy.isInsideHome(home.path, home: home.path))
-        #expect(DiskExplorerTrashPolicy.isInsideHome(descendant.path, home: home.path))
-        #expect(!DiskExplorerTrashPolicy.isInsideHome(prefixSibling.path, home: home.path))
-        #expect(!DiskExplorerTrashPolicy.isInsideHome("/", home: home.path))
+        #expect(DiskExplorerTrashPolicy.isLexicallyInsideHome(home.path, home: home.path))
+        #expect(DiskExplorerTrashPolicy.isLexicallyInsideHome(descendant.path, home: home.path))
+        #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome(prefixSibling.path, home: home.path))
+        #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome("/", home: home.path))
     }
 }

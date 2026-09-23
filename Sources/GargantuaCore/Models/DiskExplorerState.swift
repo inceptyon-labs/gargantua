@@ -70,14 +70,19 @@ public final class DiskExplorerState {
     public var phase: DiskExplorerPhase = .idle
     public var scanGeneration: Int = 0
     /// Controls the Rescan confirmation dialog. The view flips this true
-    /// instead of calling `rescanFromHome` directly when the user has drilled
-    /// past the home directory, so they can't silently lose a deep
+    /// instead of calling `rescanFromRoot` directly when the user has drilled
+    /// past the scan root, so they can't silently lose a deep
     /// drill-down with one click.
     public var showRescanConfirmation: Bool = false
     /// Per-path snapshot of the last successful scan. Lets the breadcrumb
     /// navigate back to a directory we've already mapped without paying for
     /// another recursive sizing pass. Invalidated by Refresh / Rescan / Back.
     public var pathCache: [String: [DirectoryItem]] = [:]
+    /// Paths the loader found unlistable (off-main-actor `contentsOfDirectory`
+    /// failed) after a scan came back empty. Drives the "Can't read this
+    /// folder" empty state without a main-thread `FileManager` call in the
+    /// view body. Cleared wherever `pathCache` is fully cleared.
+    public var unreadablePaths: Set<String> = []
 
     public init() {}
 
@@ -119,6 +124,7 @@ public final class DiskExplorerState {
 
     public func startScan(root: DiskExplorerCrumb = .home) {
         pathCache = [:]
+        unreadablePaths = []
         scanRoot = root
         pathStack = [root]
         items = []
@@ -132,6 +138,7 @@ public final class DiskExplorerState {
 
     public func refreshCurrent() {
         pathCache.removeValue(forKey: currentPath)
+        unreadablePaths.remove(currentPath)
         items = []
         clearExpansion()
         maxSize = 1
@@ -142,6 +149,7 @@ public final class DiskExplorerState {
 
     public func rescanFromRoot() {
         pathCache = [:]
+        unreadablePaths = []
         pathStack = [scanRoot]
         items = []
         clearExpansion()
@@ -153,6 +161,7 @@ public final class DiskExplorerState {
 
     public func exitToIdle() {
         pathCache = [:]
+        unreadablePaths = []
         items = []
         clearExpansion()
         maxSize = 1

@@ -32,12 +32,12 @@ private func classifyChild(
         ))?.totalFileAllocatedSize ?? 0
         return .file(size: Int64(fileSize))
     }
-    guard fm.isReadableFile(atPath: child.path) else {
-        return .unreadableDirectory
-    }
     let mountInfo = mountRootCheck(child)
     if mountInfo.isMountRoot {
         return .mountRoot(isNetwork: mountInfo.isNetwork)
+    }
+    guard fm.isReadableFile(atPath: child.path) else {
+        return .unreadableDirectory
     }
     return .readableDirectory
 }

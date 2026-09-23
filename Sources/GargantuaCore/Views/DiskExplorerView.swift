@@ -358,6 +358,14 @@ public struct DiskExplorerView: View {
         }
 
         if !Task.isCancelled {
+            if state.items.isEmpty {
+                let unreadable = await Task.detached {
+                    (try? FileManager.default.contentsOfDirectory(atPath: path)) == nil
+                }.value
+                if unreadable {
+                    state.unreadablePaths.insert(path)
+                }
+            }
             state.completeLoad(for: path)
         }
     }

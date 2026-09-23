@@ -280,6 +280,22 @@ struct DiskExplorerStateTests {
         #expect(state.pathStack.count == 1)
     }
 
+    @Test("refreshCurrent removes the current path from unreadablePaths; startScan clears it")
+    @MainActor
+    func unreadablePathsClearedByRefreshAndStartScan() {
+        let state = DiskExplorerState()
+        state.unreadablePaths = [state.currentPath, "/other"]
+
+        state.refreshCurrent()
+
+        #expect(!state.unreadablePaths.contains(state.currentPath))
+        #expect(state.unreadablePaths.contains("/other"))
+
+        state.startScan()
+
+        #expect(state.unreadablePaths.isEmpty)
+    }
+
     @Test("scanLoadKey combines generation and current path")
     @MainActor
     func scanLoadKeyComposed() {
