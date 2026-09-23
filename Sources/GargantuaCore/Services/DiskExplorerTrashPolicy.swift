@@ -49,7 +49,7 @@ enum DiskExplorerTrashPolicy {
         guard targetComponents.count > homeComponents.count else { return false }
         guard Array(targetComponents.prefix(homeComponents.count)) == homeComponents else { return false }
 
-        for count in (homeComponents.count + 1)...targetComponents.count {
+        for count in (homeComponents.count + 1) ... targetComponents.count {
             let ancestor = url(fromComponents: Array(targetComponents.prefix(count)))
             switch isMountRoot(ancestor) {
             case .some(true), .none:
