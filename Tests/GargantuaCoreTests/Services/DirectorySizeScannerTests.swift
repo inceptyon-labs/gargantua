@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 @testable import GargantuaCore
@@ -257,6 +258,114 @@ struct DirectorySizeScannerTests {
         if let realDirRow, let aggregateRow {
             #expect(realDirRow.id != aggregateRow.id, "ids must differ to survive upsert dedupe")
         }
+    }
+
+    // MARK: - UF_HIDDEN system folders vs. dotfiles
+
+    @Test("scanChildren lists a UF_HIDDEN directory but not a dot-prefixed one")
+    func scanChildrenListsHiddenSystemFolder() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dss-uf-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let ufHidden = root.appendingPathComponent("opt_like", isDirectory: true)
+        let dotDir = root.appendingPathComponent(".dotdir", isDirectory: true)
+        try fm.createDirectory(at: ufHidden, withIntermediateDirectories: true)
+        try fm.createDirectory(at: dotDir, withIntermediateDirectories: true)
+
+        var rv = URLResourceValues()
+        rv.isHidden = true
+        var flaggedURL = ufHidden
+        try flaggedURL.setResourceValues(rv)
+        let stuck = (try? flaggedURL.resourceValues(forKeys: [.isHiddenKey]))?.isHidden ?? false
+        try #require(stuck, "UF_HIDDEN flag must stick to the test fixture for this test to be meaningful")
+
+        let items = await DirectorySizeScanner.scanChildren(of: root.path)
+        let names = items.map(\.name)
+        #expect(names.contains("opt_like"))
+        #expect(!names.contains(".dotdir"))
+    }
+
+    // MARK: - Mount roots
+
+    @Test("streamChildren lists a mount root without sizing it")
+    func streamChildrenListsMountRootUnsized() async throws {
+        let root = try makeFixture()
+        defer { cleanup(root) }
+
+        let mountName = "big"
+        var events: [DirectoryItem] = []
+        for await item in DirectorySizeScanner.streamChildren(
+            of: root.path,
+            directorySizeTimeout: DirectorySizeScanner.defaultDirectorySizeTimeout,
+            mountRootCheck: { url in (url.lastPathComponent == mountName, false) }
+        ) {
+            events.append(item)
+        }
+
+        let mountEvents = events.filter { $0.name == mountName }
+        #expect(mountEvents.count == 1, "a mount root must yield exactly one row, no sizing placeholder")
+        let mountRow = try #require(mountEvents.first)
+        #expect(mountRow.isMountRoot)
+        #expect(mountRow.size == 0)
+        #expect(!mountRow.isSizing)
+
+        // Other children are unaffected and still sized normally.
+        let smallFinal = events.first { $0.name == "small" && !$0.isSizing }
+        #expect(smallFinal != nil)
+        #expect(!(smallFinal?.isMountRoot ?? true))
+    }
+
+    @Test("streamChildren propagates isNetworkVolume for network mounts")
+    func streamChildrenPropagatesNetworkVolume() async throws {
+        let root = try makeFixture()
+        defer { cleanup(root) }
+
+        var events: [DirectoryItem] = []
+        for await item in DirectorySizeScanner.streamChildren(
+            of: root.path,
+            directorySizeTimeout: DirectorySizeScanner.defaultDirectorySizeTimeout,
+            mountRootCheck: { url in (url.lastPathComponent == "small", true) }
+        ) {
+            events.append(item)
+        }
+
+        let mountRow = events.first { $0.name == "small" }
+        #expect(mountRow?.isMountRoot == true)
+        #expect(mountRow?.isNetworkVolume == true)
+    }
+
+    // MARK: - Partial results for unreadable content
+
+    @Test("directorySize marks isPartial when a child directory is unreadable, only when opted in")
+    func directorySizeMarksPartialForUnreadableChild() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dss-unreadable-\(UUID().uuidString)", isDirectory: true)
+        let locked = root.appendingPathComponent("locked", isDirectory: true)
+        try fm.createDirectory(at: locked, withIntermediateDirectories: true)
+        try Data(count: 1_000).write(to: locked.appendingPathComponent("secret.bin"))
+        try Data(count: 500).write(to: root.appendingPathComponent("visible.bin"))
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? fm.removeItem(at: root)
+        }
+
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        guard !fm.isReadableFile(atPath: locked.path) else {
+            // Running as a user (e.g. root) for whom chmod 000 is still readable;
+            // nothing meaningful to assert.
+            return
+        }
+
+        let partialResult = DirectorySizeScanner.directorySize(
+            at: root.path,
+            reportsUnreadableAsPartial: true
+        )
+        #expect(partialResult.isPartial)
+
+        let defaultResult = DirectorySizeScanner.directorySize(at: root.path)
+        #expect(!defaultResult.isPartial)
     }
 
     @Test("streamChildren cancellation stops emitting promptly")

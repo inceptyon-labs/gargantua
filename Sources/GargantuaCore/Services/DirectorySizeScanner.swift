@@ -1,4 +1,60 @@
 import Foundation
+import os
+
+/// Classification of a single directory child, shared by `streamChildren` and
+/// `scanChildrenSync` so the UF_HIDDEN/dotfile, mount-root, and permission
+/// logic lives in one place.
+private enum ChildKind {
+    case skip
+    case file(size: Int64)
+    case mountRoot(isNetwork: Bool)
+    case readableDirectory
+    case unreadableDirectory
+}
+
+/// Dot-prefixed names stay hidden; UF_HIDDEN system folders (e.g. /opt, /usr,
+/// /Volumes) are not filtered by name and are classified normally.
+private func classifyChild(
+    _ child: URL,
+    fm: FileManager,
+    mountRootCheck: @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool)
+) -> ChildKind {
+    if child.lastPathComponent.hasPrefix(".") {
+        return .skip
+    }
+    if (try? child.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+        return .skip
+    }
+    let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+    guard isDirectory else {
+        let fileSize = (try? child.resourceValues(
+            forKeys: [.totalFileAllocatedSizeKey]
+        ))?.totalFileAllocatedSize ?? 0
+        return .file(size: Int64(fileSize))
+    }
+    guard fm.isReadableFile(atPath: child.path) else {
+        return .unreadableDirectory
+    }
+    let mountInfo = mountRootCheck(child)
+    if mountInfo.isMountRoot {
+        return .mountRoot(isNetwork: mountInfo.isNetwork)
+    }
+    return .readableDirectory
+}
+
+/// Tracks, in a Sendable-safe way, whether the enumerator in `DirectorySizeScanner.directorySize`
+/// hit any unreadable entry.
+private final class UnreadableEntryFlag: Sendable {
+    private let flag = OSAllocatedUnfairLock(initialState: false)
+
+    func mark() {
+        flag.withLock { $0 = true }
+    }
+
+    var wasHit: Bool {
+        flag.withLock { $0 }
+    }
+}
 
 /// Scans directory sizes using FileManager for the Disk Explorer.
 ///
@@ -18,6 +74,14 @@ public enum DirectorySizeScanner: Sendable {
     /// still letting SSD random-I/O parallelism help sizing proceed visibly faster.
     private static let sizingConcurrency = 4
 
+    /// Identifies children that are separate volume mount points (e.g. `/Volumes/X`,
+    /// `/System/Volumes/Data`, `/dev`) via `.isVolumeKey`, and whether that volume is
+    /// remote via `.volumeIsLocalKey`. Injectable for testing.
+    static let defaultMountRootCheck: @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool) = { url in
+        let values = try? url.resourceValues(forKeys: [.isVolumeKey, .volumeIsLocalKey])
+        return (values?.isVolume == true, values?.volumeIsLocal == false)
+    }
+
     /// Scan the immediate children of `directoryPath`, returning each child directory
     /// with its recursively computed total size, sorted largest first.
     ///
@@ -27,10 +91,25 @@ public enum DirectorySizeScanner: Sendable {
         of directoryPath: String,
         directorySizeTimeout: Duration? = defaultDirectorySizeTimeout
     ) async -> [DirectoryItem] {
+        await scanChildren(
+            of: directoryPath,
+            directorySizeTimeout: directorySizeTimeout,
+            mountRootCheck: defaultMountRootCheck
+        )
+    }
+
+    /// `mountRootCheck`-injectable overload for testing. Mount-root rows carry
+    /// size 0 and sort after sized rows through the ordinary size comparison below.
+    static func scanChildren(
+        of directoryPath: String,
+        directorySizeTimeout: Duration?,
+        mountRootCheck: @escaping @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool)
+    ) async -> [DirectoryItem] {
         var items: [DirectoryItem] = []
         for await item in streamChildren(
             of: directoryPath,
-            directorySizeTimeout: directorySizeTimeout
+            directorySizeTimeout: directorySizeTimeout,
+            mountRootCheck: mountRootCheck
         ) where !item.isSizing {
             // Drop the `isSizing` placeholder events; we only want final rows.
             items.append(item)
@@ -49,9 +128,11 @@ public enum DirectorySizeScanner: Sendable {
     /// Emission order:
     /// 1. One `isSizing: true` placeholder per readable subdirectory, emitted as soon
     ///    as directory enumeration yields it.
-    /// 2. One permission-denied row per unreadable subdirectory (no follow-up event).
-    /// 3. One "(Files)" aggregate row if loose files exist at this level.
-    /// 4. One `isSizing: false` row per previously-placeheld directory, replacing it by id
+    /// 2. One `isMountRoot: true` row per child that is a separate volume mount point,
+    ///    emitted immediately with size 0 (never sized, no follow-up event).
+    /// 3. One permission-denied row per unreadable subdirectory (no follow-up event).
+    /// 4. One "(Files)" aggregate row if loose files exist at this level.
+    /// 5. One `isSizing: false` row per previously-placeheld directory, replacing it by id
     ///    once its recursive size is known. Emitted in size-computation-finish order.
     ///
     /// The stream honors cancellation: if the consuming task is cancelled (typically
@@ -61,11 +142,26 @@ public enum DirectorySizeScanner: Sendable {
         of directoryPath: String,
         directorySizeTimeout: Duration? = defaultDirectorySizeTimeout
     ) -> AsyncStream<DirectoryItem> {
+        streamChildren(
+            of: directoryPath,
+            directorySizeTimeout: directorySizeTimeout,
+            mountRootCheck: defaultMountRootCheck
+        )
+    }
+
+    /// `mountRootCheck`-injectable overload for testing.
+    static func streamChildren(
+        of directoryPath: String,
+        directorySizeTimeout: Duration?,
+        mountRootCheck: @escaping @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool)
+    ) -> AsyncStream<DirectoryItem> {
         AsyncStream { continuation in
-            let task = Task.detached { [continuation] in
+            let task = Task.detached { [continuation, mountRootCheck] in
                 let fm = FileManager.default
                 let url = URL(fileURLWithPath: directoryPath)
 
+                // Dot-prefixed names stay hidden; UF_HIDDEN system folders (e.g. /opt,
+                // /usr, /Volumes) are not filtered by name and are listed.
                 guard let contents = try? fm.contentsOfDirectory(
                     at: url,
                     includingPropertiesForKeys: [
@@ -73,7 +169,7 @@ public enum DirectorySizeScanner: Sendable {
                         .totalFileAllocatedSizeKey,
                         .isSymbolicLinkKey,
                     ],
-                    options: [.skipsHiddenFiles]
+                    options: []
                 ) else {
                     continuation.finish()
                     return
@@ -88,33 +184,36 @@ public enum DirectorySizeScanner: Sendable {
                         return
                     }
 
-                    if (try? child.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+                    switch classifyChild(child, fm: fm, mountRootCheck: mountRootCheck) {
+                    case .skip:
                         continue
-                    }
-
-                    let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-                    if isDirectory {
-                        if fm.isReadableFile(atPath: child.path) {
-                            continuation.yield(DirectoryItem(
-                                name: child.lastPathComponent,
-                                path: child.path,
-                                size: 0,
-                                isSizing: true
-                            ))
-                            subdirectoriesToSize.append(child)
-                        } else {
-                            continuation.yield(DirectoryItem(
-                                name: child.lastPathComponent,
-                                path: child.path,
-                                size: 0,
-                                isPermissionDenied: true
-                            ))
-                        }
-                    } else {
-                        let fileSize = (try? child.resourceValues(
-                            forKeys: [.totalFileAllocatedSizeKey]
-                        ))?.totalFileAllocatedSize ?? 0
-                        topLevelFilesSize += Int64(fileSize)
+                    case .file(let size):
+                        topLevelFilesSize += size
+                    case .mountRoot(let isNetwork):
+                        // A separate volume: list it, but don't recursively size it
+                        // until the user drills in.
+                        continuation.yield(DirectoryItem(
+                            name: child.lastPathComponent,
+                            path: child.path,
+                            size: 0,
+                            isMountRoot: true,
+                            isNetworkVolume: isNetwork
+                        ))
+                    case .readableDirectory:
+                        continuation.yield(DirectoryItem(
+                            name: child.lastPathComponent,
+                            path: child.path,
+                            size: 0,
+                            isSizing: true
+                        ))
+                        subdirectoriesToSize.append(child)
+                    case .unreadableDirectory:
+                        continuation.yield(DirectoryItem(
+                            name: child.lastPathComponent,
+                            path: child.path,
+                            size: 0,
+                            isPermissionDenied: true
+                        ))
                     }
                 }
 
@@ -143,14 +242,17 @@ public enum DirectorySizeScanner: Sendable {
     // MARK: - Internal
 
     /// Back-compat synchronous scan. Blocks the current thread; avoid on the main actor.
-    static func scanChildrenSync(of directoryPath: String) -> [DirectoryItem] {
+    static func scanChildrenSync(
+        of directoryPath: String,
+        mountRootCheck: @escaping @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool) = defaultMountRootCheck
+    ) -> [DirectoryItem] {
         let fm = FileManager.default
         let url = URL(fileURLWithPath: directoryPath)
 
         guard let contents = try? fm.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey, .totalFileAllocatedSizeKey, .isSymbolicLinkKey],
-            options: [.skipsHiddenFiles]
+            options: []
         ) else {
             return []
         }
@@ -159,37 +261,38 @@ public enum DirectorySizeScanner: Sendable {
         var topLevelFilesSize: Int64 = 0
 
         for child in contents {
-            if (try? child.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+            switch classifyChild(child, fm: fm, mountRootCheck: mountRootCheck) {
+            case .skip:
                 continue
-            }
-
-            let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-
-            if isDirectory {
-                if fm.isReadableFile(atPath: child.path) {
-                    let result = directorySize(
-                        at: child.path,
-                        timeout: defaultDirectorySizeTimeout
-                    )
-                    items.append(DirectoryItem(
-                        name: child.lastPathComponent,
-                        path: child.path,
-                        size: result.totalSize,
-                        isPartial: result.isPartial
-                    ))
-                } else {
-                    items.append(DirectoryItem(
-                        name: child.lastPathComponent,
-                        path: child.path,
-                        size: 0,
-                        isPermissionDenied: true
-                    ))
-                }
-            } else {
-                let fileSize = (try? child.resourceValues(
-                    forKeys: [.totalFileAllocatedSizeKey]
-                ))?.totalFileAllocatedSize ?? 0
-                topLevelFilesSize += Int64(fileSize)
+            case .file(let size):
+                topLevelFilesSize += size
+            case .mountRoot(let isNetwork):
+                items.append(DirectoryItem(
+                    name: child.lastPathComponent,
+                    path: child.path,
+                    size: 0,
+                    isMountRoot: true,
+                    isNetworkVolume: isNetwork
+                ))
+            case .readableDirectory:
+                let result = directorySize(
+                    at: child.path,
+                    timeout: defaultDirectorySizeTimeout,
+                    reportsUnreadableAsPartial: true
+                )
+                items.append(DirectoryItem(
+                    name: child.lastPathComponent,
+                    path: child.path,
+                    size: result.totalSize,
+                    isPartial: result.isPartial
+                ))
+            case .unreadableDirectory:
+                items.append(DirectoryItem(
+                    name: child.lastPathComponent,
+                    path: child.path,
+                    size: 0,
+                    isPermissionDenied: true
+                ))
             }
         }
 
@@ -232,7 +335,11 @@ public enum DirectorySizeScanner: Sendable {
                 let url = directories[nextIndex]
                 group.addTask {
                     if Task.isCancelled { return nil }
-                    let result = directorySize(at: url.path, timeout: directorySizeTimeout)
+                    let result = directorySize(
+                        at: url.path,
+                        timeout: directorySizeTimeout,
+                        reportsUnreadableAsPartial: true
+                    )
                     return (url, result)
                 }
                 inflight += 1
@@ -267,7 +374,17 @@ public enum DirectorySizeScanner: Sendable {
     }
 
     /// Recursively compute the total allocated size of all files under `path`.
-    static func directorySize(at path: String, timeout: Duration? = nil) -> DirectorySizeResult {
+    ///
+    /// When `reportsUnreadableAsPartial` is true, any entry the enumerator can't
+    /// descend into or read resource values for marks the result `isPartial` —
+    /// used by the Explorer so a row with unreadable content reads as a lower
+    /// bound rather than a silently undercounted total. Other callers leave this
+    /// false and see no behavior change.
+    static func directorySize(
+        at path: String,
+        timeout: Duration? = nil,
+        reportsUnreadableAsPartial: Bool = false
+    ) -> DirectorySizeResult {
         let fm = FileManager.default
         let url = URL(fileURLWithPath: path)
         let clock = ContinuousClock()
@@ -279,6 +396,15 @@ public enum DirectorySizeScanner: Sendable {
             return false
         }
 
+        let unreadableFlag = reportsUnreadableAsPartial ? UnreadableEntryFlag() : nil
+        var errorHandler: (@Sendable (URL, Error) -> Bool)?
+        if let unreadableFlag {
+            errorHandler = { _, _ in
+                unreadableFlag.mark()
+                return true
+            }
+        }
+
         // Count hidden files: removal deletes dot-content too, so excluding it
         // undercounts "space freed" and, worse, sizes an all-hidden remnant dir
         // to 0 — where `size > 0` guards silently drop it and leave the leftover
@@ -287,7 +413,7 @@ public enum DirectorySizeScanner: Sendable {
             at: url,
             includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .isSymbolicLinkKey],
             options: [],
-            errorHandler: nil
+            errorHandler: errorHandler
         ) else {
             return DirectorySizeResult(totalSize: 0, isPartial: false)
         }
@@ -300,6 +426,7 @@ public enum DirectorySizeScanner: Sendable {
             guard let values = try? fileURL.resourceValues(
                 forKeys: [.totalFileAllocatedSizeKey, .isSymbolicLinkKey]
             ) else {
+                unreadableFlag?.mark()
                 continue
             }
             if values.isSymbolicLink == true {
@@ -308,6 +435,6 @@ public enum DirectorySizeScanner: Sendable {
             }
             total += Int64(values.totalFileAllocatedSize ?? 0)
         }
-        return DirectorySizeResult(totalSize: total, isPartial: false)
+        return DirectorySizeResult(totalSize: total, isPartial: unreadableFlag?.wasHit ?? false)
     }
 }

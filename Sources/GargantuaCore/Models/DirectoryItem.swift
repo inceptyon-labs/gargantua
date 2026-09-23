@@ -31,6 +31,13 @@ public struct DirectoryItem: Identifiable, Sendable {
     /// rectangle. Not drillable; surfaced only in the treemap view.
     public let isOthersAggregate: Bool
 
+    /// `true` when this row is a separate volume mounted here; listed but not
+    /// sized until the user opens it.
+    public let isMountRoot: Bool
+
+    /// `true` when the mount is not local (`.volumeIsLocalKey == false`).
+    public let isNetworkVolume: Bool
+
     /// Child items, loaded on demand. `nil` means not yet loaded.
     public var children: [DirectoryItem]?
 
@@ -43,6 +50,8 @@ public struct DirectoryItem: Identifiable, Sendable {
         isSizing: Bool = false,
         isFilesAggregate: Bool = false,
         isOthersAggregate: Bool = false,
+        isMountRoot: Bool = false,
+        isNetworkVolume: Bool = false,
         children: [DirectoryItem]? = nil
     ) {
         if isFilesAggregate {
@@ -60,6 +69,8 @@ public struct DirectoryItem: Identifiable, Sendable {
         self.isSizing = isSizing
         self.isFilesAggregate = isFilesAggregate
         self.isOthersAggregate = isOthersAggregate
+        self.isMountRoot = isMountRoot
+        self.isNetworkVolume = isNetworkVolume
         self.children = children
     }
 }
