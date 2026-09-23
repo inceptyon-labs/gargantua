@@ -32,6 +32,18 @@ struct DiskExplorerDominantChildView: View {
             && !dominant.isSizing
     }
 
+    @ViewBuilder
+    private var dominantSizeLabel: some View {
+        let text = Text("\(dominant.isPartial ? "~" : "")\(AlertItem.formatBytes(dominant.size))")
+            .font(GargantuaFonts.monoData)
+            .foregroundStyle(GargantuaColors.ink2)
+        if dominant.isPartial {
+            text.help("Partial size — some items couldn't be read or sizing hit its time limit.")
+        } else {
+            text
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space4) {
             header
@@ -70,9 +82,7 @@ struct DiskExplorerDominantChildView: View {
                         .foregroundStyle(GargantuaColors.ink)
                         .lineLimit(2)
                     HStack(spacing: GargantuaSpacing.space2) {
-                        Text(AlertItem.formatBytes(dominant.size))
-                            .font(GargantuaFonts.monoData)
-                            .foregroundStyle(GargantuaColors.ink2)
+                        dominantSizeLabel
                         Text("•")
                             .foregroundStyle(GargantuaColors.ink4)
                         Text("\(percent)% of folder")

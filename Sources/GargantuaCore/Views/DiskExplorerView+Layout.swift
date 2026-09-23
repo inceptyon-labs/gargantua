@@ -29,7 +29,8 @@ extension DiskExplorerView {
     }
 
     /// Up one level, or all the way out when already at the root — so Escape
-    /// still leaves the explorer from Home, where there is nowhere to go up to.
+    /// still leaves the explorer from the scan root, where there is nowhere
+    /// to go up to.
     func navigateUpOrExit() {
         if state.pathStack.count > 1 {
             state.navigateTo(index: state.pathStack.count - 2)
@@ -45,16 +46,23 @@ extension DiskExplorerView {
 
     @ViewBuilder
     var permissionBanner: some View {
-        if state.items.contains(where: { $0.isPermissionDenied }) {
+        if !DiskExplorerTrashPolicy.isInsideHome(state.currentPath) {
+            PermissionBannerView(
+                message: "Read-only outside your Home folder. Some folders need Full Disk Access to be sized.",
+                settingsURL: PermissionBannerView.fullDiskAccess.settingsURL
+            )
+            .padding(.horizontal, GargantuaSpacing.space6)
+            .padding(.bottom, GargantuaSpacing.space3)
+        } else if state.items.contains(where: { $0.isPermissionDenied }) {
             PermissionBannerView.fullDiskAccess
                 .padding(.horizontal, GargantuaSpacing.space6)
                 .padding(.bottom, GargantuaSpacing.space3)
         }
     }
 
-    /// Skip the Rescan confirmation when the user is already at home — the
-    /// only thing Rescan does in that case is re-run the scan, which Refresh
-    /// already does without ceremony.
+    /// Skip the Rescan confirmation when the user is already at the scan
+    /// root — the only thing Rescan does in that case is re-run the scan,
+    /// which Refresh already does without ceremony.
     func requestRescan() {
         if state.pathStack.count > 1 {
             state.showRescanConfirmation = true
@@ -86,18 +94,45 @@ extension DiskExplorerView {
         .accessibilityLabel("Scanning \(folderName), \(primary)")
     }
 
+    @ViewBuilder
     var emptyState: some View {
-        VStack(spacing: GargantuaSpacing.space2) {
-            AccretionDiskView(activityRate: 0, size: 28, color: GargantuaColors.ink3)
+        if !FileManager.default.isReadableFile(atPath: state.currentPath) {
+            unreadableFolderState
+        } else {
+            VStack(spacing: GargantuaSpacing.space2) {
+                AccretionDiskView(activityRate: 0, size: 28, color: GargantuaColors.ink3)
+                    .opacity(0.4)
+
+                Text("Empty orbit")
+                    .font(GargantuaFonts.heading)
+                    .foregroundStyle(GargantuaColors.ink2)
+
+                Text("No bodies detected at this radius.")
+                    .font(GargantuaFonts.body.italic())
+                    .foregroundStyle(GargantuaColors.ink3)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, GargantuaSpacing.space6)
+        }
+    }
+
+    private var unreadableFolderState: some View {
+        VStack(spacing: GargantuaSpacing.space3) {
+            AccretionDiskView(activityRate: 0, size: 28, color: GargantuaColors.review)
                 .opacity(0.4)
 
-            Text("Empty orbit")
+            Text("Can't read this folder")
                 .font(GargantuaFonts.heading)
                 .foregroundStyle(GargantuaColors.ink2)
 
-            Text("No bodies detected at this radius.")
-                .font(GargantuaFonts.body.italic())
+            Text("Gargantua needs Full Disk Access to look inside it.")
+                .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink3)
+
+            GargantuaButton("Open Full Disk Access", tone: .neutral) {
+                openURL(PermissionBannerView.fullDiskAccess.settingsURL)
+            }
+            .padding(.top, GargantuaSpacing.space1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, GargantuaSpacing.space6)
@@ -124,7 +159,7 @@ extension DiskExplorerView {
         var aggregated: [DirectoryItem] = []
 
         for item in items {
-            if item.isPermissionDenied || item.isSizing || item.isFilesAggregate {
+            if item.isPermissionDenied || item.isSizing || item.isFilesAggregate || item.isMountRoot {
                 kept.append(item)
                 continue
             }

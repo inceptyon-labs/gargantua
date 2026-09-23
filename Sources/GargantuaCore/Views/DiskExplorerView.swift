@@ -6,12 +6,15 @@ import SwiftUI
 /// Dev Purge, and Duplicate Finder: starts at an idle CTA, transitions to the
 /// `ScanResultsHeader`-fronted results view once the user kicks off a scan.
 /// Within results, clicking a tile drills down (pushes onto the breadcrumb
-/// stack); Refresh re-scans the current directory; Rescan resets to home and
-/// re-runs from scratch; Back returns to the idle CTA.
+/// stack); Refresh re-scans the current directory; Rescan resets to the scan
+/// root and re-runs from scratch; Back returns to the idle CTA.
 public struct DiskExplorerView: View {
     @Bindable public var state: DiskExplorerState
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Not private — `DiskExplorerView+Layout`'s `emptyState` reaches this to
+    /// open Full Disk Access settings from the unreadable-folder empty state.
+    @Environment(\.openURL) var openURL
 
     public init(state: DiskExplorerState) {
         self.state = state
@@ -24,7 +27,7 @@ public struct DiskExplorerView: View {
 
             switch state.phase {
             case .idle:
-                DiskExplorerIdleView(onStart: startScan)
+                DiskExplorerIdleView(onStart: { startScan(root: $0) })
                     .transition(.opacity)
             case .results:
                 resultsView
@@ -59,16 +62,16 @@ public struct DiskExplorerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(keyboardShortcutLayer)
         .confirmationDialog(
-            "Restart from Home?",
+            "Restart from \(state.scanRoot.name)?",
             isPresented: $state.showRescanConfirmation,
             titleVisibility: .visible
         ) {
             Button("Restart Scan", role: .destructive) { rescanFromRoot() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            // pathStack.count includes Home itself, so depth is count - 1.
+            // pathStack.count includes the root itself, so depth is count - 1.
             let depth = max(state.pathStack.count - 1, 0)
-            Text("This discards your current drill-down (\(depth) level\(depth == 1 ? "" : "s") deep) and rescans from your home directory.")
+            Text("This discards your current drill-down (\(depth) level\(depth == 1 ? "" : "s") deep) and rescans from \(state.scanRoot.name).")
         }
     }
 
@@ -284,6 +287,8 @@ public struct DiskExplorerView: View {
                 .padding(.bottom, GargantuaSpacing.space6)
             }
             .frame(minHeight: 320)
+
+            DiskExplorerMountRootStripView(items: state.items, onDrillDown: { drillDown(into: $0) })
         }
     }
 
@@ -332,7 +337,7 @@ public struct DiskExplorerView: View {
 
     // MARK: - Actions
 
-    private func startScan() { state.startScan() }
+    private func startScan(root: DiskExplorerCrumb) { state.startScan(root: root) }
     private func refreshCurrent() { state.refreshCurrent() }
     private func rescanFromRoot() { state.rescanFromRoot() }
     private func exitToIdle() { state.exitToIdle() }

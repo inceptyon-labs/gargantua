@@ -73,4 +73,26 @@ struct DiskExplorerReachabilityTests {
         #expect(collapsed.count == items.count)
         #expect(collapsed.contains { $0.isOthersAggregate } == false)
     }
+
+    @Test("mount roots are never folded into the Others aggregate")
+    func mountRootsNotAggregated() {
+        // Past the 12-sized-children threshold, with two size-0 mount roots
+        // mixed in alongside enough small children to trigger a collapse.
+        var items = (0 ..< 5).map { makeItem(name: "big-\($0)", size: 1_000_000) }
+        items += (0 ..< 15).map { makeItem(name: "small-\($0)", size: 100) }
+        items.append(DirectoryItem(name: "External", path: "/Volumes/External", size: 0, isMountRoot: true))
+        items.append(DirectoryItem(
+            name: "Network Share",
+            path: "/Volumes/Network Share",
+            size: 0,
+            isMountRoot: true,
+            isNetworkVolume: true
+        ))
+
+        let collapsed = DiskExplorerView.collapseSmall(items)
+
+        #expect(collapsed.contains { $0.name == "External" && $0.isMountRoot })
+        #expect(collapsed.contains { $0.name == "Network Share" && $0.isMountRoot })
+        #expect(collapsed.contains { $0.isOthersAggregate })
+    }
 }

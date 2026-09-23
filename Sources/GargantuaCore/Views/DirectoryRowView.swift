@@ -29,6 +29,10 @@ struct DirectoryRowView: View {
         item.isFilesAggregate
     }
 
+    private var mountRootCaption: String {
+        item.isNetworkVolume ? "Network volume — open to size" : "Separate volume — open to size"
+    }
+
     var body: some View {
         Button {
             if item.isOthersAggregate {
@@ -64,6 +68,10 @@ struct DirectoryRowView: View {
                         Text("Requires Full Disk Access")
                             .font(GargantuaFonts.caption)
                             .foregroundStyle(GargantuaColors.ink4)
+                    } else if item.isMountRoot {
+                        Text(mountRootCaption)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink4)
                     }
                 }
 
@@ -72,6 +80,11 @@ struct DirectoryRowView: View {
                 HStack(spacing: GargantuaSpacing.space3) {
                     if item.isPermissionDenied {
                         grantAccessAffordance
+                    } else if item.isMountRoot {
+                        Text("—")
+                            .font(GargantuaFonts.monoData)
+                            .foregroundStyle(GargantuaColors.ink4)
+                            .frame(width: 70, alignment: .trailing)
                     } else if item.isSizing {
                         Color.clear.frame(width: 100, height: 6)
                         AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
@@ -228,7 +241,7 @@ struct DirectoryRowView: View {
     private var sizeLabelView: some View {
         if item.isPartial {
             formattedSizeLabel
-                .help("Partial size. This directory hit the sizing time limit.")
+                .help("Partial size — some items couldn't be read or sizing hit its time limit.")
         } else {
             formattedSizeLabel
         }
@@ -258,6 +271,9 @@ struct DirectoryRowView: View {
         if item.isOthersAggregate { return "ellipsis.circle" }
         if isFilesAggregate { return "doc" }
         if item.isPermissionDenied { return "lock.fill" }
+        if item.isMountRoot {
+            return item.isNetworkVolume ? "externaldrive.connected.to.line.below" : "externaldrive"
+        }
         return "folder.fill"
     }
 }
