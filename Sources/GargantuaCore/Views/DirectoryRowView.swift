@@ -148,7 +148,10 @@ struct DirectoryRowView: View {
     }
 
     private var canTrash: Bool {
-        canRevealInFinder && onItemTrashed != nil
+        canRevealInFinder
+            && onItemTrashed != nil
+            && !item.isMountRoot
+            && DiskExplorerTrashPolicy.canTrash(path: item.path)
     }
 
     private func revealInFinder() {
@@ -158,17 +161,14 @@ struct DirectoryRowView: View {
     }
 
     private func moveToTrash() {
-        let url = URL(fileURLWithPath: item.path)
         // Report the failure rather than discarding it. Without this the row
         // simply stays put after a refresh, which is indistinguishable from
         // the delete never having been requested.
-        NSWorkspace.shared.recycle([url]) { _, error in
-            DispatchQueue.main.async {
-                if let error {
-                    trashError = error.localizedDescription
-                } else {
-                    onItemTrashed?()
-                }
+        DiskExplorerTrashPolicy.recycle(path: item.path) { error in
+            if let error {
+                trashError = error.localizedDescription
+            } else {
+                onItemTrashed?()
             }
         }
     }
