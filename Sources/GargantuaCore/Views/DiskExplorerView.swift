@@ -362,6 +362,10 @@ public struct DiskExplorerView: View {
                 let unreadable = await Task.detached {
                     (try? FileManager.default.contentsOfDirectory(atPath: path)) == nil
                 }.value
+                // `.task(id:)` cancels this loader when the user navigates or
+                // rescans; the await above is a suspension point, so recheck
+                // before touching state that now belongs to the next scan.
+                guard !Task.isCancelled else { return }
                 if unreadable {
                     state.unreadablePaths.insert(path)
                 }
