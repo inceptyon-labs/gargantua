@@ -39,6 +39,61 @@ struct DiskExplorerStateTests {
         #expect(!state.displayModeIsExplicit)
     }
 
+    @Test("startScan(root:) sets the scan root and scopes the breadcrumb to it")
+    @MainActor
+    func startScanWithRootSetsScanRoot() {
+        let state = DiskExplorerState()
+        let root = DiskExplorerCrumb(path: "/Volumes/External", name: "External")
+
+        state.startScan(root: root)
+
+        #expect(state.scanRoot == root)
+        #expect(state.pathStack == [root])
+        #expect(state.currentPath == root.path)
+    }
+
+    @Test("rescanFromRoot after drilling down returns to the chosen root, not Home")
+    @MainActor
+    func rescanFromRootReturnsToChosenRoot() {
+        let state = DiskExplorerState()
+        let root = DiskExplorerCrumb(path: "/Volumes/External", name: "External")
+        state.startScan(root: root)
+        state.drillDown(into: makeItem(name: "child", size: 100))
+        #expect(state.pathStack.count == 2)
+
+        state.rescanFromRoot()
+
+        #expect(state.pathStack == [root])
+        #expect(state.currentPath == root.path)
+    }
+
+    @Test("exitToIdle resets the scan root to Home")
+    @MainActor
+    func exitToIdleResetsScanRoot() {
+        let state = DiskExplorerState()
+        state.startScan(root: DiskExplorerCrumb(path: "/Volumes/External", name: "External"))
+
+        state.exitToIdle()
+
+        #expect(state.scanRoot == .home)
+        #expect(state.pathStack == [.home])
+    }
+
+    @Test("crumb(forRootPath:) names the boot volume, Home, and an arbitrary folder")
+    @MainActor
+    func crumbForRootPath() {
+        let root = DiskExplorerState.crumb(forRootPath: "/")
+        #expect(root.path == "/")
+        #expect(!root.name.isEmpty)
+
+        let home = DiskExplorerState.crumb(forRootPath: NSHomeDirectory())
+        #expect(home == .home)
+
+        let folder = DiskExplorerState.crumb(forRootPath: "/tmp/foo")
+        #expect(folder.path == "/tmp/foo")
+        #expect(folder.name == "foo")
+    }
+
     @Test("upsert keeps items sorted largest-first with denied rows last")
     @MainActor
     func upsertSorts() {

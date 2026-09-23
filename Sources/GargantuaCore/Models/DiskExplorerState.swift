@@ -32,6 +32,8 @@ public struct DiskExplorerCrumb: Sendable, Equatable {
         self.path = path
         self.name = name
     }
+
+    public static let home = DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")
 }
 
 /// Navigation, scan, and cache state for the Disk Explorer.
@@ -44,11 +46,12 @@ public struct DiskExplorerCrumb: Sendable, Equatable {
 /// `@Bindable`/`@Observable`.
 @Observable @MainActor
 public final class DiskExplorerState {
+    /// The root the current scan started from — Home, a whole volume, or a
+    /// user-chosen folder. Rescan returns here rather than always to Home.
+    public var scanRoot: DiskExplorerCrumb = .home
     /// Stack of crumbs representing the drill-down trail. The last entry is
     /// the directory currently displayed.
-    public var pathStack: [DiskExplorerCrumb] = [
-        DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")
-    ]
+    public var pathStack: [DiskExplorerCrumb] = [.home]
     public var items: [DirectoryItem] = []
     public var expandedItems: [String: [DirectoryItem]] = [:]
     /// Scanned children retained across a collapse so re-expanding a row reuses
@@ -79,7 +82,22 @@ public final class DiskExplorerState {
     public init() {}
 
     public var currentPath: String {
-        pathStack.last?.path ?? NSHomeDirectory()
+        pathStack.last?.path ?? scanRoot.path
+    }
+
+    /// The crumb for a scan root path: the volume name for "/", `.home` for
+    /// the home directory, or the folder's own name otherwise.
+    public static func crumb(forRootPath path: String) -> DiskExplorerCrumb {
+        if path == "/" {
+            let volumeName = try? URL(fileURLWithPath: "/")
+                .resourceValues(forKeys: [.volumeNameKey])
+                .volumeName
+            return DiskExplorerCrumb(path: "/", name: volumeName.flatMap { $0 } ?? "Macintosh HD")
+        }
+        if path == NSHomeDirectory() {
+            return .home
+        }
+        return DiskExplorerCrumb(path: path, name: URL(fileURLWithPath: path).lastPathComponent)
     }
 
     /// Bumped on every navigation/rescan so the view's `.task(id:)` re-runs
@@ -99,9 +117,10 @@ public final class DiskExplorerState {
         expandedChildrenCache = [:]
     }
 
-    public func startScan() {
+    public func startScan(root: DiskExplorerCrumb = .home) {
         pathCache = [:]
-        pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
+        scanRoot = root
+        pathStack = [root]
         items = []
         clearExpansion()
         maxSize = 1
@@ -121,9 +140,9 @@ public final class DiskExplorerState {
         scanGeneration &+= 1
     }
 
-    public func rescanFromHome() {
+    public func rescanFromRoot() {
         pathCache = [:]
-        pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
+        pathStack = [scanRoot]
         items = []
         clearExpansion()
         maxSize = 1
@@ -138,7 +157,8 @@ public final class DiskExplorerState {
         clearExpansion()
         maxSize = 1
         displayModeIsExplicit = false
-        pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
+        scanRoot = .home
+        pathStack = [.home]
         isLoading = false
         phase = .idle
     }

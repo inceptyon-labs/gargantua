@@ -59,7 +59,7 @@ extension DiskExplorerView {
         if state.pathStack.count > 1 {
             state.showRescanConfirmation = true
         } else {
-            state.rescanFromHome()
+            state.rescanFromRoot()
         }
     }
 

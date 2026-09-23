@@ -63,7 +63,7 @@ public struct DiskExplorerView: View {
             isPresented: $state.showRescanConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Restart Scan", role: .destructive) { rescanFromHome() }
+            Button("Restart Scan", role: .destructive) { rescanFromRoot() }
             Button("Cancel", role: .cancel) {}
         } message: {
             // pathStack.count includes Home itself, so depth is count - 1.
@@ -334,7 +334,7 @@ public struct DiskExplorerView: View {
 
     private func startScan() { state.startScan() }
     private func refreshCurrent() { state.refreshCurrent() }
-    private func rescanFromHome() { state.rescanFromHome() }
+    private func rescanFromRoot() { state.rescanFromRoot() }
     private func exitToIdle() { state.exitToIdle() }
     private func drillDown(into item: DirectoryItem) { state.drillDown(into: item) }
     private func navigateTo(index: Int) { state.navigateTo(index: index) }
