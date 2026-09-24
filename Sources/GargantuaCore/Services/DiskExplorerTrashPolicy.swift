@@ -45,8 +45,8 @@ enum DiskExplorerTrashPolicy {
     /// the read-only banner, which renders on every row/tile and can't afford
     /// a filesystem round-trip.
     static func isLexicallyInsideHome(_ path: String, home: String = NSHomeDirectory()) -> Bool {
-        let homeComponents = URL(fileURLWithPath: home).standardizedFileURL.pathComponents
-        let targetComponents = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        let homeComponents = firmlinkResolvedComponents(home)
+        let targetComponents = firmlinkResolvedComponents(path)
         guard targetComponents.count >= homeComponents.count else { return false }
         return Array(targetComponents.prefix(homeComponents.count)) == homeComponents
     }
@@ -63,8 +63,8 @@ enum DiskExplorerTrashPolicy {
         allowedRoots: [String] = outsideHomeAllowedRoots,
         deniedSubtrees: [String] = outsideHomeDeniedSubtrees
     ) -> DiskExplorerTrashDecision {
-        let homeComponents = URL(fileURLWithPath: home).standardizedFileURL.pathComponents
-        let targetComponents = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        let homeComponents = firmlinkResolvedComponents(home)
+        let targetComponents = firmlinkResolvedComponents(path)
         if targetComponents.count > homeComponents.count,
            Array(targetComponents.prefix(homeComponents.count)) == homeComponents {
             return .home
@@ -72,8 +72,7 @@ enum DiskExplorerTrashPolicy {
         if isLexicallyInsideHome(path, home: home) {
             return .blocked(reason: "This item can't be trashed from Disk Explorer")
         }
-        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
-        if let reason = outsideHomeLexicalBlockReason(standardized, allowedRoots: allowedRoots, deniedSubtrees: deniedSubtrees) {
+        if let reason = outsideHomeLexicalBlockReason(path, allowedRoots: allowedRoots, deniedSubtrees: deniedSubtrees) {
             return .blocked(reason: reason)
         }
         return .outsideHome
@@ -110,8 +109,8 @@ enum DiskExplorerTrashPolicy {
         }
         if let reason = protectedRoots.protectionReason(
             for: URL(fileURLWithPath: resolved), homeDirectory: URL(fileURLWithPath: home)
-        ) {
-            return .blocked(reason: "Protected: \(reason)")
+        ).map({ "Protected: \($0)" }) ?? protectedDescendantReason(candidatePath: resolved, home: home, protectedRoots: protectedRoots) {
+            return .blocked(reason: reason)
         }
 
         let targetComponents = URL(fileURLWithPath: resolved).pathComponents
@@ -167,11 +166,25 @@ enum DiskExplorerTrashPolicy {
         return nil
     }
 
-    /// Standardized, then firmlink-resolved (standardizing strips `/private`).
+    /// Pure string normalization, no filesystem access: splits on `/`, drops
+    /// empty and `.` segments, pops a segment on `..` (never above root),
+    /// then applies the `/tmp`, `/var`, `/etc` → `/private/...` firmlink
+    /// mapping on the resulting path. Plain `URL(fileURLWithPath:)` and
+    /// `standardizedFileURL` can stat the filesystem to resolve a trailing
+    /// slash, so `lexicalDecision`, `isLexicallyInsideHome`, and
+    /// `outsideHomeLexicalBlockReason` — all callable during view body
+    /// evaluation — go through this instead.
     private static func firmlinkResolvedComponents(_ path: String) -> [String] {
-        URL(fileURLWithPath: PrivilegedRemovabilityPolicy.firmlinkResolved(
-            URL(fileURLWithPath: path).standardizedFileURL.path
-        )).pathComponents
+        var stack: [String] = []
+        for segment in path.split(separator: "/", omittingEmptySubsequences: true) {
+            if segment == ".." {
+                if !stack.isEmpty { stack.removeLast() }
+            } else if segment != "." {
+                stack.append(String(segment))
+            }
+        }
+        let resolved = PrivilegedRemovabilityPolicy.firmlinkResolved("/" + stack.joined(separator: "/"))
+        return ["/"] + resolved.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
     }
 
     /// True only when `path` is strictly under Home (never Home itself) and no
@@ -274,6 +287,12 @@ enum DiskExplorerTrashPolicy {
         guard trashFd >= 0 else { return .failure(.trashUnavailable) }
         defer { close(trashFd) }
 
+        // Residual window: a same-uid process could rename the pinned parent
+        // to a non-allowed location between the F_GETPATH recheck above and
+        // the renameatx_np below. Accepted — it crosses no trust boundary
+        // (we already run as the user, who can trash/delete anything they
+        // own) and the outcome is a recoverable move into the user's own
+        // Trash, not data loss or a privilege escalation.
         errno = 0
         guard let name = SecureTrashFileOps.moveIntoTrash(sourceParentFd: parentFd, leaf: leaf, trashFd: trashFd) else {
             return .failure(.moveFailed(errno: errno))
@@ -300,14 +319,50 @@ enum DiskExplorerTrashPolicy {
         deniedSubtrees: [String],
         protectedRoots: ProtectedRootPolicy
     ) -> String? {
-        if let reason = outsideHomeLexicalBlockReason(
-            realTarget, allowedRoots: allowedRoots, deniedSubtrees: deniedSubtrees
-        ) {
-            return reason
+        outsideHomeLexicalBlockReason(realTarget, allowedRoots: allowedRoots, deniedSubtrees: deniedSubtrees)
+            ?? protectedRoots.protectionReason(
+                for: URL(fileURLWithPath: realTarget), homeDirectory: URL(fileURLWithPath: home)
+            ).map { "Protected: \($0)" }
+            ?? protectedDescendantReason(candidatePath: realTarget, home: home, protectedRoots: protectedRoots)
+    }
+
+    /// True when a protected-root entry lies strictly below `candidatePath`:
+    /// trashing the candidate would carry that protected location away with
+    /// it. Expands `~`/`${HOME}` in the entry's path, takes the literal
+    /// prefix up to (not including) the first path segment containing a `*`
+    /// glob, and firmlink-resolves that prefix the same way `decision`
+    /// resolves paths. When a glob segment was dropped, the literal prefix
+    /// alone may equal the candidate (e.g. `proj/*/keep` under `proj`) — the
+    /// dropped wildcard segment still guarantees the real match is deeper, so
+    /// an equal-length prefix counts too in that case. A fail-closed policy
+    /// has no entries to walk here — `protectionReason` already blocked the
+    /// candidate itself.
+    private static func protectedDescendantReason(
+        candidatePath: String,
+        home: String,
+        protectedRoots: ProtectedRootPolicy
+    ) -> String? {
+        let candidateComponents = firmlinkResolvedComponents(candidatePath)
+        for entry in protectedRoots.entries where !entry.path.isEmpty {
+            let allSegments = expandingHomeTokens(entry.path, home: home).split(separator: "/", omittingEmptySubsequences: true)
+            let literalSegments = allSegments.prefix { !$0.contains("*") }
+            guard !literalSegments.isEmpty else { continue }
+            let prefixComponents = firmlinkResolvedComponents("/" + literalSegments.joined(separator: "/"))
+            guard Array(prefixComponents.prefix(candidateComponents.count)) == candidateComponents,
+                  prefixComponents.count > candidateComponents.count || literalSegments.count < allSegments.count else {
+                continue
+            }
+            return "Contains a protected location: \(entry.reason)"
         }
-        return protectedRoots.protectionReason(
-            for: URL(fileURLWithPath: realTarget), homeDirectory: URL(fileURLWithPath: home)
-        ).map { "Protected: \($0)" }
+        return nil
+    }
+
+    /// Expands a leading `~`/`~/` or an embedded `${HOME}` token to `home`,
+    /// matching `ProtectedRootPolicy`'s own token expansion.
+    private static func expandingHomeTokens(_ path: String, home: String) -> String {
+        if path == "~" { return home }
+        if path.hasPrefix("~/") { return home + String(path.dropFirst()) }
+        return path.replacingOccurrences(of: "${HOME}", with: home)
     }
 
     /// Nil when `leaf` exists (unfollowed) on the same device as its parent.

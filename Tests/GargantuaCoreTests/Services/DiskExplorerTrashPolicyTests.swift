@@ -196,6 +196,16 @@ struct DiskExplorerTrashPolicyTests {
         #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome(prefixSibling.path, home: home.path))
         #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome("/", home: home.path))
     }
+
+    @Test("Lexical normalization is pure string handling: double slashes, dot segments, dot-dot segments, and trailing slashes, with no filesystem access")
+    func lexicalNormalizationIsPureStringHandling() {
+        let home = "/tmp/does-not-exist-\(UUID().uuidString)/home"
+        #expect(DiskExplorerTrashPolicy.isLexicallyInsideHome("\(home)//sub", home: home))
+        #expect(DiskExplorerTrashPolicy.isLexicallyInsideHome("\(home)/./sub", home: home))
+        #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome("\(home)/../Applications/../System/x", home: home))
+        #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome("/..", home: home))
+        #expect(DiskExplorerTrashPolicy.isLexicallyInsideHome("\(home)/sub/", home: home))
+    }
 }
 
 // MARK: - Outside Home
@@ -218,10 +228,12 @@ extension DiskExplorerTrashPolicyTests {
             ProtectedRootPolicy(entries: [ProtectedRootEntry(path: protectedDir.path, reason: "Test protected")])
         }
 
-        func decision(_ url: URL, isMountRoot: (URL) -> Bool? = { _ in false }) -> DiskExplorerTrashDecision {
+        func decision(
+            _ url: URL, protectedRoots: ProtectedRootPolicy? = nil, isMountRoot: (URL) -> Bool? = { _ in false }
+        ) -> DiskExplorerTrashDecision {
             DiskExplorerTrashPolicy.decision(
                 path: url.path, home: home.path, allowedRoots: allowedRoots,
-                deniedSubtrees: deniedSubtrees, protectedRoots: protectedRoots, isMountRoot: isMountRoot
+                deniedSubtrees: deniedSubtrees, protectedRoots: protectedRoots ?? self.protectedRoots, isMountRoot: isMountRoot
             )
         }
 
@@ -291,6 +303,34 @@ extension DiskExplorerTrashPolicyTests {
         #expect(fixture.decision(mount, isMountRoot: isMountRoot) != .outsideHome)
         #expect(fixture.decision(underMount, isMountRoot: isMountRoot) != .outsideHome)
         #expect(fixture.decision(underMount, isMountRoot: { _ in nil }) != .outsideHome)
+    }
+
+    @Test("Outside Home: trashing a folder that contains a protected descendant is blocked, a sibling isn't, and a glob entry blocks the same way")
+    func outsideHomeProtectedDescendant() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let proj = fixture.applications.appendingPathComponent("proj")
+        let keep = proj.appendingPathComponent("keep")
+        let other = fixture.applications.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: keep, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+
+        let literalProtectedRoots = ProtectedRootPolicy(
+            entries: [ProtectedRootEntry(path: keep.path, reason: "Keep this")]
+        )
+        #expect(
+            fixture.decision(proj, protectedRoots: literalProtectedRoots)
+                == .blocked(reason: "Contains a protected location: Keep this")
+        )
+        #expect(fixture.decision(other, protectedRoots: literalProtectedRoots) == .outsideHome)
+
+        let globProtectedRoots = ProtectedRootPolicy(
+            entries: [ProtectedRootEntry(path: proj.appendingPathComponent("*/keep").path, reason: "Glob keep")]
+        )
+        #expect(
+            fixture.decision(proj, protectedRoots: globProtectedRoots)
+                == .blocked(reason: "Contains a protected location: Glob keep")
+        )
     }
 
     @Test("Home paths keep the canTrash rules under decision")
