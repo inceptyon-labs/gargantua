@@ -1,10 +1,11 @@
+import Darwin
 import Foundation
 import os
 
 /// Classification of a single directory child, shared by `streamChildren` and
 /// `scanChildrenSync` so the UF_HIDDEN/dotfile, mount-root, and permission
 /// logic lives in one place.
-private enum ChildKind {
+enum ChildKind {
     case skip
     case file(size: Int64)
     case mountRoot(isNetwork: Bool)
@@ -14,7 +15,7 @@ private enum ChildKind {
 
 /// Dot-prefixed names stay hidden; UF_HIDDEN system folders (e.g. /opt, /usr,
 /// /Volumes) are not filtered by name and are classified normally.
-private func classifyChild(
+func classifyChild(
     _ child: URL,
     fm: FileManager,
     mountRootCheck: @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool)
@@ -42,9 +43,75 @@ private func classifyChild(
     return .readableDirectory
 }
 
+/// Identifies a file by (device, inode) so `directorySize`'s explorer accounting can count a
+/// hard-linked file's allocated size only the first time that pair is seen in a given walk.
+struct InodeKey: Hashable {
+    let device: Int32
+    let inode: UInt64
+
+    init?(path: String) {
+        var st = stat()
+        guard lstat(path, &st) == 0 else { return nil }
+        self.device = st.st_dev
+        self.inode = st.st_ino
+    }
+}
+
+/// Reads the APFS "private size" of `path` — the portion of its content not shared with any
+/// clone — via `getattrlist`'s common-extended attribute group. Returns `nil` on any failure
+/// (non-APFS volume, permission, etc.), in which case the caller adds nothing to shared bytes.
+///
+/// Buffer layout the kernel writes back: a `UInt32` length, then the returned `attribute_set_t`,
+/// then the `off_t` private size. Decoded with `loadUnaligned` rather than a matching Swift
+/// struct since the C struct's packing isn't a Swift layout guarantee.
+func privateCloneSize(atPath path: String) -> Int64? {
+    var attrList = attrlist()
+    attrList.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
+    attrList.commonattr = attrgroup_t(ATTR_CMN_RETURNED_ATTRS)
+    attrList.forkattr = attrgroup_t(ATTR_CMNEXT_PRIVATESIZE)
+
+    let bufferSize = MemoryLayout<UInt32>.size + MemoryLayout<attribute_set_t>.size + MemoryLayout<off_t>.size
+    var buffer = [UInt8](repeating: 0, count: bufferSize)
+    let result = buffer.withUnsafeMutableBytes { rawBuffer -> Int32 in
+        getattrlist(path, &attrList, rawBuffer.baseAddress, rawBuffer.count, UInt32(FSOPT_ATTR_CMN_EXTENDED | FSOPT_NOFOLLOW))
+    }
+    guard result == 0 else { return nil }
+
+    let privateSizeOffset = MemoryLayout<UInt32>.size + MemoryLayout<attribute_set_t>.size
+    let privateSize: off_t = buffer.withUnsafeBytes { rawBuffer in
+        rawBuffer.loadUnaligned(fromByteOffset: privateSizeOffset, as: off_t.self)
+    }
+    return Int64(privateSize)
+}
+
+/// Applies the same hard-link/clone accounting `directorySize(explorerAccounting: true)` uses,
+/// scoped to the loose top-level files folded into the "(Files)" aggregate row. `url`'s resource
+/// values are already cached from the directory listing's `includingPropertiesForKeys`, so these
+/// lookups don't cost another directory read — only `lstat`/`getattrlist` for the two accounting
+/// checks themselves.
+func looseFileAccounting(
+    for url: URL,
+    allocated: Int64,
+    seenInodes: inout Set<InodeKey>
+) -> (countedSize: Int64, sharedCloneBytes: Int64) {
+    let values = try? url.resourceValues(forKeys: [.linkCountKey, .mayShareFileContentKey])
+
+    var countedSize = allocated
+    if let linkCount = values?.linkCount, linkCount > 1, let key = InodeKey(path: url.path) {
+        countedSize = seenInodes.insert(key).inserted ? allocated : 0
+    }
+
+    var sharedCloneBytes: Int64 = 0
+    if values?.mayShareFileContent == true, let privateSize = privateCloneSize(atPath: url.path) {
+        sharedCloneBytes = max(allocated - privateSize, 0)
+    }
+
+    return (countedSize, sharedCloneBytes)
+}
+
 /// Tracks, in a Sendable-safe way, whether the enumerator in `DirectorySizeScanner.directorySize`
 /// hit any unreadable entry.
-private final class UnreadableEntryFlag: Sendable {
+final class UnreadableEntryFlag: Sendable {
     private let flag = OSAllocatedUnfairLock(initialState: false)
 
     func mark() {
@@ -64,6 +131,7 @@ public enum DirectorySizeScanner: Sendable {
     struct DirectorySizeResult: Sendable, Equatable {
         let totalSize: Int64
         let isPartial: Bool
+        var sharedCloneBytes: Int64 = 0
     }
 
     public static let defaultDirectorySizeTimeout: Duration = .seconds(15)
@@ -168,6 +236,8 @@ public enum DirectorySizeScanner: Sendable {
                         .isDirectoryKey,
                         .totalFileAllocatedSizeKey,
                         .isSymbolicLinkKey,
+                        .linkCountKey,
+                        .mayShareFileContentKey,
                     ],
                     options: []
                 ) else {
@@ -177,6 +247,8 @@ public enum DirectorySizeScanner: Sendable {
 
                 var subdirectoriesToSize: [URL] = []
                 var topLevelFilesSize: Int64 = 0
+                var topLevelSharedCloneBytes: Int64 = 0
+                var topLevelSeenInodes: Set<InodeKey> = []
 
                 for child in contents {
                     if Task.isCancelled {
@@ -188,7 +260,9 @@ public enum DirectorySizeScanner: Sendable {
                     case .skip:
                         continue
                     case .file(let size):
-                        topLevelFilesSize += size
+                        let accounting = looseFileAccounting(for: child, allocated: size, seenInodes: &topLevelSeenInodes)
+                        topLevelFilesSize += accounting.countedSize
+                        topLevelSharedCloneBytes += accounting.sharedCloneBytes
                     case .mountRoot(let isNetwork):
                         // A separate volume: list it, but don't recursively size it
                         // until the user drills in.
@@ -222,7 +296,8 @@ public enum DirectorySizeScanner: Sendable {
                         name: "(Files)",
                         path: directoryPath + "/(files)",
                         size: topLevelFilesSize,
-                        isFilesAggregate: true
+                        isFilesAggregate: true,
+                        sharedCloneBytes: topLevelSharedCloneBytes
                     ))
                 }
 
@@ -237,204 +312,5 @@ public enum DirectorySizeScanner: Sendable {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
-    }
-
-    // MARK: - Internal
-
-    /// Back-compat synchronous scan. Blocks the current thread; avoid on the main actor.
-    static func scanChildrenSync(
-        of directoryPath: String,
-        mountRootCheck: @escaping @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool) = defaultMountRootCheck
-    ) -> [DirectoryItem] {
-        let fm = FileManager.default
-        let url = URL(fileURLWithPath: directoryPath)
-
-        guard let contents = try? fm.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey, .totalFileAllocatedSizeKey, .isSymbolicLinkKey],
-            options: []
-        ) else {
-            return []
-        }
-
-        var items: [DirectoryItem] = []
-        var topLevelFilesSize: Int64 = 0
-
-        for child in contents {
-            switch classifyChild(child, fm: fm, mountRootCheck: mountRootCheck) {
-            case .skip:
-                continue
-            case .file(let size):
-                topLevelFilesSize += size
-            case .mountRoot(let isNetwork):
-                items.append(DirectoryItem(
-                    name: child.lastPathComponent,
-                    path: child.path,
-                    size: 0,
-                    isMountRoot: true,
-                    isNetworkVolume: isNetwork
-                ))
-            case .readableDirectory:
-                let result = directorySize(
-                    at: child.path,
-                    timeout: defaultDirectorySizeTimeout,
-                    reportsUnreadableAsPartial: true
-                )
-                items.append(DirectoryItem(
-                    name: child.lastPathComponent,
-                    path: child.path,
-                    size: result.totalSize,
-                    isPartial: result.isPartial
-                ))
-            case .unreadableDirectory:
-                items.append(DirectoryItem(
-                    name: child.lastPathComponent,
-                    path: child.path,
-                    size: 0,
-                    isPermissionDenied: true
-                ))
-            }
-        }
-
-        if topLevelFilesSize > 0 {
-            items.append(DirectoryItem(
-                name: "(Files)",
-                path: directoryPath + "/(files)",
-                size: topLevelFilesSize,
-                isFilesAggregate: true
-            ))
-        }
-
-        items.sort { lhs, rhs in
-            if lhs.isPermissionDenied != rhs.isPermissionDenied {
-                return !lhs.isPermissionDenied
-            }
-            return lhs.size > rhs.size
-        }
-
-        return items
-    }
-
-    /// Walk `directories` with `maxConcurrent` parallel sizing tasks in flight,
-    /// invoking `yield` whenever a directory's size resolves.
-    private static func sizeDirectoriesStreaming(
-        _ directories: [URL],
-        maxConcurrent: Int,
-        directorySizeTimeout: Duration?,
-        yield: @escaping @Sendable (DirectoryItem) -> Void
-    ) async {
-        guard !directories.isEmpty else { return }
-
-        await withTaskGroup(of: (URL, DirectorySizeResult)?.self) { group in
-            var nextIndex = 0
-            let total = directories.count
-            var inflight = 0
-
-            func enqueueNext() {
-                guard nextIndex < total, !Task.isCancelled else { return }
-                let url = directories[nextIndex]
-                group.addTask {
-                    if Task.isCancelled { return nil }
-                    let result = directorySize(
-                        at: url.path,
-                        timeout: directorySizeTimeout,
-                        reportsUnreadableAsPartial: true
-                    )
-                    return (url, result)
-                }
-                inflight += 1
-                nextIndex += 1
-            }
-
-            for _ in 0 ..< maxConcurrent { enqueueNext() }
-
-            while inflight > 0 {
-                if Task.isCancelled {
-                    group.cancelAll()
-                    break
-                }
-                guard let result = await group.next() else { break }
-                inflight -= 1
-
-                // Re-check cancellation between resuming and yielding — if the
-                // consumer bailed while we were suspended, drop the result
-                // rather than pushing it through a torn-down stream.
-                if let (url, directorySize) = result, !Task.isCancelled {
-                    yield(DirectoryItem(
-                        name: url.lastPathComponent,
-                        path: url.path,
-                        size: directorySize.totalSize,
-                        isPartial: directorySize.isPartial,
-                        isSizing: false
-                    ))
-                }
-                enqueueNext()
-            }
-        }
-    }
-
-    /// Recursively compute the total allocated size of all files under `path`.
-    ///
-    /// When `reportsUnreadableAsPartial` is true, any entry the enumerator can't
-    /// descend into or read resource values for marks the result `isPartial` —
-    /// used by the Explorer so a row with unreadable content reads as a lower
-    /// bound rather than a silently undercounted total. Other callers leave this
-    /// false and see no behavior change.
-    static func directorySize(
-        at path: String,
-        timeout: Duration? = nil,
-        reportsUnreadableAsPartial: Bool = false
-    ) -> DirectorySizeResult {
-        let fm = FileManager.default
-        let url = URL(fileURLWithPath: path)
-        let clock = ContinuousClock()
-        let deadline = timeout.map { clock.now.advanced(by: $0) }
-
-        func shouldStop() -> Bool {
-            if Task.isCancelled { return true }
-            if let deadline, clock.now >= deadline { return true }
-            return false
-        }
-
-        let unreadableFlag = reportsUnreadableAsPartial ? UnreadableEntryFlag() : nil
-        var errorHandler: (@Sendable (URL, Error) -> Bool)?
-        if let unreadableFlag {
-            errorHandler = { _, _ in
-                unreadableFlag.mark()
-                return true
-            }
-        }
-
-        // Count hidden files: removal deletes dot-content too, so excluding it
-        // undercounts "space freed" and, worse, sizes an all-hidden remnant dir
-        // to 0 — where `size > 0` guards silently drop it and leave the leftover
-        // behind. Honest sizing includes everything a delete would remove.
-        guard let enumerator = fm.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .isSymbolicLinkKey],
-            options: [],
-            errorHandler: errorHandler
-        ) else {
-            return DirectorySizeResult(totalSize: 0, isPartial: false)
-        }
-
-        var total: Int64 = 0
-        for case let fileURL as URL in enumerator {
-            if shouldStop() {
-                return DirectorySizeResult(totalSize: total, isPartial: true)
-            }
-            guard let values = try? fileURL.resourceValues(
-                forKeys: [.totalFileAllocatedSizeKey, .isSymbolicLinkKey]
-            ) else {
-                unreadableFlag?.mark()
-                continue
-            }
-            if values.isSymbolicLink == true {
-                enumerator.skipDescendants()
-                continue
-            }
-            total += Int64(values.totalFileAllocatedSize ?? 0)
-        }
-        return DirectorySizeResult(totalSize: total, isPartial: unreadableFlag?.wasHit ?? false)
     }
 }

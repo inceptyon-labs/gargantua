@@ -38,6 +38,10 @@ public struct DirectoryItem: Identifiable, Sendable {
     /// `true` when the mount is not local (`.volumeIsLocalKey == false`).
     public let isNetworkVolume: Bool
 
+    /// Bytes in this row that may be shared with APFS clones elsewhere;
+    /// trashing the row frees up to this much less than `size`.
+    public let sharedCloneBytes: Int64
+
     /// Child items, loaded on demand. `nil` means not yet loaded.
     public var children: [DirectoryItem]?
 
@@ -52,6 +56,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         isOthersAggregate: Bool = false,
         isMountRoot: Bool = false,
         isNetworkVolume: Bool = false,
+        sharedCloneBytes: Int64 = 0,
         children: [DirectoryItem]? = nil
     ) {
         if isFilesAggregate {
@@ -71,6 +76,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         self.isOthersAggregate = isOthersAggregate
         self.isMountRoot = isMountRoot
         self.isNetworkVolume = isNetworkVolume
+        self.sharedCloneBytes = sharedCloneBytes
         self.children = children
     }
 }
