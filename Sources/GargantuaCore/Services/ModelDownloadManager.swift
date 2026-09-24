@@ -7,7 +7,7 @@ import Foundation
 /// then moved into the model directory. Any failure rolls back the directory
 /// so the next attempt starts clean.
 @MainActor
-public final class ModelDownloadManager: NSObject, ObservableObject {
+public final class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate {
     /// Current state of the model.
     @Published public internal(set) var state: ModelState = .notDownloaded
 

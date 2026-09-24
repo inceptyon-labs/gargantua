@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - URLSessionDownloadDelegate
 
-extension ModelDownloadManager: URLSessionDownloadDelegate {
+extension ModelDownloadManager {
     public nonisolated func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
