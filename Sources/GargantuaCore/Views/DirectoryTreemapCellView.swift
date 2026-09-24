@@ -368,7 +368,9 @@ extension DirectoryTreemapCellView {
     /// mount roots never reach `DiskExplorerTrashPolicy.decision`, which does
     /// filesystem work.
     var trashDecision: DiskExplorerTrashDecision {
-        DiskExplorerTrashPolicy.decision(path: item.path)
+        DiskExplorerTrashPolicy.decision(
+            path: item.path, protectedRoots: DiskExplorerTrashPolicy.menuProtectedRoots
+        )
     }
 
     var canTrash: Bool {

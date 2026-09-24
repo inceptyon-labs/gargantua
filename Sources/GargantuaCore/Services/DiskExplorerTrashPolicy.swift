@@ -26,6 +26,13 @@ enum DiskExplorerTrashPolicy {
     ]
     static let outsideHomeDeniedSubtrees: [String] = ["/Library/Apple"]
 
+    /// Protected roots loaded once, for deciding whether a row offers Move to
+    /// Trash. Rows re-evaluate on every render, so re-parsing the YAML there
+    /// would repeat per row; `recycle` still loads the policy fresh at confirm
+    /// time, so a root added since launch is enforced even if the menu offered
+    /// the item.
+    static let menuProtectedRoots = ProtectedRootPolicy.loadDefault()
+
     static let systemLocationReason = "System location — Disk Explorer can't trash items here"
     static let separateVolumeReason = "Separate volume — Disk Explorer can't trash items here"
 
