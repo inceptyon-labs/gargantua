@@ -1,4 +1,5 @@
 import AppKit
+import GargantuaLicensing
 import SwiftUI
 
 struct DirectoryTreemapCellView: View {
@@ -6,10 +7,11 @@ struct DirectoryTreemapCellView: View {
     let totalSiblingSize: Int64
     let onDrillDown: () -> Void
     let onItemTrashed: (() -> Void)?
+    let onLicenseBlocked: (BlockReason) -> Void
 
     @State private var isHovered = false
     @State private var sizingPulse = false
-    @State private var showTrashConfirm = false
+    @State private var pendingTrashDecision: DiskExplorerTrashDecision?
     @State private var trashError: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
@@ -68,14 +70,20 @@ struct DirectoryTreemapCellView: View {
             }
             if canTrash {
                 Divider()
-                Button("Move to Trash", role: .destructive) { showTrashConfirm = true }
+                Button(trashMenuLabel, role: .destructive) { pendingTrashDecision = trashDecision }
             }
         }
-        .alert("Move to Trash?", isPresented: $showTrashConfirm) {
-            Button("Move to Trash", role: .destructive) { moveToTrash() }
-            Button("Cancel", role: .cancel) {}
+        .alert(
+            trashConfirmTitle,
+            isPresented: Binding(
+                get: { pendingTrashDecision != nil },
+                set: { if !$0 { pendingTrashDecision = nil } }
+            )
+        ) {
+            Button(trashConfirmButtonLabel, role: .destructive) { moveToTrash() }
+            Button("Cancel", role: .cancel) { pendingTrashDecision = nil }
         } message: {
-            Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
+            trashConfirmMessage
         }
         .alert(
             "Could not move to Trash",
@@ -94,13 +102,6 @@ struct DirectoryTreemapCellView: View {
             && !item.isOthersAggregate
     }
 
-    private var canTrash: Bool {
-        canRevealInFinder
-            && onItemTrashed != nil
-            && !item.isMountRoot
-            && DiskExplorerTrashPolicy.canTrash(path: item.path)
-    }
-
     private func revealInFinder() {
         NSWorkspace.shared.activateFileViewerSelecting(
             [URL(fileURLWithPath: item.path)]
@@ -108,14 +109,23 @@ struct DirectoryTreemapCellView: View {
     }
 
     private func moveToTrash() {
-        // Report the failure rather than discarding it. Without this the row
-        // simply stays put after a refresh, which is indistinguishable from
-        // the delete never having been requested.
-        DiskExplorerTrashPolicy.recycle(path: item.path) { error in
-            if let error {
-                trashError = error.localizedDescription
-            } else {
-                onItemTrashed?()
+        Task { @MainActor in
+            switch await LicenseGate.shared.authorize(.diskExplorer) {
+            case .failure(let reason):
+                onLicenseBlocked(reason)
+                return
+            case .success:
+                break
+            }
+            // Report the failure rather than discarding it. Without this the
+            // row simply stays put after a refresh, which is indistinguishable
+            // from the delete never having been requested.
+            DiskExplorerTrashPolicy.recycle(path: item.path) { error in
+                if let error {
+                    trashError = error.localizedDescription
+                } else {
+                    onItemTrashed?()
+                }
             }
         }
     }
@@ -353,6 +363,46 @@ struct DirectoryTreemapCellView: View {
 // `totalSiblingSize` and don't touch view state.
 
 extension DirectoryTreemapCellView {
+    /// Only evaluated once `canRevealInFinder`, `onItemTrashed`, and
+    /// `!item.isMountRoot` already hold — see `canTrash` — so aggregates and
+    /// mount roots never reach `DiskExplorerTrashPolicy.decision`, which does
+    /// filesystem work.
+    var trashDecision: DiskExplorerTrashDecision {
+        DiskExplorerTrashPolicy.decision(path: item.path)
+    }
+
+    var canTrash: Bool {
+        guard canRevealInFinder, onItemTrashed != nil, !item.isMountRoot else { return false }
+        if case .blocked = trashDecision { return false }
+        return true
+    }
+
+    var trashMenuLabel: String {
+        if case .outsideHome = trashDecision { return "Move to Trash…" }
+        return "Move to Trash"
+    }
+
+    var trashConfirmTitle: String {
+        if case .outsideHome = pendingTrashDecision { return "Move to Trash outside Home?" }
+        return "Move to Trash?"
+    }
+
+    var trashConfirmButtonLabel: String {
+        if case .outsideHome = pendingTrashDecision { return "Move to Trash Anyway" }
+        return "Move to Trash"
+    }
+
+    var trashConfirmMessage: Text {
+        if case .outsideHome = pendingTrashDecision {
+            return Text(
+                "\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) at \(item.path) will be moved to your Trash. " +
+                "It's outside your Home folder — apps, Homebrew, or system software that use it may stop working. " +
+                "Finder's Put Back won't be available for it."
+            )
+        }
+        return Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
+    }
+
     var emphasized: Bool {
         item.isPermissionDenied || item.isPartial || item.isSizing
     }

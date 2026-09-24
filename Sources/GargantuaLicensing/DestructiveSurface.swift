@@ -21,15 +21,20 @@ extension BlockReason: Error {}
 /// delete files and take no token; they are reachable from other files in the
 /// module and are covered only by the gate their callers pass through.
 ///
-/// Three shipping features destroy user data outside that boundary and are
+/// `.diskExplorer` sits outside that structural guarantee. Disk Explorer's
+/// per-row "Move to Trash" (`DirectoryRowView.moveToTrash()` and
+/// `DirectoryTreemapCellView.moveToTrash()`) doesn't reach one of the four
+/// boundaries above — it calls `LicenseGate.authorize(.diskExplorer)` itself
+/// before calling `DiskExplorerTrashPolicy.recycle(path:completion:)`, which
+/// takes no token parameter. The gate is enforced at those two view call
+/// sites by convention, not by the type system — unlike the four boundaries,
+/// a future call site that skips `authorize` would still compile.
+///
+/// Two shipping features destroy user data outside that boundary and are
 /// deliberately not enumerated here: Background Items
-/// (`DefaultBackgroundItemTrasher`), the File Organizer (`OrganizerExecutor`),
-/// and Disk Explorer's per-row "Move to Trash"
-/// (`DirectoryRowView.moveToTrash()` and
-/// `DirectoryTreemapCellView.moveToTrash()`, both calling
-/// `NSWorkspace.shared.recycle` directly on the selected path). Whether they
-/// should require a license is a product decision that has not been made; do
-/// not read their absence as coverage.
+/// (`DefaultBackgroundItemTrasher`) and the File Organizer
+/// (`OrganizerExecutor`). Whether they should require a license is a product
+/// decision that has not been made; do not read their absence as coverage.
 public enum DestructiveSurface: String, CaseIterable, Sendable {
     case deepClean
     case devArtifacts
@@ -42,6 +47,7 @@ public enum DestructiveSurface: String, CaseIterable, Sendable {
     case spotlightOrphanRules
     case mcpClean
     case claudeCodeAgent
+    case diskExplorer
 }
 
 /// Proof that ``LicenseGate/canExecuteDestructiveAction()`` was consulted and

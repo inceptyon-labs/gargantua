@@ -48,7 +48,8 @@ extension DiskExplorerView {
     var permissionBanner: some View {
         if !DiskExplorerTrashPolicy.isLexicallyInsideHome(state.currentPath) {
             PermissionBannerView(
-                message: "Read-only outside your Home folder. Some folders need Full Disk Access to be sized.",
+                message: "Outside your Home folder. Only apps, Library, Homebrew, /usr/local, Shared, and temp " +
+                    "items can be trashed here. Some folders need Full Disk Access to be sized.",
                 settingsURL: PermissionBannerView.fullDiskAccess.settingsURL
             )
             .padding(.horizontal, GargantuaSpacing.space6)

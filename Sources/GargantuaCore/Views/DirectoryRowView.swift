@@ -1,4 +1,5 @@
 import AppKit
+import GargantuaLicensing
 import SwiftUI
 
 struct DirectoryRowView: View {
@@ -8,11 +9,12 @@ struct DirectoryRowView: View {
     let onExpand: (() async -> Void)?
     let onDrillDown: () -> Void
     let onItemTrashed: (() -> Void)?
+    let onLicenseBlocked: (BlockReason) -> Void
     var indentLevel: Int = 0
 
     @State private var isHovered = false
     @State private var isLoadingChildren = false
-    @State private var showTrashConfirm = false
+    @State private var pendingTrashDecision: DiskExplorerTrashDecision?
     @State private var trashError: String?
     @Environment(\.openURL) private var openURL
 
@@ -113,14 +115,20 @@ struct DirectoryRowView: View {
             }
             if canTrash {
                 Divider()
-                Button("Move to Trash", role: .destructive) { showTrashConfirm = true }
+                Button(trashMenuLabel, role: .destructive) { pendingTrashDecision = trashDecision }
             }
         }
-        .alert("Move to Trash?", isPresented: $showTrashConfirm) {
-            Button("Move to Trash", role: .destructive) { moveToTrash() }
-            Button("Cancel", role: .cancel) {}
+        .alert(
+            trashConfirmTitle,
+            isPresented: Binding(
+                get: { pendingTrashDecision != nil },
+                set: { if !$0 { pendingTrashDecision = nil } }
+            )
+        ) {
+            Button(trashConfirmButtonLabel, role: .destructive) { moveToTrash() }
+            Button("Cancel", role: .cancel) { pendingTrashDecision = nil }
         } message: {
-            Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
+            trashConfirmMessage
         }
         .alert(
             "Could not move to Trash",
@@ -160,11 +168,44 @@ struct DirectoryRowView: View {
             && !item.isOthersAggregate
     }
 
+    /// Only evaluated once `canRevealInFinder`, `onItemTrashed`, and
+    /// `!item.isMountRoot` already hold — see `canTrash` — so aggregates and
+    /// mount roots never reach `DiskExplorerTrashPolicy.decision`, which does
+    /// filesystem work.
+    private var trashDecision: DiskExplorerTrashDecision {
+        DiskExplorerTrashPolicy.decision(path: item.path)
+    }
+
     private var canTrash: Bool {
-        canRevealInFinder
-            && onItemTrashed != nil
-            && !item.isMountRoot
-            && DiskExplorerTrashPolicy.canTrash(path: item.path)
+        guard canRevealInFinder, onItemTrashed != nil, !item.isMountRoot else { return false }
+        if case .blocked = trashDecision { return false }
+        return true
+    }
+
+    private var trashMenuLabel: String {
+        if case .outsideHome = trashDecision { return "Move to Trash…" }
+        return "Move to Trash"
+    }
+
+    private var trashConfirmTitle: String {
+        if case .outsideHome = pendingTrashDecision { return "Move to Trash outside Home?" }
+        return "Move to Trash?"
+    }
+
+    private var trashConfirmButtonLabel: String {
+        if case .outsideHome = pendingTrashDecision { return "Move to Trash Anyway" }
+        return "Move to Trash"
+    }
+
+    private var trashConfirmMessage: Text {
+        if case .outsideHome = pendingTrashDecision {
+            return Text(
+                "\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) at \(item.path) will be moved to your Trash. " +
+                "It's outside your Home folder — apps, Homebrew, or system software that use it may stop working. " +
+                "Finder's Put Back won't be available for it."
+            )
+        }
+        return Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
     }
 
     private func revealInFinder() {
@@ -174,14 +215,23 @@ struct DirectoryRowView: View {
     }
 
     private func moveToTrash() {
-        // Report the failure rather than discarding it. Without this the row
-        // simply stays put after a refresh, which is indistinguishable from
-        // the delete never having been requested.
-        DiskExplorerTrashPolicy.recycle(path: item.path) { error in
-            if let error {
-                trashError = error.localizedDescription
-            } else {
-                onItemTrashed?()
+        Task { @MainActor in
+            switch await LicenseGate.shared.authorize(.diskExplorer) {
+            case .failure(let reason):
+                onLicenseBlocked(reason)
+                return
+            case .success:
+                break
+            }
+            // Report the failure rather than discarding it. Without this the
+            // row simply stays put after a refresh, which is indistinguishable
+            // from the delete never having been requested.
+            DiskExplorerTrashPolicy.recycle(path: item.path) { error in
+                if let error {
+                    trashError = error.localizedDescription
+                } else {
+                    onItemTrashed?()
+                }
             }
         }
     }

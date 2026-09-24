@@ -1,3 +1,4 @@
+import GargantuaLicensing
 import SwiftUI
 
 /// Disk Explorer with native treemap and sorted list views for disk consumers.
@@ -15,6 +16,9 @@ public struct DiskExplorerView: View {
     /// Not private — `DiskExplorerView+Layout`'s `emptyState` reaches this to
     /// open Full Disk Access settings from the unreadable-folder empty state.
     @Environment(\.openURL) var openURL
+    /// Hoisted here rather than one `@State` + `.destructiveActionGate` per
+    /// row/tile — a directory listing can render hundreds of them.
+    @State private var blockedReason: BlockReason?
 
     public init(state: DiskExplorerState) {
         self.state = state
@@ -73,6 +77,7 @@ public struct DiskExplorerView: View {
             let depth = max(state.pathStack.count - 1, 0)
             Text("This discards your current drill-down (\(depth) level\(depth == 1 ? "" : "s") deep) and rescans from \(state.scanRoot.name).")
         }
+        .destructiveActionGate(reason: $blockedReason)
     }
 
     private var scanSubtitle: String? {
@@ -275,7 +280,8 @@ public struct DiskExplorerView: View {
                                     drillDown(into: tile.item)
                                 }
                             },
-                            onItemTrashed: { refreshCurrent() }
+                            onItemTrashed: { refreshCurrent() },
+                            onLicenseBlocked: { blockedReason = $0 }
                         )
                         .frame(width: max(tile.rect.width, 1), height: max(tile.rect.height, 1))
                         .offset(x: tile.rect.minX, y: tile.rect.minY)
@@ -302,7 +308,8 @@ public struct DiskExplorerView: View {
                         isExpanded: state.expandedItems[item.path] != nil,
                         onExpand: { await toggleExpand(item) },
                         onDrillDown: { drillDown(into: item) },
-                        onItemTrashed: { refreshCurrent() }
+                        onItemTrashed: { refreshCurrent() },
+                        onLicenseBlocked: { blockedReason = $0 }
                     )
 
                     if let children = state.expandedItems[item.path] {
@@ -314,6 +321,7 @@ public struct DiskExplorerView: View {
                                 onExpand: nil,
                                 onDrillDown: { drillDown(into: child) },
                                 onItemTrashed: { refreshCurrent() },
+                                onLicenseBlocked: { blockedReason = $0 },
                                 indentLevel: 1
                             )
                         }

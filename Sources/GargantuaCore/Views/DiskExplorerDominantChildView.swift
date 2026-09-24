@@ -133,7 +133,8 @@ struct DiskExplorerDominantChildView: View {
                                 isExpanded: false,
                                 onExpand: nil,
                                 onDrillDown: { onDrillDown(item) },
-                                onItemTrashed: nil
+                                onItemTrashed: nil,
+                                onLicenseBlocked: { _ in }
                             )
                         }
                     }
