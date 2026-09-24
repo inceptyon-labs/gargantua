@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.11] - 2026-09-24
+
+### Added
+
+- **Pick your own scan root.** The idle Disk Explorer view now offers Scan Home, Scan boot volume, or Choose Folder…, and rescans return to whatever root you started from instead of always snapping back to Home.
+- **See the whole picture, including other volumes.** Hidden system folders are listed, mount-root rows show a "separate volume" caption with a drill-in button instead of a broken tile, and a read-only banner appears when browsing outside Home.
+- **Trash more, safely.** Move to Trash now works outside Home and off mounted volumes through an allow-listed, descriptor-based move, gated by license and with a warning before trashing outside Home.
+- **Know what APFS clones actually cost.** Disk Explorer counts hard links and clone-shared bytes once per file and notes shared bytes on rows and tiles, so deleting a clone shows the real space it will free.
+
+### Fixed
+
+- **Trash decisions stay safe and off the main thread.** Protected paths (including globbed descendants and sensitive Library subtrees) are blocked from trashing, relative paths are rejected, and eligibility/readability checks run off the main thread with cancelled loaders no longer finishing late.
+- **Clone-size accuracy.** Clone-shared byte counts are deduplicated per inode, getattrlist results are validated, empty tile tooltips are dropped, and the clone note now correctly says deleting (not trashing) frees less space.
+- Minor formatting and compiler-warning cleanup.
+
+### Performance
+
+- **Faster per-row trash checks.** Protected roots are now cached instead of recomputed for every row.
+
 ## [0.4.10] - 2026-09-19
 
 ### Added
