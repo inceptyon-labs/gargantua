@@ -63,6 +63,7 @@ enum DiskExplorerTrashPolicy {
         allowedRoots: [String] = outsideHomeAllowedRoots,
         deniedSubtrees: [String] = outsideHomeDeniedSubtrees
     ) -> DiskExplorerTrashDecision {
+        guard path.hasPrefix("/") else { return .blocked(reason: "Invalid path") }
         let homeComponents = firmlinkResolvedComponents(home)
         let targetComponents = firmlinkResolvedComponents(path)
         if targetComponents.count > homeComponents.count,
@@ -92,6 +93,7 @@ enum DiskExplorerTrashPolicy {
         protectedRoots: ProtectedRootPolicy = .loadDefault(),
         isMountRoot: (URL) -> Bool? = defaultIsMountRoot
     ) -> DiskExplorerTrashDecision {
+        guard path.hasPrefix("/") else { return .blocked(reason: "Invalid path") }
         if isLexicallyInsideHome(path, home: home) {
             return canTrash(path: path, home: home, isMountRoot: isMountRoot)
                 ? .home
@@ -328,30 +330,30 @@ enum DiskExplorerTrashPolicy {
 
     /// True when a protected-root entry lies strictly below `candidatePath`:
     /// trashing the candidate would carry that protected location away with
-    /// it. Expands `~`/`${HOME}` in the entry's path, takes the literal
-    /// prefix up to (not including) the first path segment containing a `*`
-    /// glob, and firmlink-resolves that prefix the same way `decision`
-    /// resolves paths. When a glob segment was dropped, the literal prefix
-    /// alone may equal the candidate (e.g. `proj/*/keep` under `proj`) — the
-    /// dropped wildcard segment still guarantees the real match is deeper, so
-    /// an equal-length prefix counts too in that case. A fail-closed policy
-    /// has no entries to walk here — `protectionReason` already blocked the
-    /// candidate itself.
+    /// it. Expands `~`/`${HOME}` in the entry's path and firmlink-resolves it
+    /// into components the same way `decision` resolves paths, then blocks
+    /// when the entry has more components than the candidate and each of the
+    /// candidate's components matches the entry's component at the same
+    /// index — literal equality, or a glob match when the entry component
+    /// contains `*`. That handles a wildcard anywhere in the entry, not just
+    /// its last segment (e.g. `/usr/local/*/data` still blocks
+    /// `/usr/local/foo`). Compared case-insensitively, matching APFS and
+    /// `ProtectedRootPolicy`. A fail-closed policy has no entries to walk
+    /// here — `protectionReason` already blocked the candidate itself.
     private static func protectedDescendantReason(
         candidatePath: String,
         home: String,
         protectedRoots: ProtectedRootPolicy
     ) -> String? {
-        let candidateComponents = firmlinkResolvedComponents(candidatePath)
+        let candidateComponents = firmlinkResolvedComponents(candidatePath).map { $0.lowercased() }
         for entry in protectedRoots.entries where !entry.path.isEmpty {
-            let allSegments = expandingHomeTokens(entry.path, home: home).split(separator: "/", omittingEmptySubsequences: true)
-            let literalSegments = allSegments.prefix { !$0.contains("*") }
-            guard !literalSegments.isEmpty else { continue }
-            let prefixComponents = firmlinkResolvedComponents("/" + literalSegments.joined(separator: "/"))
-            guard Array(prefixComponents.prefix(candidateComponents.count)) == candidateComponents,
-                  prefixComponents.count > candidateComponents.count || literalSegments.count < allSegments.count else {
-                continue
+            let entryComponents = firmlinkResolvedComponents(expandingHomeTokens(entry.path, home: home)).map { $0.lowercased() }
+            guard entryComponents.count > candidateComponents.count else { continue }
+            let matches = zip(candidateComponents, entryComponents).allSatisfy { candidateComponent, entryComponent in
+                entryComponent == candidateComponent
+                    || (entryComponent.contains("*") && fnmatch(entryComponent, candidateComponent, FNM_CASEFOLD) == 0)
             }
+            guard matches else { continue }
             return "Contains a protected location: \(entry.reason)"
         }
         return nil
@@ -376,20 +378,21 @@ enum DiskExplorerTrashPolicy {
         return leafInfo.st_dev == parentInfo.st_dev ? nil : .blocked(reason: separateVolumeReason)
     }
 
-    /// Re-checks `decision` and trashes accordingly: `.home` through NSWorkspace
-    /// recycle, `.outsideHome` through `moveOutsideHomeItemToTrash` off the main
-    /// actor, `.blocked` as an error carrying the reason. Completion runs on
-    /// the main actor with nil on success or an error.
+    /// Checks `lexicalDecision` first — no filesystem access, so the common
+    /// case never blocks the main actor on a YAML load or mount walk.
+    /// `.blocked` completes immediately with the reason; `.outsideHome` goes
+    /// straight to `moveOutsideHomeItemToTrash`, which re-runs the full
+    /// decision off the main actor; `.home` runs the full `decision` (cheap
+    /// for Home paths — just a mount walk under Home, so `menuProtectedRoots`
+    /// is passed to skip a redundant YAML parse) and recycles through
+    /// NSWorkspace only if it's still `.home`, otherwise completes with the
+    /// block reason. Completion runs on the main actor with nil on success or
+    /// an error.
     @MainActor
     static func recycle(path: String, completion: @escaping @MainActor (Error?) -> Void) {
-        switch decision(path: path) {
-        case .home:
-            let url = URL(fileURLWithPath: path)
-            NSWorkspace.shared.recycle([url]) { _, error in
-                Task { @MainActor in
-                    completion(error)
-                }
-            }
+        switch lexicalDecision(path: path) {
+        case .blocked(let reason):
+            completion(DiskExplorerTrashError.blocked(reason: reason))
         case .outsideHome:
             Task.detached {
                 let result = moveOutsideHomeItemToTrash(path: path)
@@ -402,8 +405,20 @@ enum DiskExplorerTrashPolicy {
                     }
                 }
             }
-        case .blocked(let reason):
-            completion(DiskExplorerTrashError.blocked(reason: reason))
+        case .home:
+            switch decision(path: path, protectedRoots: menuProtectedRoots) {
+            case .home:
+                let url = URL(fileURLWithPath: path)
+                NSWorkspace.shared.recycle([url]) { _, error in
+                    Task { @MainActor in
+                        completion(error)
+                    }
+                }
+            case .outsideHome:
+                completion(DiskExplorerTrashError.blocked(reason: "This item can't be trashed from Disk Explorer"))
+            case .blocked(let reason):
+                completion(DiskExplorerTrashError.blocked(reason: reason))
+            }
         }
     }
 

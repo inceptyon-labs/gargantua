@@ -197,6 +197,33 @@ struct DiskExplorerTrashPolicyTests {
         #expect(!DiskExplorerTrashPolicy.isLexicallyInsideHome("/", home: home.path))
     }
 
+    @Test("decision, lexicalDecision, and moveOutsideHomeItemToTrash reject non-absolute paths")
+    func rejectsNonAbsolutePaths() {
+        for path in ["", "relative/x"] {
+            #expect(DiskExplorerTrashPolicy.decision(path: path) == .blocked(reason: "Invalid path"), "\(path)")
+            #expect(DiskExplorerTrashPolicy.lexicalDecision(path: path) == .blocked(reason: "Invalid path"), "\(path)")
+            #expect(
+                DiskExplorerTrashPolicy.moveOutsideHomeItemToTrash(path: path)
+                    == .failure(.blocked(reason: "Invalid path")), "\(path)"
+            )
+        }
+    }
+
+    @Test("lexicalDecision: Home itself is blocked, a descendant is .home")
+    func lexicalDecisionHomeCases() throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = root.appendingPathComponent("home")
+        let descendant = home.appendingPathComponent("a/b")
+        try FileManager.default.createDirectory(at: descendant, withIntermediateDirectories: true)
+
+        #expect(DiskExplorerTrashPolicy.lexicalDecision(path: descendant.path, home: home.path) == .home)
+        #expect(
+            DiskExplorerTrashPolicy.lexicalDecision(path: home.path, home: home.path)
+                == .blocked(reason: "This item can't be trashed from Disk Explorer")
+        )
+    }
+
     @Test("Lexical normalization is pure string handling: double slashes, dot segments, dot-dot segments, and trailing slashes, with no filesystem access")
     func lexicalNormalizationIsPureStringHandling() {
         let home = "/tmp/does-not-exist-\(UUID().uuidString)/home"
@@ -330,6 +357,34 @@ extension DiskExplorerTrashPolicyTests {
         #expect(
             fixture.decision(proj, protectedRoots: globProtectedRoots)
                 == .blocked(reason: "Contains a protected location: Glob keep")
+        )
+    }
+
+    @Test("Outside Home: a glob segment in the middle of a protected entry still blocks a shorter candidate, case-insensitively")
+    func outsideHomeProtectedDescendantMidSegmentGlob() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let foo = fixture.applications.appendingPathComponent("foo")
+        let fooOther = foo.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: fooOther, withIntermediateDirectories: true)
+
+        let midGlobRoots = ProtectedRootPolicy(
+            entries: [ProtectedRootEntry(path: fixture.applications.appendingPathComponent("*/data").path, reason: "Mid glob")]
+        )
+        #expect(
+            fixture.decision(foo, protectedRoots: midGlobRoots)
+                == .blocked(reason: "Contains a protected location: Mid glob")
+        )
+        #expect(fixture.decision(fooOther, protectedRoots: midGlobRoots) == .outsideHome)
+
+        let lowerProj = fixture.applications.appendingPathComponent("proj")
+        try FileManager.default.createDirectory(at: lowerProj, withIntermediateDirectories: true)
+        let caseFoldedRoots = ProtectedRootPolicy(
+            entries: [ProtectedRootEntry(path: fixture.applications.appendingPathComponent("Proj/Keep").path, reason: "Case keep")]
+        )
+        #expect(
+            fixture.decision(lowerProj, protectedRoots: caseFoldedRoots)
+                == .blocked(reason: "Contains a protected location: Case keep")
         )
     }
 
