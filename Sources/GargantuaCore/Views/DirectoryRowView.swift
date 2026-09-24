@@ -75,7 +75,7 @@ struct DirectoryRowView: View {
                             .font(GargantuaFonts.caption)
                             .foregroundStyle(GargantuaColors.ink4)
                     } else if item.sharedCloneBytes > 0 {
-                        Text("~\(AlertItem.formatBytes(item.sharedCloneBytes)) shared with clones")
+                        Text("up to \(AlertItem.formatBytes(item.sharedCloneBytes)) shared with clones")
                             .font(GargantuaFonts.caption)
                             .foregroundStyle(GargantuaColors.ink4)
                     }
@@ -317,8 +317,8 @@ struct DirectoryRowView: View {
         }
         if item.sharedCloneBytes > 0 {
             parts.append(
-                "Includes about \(AlertItem.formatBytes(item.sharedCloneBytes)) shared with APFS clones — " +
-                    "moving this to the Trash frees less than shown."
+                "Includes up to \(AlertItem.formatBytes(item.sharedCloneBytes)) that may be shared with APFS clones — " +
+                    "moving this to the Trash may free less than shown."
             )
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")

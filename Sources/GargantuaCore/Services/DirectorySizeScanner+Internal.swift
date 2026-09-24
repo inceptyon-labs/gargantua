@@ -168,6 +168,10 @@ extension DirectorySizeScanner {
     /// content with an APFS clone contribute their non-private bytes to
     /// `sharedCloneBytes`. Other callers leave this false and see no behavior
     /// change.
+    ///
+    /// Hard links are deduped per walk, not per volume: a link shared between
+    /// sibling directories isn't deduped across them, so each sibling's row
+    /// can count it once.
     static func directorySize(
         at path: String,
         timeout: Duration? = nil,
@@ -242,7 +246,8 @@ extension DirectorySizeScanner {
             if countsAllocation {
                 total += allocated
             }
-            if values.mayShareFileContent == true, let privateSize = privateCloneSize(atPath: fileURL.path) {
+            if countsAllocation, values.mayShareFileContent == true,
+               let privateSize = privateCloneSize(atPath: fileURL.path) {
                 sharedCloneBytes += max(allocated - privateSize, 0)
             }
         }

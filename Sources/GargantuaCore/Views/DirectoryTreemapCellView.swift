@@ -2,6 +2,20 @@ import AppKit
 import GargantuaLicensing
 import SwiftUI
 
+extension View {
+    /// Applies `.help(text)` only when `text` is non-nil, so a tile with nothing to say
+    /// doesn't attach an empty tooltip that can override a more specific `.help` (or
+    /// `.accessibilityHint`) set later in the same modifier chain.
+    @ViewBuilder
+    fileprivate func help(optional text: String?) -> some View {
+        if let text {
+            help(text)
+        } else {
+            self
+        }
+    }
+}
+
 struct DirectoryTreemapCellView: View {
     let item: DirectoryItem
     let totalSiblingSize: Int64
@@ -64,7 +78,7 @@ struct DirectoryTreemapCellView: View {
             isHovered = hovering
         }
         .accessibilityLabel(accessibilityLabel)
-        .help(cloneHelpText ?? "")
+        .help(optional: cloneHelpText)
         .contextMenu {
             if canRevealInFinder {
                 Button("Reveal in Finder") { revealInFinder() }
@@ -439,8 +453,8 @@ extension DirectoryTreemapCellView {
     /// Hover text noting APFS clone sharing, `nil` when this row shares nothing.
     var cloneHelpText: String? {
         guard item.sharedCloneBytes > 0 else { return nil }
-        return "Includes about \(AlertItem.formatBytes(item.sharedCloneBytes)) shared with APFS clones — " +
-            "moving this to the Trash frees less than shown."
+        return "Includes up to \(AlertItem.formatBytes(item.sharedCloneBytes)) that may be shared with APFS clones — " +
+            "moving this to the Trash may free less than shown."
     }
 
     var percentLabel: String? {

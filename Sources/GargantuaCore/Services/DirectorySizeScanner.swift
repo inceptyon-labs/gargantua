@@ -59,11 +59,14 @@ struct InodeKey: Hashable {
 
 /// Reads the APFS "private size" of `path` — the portion of its content not shared with any
 /// clone — via `getattrlist`'s common-extended attribute group. Returns `nil` on any failure
-/// (non-APFS volume, permission, etc.), in which case the caller adds nothing to shared bytes.
+/// (non-APFS volume, permission, etc.) or when the filesystem didn't actually populate the
+/// private-size field, in which case the caller adds nothing to shared bytes.
 ///
 /// Buffer layout the kernel writes back: a `UInt32` length, then the returned `attribute_set_t`,
 /// then the `off_t` private size. Decoded with `loadUnaligned` rather than a matching Swift
-/// struct since the C struct's packing isn't a Swift layout guarantee.
+/// struct since the C struct's packing isn't a Swift layout guarantee. The length and the
+/// returned `attribute_set_t.forkattr` bit are checked before trusting the private-size bytes —
+/// a short or attribute-less response means the kernel didn't fill that field.
 func privateCloneSize(atPath path: String) -> Int64? {
     var attrList = attrlist()
     attrList.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
@@ -76,6 +79,14 @@ func privateCloneSize(atPath path: String) -> Int64? {
         getattrlist(path, &attrList, rawBuffer.baseAddress, rawBuffer.count, UInt32(FSOPT_ATTR_CMN_EXTENDED | FSOPT_NOFOLLOW))
     }
     guard result == 0 else { return nil }
+
+    let returnedLength: UInt32 = buffer.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt32.self) }
+    let returnedAttrs: attribute_set_t = buffer.withUnsafeBytes {
+        $0.loadUnaligned(fromByteOffset: MemoryLayout<UInt32>.size, as: attribute_set_t.self)
+    }
+    guard returnedLength >= 32, returnedAttrs.forkattr & attrgroup_t(ATTR_CMNEXT_PRIVATESIZE) != 0 else {
+        return nil
+    }
 
     let privateSizeOffset = MemoryLayout<UInt32>.size + MemoryLayout<attribute_set_t>.size
     let privateSize: off_t = buffer.withUnsafeBytes { rawBuffer in
@@ -96,13 +107,14 @@ func looseFileAccounting(
 ) -> (countedSize: Int64, sharedCloneBytes: Int64) {
     let values = try? url.resourceValues(forKeys: [.linkCountKey, .mayShareFileContentKey])
 
-    var countedSize = allocated
+    var countsAllocation = true
     if let linkCount = values?.linkCount, linkCount > 1, let key = InodeKey(path: url.path) {
-        countedSize = seenInodes.insert(key).inserted ? allocated : 0
+        countsAllocation = seenInodes.insert(key).inserted
     }
+    let countedSize = countsAllocation ? allocated : 0
 
     var sharedCloneBytes: Int64 = 0
-    if values?.mayShareFileContent == true, let privateSize = privateCloneSize(atPath: url.path) {
+    if countsAllocation, values?.mayShareFileContent == true, let privateSize = privateCloneSize(atPath: url.path) {
         sharedCloneBytes = max(allocated - privateSize, 0)
     }
 

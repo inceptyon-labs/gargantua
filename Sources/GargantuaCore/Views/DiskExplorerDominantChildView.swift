@@ -52,8 +52,8 @@ struct DiskExplorerDominantChildView: View {
         }
         if dominant.sharedCloneBytes > 0 {
             parts.append(
-                "Includes about \(AlertItem.formatBytes(dominant.sharedCloneBytes)) shared with APFS clones — " +
-                    "moving this to the Trash frees less than shown."
+                "Includes up to \(AlertItem.formatBytes(dominant.sharedCloneBytes)) that may be shared with APFS clones — " +
+                    "moving this to the Trash may free less than shown."
             )
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
