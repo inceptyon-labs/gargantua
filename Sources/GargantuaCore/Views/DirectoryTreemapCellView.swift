@@ -454,7 +454,7 @@ extension DirectoryTreemapCellView {
     var cloneHelpText: String? {
         guard item.sharedCloneBytes > 0 else { return nil }
         return "Includes up to \(AlertItem.formatBytes(item.sharedCloneBytes)) that may be shared with APFS clones — " +
-            "moving this to the Trash may free less than shown."
+            "deleting it may free less than shown."
     }
 
     var percentLabel: String? {

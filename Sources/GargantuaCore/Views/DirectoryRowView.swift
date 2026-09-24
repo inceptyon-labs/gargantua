@@ -318,7 +318,7 @@ struct DirectoryRowView: View {
         if item.sharedCloneBytes > 0 {
             parts.append(
                 "Includes up to \(AlertItem.formatBytes(item.sharedCloneBytes)) that may be shared with APFS clones — " +
-                    "moving this to the Trash may free less than shown."
+                    "deleting it may free less than shown."
             )
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
