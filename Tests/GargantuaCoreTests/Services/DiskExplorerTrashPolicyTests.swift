@@ -160,28 +160,22 @@ struct DiskExplorerTrashPolicyTests {
         #expect(error != nil)
     }
 
-    @Test("recycle(path:) refuses a path outside the real Home and leaves the file in place")
+    @Test("recycle(path:) refuses a path outside every allowed location and never touches it")
     @MainActor
     func recycleRefusesPathOutsideRealHome() async throws {
-        let outside = FileManager.default.temporaryDirectory
-            .appendingPathComponent("DiskExplorerTrashPolicyTests-recycle-\(UUID().uuidString)")
-        FileManager.default.createFile(atPath: outside.path, contents: Data())
-        defer { try? FileManager.default.removeItem(at: outside) }
-
-        guard !DiskExplorerTrashPolicy.isLexicallyInsideHome(outside.path) else {
-            // This machine's temp directory happens to live under the real
-            // Home; the outside-Home premise doesn't hold, so skip.
-            return
-        }
+        // A nonexistent path under /System/Library — blocked lexically before
+        // any filesystem access, so this can never reach the real Trash
+        // regardless of where this machine's TMPDIR resolves.
+        let outside = "/System/Library/DiskExplorerTrashPolicyTests-recycle-\(UUID().uuidString)"
 
         let error = await withCheckedContinuation { (continuation: CheckedContinuation<Error?, Never>) in
-            DiskExplorerTrashPolicy.recycle(path: outside.path) { error in
+            DiskExplorerTrashPolicy.recycle(path: outside) { error in
                 continuation.resume(returning: error)
             }
         }
 
         #expect(error != nil)
-        #expect(FileManager.default.fileExists(atPath: outside.path))
+        #expect(!FileManager.default.fileExists(atPath: outside))
     }
 
     @Test("isLexicallyInsideHome covers Home, descendants, prefix siblings, and root")
@@ -316,13 +310,24 @@ extension DiskExplorerTrashPolicyTests {
         let blocked = [
             "/System/Library/x", "/usr/bin/x", "/bin/x", "/sbin/x", "/private/var/db/x",
             "/Library/Apple/x", "/library/apple/x", "/Applications", "/Users/someoneelse/x", "/LibraryX/x",
+            "/System/Volumes/Data/Applications/x", "/Applications/../System/x", "/Library/APPLE/x",
         ]
         for path in blocked {
             #expect(DiskExplorerTrashPolicy.outsideHomeLexicalBlockReason(path) != nil, "\(path)")
             #expect(DiskExplorerTrashPolicy.decision(path: path, home: "/Users/nobody-here") != .outsideHome, "\(path)")
+            #expect(DiskExplorerTrashPolicy.lexicalDecision(path: path, home: "/Users/nobody-here") != .outsideHome, "\(path)")
         }
-        for path in ["/usr/local/x", "/Applications/Foo.app", "/Library/Caches/x", "/private/tmp/x", "/Users/Shared/x"] {
+        for path in ["/usr/local/x", "/Applications/Foo.app", "/Library/Caches/x", "/private/tmp/x", "/Users/Shared/x", "/tmp/x"] {
             #expect(DiskExplorerTrashPolicy.outsideHomeLexicalBlockReason(path) == nil, "\(path)")
+            #expect(DiskExplorerTrashPolicy.lexicalDecision(path: path, home: "/Users/nobody-here") == .outsideHome, "\(path)")
+        }
+    }
+
+    @Test("Every default denied subtree is blocked lexically")
+    func defaultDeniedSubtreesAreBlockedLexically() {
+        for root in DiskExplorerTrashPolicy.outsideHomeDeniedSubtrees {
+            let path = "\(root)/x"
+            #expect(DiskExplorerTrashPolicy.outsideHomeLexicalBlockReason(path) != nil, "\(path)")
         }
     }
 

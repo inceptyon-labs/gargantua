@@ -24,7 +24,11 @@ enum DiskExplorerTrashPolicy {
     static let outsideHomeAllowedRoots: [String] = [
         "/Applications", "/Library", "/opt", "/usr/local", "/Users/Shared", "/private/tmp",
     ]
-    static let outsideHomeDeniedSubtrees: [String] = ["/Library/Apple"]
+    static let outsideHomeDeniedSubtrees: [String] = [
+        "/Library/Apple", "/Library/LaunchDaemons", "/Library/LaunchAgents", "/Library/PrivilegedHelperTools",
+        "/Library/Extensions", "/Library/SystemExtensions", "/Library/StagedExtensions", "/Library/Keychains",
+        "/Library/Security",
+    ]
 
     /// Protected roots loaded once, for deciding whether a row offers Move to
     /// Trash. Rows re-evaluate on every render, so re-parsing the YAML there
@@ -45,6 +49,34 @@ enum DiskExplorerTrashPolicy {
         let targetComponents = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
         guard targetComponents.count >= homeComponents.count else { return false }
         return Array(targetComponents.prefix(homeComponents.count)) == homeComponents
+    }
+
+    /// Lexical-only classification of `path`: no filesystem access at all (no
+    /// symlink resolution, no `.isVolumeKey` reads), so it's safe to call
+    /// during view body evaluation, unlike `decision`. Strictly under Home
+    /// (lexically) is `.home`; Home itself is blocked. Outside Home, defers to
+    /// `outsideHomeLexicalBlockReason`. Menus use this for visibility/label;
+    /// the tap handler still calls `decision` once before acting.
+    static func lexicalDecision(
+        path: String,
+        home: String = NSHomeDirectory(),
+        allowedRoots: [String] = outsideHomeAllowedRoots,
+        deniedSubtrees: [String] = outsideHomeDeniedSubtrees
+    ) -> DiskExplorerTrashDecision {
+        let homeComponents = URL(fileURLWithPath: home).standardizedFileURL.pathComponents
+        let targetComponents = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        if targetComponents.count > homeComponents.count,
+           Array(targetComponents.prefix(homeComponents.count)) == homeComponents {
+            return .home
+        }
+        if isLexicallyInsideHome(path, home: home) {
+            return .blocked(reason: "This item can't be trashed from Disk Explorer")
+        }
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+        if let reason = outsideHomeLexicalBlockReason(standardized, allowedRoots: allowedRoots, deniedSubtrees: deniedSubtrees) {
+            return .blocked(reason: reason)
+        }
+        return .outsideHome
     }
 
     /// Classifies `path`. Inside Home (lexically) the `canTrash` rules apply.
@@ -155,8 +187,9 @@ enum DiskExplorerTrashPolicy {
     /// resolved location is inside Home. That's fail-closed and acceptable —
     /// v1 only trashes paths that read as inside Home without following links.
     ///
-    /// Equivalent to `decision(...) == .home`; kept for the current views,
-    /// which move to `decision` next.
+    /// Equivalent to `decision(...) == .home`; the Home-rules helper that
+    /// `decision` calls for paths lexically inside Home. Views use
+    /// `lexicalDecision`/`decision` directly, not this.
     static func canTrash(
         path: String,
         home: String = NSHomeDirectory(),
@@ -241,6 +274,7 @@ enum DiskExplorerTrashPolicy {
         guard trashFd >= 0 else { return .failure(.trashUnavailable) }
         defer { close(trashFd) }
 
+        errno = 0
         guard let name = SecureTrashFileOps.moveIntoTrash(sourceParentFd: parentFd, leaf: leaf, trashFd: trashFd) else {
             return .failure(.moveFailed(errno: errno))
         }
@@ -349,8 +383,6 @@ enum DiskExplorerTrashPolicy {
 }
 
 enum DiskExplorerTrashError: LocalizedError, Equatable, Sendable {
-    /// The item is outside the Home folder and outside every allowed location.
-    case outsideHome
     /// The policy refused the item; `reason` is user-facing.
     case blocked(reason: String)
     /// The item or a folder above it moved, vanished, or became a symbolic link.
@@ -362,8 +394,6 @@ enum DiskExplorerTrashError: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .outsideHome:
-            return "This item is outside the Home folder and Disk Explorer can't trash it."
         case .blocked(let reason):
             return reason
         case .locationChanged:
@@ -372,6 +402,8 @@ enum DiskExplorerTrashError: LocalizedError, Equatable, Sendable {
             return "Your Trash folder couldn't be opened."
         case .moveFailed(let code):
             switch code {
+            case 0:
+                return "Couldn't move this item to the Trash."
             case EXDEV:
                 return "It's on a different volume than your Trash."
             case EACCES, EPERM:

@@ -68,9 +68,10 @@ struct DirectoryTreemapCellView: View {
             if canRevealInFinder {
                 Button("Reveal in Finder") { revealInFinder() }
             }
-            if canTrash {
+            let menuDecision = DiskExplorerTrashPolicy.lexicalDecision(path: item.path)
+            if canTrash(for: menuDecision) {
                 Divider()
-                Button(trashMenuLabel, role: .destructive) { pendingTrashDecision = trashDecision }
+                Button(trashMenuLabel(for: menuDecision), role: .destructive) { beginTrash() }
             }
         }
         .alert(
@@ -363,25 +364,30 @@ struct DirectoryTreemapCellView: View {
 // `totalSiblingSize` and don't touch view state.
 
 extension DirectoryTreemapCellView {
-    /// Only evaluated once `canRevealInFinder`, `onItemTrashed`, and
-    /// `!item.isMountRoot` already hold — see `canTrash` — so aggregates and
-    /// mount roots never reach `DiskExplorerTrashPolicy.decision`, which does
-    /// filesystem work.
-    var trashDecision: DiskExplorerTrashDecision {
-        DiskExplorerTrashPolicy.decision(
-            path: item.path, protectedRoots: DiskExplorerTrashPolicy.menuProtectedRoots
-        )
-    }
-
-    var canTrash: Bool {
+    /// Menu visibility, from a lexical (no filesystem access) decision so it's
+    /// cheap to compute on every body pass.
+    func canTrash(for decision: DiskExplorerTrashDecision) -> Bool {
         guard canRevealInFinder, onItemTrashed != nil, !item.isMountRoot else { return false }
-        if case .blocked = trashDecision { return false }
+        if case .blocked = decision { return false }
         return true
     }
 
-    var trashMenuLabel: String {
-        if case .outsideHome = trashDecision { return "Move to Trash…" }
+    func trashMenuLabel(for decision: DiskExplorerTrashDecision) -> String {
+        if case .outsideHome = decision { return "Move to Trash…" }
         return "Move to Trash"
+    }
+
+    /// Runs the full (filesystem-backed) decision once, on tap: blocked stops
+    /// with an error, otherwise the confirmation alert opens.
+    func beginTrash() {
+        let decision = DiskExplorerTrashPolicy.decision(
+            path: item.path, protectedRoots: DiskExplorerTrashPolicy.menuProtectedRoots
+        )
+        if case .blocked(let reason) = decision {
+            trashError = reason
+            return
+        }
+        pendingTrashDecision = decision
     }
 
     var trashConfirmTitle: String {
