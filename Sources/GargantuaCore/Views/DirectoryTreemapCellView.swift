@@ -64,6 +64,7 @@ struct DirectoryTreemapCellView: View {
             isHovered = hovering
         }
         .accessibilityLabel(accessibilityLabel)
+        .help(cloneHelpText ?? "")
         .contextMenu {
             if canRevealInFinder {
                 Button("Reveal in Finder") { revealInFinder() }
@@ -433,6 +434,13 @@ extension DirectoryTreemapCellView {
     var sizeLabel: String {
         let prefix = item.isPartial ? "~" : ""
         return "\(prefix)\(AlertItem.formatBytes(item.size))"
+    }
+
+    /// Hover text noting APFS clone sharing, `nil` when this row shares nothing.
+    var cloneHelpText: String? {
+        guard item.sharedCloneBytes > 0 else { return nil }
+        return "Includes about \(AlertItem.formatBytes(item.sharedCloneBytes)) shared with APFS clones — " +
+            "moving this to the Trash frees less than shown."
     }
 
     var percentLabel: String? {

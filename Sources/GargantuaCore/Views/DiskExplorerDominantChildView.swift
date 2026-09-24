@@ -37,11 +37,26 @@ struct DiskExplorerDominantChildView: View {
         let text = Text("\(dominant.isPartial ? "~" : "")\(AlertItem.formatBytes(dominant.size))")
             .font(GargantuaFonts.monoData)
             .foregroundStyle(GargantuaColors.ink2)
-        if dominant.isPartial {
-            text.help("Partial size — some items couldn't be read or sizing hit its time limit.")
+        if let dominantSizeHelpText {
+            text.help(dominantSizeHelpText)
         } else {
             text
         }
+    }
+
+    /// Combines the partial-size caveat with the APFS clone-sharing caveat when both apply.
+    private var dominantSizeHelpText: String? {
+        var parts: [String] = []
+        if dominant.isPartial {
+            parts.append("Partial size — some items couldn't be read or sizing hit its time limit.")
+        }
+        if dominant.sharedCloneBytes > 0 {
+            parts.append(
+                "Includes about \(AlertItem.formatBytes(dominant.sharedCloneBytes)) shared with APFS clones — " +
+                    "moving this to the Trash frees less than shown."
+            )
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     var body: some View {

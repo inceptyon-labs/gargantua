@@ -74,6 +74,10 @@ struct DirectoryRowView: View {
                         Text(mountRootCaption)
                             .font(GargantuaFonts.caption)
                             .foregroundStyle(GargantuaColors.ink4)
+                    } else if item.sharedCloneBytes > 0 {
+                        Text("~\(AlertItem.formatBytes(item.sharedCloneBytes)) shared with clones")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink4)
                     }
                 }
 
@@ -297,12 +301,27 @@ struct DirectoryRowView: View {
 
     @ViewBuilder
     private var sizeLabelView: some View {
-        if item.isPartial {
-            formattedSizeLabel
-                .help("Partial size — some items couldn't be read or sizing hit its time limit.")
+        if let sizeHelpText {
+            formattedSizeLabel.help(sizeHelpText)
         } else {
             formattedSizeLabel
         }
+    }
+
+    /// Combines the partial-size caveat with the APFS clone-sharing caveat when both apply,
+    /// so trashing this row doesn't surprise the user on either count.
+    private var sizeHelpText: String? {
+        var parts: [String] = []
+        if item.isPartial {
+            parts.append("Partial size — some items couldn't be read or sizing hit its time limit.")
+        }
+        if item.sharedCloneBytes > 0 {
+            parts.append(
+                "Includes about \(AlertItem.formatBytes(item.sharedCloneBytes)) shared with APFS clones — " +
+                    "moving this to the Trash frees less than shown."
+            )
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     private var formattedSizeLabel: some View {
