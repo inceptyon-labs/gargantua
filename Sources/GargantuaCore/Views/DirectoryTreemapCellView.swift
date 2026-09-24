@@ -404,8 +404,8 @@ extension DirectoryTreemapCellView {
         if case .outsideHome = pendingTrashDecision {
             return Text(
                 "\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) at \(item.path) will be moved to your Trash. " +
-                "It's outside your Home folder — apps, Homebrew, or system software that use it may stop working. " +
-                "Finder's Put Back won't be available for it."
+                    "It's outside your Home folder — apps, Homebrew, or system software that use it may stop working. " +
+                    "Finder's Put Back won't be available for it."
             )
         }
         return Text("\"\(item.name)\" (\(AlertItem.formatBytes(item.size))) will be moved to the Trash.")
