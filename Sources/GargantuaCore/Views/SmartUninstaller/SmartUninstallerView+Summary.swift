@@ -24,6 +24,9 @@ extension SmartUninstallerView {
             CleanupSummaryView(result: result.cleanupResult, outcomeAccent: accent) {
                 viewModel.reset()
             }
+            if let note = LoginItemsTrashNote.message(for: [result]) {
+                LoginItemsTrashNote(message: note)
+            }
             Spacer()
         }
         .padding(GargantuaSpacing.space6)
@@ -56,6 +59,9 @@ extension SmartUninstallerView {
             }
             CleanupSummaryView(result: combined, outcomeAccent: accent) {
                 viewModel.reset()
+            }
+            if let note = LoginItemsTrashNote.message(for: results) {
+                LoginItemsTrashNote(message: note)
             }
             Spacer()
         }
