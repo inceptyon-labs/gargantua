@@ -17,6 +17,9 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
     let receiptExpander: PackageReceiptExpander?
     let receiptBuilder: ReceiptRemnantBuilder?
     let spotlightRulesReader: (any SpotlightRulesReading)?
+    /// Decides whether a `-setapp` app's suffix-stripped sibling is still
+    /// installed. `nil` disables the sibling pass.
+    let siblingAppResolver: (any InstalledAppResolving)?
     let observer: (any ScanProgressObserving)?
 
     public init(
@@ -26,6 +29,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         receiptExpander: PackageReceiptExpander? = nil,
         receiptBuilder: ReceiptRemnantBuilder? = nil,
         spotlightRulesReader: (any SpotlightRulesReading)? = nil,
+        siblingAppResolver: (any InstalledAppResolving)? = nil,
         observer: (any ScanProgressObserving)? = nil
     ) {
         self.rules = rules
@@ -34,6 +38,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
         self.receiptExpander = receiptExpander
         self.receiptBuilder = receiptBuilder
         self.spotlightRulesReader = spotlightRulesReader
+        self.siblingAppResolver = siblingAppResolver
         self.observer = observer
     }
 
@@ -74,6 +79,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
             rules: rules,
             scanRoots: scanRoots ?? PathExpander.defaultScanRoots(),
             spotlightRulesReader: CFPreferencesSpotlightRulesStore(),
+            siblingAppResolver: WorkspaceInstalledAppResolver(),
             observer: observer
         )
     }
@@ -89,6 +95,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
             receiptExpander: receiptExpander,
             receiptBuilder: receiptBuilder,
             spotlightRulesReader: spotlightRulesReader,
+            siblingAppResolver: siblingAppResolver,
             observer: observer
         )
     }
@@ -127,6 +134,7 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
             }
         }
 
+        appendSetappSiblingRemnants(into: &remnants, seenPaths: &seenPaths, for: app)
         appendReceiptEvidence(into: &remnants, seenPaths: &seenPaths, for: app)
         appendSpotlightRuleEvidence(into: &remnants, for: app)
 
