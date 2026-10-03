@@ -27,6 +27,8 @@ public enum DuplicateFinderScanState: Sendable {
 public final class DuplicateFinderContainerState {
     public var scanState: DuplicateFinderScanState = .idle
     public var scanProgress: ScanProgress = ScanProgress()
+    /// Per-item progress of a running delete, for the cleaning view's gauge.
+    public let cleanupProgress = PathStreamViewModel()
 
     /// Generation tag used to drop completion of a superseded scan. Bumped
     /// on every `prepareForScan()`; only the matching completion is allowed

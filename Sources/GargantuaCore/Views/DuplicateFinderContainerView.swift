@@ -87,7 +87,7 @@ public struct DuplicateFinderContainerView: View {
                 case .scanning:
                     DuplicateFinderScanningView(progress: state.scanProgress, onCancel: { state.cancelScan() })
                 case .cleaning:
-                    DuplicateFinderCleaningView()
+                    DuplicateFinderCleaningView(progress: state.cleanupProgress)
                 case .summary(let result, let priorResults):
                     ScrollView {
                         CleanupSummaryView(
@@ -153,9 +153,13 @@ public struct DuplicateFinderContainerView: View {
         // Remember the list to return to, and show a busy phase — the results
         // view is otherwise fully interactive while the engine runs.
         guard let priorResults = state.beginCleanup() else { return }
+        state.cleanupProgress.clear()
+        state.cleanupProgress.beginProgress(total: items.count)
 
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-        let result = await engine.clean(items, method: method, authorization: authorization)
+        let result = await engine.clean(
+            items, method: method, observer: state.cleanupProgress, authorization: authorization
+        )
         do {
             try AuditWriter().record(result: result)
             auditWriteFailed = false
@@ -181,12 +185,23 @@ public struct DuplicateFinderContainerView: View {
 
 /// Busy state shown while a confirmed delete runs.
 struct DuplicateFinderCleaningView: View {
+    let progress: PathStreamViewModel
+
     var body: some View {
         VStack(spacing: GargantuaSpacing.space3) {
             AccretionDiskView(activityRate: 24, size: 56, color: GargantuaColors.accent)
             Text("Removing selected duplicates…")
                 .font(GargantuaFonts.label)
                 .foregroundStyle(GargantuaColors.ink2)
+            if let total = progress.expectedTotal {
+                CleanupProgressGauge(
+                    cleaned: progress.settledCount - progress.settledFailureCount,
+                    failed: progress.settledFailureCount,
+                    total: total
+                )
+                .frame(maxWidth: 520)
+                .padding(.horizontal, GargantuaSpacing.space5)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("Removing selected duplicates")

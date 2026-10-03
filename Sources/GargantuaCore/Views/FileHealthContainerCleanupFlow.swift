@@ -33,6 +33,14 @@ extension FileHealthContainerView {
                     .foregroundStyle(GargantuaColors.ink2)
             }
 
+            if let total = state.cleanupProgress.expectedTotal {
+                CleanupProgressGauge(
+                    cleaned: state.cleanupProgress.settledCount - state.cleanupProgress.settledFailureCount,
+                    failed: state.cleanupProgress.settledFailureCount,
+                    total: total
+                )
+            }
+
             Spacer()
         }
         .padding(GargantuaSpacing.space5)
@@ -103,9 +111,11 @@ extension FileHealthContainerView {
                 authorization = granted
             }
             state.beginCleanup()
+            state.cleanupProgress.clear()
+            state.cleanupProgress.beginProgress(total: items.count)
 
             let result = await CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
-                .clean(items, method: .trash, authorization: authorization)
+                .clean(items, method: .trash, observer: state.cleanupProgress, authorization: authorization)
             do {
                 try AuditWriter().record(
                     result: result,

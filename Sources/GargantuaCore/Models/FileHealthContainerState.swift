@@ -20,6 +20,8 @@ public enum FileHealthPhase: Sendable, Equatable {
 public final class FileHealthContainerState {
     public var phase: FileHealthPhase = .idle
     public var scanProgress: ScanProgress = ScanProgress()
+    /// Per-item progress of a running cleanup, for the cleaning view's gauge.
+    public let cleanupProgress = PathStreamViewModel()
     public var scanResults: [ScanResult] = []
     public var scanWarnings: [String] = []
     public var errorMessage: String?
