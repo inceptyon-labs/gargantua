@@ -61,13 +61,16 @@ public final class DeepCleanSessionState {
     /// other session state.
     public let pathStream: PathStreamViewModel
     private let appTerminator: any RunningApplicationTerminating
+    private let processChecker: any RunningProcessChecking
 
     public init(
         pathStream: PathStreamViewModel = PathStreamViewModel(),
-        appTerminator: any RunningApplicationTerminating = WorkspaceRunningApplicationTerminator()
+        appTerminator: any RunningApplicationTerminating = WorkspaceRunningApplicationTerminator(),
+        processChecker: any RunningProcessChecking = DefaultRunningProcessChecker()
     ) {
         self.pathStream = pathStream
         self.appTerminator = appTerminator
+        self.processChecker = processChecker
     }
 
     public func clearResults() {
@@ -186,8 +189,18 @@ public final class DeepCleanSessionState {
             bundleIdentifier: app.bundleID,
             timeout: 10
         )
-        guard exited else { return false }
         let affectedResults = (scanResults ?? []).filter { $0.blockedByApp?.bundleID == app.bundleID }
+        let ownerStillRunning = affectedResults.contains { result in
+            ((result.ownerProcesses ?? []) + [app.bundleID]).contains { processChecker.isRunning(identifier: $0) }
+        }
+        guard exited, !ownerStillRunning else {
+            let message = "\(app.name) is still running, so its items stay locked. "
+                + "Quit it, including any \(app.name) command-line sessions, then rescan."
+            if !scanProgress.errors.contains(message) {
+                scanProgress.recordError(message)
+            }
+            return false
+        }
         unblockedResultIDs.formUnion(affectedResults.map(\.id))
         // Pre-select only what a fresh scan would: safe items. Review items
         // the app was holding unlock but stay unselected.

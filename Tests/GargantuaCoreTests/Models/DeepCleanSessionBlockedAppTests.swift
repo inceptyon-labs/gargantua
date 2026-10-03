@@ -16,7 +16,11 @@ private final class StubTerminator: RunningApplicationTerminating {
 @Suite("DeepCleanSessionState app-blocked items")
 @MainActor
 struct DeepCleanSessionBlockedAppTests {
-    private func blockedResult(id: String = "b", safety: SafetyLevel = .safe) -> ScanResult {
+    private func blockedResult(
+        id: String = "b",
+        safety: SafetyLevel = .safe,
+        ownerProcesses: [String]? = nil
+    ) -> ScanResult {
         ScanResult(
             id: id,
             name: "Brave Browser Cache",
@@ -27,7 +31,8 @@ struct DeepCleanSessionBlockedAppTests {
             explanation: "cache",
             source: SourceAttribution(name: "Brave Browser"),
             category: "browser_cache",
-            blockedByApp: BlockedApp(bundleID: "com.brave.Browser", name: "Brave Browser")
+            blockedByApp: BlockedApp(bundleID: "com.brave.Browser", name: "Brave Browser"),
+            ownerProcesses: ownerProcesses
         )
     }
 
@@ -44,7 +49,7 @@ struct DeepCleanSessionBlockedAppTests {
     @Test("Quitting the app unblocks and selects every item it held, in place")
     func quitUnblocksAndSelects() async {
         let term = StubTerminator(exits: true)
-        let session = DeepCleanSessionState(appTerminator: term)
+        let session = DeepCleanSessionState(appTerminator: term, processChecker: RunningStub(running: []))
         // Two items held by the same app — both should unblock on a single quit.
         session.finishScan(results: [blockedResult(id: "a"), blockedResult(id: "b")], duration: 0)
 
@@ -61,7 +66,7 @@ struct DeepCleanSessionBlockedAppTests {
 
     @Test("Quitting the app unlocks its review items without selecting them")
     func quitLeavesReviewItemsUnselected() async {
-        let session = DeepCleanSessionState(appTerminator: StubTerminator(exits: true))
+        let session = DeepCleanSessionState(appTerminator: StubTerminator(exits: true), processChecker: RunningStub(running: []))
         session.finishScan(results: [blockedResult(id: "cache"), blockedResult(id: "storage", safety: .review)], duration: 0)
 
         _ = await session.quitBlockingApp(for: "cache")
@@ -72,7 +77,7 @@ struct DeepCleanSessionBlockedAppTests {
 
     @Test("If the app refuses to quit, the item stays blocked and unselected")
     func quitFailureKeepsBlocked() async {
-        let session = DeepCleanSessionState(appTerminator: StubTerminator(exits: false))
+        let session = DeepCleanSessionState(appTerminator: StubTerminator(exits: false), processChecker: RunningStub(running: []))
         session.finishScan(results: [blockedResult()], duration: 0)
 
         let ok = await session.quitBlockingApp(for: "b")
@@ -81,7 +86,49 @@ struct DeepCleanSessionBlockedAppTests {
         #expect(session.blockedApp(for: "b") != nil)
         #expect(!session.isSelectable("b"))
         #expect(session.selectedResultIDs.isEmpty)
+        #expect(session.scanProgress.errors == [Self.stillRunningMessage])
     }
+
+    private static let stillRunningMessage =
+        "Brave Browser is still running, so its items stay locked. "
+            + "Quit it, including any Brave Browser command-line sessions, then rescan."
+
+    @Test("A still-running CLI owner keeps items locked and the message is recorded once")
+    func cliOwnerKeepsLocked() async {
+        let session = DeepCleanSessionState(
+            appTerminator: StubTerminator(exits: true),
+            processChecker: RunningStub(running: ["codex"])
+        )
+        session.finishScan(results: [blockedResult(ownerProcesses: ["com.brave.Browser", "codex"])], duration: 0)
+
+        let first = await session.quitBlockingApp(for: "b")
+        let second = await session.quitBlockingApp(for: "b")
+
+        #expect(!first)
+        #expect(!second)
+        #expect(session.blockedApp(for: "b") != nil)
+        #expect(session.selectedResultIDs.isEmpty)
+        #expect(session.scanProgress.errors == [Self.stillRunningMessage])
+    }
+
+    @Test("Quit unlocks when no owner is still running")
+    func noOwnerRunningUnlocks() async {
+        let session = DeepCleanSessionState(
+            appTerminator: StubTerminator(exits: true),
+            processChecker: RunningStub(running: [])
+        )
+        session.finishScan(results: [blockedResult(ownerProcesses: ["com.brave.Browser", "codex"])], duration: 0)
+
+        #expect(await session.quitBlockingApp(for: "b"))
+        #expect(session.blockedApp(for: "b") == nil)
+        #expect(session.selectedResultIDs == ["b"])
+        #expect(session.scanProgress.errors.isEmpty)
+    }
+}
+
+private struct RunningStub: RunningProcessChecking {
+    let running: Set<String>
+    func isRunning(identifier: String) -> Bool { running.contains(identifier) }
 }
 
 @Suite("NativeRuleGuardEvaluator.blockingApp")
