@@ -100,6 +100,25 @@ public struct RemnantRule: Codable, Sendable, Identifiable {
         self.regenerates = regenerates
         self.tags = tags
     }
+
+    /// The same rule over a subset of its path templates.
+    func withPathTemplates(_ templates: [String]) -> RemnantRule {
+        RemnantRule(
+            id: id,
+            name: name,
+            category: category,
+            pathTemplates: templates,
+            pattern: pattern,
+            exclude: exclude,
+            safety: safety,
+            confidence: confidence,
+            explanation: explanation,
+            source: source,
+            appliesTo: appliesTo,
+            regenerates: regenerates,
+            tags: tags
+        )
+    }
 }
 
 /// Narrows a `RemnantRule` to a subset of apps by bundle identifier.

@@ -79,6 +79,32 @@ struct RemnantScannerSetappSiblingTests {
         #expect(Set(plan.remnants.map(\.id)).count == plan.remnants.count)
     }
 
+    @Test("a wildcard that runs into the ID can't reach another product's files")
+    func siblingSkipsOpenEndedTemplates() throws {
+        let fixture = try FixtureTree()
+        let otherProduct = try fixture.makeFile("ByHost/com.bjango.istatmenus7.ABC123.plist")
+        let rule = RemnantRule(
+            id: "generic_byhost",
+            name: "ByHost preferences",
+            category: .preferences,
+            pathTemplates: [fixture.root.appendingPathComponent("ByHost/{bundleID}*.plist").path],
+            confidence: 80,
+            explanation: "Per-host preferences.",
+            source: SourceAttribution(name: "{appName}")
+        )
+        let scanner = RemnantScanner(
+            rules: [rule],
+            scanRoots: [fixture.root],
+            siblingAppResolver: FakeResolver(installed: [])
+        )
+
+        let plan = scanner.plan(for: setappApp, includeAppBundle: false)
+
+        #expect(!plan.remnants.contains { $0.path == otherProduct.path })
+        #expect(RemnantScanner.isDelimitedBundleIDTemplate("~/Library/LaunchDaemons/{bundleID}.*.plist"))
+        #expect(!RemnantScanner.isDelimitedBundleIDTemplate("~/Library/Group Containers/*{bundleID}*"))
+    }
+
     @Test("an installed direct build keeps its files")
     func skipsInstalledSibling() throws {
         let fixture = try FixtureTree()

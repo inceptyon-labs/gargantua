@@ -18,6 +18,20 @@ extension RemnantScanner {
         return base
     }
 
+    /// A template whose `{bundleID}` starts a path component and ends it or
+    /// a dot-separated part (`/{bundleID}`, `/{bundleID}.plist`,
+    /// `/{bundleID}.*.plist`). With the sibling's shorter ID, a wildcard
+    /// running into the ID reaches other apps' data: `{bundleID}*` as
+    /// `com.bjango.istatmenus*` also matches iStat Menus 7
+    /// (`com.bjango.istatmenus7`), the Setapp build's own files, and a
+    /// `/Library/PrivilegedHelperTools` helper of either.
+    static func isDelimitedBundleIDTemplate(_ template: String) -> Bool {
+        guard let range = template.range(of: "{bundleID}") else { return false }
+        let before = template[..<range.lowerBound].last
+        let after = template[range.upperBound...].first
+        return before == "/" && (after == nil || after == "/" || after == ".")
+    }
+
     func appendSetappSiblingRemnants(
         into remnants: inout [RemnantItem],
         seenPaths: inout Set<String>,
@@ -34,11 +48,12 @@ extension RemnantScanner {
             bundlePath: app.bundlePath,
             teamIdentifier: app.teamIdentifier
         )
-        let siblingRules = rules.filter { rule in
+        let siblingRules: [RemnantRule] = rules.compactMap { rule in
             if let scope = rule.appliesTo {
-                return scope.matches(bundleID: siblingID) && !scope.matches(bundleID: app.bundleID)
+                return scope.matches(bundleID: siblingID) && !scope.matches(bundleID: app.bundleID) ? rule : nil
             }
-            return rule.pathTemplates.contains { $0.contains("{bundleID}") }
+            let delimited = rule.pathTemplates.filter(Self.isDelimitedBundleIDTemplate)
+            return delimited.isEmpty ? nil : rule.withPathTemplates(delimited)
         }
 
         for rule in siblingRules {
