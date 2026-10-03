@@ -59,8 +59,8 @@ extension DeveloperToolPanel {
                             (operation.estimateIsUpperBound ? "Up to " : "") + Self.formatBytes(bytes) + " previewed"
                                 + Self.autoremoveFormulaSuffix(operation, preview: preview)
                         )
-                            .font(GargantuaFonts.monoData)
-                            .foregroundStyle(GargantuaColors.ink2)
+                        .font(GargantuaFonts.monoData)
+                        .foregroundStyle(GargantuaColors.ink2)
                     } else {
                         Text("Exact reclaim estimate unavailable")
                             .font(GargantuaFonts.monoData)

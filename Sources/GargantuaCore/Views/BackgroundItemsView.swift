@@ -14,6 +14,7 @@ public struct BackgroundItemsView: View {
     @State var session: BackgroundItemsSession
     @State var expandedID: String?
     @State var filter: BackgroundItemFilter = .all
+    @State var searchQuery = ""
     @State var pendingAction: PendingBackgroundItemAction?
     @State var lastError: String?
     @Binding var preSelectedPlistPath: String?
@@ -193,9 +194,14 @@ public struct BackgroundItemsView: View {
 
     @ViewBuilder
     func resultsState(_ scan: BackgroundItemScan) -> some View {
-        let visible = filter.apply(scan.items)
+        let visible = filter.apply(scan.items).filter { $0.matches(searchQuery: searchQuery) }
 
         VStack(spacing: 0) {
+            PaneSearchField(placeholder: "Search by name, path, bundle ID, or team ID", text: $searchQuery)
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.top, GargantuaSpacing.space3)
+                .padding(.bottom, GargantuaSpacing.space1)
+
             controlBar(scan: scan, visibleCount: visible.count)
 
             Rectangle()

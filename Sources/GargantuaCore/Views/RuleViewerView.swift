@@ -17,6 +17,7 @@ public struct RuleViewerView: View {
     @State var categories: [RuleCategory] = []
     @State var selectedCategory: String?
     @State var selectedRuleID: String?
+    @State var ruleSearchQuery = ""
     @State private var isLoading = true
     @State private var userRuleErrors: [String] = []
     /// Non-nil when the *bundled* rule set failed to load, as opposed to the
@@ -36,8 +37,14 @@ public struct RuleViewerView: View {
         categories.first(where: { $0.name == selectedCategory })?.rules ?? []
     }
 
+    /// Rules in every category matching the search, or `nil` when not searching.
+    var searchMatches: [ScanRule]? {
+        guard !ruleSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return categories.flatMap(\.rules).filter { $0.matches(searchQuery: ruleSearchQuery) }
+    }
+
     var selectedRule: ScanRule? {
-        selectedCategoryRules.first(where: { $0.id == selectedRuleID })
+        (searchMatches ?? selectedCategoryRules).first(where: { $0.id == selectedRuleID })
     }
 
     public var body: some View {
