@@ -184,4 +184,47 @@ struct CleanupEngineSQLiteTests {
         #expect(helper.received.first?.items.first?.path == db.path)
         #expect(result.allSucceeded)
     }
+
+    @Test("An already-gone database has its leftover sidecars removed")
+    @MainActor
+    func goneDatabaseLosesSidecars() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = dir.appendingPathComponent("x.sqlite")
+        let wal = try Self.write(dir, "x.sqlite-wal")
+        let shm = try Self.write(dir, "x.sqlite-shm")
+
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: dir,
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            isAppRunning: { _ in false }
+        )
+        let result = await engine.clean([Self.item(db)], method: .delete, authorization: .unchecked(.deepClean))
+
+        #expect(result.itemResults.first?.succeeded == true)
+        #expect(result.itemResults.first?.bytesFreed == 0)
+        #expect(!FileManager.default.fileExists(atPath: wal.path))
+        #expect(!FileManager.default.fileExists(atPath: shm.path))
+    }
+
+    @Test("An already-gone database keeps its sidecars while an owner runs")
+    @MainActor
+    func goneDatabaseKeepsSidecarsWhileOwnerRuns() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = dir.appendingPathComponent("x.sqlite")
+        let wal = try Self.write(dir, "x.sqlite-wal")
+        var item = Self.item(db)
+        item.ownerProcesses = ["owner"]
+
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: dir,
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            isAppRunning: { $0 == "owner" }
+        )
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
+
+        #expect(result.itemResults.first?.succeeded == false)
+        #expect(FileManager.default.fileExists(atPath: wal.path))
+    }
 }

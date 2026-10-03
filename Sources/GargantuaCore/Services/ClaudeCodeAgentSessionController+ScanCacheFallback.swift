@@ -104,8 +104,9 @@ extension ClaudeCodeAgentSessionController {
     /// back to the `ScanResult` shape `CleanupEngine` and `DeepCleanView`
     /// consume. Lossy on `size` (round-trips through the formatted display
     /// string), `tags` (not on wire), `regenerates` and `regenerateCommand`
-    /// (not on wire). `scanTimeResolvedParent` round-trips so `SymlinkSwapGuard`
-    /// still recognizes a symlinked scan root under agent-proposed cleanup.
+    /// (not on wire). `ownerProcesses` and `blockedByApp` round-trip so the
+    /// clean-time owner check still runs. `scanTimeResolvedParent` round-trips so
+    /// `SymlinkSwapGuard` still recognizes a symlinked scan root under agent-proposed cleanup.
     /// Returns nil when the safety raw value is unknown.
     static func scanResult(from item: MCPScanItem) -> ScanResult? {
         guard let safety = SafetyLevel(rawValue: item.safety) else { return nil }
@@ -120,6 +121,8 @@ extension ClaudeCodeAgentSessionController {
             source: SourceAttribution(name: item.source),
             lastAccessed: item.lastAccessed,
             category: item.category,
+            blockedByApp: item.blockedByApp.map { BlockedApp(bundleID: $0.bundleID, name: $0.name) },
+            ownerProcesses: item.ownerProcesses,
             scanTimeResolvedParent: item.scanTimeResolvedParent
         )
     }

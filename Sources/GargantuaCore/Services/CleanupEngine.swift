@@ -243,16 +243,7 @@ public final class CleanupEngine: Sendable {
                 error: "Skipped \(protectedRoot): \(url.path)"
             )
         }
-        let owners = (item.ownerProcesses ?? []) + [item.blockedByApp?.bundleID].compactMap { $0 }
-        if owners.contains(where: isAppRunning) {
-            let name = item.blockedByApp?.name ?? item.source.name
-            return CleanupItemResult(
-                item: item,
-                succeeded: false,
-                error: "Skipped while \(name) is running. Quit it, then clean again."
-            )
-        }
-        return nil
+        return ownerRunningSkip(item: item)
     }
 
     /// The helper moves only `item.path`; a database moved without its sidecars
@@ -365,6 +356,10 @@ public final class CleanupEngine: Sendable {
             return await pruneHuggingFaceRevisions(item: item, method: method)
         }
 
+        if let stale = await removeStaleSidecars(of: url, item: item, method: method) {
+            return stale
+        }
+
         // Already gone. Apps like browsers wipe and recreate their cache on quit,
         // and a path can vanish between scan and clean, so the directory the scan
         // recorded may no longer exist. The user wanted it gone and it is — count
@@ -404,9 +399,7 @@ public final class CleanupEngine: Sendable {
 
         let result: CleanupItemResult
         switch method {
-        case .trash:
-            result = await removeWithSQLiteSidecars(url: url, item: item, method: method)
-        case .delete:
+        case .trash, .delete:
             result = await removeWithSQLiteSidecars(url: url, item: item, method: method)
         case .toolNative:
             return CleanupItemResult(

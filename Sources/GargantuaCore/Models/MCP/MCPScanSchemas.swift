@@ -74,6 +74,12 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
     /// instead of losing it and refusing every symlink ancestor. `nil` when
     /// the producing scan didn't record one.
     public let scanTimeResolvedParent: String?
+    /// Process names or bundle IDs that must not be running when the item is
+    /// cleaned, carried so the clean-time owner check survives the round trip.
+    /// `nil` when the rule named none.
+    public let ownerProcesses: [String]?
+    /// The running app that blocked the item at scan time, if any.
+    public let blockedByApp: MCPBlockedApp?
 
     /// Creates a scan item row for MCP responses.
     public init(
@@ -87,7 +93,9 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
         source: String,
         lastAccessed: Date? = nil,
         category: String,
-        scanTimeResolvedParent: String? = nil
+        scanTimeResolvedParent: String? = nil,
+        ownerProcesses: [String]? = nil,
+        blockedByApp: MCPBlockedApp? = nil
     ) {
         self.id = id
         self.name = name
@@ -100,12 +108,35 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
         self.lastAccessed = lastAccessed
         self.category = category
         self.scanTimeResolvedParent = scanTimeResolvedParent
+        self.ownerProcesses = ownerProcesses
+        self.blockedByApp = blockedByApp
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, path, size, safety, confidence, explanation, source, category
         case lastAccessed = "last_accessed"
         case scanTimeResolvedParent = "scan_time_resolved_parent"
+        case ownerProcesses = "owner_processes"
+        case blockedByApp = "blocked_by_app"
+    }
+}
+
+/// The app blocking a scan item, as surfaced over MCP.
+public struct MCPBlockedApp: Codable, Sendable, Equatable {
+    /// Bundle identifier of the blocking app.
+    public let bundleID: String
+    /// Friendly name of the blocking app.
+    public let name: String
+
+    /// Creates a blocked-app descriptor.
+    public init(bundleID: String, name: String) {
+        self.bundleID = bundleID
+        self.name = name
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case bundleID = "bundle_id"
     }
 }
 

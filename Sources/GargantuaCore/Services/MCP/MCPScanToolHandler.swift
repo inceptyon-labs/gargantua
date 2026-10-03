@@ -213,7 +213,9 @@ public struct MCPScanToolHandler: Sendable {
                 source: result.source.name,
                 lastAccessed: result.lastAccessed,
                 category: result.category,
-                scanTimeResolvedParent: result.scanTimeResolvedParent
+                scanTimeResolvedParent: result.scanTimeResolvedParent,
+                ownerProcesses: result.ownerProcesses,
+                blockedByApp: result.blockedByApp.map { MCPBlockedApp(bundleID: $0.bundleID, name: $0.name) }
             )
         }
 

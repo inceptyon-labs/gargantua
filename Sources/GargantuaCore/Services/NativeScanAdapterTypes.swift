@@ -15,6 +15,13 @@ public struct DefaultRunningProcessChecker: RunningProcessChecking {
         let needle = identifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return false }
 
+        // Queries LaunchServices directly; `runningApplications` below only
+        // refreshes while the main run loop runs, which the MCP server's
+        // `dispatchMain()` doesn't guarantee.
+        if !NSRunningApplication.runningApplications(withBundleIdentifier: identifier.trimmingCharacters(in: .whitespacesAndNewlines)).isEmpty {
+            return true
+        }
+
         let appMatch = NSWorkspace.shared.runningApplications.contains { app in
             let bundleID = app.bundleIdentifier?.lowercased()
             let localizedName = app.localizedName?.lowercased()
@@ -29,7 +36,8 @@ public struct DefaultRunningProcessChecker: RunningProcessChecking {
         }
         if appMatch { return true }
 
-        // Identifiers with a dot are bundle IDs, never executable names.
+        // Identifiers with a dot are treated as bundle IDs and skip the process
+        // walk, so a dot-named executable such as an XPC service isn't matched here.
         guard !needle.contains(".") else { return false }
 
         // CLI tools such as `codex` never appear in runningApplications, so

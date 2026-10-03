@@ -67,4 +67,25 @@ struct CleanupEngineOwnerProcessTests {
 
         #expect(await terminator.terminateRunningApplications(bundleIdentifier: probe.name, timeout: 1) == true)
     }
+
+    @Test("The production engine skips an item while a command-line owner runs, removes it after")
+    @MainActor
+    func productionEngineSeesCommandLineOwner() async throws {
+        let probe = try ProbeProcess()
+        defer { probe.stop() }
+        let (dir, file) = try makeTempFile()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var item = makeItem(path: file.path)
+        item.ownerProcesses = [probe.name]
+
+        let skipped = await CleanupEngine().clean([item], method: .delete, authorization: .unchecked(.mcpClean))
+        #expect(skipped.itemResults.first?.succeeded == false)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+
+        probe.stop()
+
+        let removed = await CleanupEngine().clean([item], method: .delete, authorization: .unchecked(.mcpClean))
+        #expect(removed.itemResults.first?.succeeded == true)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
 }
