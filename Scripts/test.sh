@@ -2,8 +2,8 @@
 # test.sh — `swift test` wrapper that stages mlx.metallib alongside the test
 # binary so MLX-touching tests can actually run.
 #
-# Why: `swift test` launches the xctest binary from inside
-# `.build/<arch>/debug/GargantuaPackageTests.xctest/Contents/MacOS/`, and
+# Why: `swift test` launches the xctest binary from inside the test
+# bundle's `Contents/MacOS/` directory, and
 # mlx-swift's runtime looks for a colocated `mlx.metallib` at that path
 # first. Without it, any test that forces MLX's Metal device init fails with
 # "Failed to load the default metallib" (see build-metallib.sh header).
@@ -61,14 +61,32 @@ log "Building tests ($CONFIG) to locate test binary directory..."
 swift build -c "$CONFIG" --build-tests >/dev/null
 
 BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
-TEST_BUNDLE_MACOS="$BIN_DIR/GargantuaPackageTests.xctest/Contents/MacOS"
 
-if [ ! -d "$TEST_BUNDLE_MACOS" ]; then
-    die "expected test bundle path missing: $TEST_BUNDLE_MACOS
+# The native build system writes one GargantuaPackageTests.xctest; the
+# swiftbuild system (.build/out/Products/<Config>/) writes one bundle per test
+# target. MLX doesn't find the mlx-swift_Cmlx.bundle swiftbuild embeds, so
+# stage the metallib into every bundle found. swiftbuild also codesigns the
+# bundles, and an unsigned file in Contents/MacOS makes the next build's
+# codesign fail, so each staged copy is ad-hoc signed.
+TEST_BUNDLES=()
+if [ -d "$BIN_DIR/GargantuaPackageTests.xctest/Contents/MacOS" ]; then
+    TEST_BUNDLES+=("$BIN_DIR/GargantuaPackageTests.xctest/Contents/MacOS")
+else
+    for bundle in "$BIN_DIR"/*Tests.xctest/Contents/MacOS; do
+        [ -d "$bundle" ] && TEST_BUNDLES+=("$bundle")
+    done
+fi
+
+if [ ${#TEST_BUNDLES[@]} -eq 0 ]; then
+    die "no test bundle found under $BIN_DIR
      Did --build-tests succeed?"
 fi
 
-"$_SCRIPT_DIR/build-metallib.sh" --output "$TEST_BUNDLE_MACOS/mlx.metallib"
+"$_SCRIPT_DIR/build-metallib.sh" --output "${TEST_BUNDLES[0]}/mlx.metallib"
+for bundle in "${TEST_BUNDLES[@]}"; do
+    [ "$bundle" = "${TEST_BUNDLES[0]}" ] || cp "${TEST_BUNDLES[0]}/mlx.metallib" "$bundle/mlx.metallib"
+    codesign --force --sign - "$bundle/mlx.metallib" 2>/dev/null
+done
 
 log "Running swift test ${SWIFT_TEST_ARGS[*]}..."
 exec swift test "${SWIFT_TEST_ARGS[@]}"
