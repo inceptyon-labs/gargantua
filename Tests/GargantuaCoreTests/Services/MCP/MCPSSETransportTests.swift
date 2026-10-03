@@ -258,7 +258,7 @@ struct MCPSSETransportTests {
 
     private func makeDefaults() throws -> (UserDefaults, String) {
         let suiteName = "GargantuaCoreTests.MCPSSETransport.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = TestDefaults.suite(suiteName)
         return (defaults, suiteName)
     }
 }

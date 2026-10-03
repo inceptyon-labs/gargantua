@@ -9,7 +9,7 @@ struct LocalAIServiceEngineSelectionTests {
     @Test("AIEnginePreference defaults to Template and persists MLX")
     func enginePreferenceStorage() throws {
         let suiteName = "gargantua-ai-engine-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = TestDefaults.suite(suiteName)
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         #expect(AIEnginePreference.stored(in: defaults) == .template)

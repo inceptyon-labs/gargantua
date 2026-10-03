@@ -56,7 +56,7 @@ struct AppUpdateSettingsTests {
 
     private func makeDefaults() throws -> UserDefaults {
         let suite = "GargantuaCoreTests.AppUpdateSettings.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = TestDefaults.suite(suite)
         defaults.removePersistentDomain(forName: suite)
         return defaults
     }

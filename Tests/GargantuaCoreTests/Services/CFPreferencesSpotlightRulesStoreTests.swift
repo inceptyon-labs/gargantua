@@ -8,7 +8,9 @@ import Testing
 @Suite("CFPreferencesSpotlightRulesStore")
 struct CFPreferencesSpotlightRulesStoreTests {
     private func makeDomain() -> String {
-        "com.inceptyon.gargantua.tests.spotlight-\(UUID().uuidString)"
+        let domain = "com.inceptyon.gargantua.tests.spotlight-\(UUID().uuidString)"
+        TestDefaults.register(domain)
+        return domain
     }
 
     private func seed(_ domain: String, _ values: [String]) {

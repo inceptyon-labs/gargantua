@@ -322,6 +322,7 @@ struct CloudAITests {
     /// test still holds it.
     private func makeSuite() -> String {
         let suite = "gargantua-cloud-ai-\(UUID().uuidString)"
+        TestDefaults.register(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return suite
     }

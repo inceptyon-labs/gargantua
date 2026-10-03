@@ -9,7 +9,7 @@ import Testing
 struct ClaudeCodeAgentTests {
     func makeDefaults() throws -> UserDefaults {
         let suite = "gargantua-claude-code-agent-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = TestDefaults.suite(suite)
         defaults.removePersistentDomain(forName: suite)
         return defaults
     }

@@ -34,6 +34,6 @@ enum OrganizerProposerTestSupport {
     /// A throwaway, isolated `UserDefaults` suite so the configuration store
     /// never touches `.standard`.
     static func makeDefaults() -> UserDefaults {
-        UserDefaults(suiteName: "org-proposer-test-\(UUID().uuidString)")!
+        TestDefaults.suite("org-proposer-test-\(UUID().uuidString)")
     }
 }

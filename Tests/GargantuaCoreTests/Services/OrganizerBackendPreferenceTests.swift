@@ -7,7 +7,7 @@ struct OrganizerBackendPreferenceTests {
 
     private static func makeDefaults() -> UserDefaults {
         let suiteName = "organizer-pref-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = TestDefaults.suite(suiteName)
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
     }

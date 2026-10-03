@@ -20,7 +20,7 @@ struct MaintenanceEngineAuditHookTests {
 
     private static func makeDefaults() -> UserDefaults {
         let suiteName = "maint-engine-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = TestDefaults.suite(suiteName)
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
     }
