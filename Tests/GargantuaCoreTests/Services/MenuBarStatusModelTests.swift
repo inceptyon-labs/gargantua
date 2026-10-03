@@ -121,6 +121,28 @@ struct MenuBarStatusModelTests {
         #expect(try persistence.fetchSettings().lastScanDate == runDate)
     }
 
+    @Test("quick scan leaves excluded paths out of the totals")
+    @MainActor
+    func quickScanAppliesExclusions() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        try persistence.addExclusionEntry(pattern: "/tmp/excluded")
+        let model = MenuBarStatusModel(
+            scanner: StubMenuBarStatusScanner(results: [
+                makeResult(id: "cache", size: 10_000, safety: .safe, category: "system_cache"),
+                makeResult(id: "excluded", size: 40_000, safety: .safe, category: "system_cache"),
+            ]),
+            makePersistence: { persistence },
+            defaults: try makeDefaults(),
+            now: { Date(timeIntervalSince1970: 8_000) }
+        )
+
+        await model.runQuickScan()
+
+        #expect(model.snapshot.reclaimableBytes == 10_000)
+        #expect(model.snapshot.pendingItemCount == 1)
+    }
+
     @Test("snoozing alerts hides pending count until refresh")
     @MainActor
     func snoozeAlerts() async throws {

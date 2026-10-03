@@ -116,8 +116,7 @@ private let scanRunner: MCPScanToolHandler.Scanner = { profile in
     let pathExclusions = loadPathExclusionPatterns()
     let adapter = try ProfileScanAdapterFactory.make(
         profile: profile,
-        staleVersionPinnedPaths: pathExclusions,
-        aiModelExcludedPaths: pathExclusions
+        pathExclusions: pathExclusions
     )
     return try runBlocking {
         try await adapter.scan(progress: nil)

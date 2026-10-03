@@ -329,7 +329,7 @@ extension AIModelsView {
                     ?? ProfileScanAdapterFactory.make(
                         profile: profile,
                         scanRoots: scanRoots,
-                        aiModelExcludedPaths: aiModelExcludedPaths
+                        pathExclusions: aiModelExcludedPaths
                     )
                 let results = try await adapter.scan(progress: session.scanProgress, observer: session.pathStream)
 

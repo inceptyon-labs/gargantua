@@ -61,10 +61,11 @@ public final class ScheduledScanRunner {
                 fallback: .light
             )
             let roots = ScanRootSettings.resolvedURLs(from: settings.scanRoots)
-            let results = try await scanner.scan(
+            let exclusions = try PathExclusionMatcher(patterns: persistence.fetchExclusionEntries().map(\.pattern))
+            let results = try await exclusions.filter(scanner.scan(
                 profile: profile,
                 scanRoots: roots.isEmpty ? nil : roots
-            )
+            ))
             let actionable = results.filter(\.safety.isActionable)
             let reclaimableBytes = actionable.reduce(Int64(0)) { $0 + $1.size }
             let summary = ScheduledScanSummary(

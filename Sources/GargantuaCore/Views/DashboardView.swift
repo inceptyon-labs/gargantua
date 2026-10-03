@@ -259,8 +259,7 @@ public struct DashboardView: View {
                 let pathExclusions = staleVersionPinnedPaths()
                 let adapter = try ProfileScanAdapterFactory.make(
                     profile: profile,
-                    staleVersionPinnedPaths: pathExclusions,
-                    aiModelExcludedPaths: pathExclusions
+                    pathExclusions: pathExclusions
                 )
                 let results = try await adapter.scan(progress: progress)
                 session.alerts = AlertItem.aggregate(from: results)

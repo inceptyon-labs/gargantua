@@ -152,7 +152,8 @@ public final class MenuBarStatusModel: ObservableObject {
             let scanRoots = ScanRootSettings.resolvedURLs(from: settings.scanRoots)
             let rootsOverride = scanRoots.isEmpty ? nil : scanRoots
             let runDate = now()
-            let results = try await scanner.scan(profile: .light, scanRoots: rootsOverride)
+            let exclusions = try PathExclusionMatcher(patterns: persistence.fetchExclusionEntries().map(\.pattern))
+            let results = try await exclusions.filter(scanner.scan(profile: .light, scanRoots: rootsOverride))
             let alerts = AlertItem.aggregate(from: results, referenceDate: runDate)
             let itemCount = alerts.reduce(0) { $0 + $1.itemCount }
             let reclaimableBytes = alerts.reduce(Int64(0)) { $0 + $1.reclaimableSize }

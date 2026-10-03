@@ -295,7 +295,7 @@ extension DevArtifactScanView {
                     ?? ProfileScanAdapterFactory.make(
                         profile: profile,
                         scanRoots: scanRoots,
-                        staleVersionPinnedPaths: staleVersionPinnedPaths
+                        pathExclusions: staleVersionPinnedPaths
                     )
                 let results = try await adapter.scan(
                     progress: session.scanProgress,

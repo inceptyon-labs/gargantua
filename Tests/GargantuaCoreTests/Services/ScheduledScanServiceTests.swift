@@ -201,6 +201,37 @@ struct ScheduledScanServiceTests {
         #expect(notifier.delivered == [summary])
     }
 
+    @Test("runner leaves excluded paths out of the summary")
+    @MainActor
+    func runnerAppliesExclusions() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        try persistence.updateSettings { settings in
+            settings.autoScanEnabled = true
+            settings.scheduledScanIntervalRaw = "daily"
+            settings.scheduledScanLastRunDate = Date(timeIntervalSince1970: 0)
+        }
+        try persistence.addExclusionEntry(pattern: "/tmp/excluded")
+        let runner = ScheduledScanRunner(
+            persistence: persistence,
+            scanner: StubScheduledScanScanner(results: [
+                makeResult(id: "kept", size: 10_000, safety: .safe),
+                makeResult(id: "excluded", size: 50_000, safety: .safe),
+            ]),
+            notifier: SpyScheduledScanNotifier(),
+            powerStateProvider: FixedScheduledScanPowerStateProvider(isOnBattery: false),
+            now: { Date(timeIntervalSince1970: 200_000) }
+        )
+
+        guard case .completed(let summary) = await runner.runIfDue() else {
+            Issue.record("expected completed result")
+            return
+        }
+
+        #expect(summary.itemCount == 1)
+        #expect(summary.reclaimableBytes == 10_000)
+    }
+
     @Test("runner skips due scan on battery when configured")
     @MainActor
     func runnerSkipsBattery() async throws {

@@ -11,10 +11,16 @@ import Foundation
 public struct CompositeScanAdapter: ScanAdapter {
     private let primary: any ScanAdapter
     private let bestEffort: [any ScanAdapter]
+    private let exclusions: PathExclusionMatcher
 
-    public init(primary: any ScanAdapter, bestEffort: [any ScanAdapter] = []) {
+    public init(
+        primary: any ScanAdapter,
+        bestEffort: [any ScanAdapter] = [],
+        exclusions: PathExclusionMatcher = .none
+    ) {
         self.primary = primary
         self.bestEffort = bestEffort
+        self.exclusions = exclusions
     }
 
     public func scan(progress: ScanProgress?) async throws -> [ScanResult] {
@@ -42,6 +48,6 @@ public struct CompositeScanAdapter: ScanAdapter {
                 // executor issue can't bring down the whole scan.
             }
         }
-        return combined
+        return exclusions.filter(combined)
     }
 }
