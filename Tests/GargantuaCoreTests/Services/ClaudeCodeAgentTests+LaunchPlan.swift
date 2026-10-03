@@ -32,6 +32,9 @@ extension ClaudeCodeAgentTests {
 
         #expect(plan.executableURL == executable)
         #expect(plan.arguments.contains("--strict-mcp-config"))
+        // Built-in tools are disabled, so only the Gargantua MCP tools exist.
+        let toolsIndex = try #require(plan.arguments.firstIndex(of: "--tools"))
+        #expect(plan.arguments[toolsIndex + 1].isEmpty)
         #expect(plan.arguments.contains("--output-format"))
         #expect(plan.arguments.contains("stream-json"))
         #expect(plan.arguments.contains("--max-turns"))

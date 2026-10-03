@@ -106,6 +106,13 @@ public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
             "--verbose",
             "--max-turns",
             "\(configuration.maxTurns)",
+            // No built-in tools (Bash, Read, WebFetch, …): the agent works only
+            // through the Gargantua MCP tools above. `--allowedTools` only
+            // pre-approves tools; without this, built-ins stay available under
+            // whatever the user's own Claude Code settings allow, and a
+            // scanned file name could steer the agent into using them.
+            "--tools",
+            "",
             "--allowedTools",
             allowedTools.joined(separator: ","),
         ]
