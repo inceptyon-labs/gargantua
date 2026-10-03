@@ -328,9 +328,14 @@ public struct DashboardView: View {
     /// running-app bundles, then drops `/System/` paths. Single directory
     /// enumeration with `skipsPackageDescendants` — fast enough for the
     /// dashboard's first paint.
+    /// Runs detached: a static on a View is main-actor isolated, and the
+    /// enumeration walks four app folders on every Dashboard visit.
     private static func countInstalledApps() async -> Int {
-        let urls = DefaultAppBundleEnumerator().enumerateBundles()
-        return urls.filter { !$0.path.hasPrefix("/System/") }.count
+        await Task.detached(priority: .utility) {
+            DefaultAppBundleEnumerator().enumerateBundles()
+                .filter { !$0.path.hasPrefix("/System/") }
+                .count
+        }.value
     }
 
     private func acknowledgeScheduledScanSummary() {
