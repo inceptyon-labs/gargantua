@@ -98,3 +98,56 @@ extension UninstallExecutorTests {
         #expect(result.privilegedItems.map(\.path) == [app.bundlePath])
     }
 }
+
+/// Cancels the running task while removing the first item, like Halt Cleanup.
+@MainActor
+final class CancellingUninstallRemover: UninstallRemoving {
+    private(set) var removedPaths: [String] = []
+
+    func moveToTrash(
+        _ item: ScanResult,
+        authorization _: DestructiveActionAuthorization
+    ) async -> CleanupItemResult {
+        removedPaths.append(item.path)
+        withUnsafeCurrentTask { $0?.cancel() }
+        return CleanupItemResult(item: item, succeeded: true)
+    }
+}
+
+extension UninstallExecutorTests {
+    @Test("Halting stops before the remaining items, Spotlight rules, and admin-helper removals")
+    @MainActor
+    func haltSkipsRemainingPhases() async throws {
+        let remover = CancellingUninstallRemover()
+        let helper = SpyPrivilegedUninstallHelper()
+        let spotlight = SpySpotlightRuleRemover()
+        let first = Self.makeRemnant(id: "a", category: .caches, path: "/Users/test/Library/Caches/demo-a", safety: .review)
+        let second = Self.makeRemnant(id: "b", category: .caches, path: "/Users/test/Library/Caches/demo-b", safety: .review)
+        let rule = Self.makeRemnant(id: "rule", category: .spotlightRules, path: "com.example.Demo", safety: .review)
+        let daemon = Self.makeRemnant(
+            id: "daemon",
+            category: .launchDaemons,
+            path: "/Library/LaunchDaemons/demo.plist",
+            safety: .review
+        )
+        let executor = UninstallExecutor(
+            remover: remover,
+            privilegedHelper: helper,
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: SpyUninstallAuditRecorder(),
+            spotlightRuleRemover: spotlight
+        )
+
+        _ = try await Task { @MainActor in
+            try await executor.execute(
+                Self.makePlan(remnants: [first, second, rule, daemon]),
+                options: UninstallExecutionOptions(confirmationMethod: .fullModal, authorization: .authorizedForTesting),
+                authorization: .unchecked(.uninstaller)
+            )
+        }.value
+
+        #expect(remover.removedPaths == [first.path])
+        #expect(spotlight.removed.isEmpty)
+        #expect(helper.removedPaths.isEmpty)
+    }
+}

@@ -241,16 +241,21 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         let ordinary = fileScanItems.filter { !requiresPrivilegedHelper($0) }
         let authorizedHelper = try preflightPrivilegedHelper(for: privileged, options: options)
 
+        // A halt (task cancellation) stops before the next item and skips the
+        // Spotlight and admin-helper phases; what already ran is kept and audited.
         var itemResults: [CleanupItemResult] = []
         for item in ordinary {
+            if Task.isCancelled { break }
             let result = await remover.moveToTrash(item, authorization: authorization)
             emit(result: result, item: item)
             itemResults.append(result)
         }
 
-        itemResults.append(contentsOf: removeSpotlightRules(spotlightRemnants))
+        if !Task.isCancelled {
+            itemResults.append(contentsOf: removeSpotlightRules(spotlightRemnants))
+        }
 
-        if let authorizedHelper {
+        if let authorizedHelper, !Task.isCancelled {
             let request = PrivilegedUninstallRequest(planID: plan.id, scanResults: privileged)
             let privilegedResults = await authorizedHelper.helper.movePrivilegedItemsToTrash(
                 request,
