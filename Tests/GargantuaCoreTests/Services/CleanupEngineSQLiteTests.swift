@@ -127,6 +127,30 @@ struct CleanupEngineSQLiteTests {
         #expect(FileManager.default.fileExists(atPath: wal.path))
     }
 
+    @Test("a rule listing a folder's children skips sidecars whose database is beside them")
+    func enumeratedChildrenSkipSidecars() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Self.write(dir, "x.db", bytes: 100)
+        try Self.write(dir, "x.db-wal", bytes: 20)
+        try Self.write(dir, "x.db-shm", bytes: 3)
+        try Self.write(dir, "stray.db-wal", bytes: 7)
+        try Self.write(dir, "note.txt", bytes: 5)
+        let rule = ScanRule(
+            id: "db_rule", name: "DB", paths: [dir.path], pattern: "*", safety: .safe,
+            confidence: 90, explanation: "t", source: SourceAttribution(name: "Test"),
+            regenerates: true, category: "test"
+        )
+        let results = try await NativeScanAdapter(
+            rules: [rule],
+            profile: CleanupProfile(id: "p", name: "P", description: "P", categories: ["test"])
+        ).scan()
+        let sizes = Dictionary(
+            uniqueKeysWithValues: results.map { (URL(fileURLWithPath: $0.path).lastPathComponent, $0.size) }
+        )
+        #expect(sizes == ["x.db": 123, "stray.db-wal": 7, "note.txt": 5])
+    }
+
     @Test("scan size sums the database and its sidecars")
     func scanSize() throws {
         let dir = try Self.makeDir()
@@ -205,6 +229,42 @@ struct CleanupEngineSQLiteTests {
         #expect(result.itemResults.first?.bytesFreed == 0)
         #expect(!FileManager.default.fileExists(atPath: wal.path))
         #expect(!FileManager.default.fileExists(atPath: shm.path))
+    }
+
+    @Test("A stale sidecar that can't be removed is named in the error")
+    @MainActor
+    func staleSidecarFailureNamesFile() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = dir.appendingPathComponent("x.sqlite")
+        try Self.write(dir, "x.sqlite-wal")
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: dir,
+            trashMover: SelectiveTrashMover(failing: ["x.sqlite-wal"]),
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            isAppRunning: { _ in false }
+        )
+        let result = await engine.clean([Self.item(db)], method: .trash, authorization: .unchecked(.deepClean))
+        let outcome = try #require(result.itemResults.first)
+        #expect(!outcome.succeeded)
+        #expect(outcome.error?.contains("x.sqlite-wal") == true)
+        #expect(outcome.error?.contains("already gone") == true)
+    }
+
+    @Test("A folder named like a database is removed without touching its look-alike sidecar")
+    @MainActor
+    func directoryNamedLikeDatabase() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let folder = dir.appendingPathComponent("cache.db", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Self.write(folder, "inner")
+        let wal = try Self.write(dir, "cache.db-wal")
+        let engine = CleanupEngine(homeDirectoryForTesting: dir)
+        let result = await engine.clean([Self.item(folder)], method: .delete, authorization: .unchecked(.deepClean))
+        #expect(result.allSucceeded)
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+        #expect(FileManager.default.fileExists(atPath: wal.path))
     }
 
     @Test("An already-gone database keeps its sidecars while an owner runs")

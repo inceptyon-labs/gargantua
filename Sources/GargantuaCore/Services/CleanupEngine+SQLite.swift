@@ -28,7 +28,14 @@ extension CleanupEngine {
             let removed = method == .trash
                 ? await recycleSingle(url: sidecarURL, item: item)
                 : await deleteSingle(url: sidecarURL, item: item)
-            if !removed.succeeded { return removed }
+            if !removed.succeeded {
+                return CleanupItemResult(
+                    item: item,
+                    succeeded: false,
+                    error: "Couldn't remove \(sidecarURL.lastPathComponent): "
+                        + "\(removed.error ?? "unknown error"). The database was already gone."
+                )
+            }
         }
         return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
     }

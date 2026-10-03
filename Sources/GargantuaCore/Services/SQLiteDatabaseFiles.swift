@@ -16,6 +16,17 @@ enum SQLiteDatabaseFiles {
         return suffixes.contains { lowered.hasSuffix($0) }
     }
 
+    /// True when `path` is a sidecar whose database exists beside it as a regular
+    /// file. That database's item already includes the sidecar's bytes.
+    static func isSidecarOfExistingDatabase(_ path: String, fileManager: FileManager = .default) -> Bool {
+        guard let suffix = sidecarSuffixes.first(where: { path.hasSuffix($0) }) else { return false }
+        let databasePath = String(path.dropLast(suffix.count))
+        var isDirectory: ObjCBool = false
+        return isDatabase(databasePath)
+            && fileManager.fileExists(atPath: databasePath, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
+    }
+
     /// The sidecars of the database at `path` that exist right now.
     static func existingSidecars(of path: String, fileManager: FileManager = .default) -> [String] {
         sidecarSuffixes.map { path + $0 }.filter { fileManager.fileExists(atPath: $0) }

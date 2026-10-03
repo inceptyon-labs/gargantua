@@ -26,4 +26,18 @@ struct SQLiteDatabaseFilesTests {
         try Data([1]).write(to: URL(fileURLWithPath: db + "-journal"))
         #expect(SQLiteDatabaseFiles.existingSidecars(of: db) == [db + "-wal", db + "-journal"])
     }
+
+    @Test("isSidecarOfExistingDatabase needs the database beside the sidecar")
+    func sidecarOfExistingDatabase() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sqlite-sidecar-of-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for name in ["x.db", "x.db-wal", "stray.db-wal", "x.txt", "x.txt-wal"] {
+            try Data([1]).write(to: dir.appendingPathComponent(name))
+        }
+        #expect(SQLiteDatabaseFiles.isSidecarOfExistingDatabase(dir.appendingPathComponent("x.db-wal").path))
+        #expect(!SQLiteDatabaseFiles.isSidecarOfExistingDatabase(dir.appendingPathComponent("stray.db-wal").path))
+        #expect(!SQLiteDatabaseFiles.isSidecarOfExistingDatabase(dir.appendingPathComponent("x.txt-wal").path))
+    }
 }

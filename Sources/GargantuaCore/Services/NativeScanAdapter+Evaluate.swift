@@ -232,6 +232,8 @@ extension NativeScanAdapter {
         now: Date = Date()
     ) -> ScanResult? {
         let fileManager = FileManager.default
+        // Listed inside its database's item, not on its own.
+        if SQLiteDatabaseFiles.isSidecarOfExistingDatabase(path, fileManager: fileManager) { return nil }
         let url = URL(fileURLWithPath: path)
         let values = try? url.resourceValues(forKeys: [
             .isDirectoryKey,
