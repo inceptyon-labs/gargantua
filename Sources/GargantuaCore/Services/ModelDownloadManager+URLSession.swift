@@ -24,6 +24,11 @@ extension ModelDownloadManager {
         }
 
         MainActor.assumeIsolated {
+            // A task from a cancelled run's session can still finish.
+            guard session === self.currentSession else {
+                try? FileManager.default.removeItem(at: scratch)
+                return
+            }
             self.handleDownloadedFile(at: scratch)
         }
     }
@@ -36,6 +41,7 @@ extension ModelDownloadManager {
         totalBytesExpectedToWrite: Int64
     ) {
         MainActor.assumeIsolated {
+            guard session === self.currentSession else { return }
             self.handleProgress(currentFileBytes: totalBytesWritten)
         }
     }
@@ -53,6 +59,7 @@ extension ModelDownloadManager {
         }
 
         MainActor.assumeIsolated {
+            guard session === self.currentSession else { return }
             self.failDownload(error.localizedDescription)
         }
     }
@@ -83,6 +90,7 @@ extension ModelDownloadManager {
         }
         let file = modelInfo.files[currentFileIndex]
         let indexAtDispatch = currentFileIndex
+        let generation = downloadGeneration
 
         // Hashing a ~700 MB safetensors on the main actor freezes the UI
         // and blocks cancellation for seconds. Offload to a detached task;
@@ -93,6 +101,7 @@ extension ModelDownloadManager {
             }
             await self?.completeFileVerification(
                 scratch: scratch,
+                generation: generation,
                 dispatchedIndex: indexAtDispatch,
                 expectedFile: file,
                 hashResult: result
@@ -100,17 +109,19 @@ extension ModelDownloadManager {
         }
     }
 
-    private func completeFileVerification(
+    func completeFileVerification(
         scratch: URL,
+        generation: Int,
         dispatchedIndex: Int,
         expectedFile: ModelFile,
         hashResult: Result<String, Error>
     ) {
         defer { try? FileManager.default.removeItem(at: scratch) }
 
-        // Cancel, or a new download run started while we were hashing —
-        // drop this work on the floor instead of mutating state.
-        guard !didCancel, dispatchedIndex == currentFileIndex else { return }
+        // Cancel, or a new download run started while we were hashing (even
+        // one that has reached the same file index) — drop this work on the
+        // floor instead of mutating state.
+        guard !didCancel, generation == downloadGeneration, dispatchedIndex == currentFileIndex else { return }
 
         let actualSha: String
         switch hashResult {

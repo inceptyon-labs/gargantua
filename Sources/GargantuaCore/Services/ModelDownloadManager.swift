@@ -21,11 +21,18 @@ public final class ModelDownloadManager: NSObject, ObservableObject, URLSessionD
     }()
 
     private var session: URLSession?
+    /// The running download's session; delegate callbacks from any other
+    /// (a cancelled run's) are ignored.
+    var currentSession: URLSession? { session }
     private var activeTask: URLSessionDownloadTask?
     // Internal so URLSession peer file can read/mutate them.
     var currentFileIndex: Int = 0
     var completedBytes: Int64 = 0
     var didCancel: Bool = false
+    /// Bumped by every start and cancel. Work dispatched by one run (a hash
+    /// still running after Cancel, then Download again) checks it before
+    /// touching state, so it can't join the next run at the same file index.
+    var downloadGeneration = 0
 
     /// Staged directory for this model.
     public nonisolated var modelDirectory: URL {
@@ -65,6 +72,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject, URLSessionD
         createDirectoriesIfNeeded()
 
         didCancel = false
+        downloadGeneration &+= 1
         currentFileIndex = 0
         completedBytes = 0
         state = .downloading(progress: 0, bytesReceived: 0)
@@ -77,6 +85,7 @@ public final class ModelDownloadManager: NSObject, ObservableObject, URLSessionD
     /// Cancel an in-progress download and clean up the staged directory.
     public func cancelDownload() {
         didCancel = true
+        downloadGeneration &+= 1
         activeTask?.cancel()
         activeTask = nil
         session?.invalidateAndCancel()

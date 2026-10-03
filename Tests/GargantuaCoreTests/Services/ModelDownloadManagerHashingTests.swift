@@ -22,6 +22,31 @@ struct ModelDownloadManagerHashingTests {
 
     // MARK: - SHA-256 helper
 
+    @Test("A hash from a cancelled run is dropped even when the new run is at the same file")
+    func staleVerificationDoesNotJoinNewRun() throws {
+        // A unique id so nothing here can touch a real downloaded model.
+        let file = ModelFile(name: "weights", url: URL(string: "https://example.com/w")!, sha256: "aa", size: 10)
+        let manager = ModelDownloadManager(modelInfo: ModelInfo(id: "stale-\(UUID().uuidString)", name: "T", files: [file]))
+        manager._setStateForTesting(.downloading(progress: 0, bytesReceived: 0))
+        let staleGeneration = manager.downloadGeneration
+        manager.downloadGeneration += 2 // Cancel, then Download again; back at file 0.
+        let scratch = try writeTempFile(bytes: Data("x".utf8))
+
+        // A mismatched hash: if the stale result were applied it would fail
+        // the new run rather than quietly advance it.
+        manager.completeFileVerification(
+            scratch: scratch,
+            generation: staleGeneration,
+            dispatchedIndex: 0,
+            expectedFile: file,
+            hashResult: .success("bb")
+        )
+
+        #expect(manager.state == .downloading(progress: 0, bytesReceived: 0))
+        #expect(manager.currentFileIndex == 0)
+        #expect(!FileManager.default.fileExists(atPath: scratch.path))
+    }
+
     @Test("sha256Hex matches known vectors")
     func sha256HexKnownVectors() throws {
         // Empty string
