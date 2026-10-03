@@ -151,8 +151,13 @@ public struct FileHealthView: View {
 
     // MARK: - Keyboard actions
 
+    /// Safe findings visible in the current tab under the path filter. ⌘A
+    /// and ⌘I used to act on every tab's safe findings, out of sight.
     private var safeSelectableIDs: [String] {
-        results.filter { $0.safety == .safe }.map(\.id)
+        guard let tab = selectedTab else { return [] }
+        return FileHealthClusterList.filter(tab.findings, by: filterText)
+            .filter { $0.safety == .safe }
+            .map(\.id)
     }
 
     /// Verbs File Health publishes to the menu bar. Expand/collapse don't apply
@@ -161,10 +166,10 @@ public struct FileHealthView: View {
     /// to it while typing.
     private var keyboardActions: ResultsKeyboardActions {
         ResultsKeyboardActions(
-            selectAll: { session.selectedResultIDs = Set(safeSelectableIDs) },
+            selectAll: { session.selectedResultIDs.formUnion(safeSelectableIDs) },
             deselectAll: session.selectedResultIDs.isEmpty ? nil : { session.selectedResultIDs.removeAll() },
             invertSelection: {
-                session.selectedResultIDs = Set(safeSelectableIDs).subtracting(session.selectedResultIDs)
+                session.selectedResultIDs.formSymmetricDifference(safeSelectableIDs)
             },
             moveToTrash: (onSendToTrash != nil && !session.selectedResultIDs.isEmpty)
                 ? { onSendToTrash?() } : nil,

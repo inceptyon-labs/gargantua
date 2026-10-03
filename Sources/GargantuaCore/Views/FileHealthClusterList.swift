@@ -53,10 +53,16 @@ struct FileHealthClusterList: View {
     }
 
     private var filteredFindings: [ScanResult] {
+        Self.filter(tab.findings, by: filterText)
+    }
+
+    /// The findings the path filter leaves visible. Shared with the
+    /// keyboard select-all/invert so they act on what's on screen.
+    static func filter(_ findings: [ScanResult], by filterText: String) -> [ScanResult] {
         let needle = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return tab.findings }
+        guard !needle.isEmpty else { return findings }
         let expanded = FileHealthView.expandHomePrefix(needle)
-        return tab.findings.filter { $0.path.localizedCaseInsensitiveContains(expanded) }
+        return findings.filter { $0.path.localizedCaseInsensitiveContains(expanded) }
     }
 
     private func tabHeader(filteredFindings: [ScanResult]) -> some View {
