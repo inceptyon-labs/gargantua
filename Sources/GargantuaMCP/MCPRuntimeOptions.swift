@@ -26,6 +26,10 @@ struct MCPRuntimeOptions {
     /// Accepts destructive cleans in a process that cannot show the consent
     /// notification. Off by default so the consent gate fails closed.
     var allowsUnattendedClean: Bool = false
+    /// Refuse every non-dry-run `clean`. The Agent Run launches its server
+    /// this way: the agent proposes with dry runs and the app's own review
+    /// runs the cleanup, so its MCP server never needs to delete anything.
+    var proposesOnly: Bool = false
 }
 
 func parseRuntimeOptions(log: (String) -> Void) -> MCPRuntimeOptions {
@@ -65,6 +69,8 @@ private func applyValuelessArgument(
         options.transportMode = .both
     case "--allow-unattended-clean":
         options.allowsUnattendedClean = true
+    case "--propose-only":
+        options.proposesOnly = true
     case "--help", "-h":
         printRuntimeHelp()
         exit(0)
@@ -131,6 +137,8 @@ private func printRuntimeHelp() {
                                    consent notification (an unbundled launch such as
                                    `swift run`). Off by default: without it, `clean`
                                    is refused rather than proceeding unprompted.
+      --propose-only               Refuse every `clean` that isn't a dry run. Used by
+                                   Agent Run, whose cleanups the app reviews and runs.
 
     Security:
       GargantuaMCP serves plain HTTP. For network clients, keep --bind localhost

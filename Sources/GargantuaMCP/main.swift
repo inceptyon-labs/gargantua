@@ -261,6 +261,14 @@ private let cleanNotificationService = MCPCleanNotificationFactory.automatic(
 // never reach the cleaner, so previews stay available to unlicensed users —
 // matching the GUI, where scanning is always free.
 private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
+    if runtimeOptions.proposesOnly {
+        let reason = "This Gargantua MCP server only proposes cleanups (dry_run: true); "
+            + "Gargantua reviews and runs them."
+        return CleanupResult(
+            itemResults: items.map { CleanupItemResult(item: $0, succeeded: false, error: reason) },
+            cleanupMethod: method
+        )
+    }
     let authorization: DestructiveActionAuthorization
     switch try runBlocking({ await LicenseGate.shared.authorize(.mcpClean) }) {
     case .failure:

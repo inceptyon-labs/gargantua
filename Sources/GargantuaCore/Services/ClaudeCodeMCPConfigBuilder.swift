@@ -23,17 +23,20 @@ public enum ClaudeCodeMCPConfigBuilder {
     public static let serverName = "gargantua"
 
     /// Returns the preferred MCP server launch, falling back to `swift run` in dev.
+    /// `--propose-only`: the agent's `clean` calls are pre-approved because
+    /// they're meant as dry-run proposals the app then reviews; the server
+    /// refuses any that would actually delete.
     public static func defaultServerLaunch(fileManager: FileManager = .default) -> ClaudeCodeMCPServerLaunch {
         if let executableDirectory = Bundle.main.executableURL?.deletingLastPathComponent() {
             let bundledMCP = executableDirectory.appendingPathComponent("GargantuaMCP")
             if fileManager.isExecutableFile(atPath: bundledMCP.path) {
-                return ClaudeCodeMCPServerLaunch(command: bundledMCP.path, args: ["--stdio"])
+                return ClaudeCodeMCPServerLaunch(command: bundledMCP.path, args: ["--stdio", "--propose-only"])
             }
         }
 
         return ClaudeCodeMCPServerLaunch(
             command: "swift",
-            args: ["run", "GargantuaMCP", "--", "--stdio"]
+            args: ["run", "GargantuaMCP", "--", "--stdio", "--propose-only"]
         )
     }
 

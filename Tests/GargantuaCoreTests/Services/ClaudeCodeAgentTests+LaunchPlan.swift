@@ -3,6 +3,11 @@ import Testing
 @testable import GargantuaCore
 
 extension ClaudeCodeAgentTests {
+    @Test("The agent's MCP server is launched propose-only")
+    func agentMCPServerIsProposeOnly() {
+        #expect(ClaudeCodeMCPConfigBuilder.defaultServerLaunch().args.contains("--propose-only"))
+    }
+
     @Test("Launch plan uses strict MCP config and includes the dry-run-propose clean tool by default")
     func launchPlanUsesStrictMCPConfigAndIncludesCleanForDryRunPropose() throws {
         let defaults = try makeDefaults()

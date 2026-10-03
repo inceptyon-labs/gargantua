@@ -1,4 +1,5 @@
 import Foundation
+import os
 @preconcurrency import UserNotifications
 
 // PRD §7.4 user-facing guardrail: before an MCP clean touches the disk, the
@@ -32,8 +33,9 @@ public enum MCPCleanDecision: Sendable, Equatable {
 /// thread; `main.swift` moves the stdio transport off-main).
 public protocol MCPCleanNotificationService: Sendable {
     /// Post the notification and block until the user responds or the grace
-    /// period elapses. Never throws — notification subsystem failures must
-    /// degrade to `.proceed` (notification is a courtesy, not a gate).
+    /// period elapses. Never throws; when the notification can't be shown
+    /// (notifications off, or posting failed) the answer is `.refused`, since
+    /// waiting out a prompt nobody saw isn't consent.
     func request(
         items: [ScanResult],
         method: CleanupMethod,
@@ -149,6 +151,11 @@ public final class UNCleanNotificationService: NSObject,
             center.removePendingNotificationRequests(withIdentifiers: [notificationID])
         }
 
+        if let reason = notificationsUnavailableReason() {
+            log?("clean-notification unavailable: \(reason)")
+            return .refused(reason: reason)
+        }
+
         let content = UNMutableNotificationContent()
         content.title = "Cleanup requested by MCP client"
         content.body = Self.bodyMessage(items: items, method: method, clientID: clientID)
@@ -163,11 +170,21 @@ public final class UNCleanNotificationService: NSObject,
         )
 
         let postSemaphore = DispatchSemaphore(value: 0)
+        let postFailure = OSAllocatedUnfairLock<String?>(initialState: nil)
         center.add(noticeRequest) { [weak self] error in
-            if let error { self?.log?("clean-notification add failed: \(error)") }
+            if let error {
+                self?.log?("clean-notification add failed: \(error)")
+                postFailure.withLock { $0 = error.localizedDescription }
+            }
             postSemaphore.signal()
         }
-        _ = postSemaphore.wait(timeout: .now() + 1)
+        if postSemaphore.wait(timeout: .now() + 1) == .timedOut {
+            postFailure.withLock { $0 = $0 ?? "the notification wasn't posted in time" }
+        }
+        if let failure = postFailure.withLock({ $0 }) {
+            return .refused(reason: "Gargantua couldn't show the clean confirmation (\(failure)), "
+                + "so it won't delete files unprompted.")
+        }
 
         // Grace period for the user to react. After the main wait times out
         // we take one extra pass through the delegate-callback race window:
@@ -186,6 +203,34 @@ public final class UNCleanNotificationService: NSObject,
         let cancelled = pendingByID[notificationID]?.cancelled ?? false
         lock.unlock()
         return cancelled ? .cancelled : .proceed
+    }
+
+    /// Why the consent notification can't be shown right now, or `nil`.
+    /// Notifications that are off (or never allowed) would let the grace
+    /// period run out unseen and the clean proceed. Asking for permission when
+    /// it was never requested lets the next clean be confirmed.
+    private func notificationsUnavailableReason() -> String? {
+        let done = DispatchSemaphore(value: 0)
+        let settings = OSAllocatedUnfairLock<(UNAuthorizationStatus, UNNotificationSetting)?>(initialState: nil)
+        center.getNotificationSettings { current in
+            settings.withLock { $0 = (current.authorizationStatus, current.alertSetting) }
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + 1) == .success,
+              let (status, alerts) = settings.withLock({ $0 }) else {
+            return "Gargantua couldn't check its notification permission, so it won't delete files unprompted."
+        }
+        let turnedOff = "Gargantua's notifications are turned off, so it can't confirm this clean and won't "
+            + "delete files unprompted. Turn them on in System Settings › Notifications."
+        switch status {
+        case .authorized, .provisional, .ephemeral:
+            return alerts == .disabled ? turnedOff : nil
+        case .notDetermined:
+            center.requestAuthorization(options: [.alert]) { _, _ in }
+            return "Allow Gargantua to show notifications so it can confirm MCP cleans, then try again."
+        default:
+            return turnedOff
+        }
     }
 
     /// Extra time past the grace period to give a just-fired delegate
