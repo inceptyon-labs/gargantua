@@ -89,10 +89,16 @@ public struct AISessionScanAdapter: ScanAdapter {
             guard policy.protectionReason(for: entry.path) == nil,
                   !policy.isExcluded(path: entry.path) else { return nil }
 
-            guard let projectPath = projectPath(forEntry: entry, kind: store.kind),
-                  isPlausibleProjectPath(projectPath),
-                  isVolumeAvailable(for: projectPath),
-                  Self.existence(of: projectPath) == .absent else {
+            // Orphaned only when every project the entry belongs to is gone:
+            // Claude Code names a project folder by flattening its path, so
+            // `/Users/me/my-app` and `/Users/me/my/app` share one folder.
+            guard let projectPaths = projectPaths(forEntry: entry, kind: store.kind),
+                  let projectPath = projectPaths.first,
+                  projectPaths.allSatisfy({ path in
+                      isPlausibleProjectPath(path)
+                          && isVolumeAvailable(for: path)
+                          && Self.existence(of: path) == .absent
+                  }) else {
                 return nil
             }
 
@@ -110,12 +116,13 @@ public struct AISessionScanAdapter: ScanAdapter {
         }
     }
 
-    private func projectPath(forEntry entry: URL, kind: AISessionStoreKind) -> String? {
+    /// The project paths an entry records, sorted; `nil` when unknown.
+    private func projectPaths(forEntry entry: URL, kind: AISessionStoreKind) -> [String]? {
         switch kind {
         case .claudeCodeProject:
-            return transcriptWorkingDirectory(in: entry)
+            return transcriptWorkingDirectories(in: entry)
         case .editorWorkspaceStorage:
-            return workspaceFolderPath(in: entry)
+            return workspaceFolderPath(in: entry).map { [$0] }
         case .agentScratchpad:
             // Scratchpads are judged by inactivity, never routed through here.
             return nil
@@ -124,27 +131,27 @@ public struct AISessionScanAdapter: ScanAdapter {
 
     // MARK: - Claude Code transcripts
 
-    /// Reads the `cwd` recorded in the newest transcripts of a project directory.
+    /// Most transcripts read to collect a folder's working directories. A
+    /// folder with more is left alone rather than judged on a sample.
+    static let transcriptProbeCountLimit = 200
+
+    /// Every distinct `cwd` recorded across a project directory's transcripts.
+    /// `nil` when none records one, or when there are too many to read all.
     ///
-    /// Only the first `transcriptProbeByteLimit` bytes of each candidate file are
-    /// read — `cwd` appears in the opening records, and transcripts routinely run
-    /// to hundreds of megabytes.
-    private func transcriptWorkingDirectory(in entry: URL) -> String? {
+    /// Only the first `transcriptProbeByteLimit` bytes of each file are read —
+    /// `cwd` appears in the opening records, and transcripts routinely run to
+    /// hundreds of megabytes.
+    private func transcriptWorkingDirectories(in entry: URL) -> [String]? {
         let transcripts = (try? fileManager.contentsOfDirectory(
             at: entry,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles]
         ))?
-            .filter { $0.pathExtension == "jsonl" }
-            .sorted { modificationDate($0) ?? .distantPast > modificationDate($1) ?? .distantPast }
-            .prefix(3) ?? []
+            .filter { $0.pathExtension == "jsonl" } ?? []
+        guard transcripts.count <= Self.transcriptProbeCountLimit else { return nil }
 
-        for transcript in transcripts {
-            if let cwd = Self.workingDirectory(inJSONLines: head(of: transcript)) {
-                return cwd
-            }
-        }
-        return nil
+        let directories = Set(transcripts.compactMap { Self.workingDirectory(inJSONLines: head(of: $0)) })
+        return directories.isEmpty ? nil : directories.sorted()
     }
 
     /// Scans newline-delimited JSON records for the first usable `cwd` value.

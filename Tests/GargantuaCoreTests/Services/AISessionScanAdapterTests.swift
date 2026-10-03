@@ -33,6 +33,22 @@ struct AISessionScanAdapterTests {
         #expect(results.isEmpty)
     }
 
+    @Test("a project folder shared by a gone path and a live one is left alone")
+    func collidingProjectFolderWithLiveCwdIgnored() async throws {
+        let fixture = try AISessionFixtureTree()
+        let live = fixture.root.appendingPathComponent("my/app", isDirectory: true)
+        try FileManager.default.createDirectory(at: live, withIntermediateDirectories: true)
+        // `my-app` (gone) and `my/app` (live) flatten to the same folder name.
+        try fixture.addClaudeProject(slug: "-root-my-app", cwd: fixture.root.appendingPathComponent("my-app").path)
+        let older = fixture.claudeProjects.appendingPathComponent("-root-my-app/older.jsonl")
+        try "{\"type\":\"user\",\"cwd\":\"\(live.path)\"}\n".write(to: older, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -86_400)], ofItemAtPath: older.path)
+
+        let results = try await fixture.makeAdapter().scan(progress: nil)
+
+        #expect(results.isEmpty)
+    }
+
     @Test("transcript with no cwd record is never proposed")
     func missingCwdRecordIgnored() async throws {
         let fixture = try AISessionFixtureTree()
