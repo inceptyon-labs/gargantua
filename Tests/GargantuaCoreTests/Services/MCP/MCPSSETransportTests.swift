@@ -23,6 +23,16 @@ struct MCPSSETransportTests {
 
     private static let validToken = "gtua_test_token_12345678901234567890"
 
+    @Test("parseHead returns the headers before the body has arrived")
+    func parseHeadBeforeBody() throws {
+        let partial = Data("POST /message HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 10\r\n\r\nabc".utf8)
+        #expect(try MCPHTTPRequestParser.parse(partial) == nil)
+        let head = try #require(try MCPHTTPRequestParser.parseHead(partial))
+        #expect(head.method == "POST")
+        #expect(head.header("host") == "127.0.0.1")
+        #expect(try MCPHTTPRequestParser.parseHead(Data("POST /message HTTP/1.1\r\nHost".utf8)) == nil)
+    }
+
     @Test("default SSE configuration is localhost on port 7493")
     func defaultConfiguration() {
         let configuration = MCPSSEServerConfiguration()

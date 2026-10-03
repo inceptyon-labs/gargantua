@@ -11,6 +11,28 @@ public enum MCPHTTPRequestParser {
 
     /// Parses a request from the supplied buffer or returns `nil` when more data is needed.
     public static func parse(_ data: Data) throws -> MCPHTTPRequest? {
+        guard let (head, bodyStart) = try parseHeadAndBodyStart(data) else { return nil }
+        guard let body = try extractBody(from: data, bodyStart: bodyStart, headers: head.headers) else {
+            return nil
+        }
+        return MCPHTTPRequest(
+            method: head.method,
+            path: head.path,
+            query: head.query,
+            headers: head.headers,
+            body: body
+        )
+    }
+
+    /// The request line and headers, with an empty body, as soon as the
+    /// header section is complete; `nil` until then. Lets the transport
+    /// refuse an unauthorized request before buffering up to a megabyte of
+    /// its body.
+    public static func parseHead(_ data: Data) throws -> MCPHTTPRequest? {
+        try parseHeadAndBodyStart(data)?.head
+    }
+
+    private static func parseHeadAndBodyStart(_ data: Data) throws -> (head: MCPHTTPRequest, bodyStart: Data.Index)? {
         guard data.count <= maximumBufferedBytes else {
             throw MCPHTTPParseError.bodyTooLarge
         }
@@ -34,23 +56,9 @@ public enum MCPHTTPRequestParser {
         let lines = headerText.components(separatedBy: "\r\n")
         let (method, target) = try parseRequestLine(lines.first)
         let headers = try parseHeaders(from: lines.dropFirst())
-
-        guard let body = try extractBody(
-            from: data,
-            bodyStart: separatorRange.upperBound,
-            headers: headers
-        ) else {
-            return nil
-        }
-
         let (path, query) = parseTarget(target)
-        return MCPHTTPRequest(
-            method: method,
-            path: path,
-            query: query,
-            headers: headers,
-            body: body
-        )
+        let head = MCPHTTPRequest(method: method, path: path, query: query, headers: headers, body: Data())
+        return (head, separatorRange.upperBound)
     }
 
     private static func parseRequestLine(_ line: String?) throws -> (method: String, target: String) {

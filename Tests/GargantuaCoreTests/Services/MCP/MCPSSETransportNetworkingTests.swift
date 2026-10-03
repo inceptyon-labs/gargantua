@@ -106,6 +106,26 @@ struct MCPSSETransportNetworkingTests {
         #expect(allowedResponse.contains("event: endpoint"))
     }
 
+    @Test("an unauthorized request is refused once its headers arrive, before its body")
+    func unauthorizedRequestRefusedBeforeBody() throws {
+        let (transport, port) = try MCPSSETransportTestSupport.startTransport { port in
+            MCPSSETransport(
+                configuration: MCPSSEServerConfiguration(isEnabled: true, port: Int(port), bindScope: .lan),
+                tokenProvider: { Self.validToken },
+                handler: MCPSSETransportTestSupport.echoHandler
+            )
+        }
+        defer { transport.stop() }
+
+        // Claims a 1 MB body but sends none of it: the 401 must not wait for it.
+        let client = try TCPClient(port: Int(port))
+        try client.write(
+            "POST /message?sessionId=x HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 1000000\r\n\r\n"
+        )
+        let response = try client.read(until: "\r\n\r\n")
+        #expect(response.contains("HTTP/1.1 401 Unauthorized"))
+    }
+
     @Test("token manager creates once and rotates on demand")
     func tokenManagerCreatesAndRotates() throws {
         final class Generator: @unchecked Sendable {

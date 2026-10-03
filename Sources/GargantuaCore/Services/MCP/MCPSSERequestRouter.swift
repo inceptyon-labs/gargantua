@@ -129,7 +129,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     /// Returns the response to send when the request must be refused, or `nil`
     /// when it may proceed. Both entry points funnel through here so neither
     /// can be hardened without the other.
-    private func rejection(
+    func rejection(
         for request: MCPHTTPRequest,
         configuration: MCPSSEServerConfiguration,
         storedToken: String?

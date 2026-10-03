@@ -142,16 +142,38 @@ public final class MCPSSETransport: @unchecked Sendable {
         }
     }
 
+    /// Connections served at once. Past it a new connection is closed, so a
+    /// peer opening sockets in a loop can't exhaust the process's descriptors.
+    static let maximumConnections = 32
+    /// Time a connection gets to send a complete request. Bounds a peer that
+    /// connects and then sends nothing, or a byte at a time.
+    static let requestReadTimeout: TimeInterval = 10
+
     private func accept(_ connection: NWConnection, generation: Int) {
         guard trackForShutdown(connection, generation: generation) else {
-            // The listener that handed this over has since been stopped, so
-            // nothing else holds a handle to this connection and nothing else
-            // would ever cancel it.
+            // The listener that handed this over has since been stopped (or
+            // the connection cap is reached), so nothing else holds a handle
+            // to this connection and nothing else would ever cancel it.
             connection.cancel()
             return
         }
         connection.start(queue: queue)
-        readRequest(from: connection, buffer: Data())
+        let progress = RequestProgress()
+        // Weak: holding the connection for the full timeout would keep a
+        // closed one alive, and the shutdown registry only prunes boxes whose
+        // connection has been deallocated.
+        queue.asyncAfter(deadline: .now() + Self.requestReadTimeout) { [weak self, weak connection] in
+            guard let connection, !progress.requestReceived else { return }
+            self?.log?("SSE connection closed: no complete request within \(Int(Self.requestReadTimeout)) s.")
+            connection.cancel()
+        }
+        readRequest(from: connection, buffer: Data(), progress: progress)
+    }
+
+    /// Per-connection state of the request read. Touched only on `queue`.
+    private final class RequestProgress: @unchecked Sendable {
+        var requestReceived = false
+        var headerChecked = false
     }
 
     /// Records a connection so `stop()` can find it, dropping any entries
@@ -180,6 +202,10 @@ public final class MCPSSETransport: @unchecked Sendable {
         defer { connectionsLock.unlock() }
         guard generation == listenerGeneration else { return false }
         acceptedConnections.removeAll { $0.value == nil }
+        guard acceptedConnections.count < Self.maximumConnections else {
+            log?("SSE connection refused: \(Self.maximumConnections) connections already open.")
+            return false
+        }
         acceptedConnections.append(WeakConnection(connection))
         return true
     }
@@ -198,7 +224,7 @@ public final class MCPSSETransport: @unchecked Sendable {
         return acceptedConnections.count
     }
 
-    private func readRequest(from connection: NWConnection, buffer: Data) {
+    private func readRequest(from connection: NWConnection, buffer: Data, progress: RequestProgress) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { [weak self] data, _, isComplete, error in
             guard let self else { return }
             var nextBuffer = buffer
@@ -213,8 +239,23 @@ public final class MCPSSETransport: @unchecked Sendable {
 
             do {
                 if let request = try MCPHTTPRequestParser.parse(nextBuffer) {
+                    progress.requestReceived = true
                     self.handle(request, on: connection)
                     return
+                }
+                // Headers are in but the body isn't: refuse an unauthorized
+                // request now rather than after buffering its body.
+                if !progress.headerChecked, let head = try MCPHTTPRequestParser.parseHead(nextBuffer) {
+                    progress.headerChecked = true
+                    if let response = self.router.rejection(
+                        for: head,
+                        configuration: self.configuration,
+                        storedToken: try? self.tokenProvider()
+                    ) {
+                        progress.requestReceived = true
+                        self.write(response, to: connection, closeAfterWrite: true)
+                        return
+                    }
                 }
             } catch {
                 let response = MCPHTTPResponse.text(400, "Bad Request", error.localizedDescription)
@@ -226,7 +267,7 @@ public final class MCPSSETransport: @unchecked Sendable {
                 connection.cancel()
                 return
             }
-            self.readRequest(from: connection, buffer: nextBuffer)
+            self.readRequest(from: connection, buffer: nextBuffer, progress: progress)
         }
     }
 
