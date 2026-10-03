@@ -41,10 +41,11 @@ public struct DefaultLaunchctlRunner: LaunchctlRunning {
         let process = Process()
         process.executableURL = executableURL
         process.arguments = arguments
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        // Drained while launchctl runs, not after: waiting first deadlocks
+        // once its output (`print`, `list`) fills a 64 KB pipe buffer.
+        let drain = ProcessOutputDrain(maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes)
+        process.standardOutput = drain.stdoutPipe
+        process.standardError = drain.stderrPipe
 
         do {
             try process.run()
@@ -56,16 +57,16 @@ public struct DefaultLaunchctlRunner: LaunchctlRunning {
                 stderr: "Failed to launch launchctl: \(error.localizedDescription)"
             )
         }
+        drain.startDraining()
         process.waitUntilExit()
-
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        drain.finish()
+        let output = drain.makeOutput(exitCode: process.terminationStatus)
 
         return LaunchctlResult(
             arguments: arguments,
-            exitCode: process.terminationStatus,
-            stdout: String(bytes: stdoutData, encoding: .utf8) ?? "",
-            stderr: String(bytes: stderrData, encoding: .utf8) ?? ""
+            exitCode: output.exitCode,
+            stdout: output.stdout,
+            stderr: output.stderr
         )
     }
 }

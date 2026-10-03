@@ -200,27 +200,38 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
         try? await Task.sleep(nanoseconds: 200_000_000)
     }
 
+    /// How long to wait for the helper to answer. Trashing is a rename, so a
+    /// healthy helper replies within seconds; these only catch a hung one,
+    /// which would otherwise leave the cleanup waiting forever.
+    static let versionReplyTimeout: TimeInterval = 10
+    static let requestReplyTimeout: TimeInterval = 120
+
     @MainActor
     private func currentHelperVersion() async -> Int? {
         await withCheckedContinuation { continuation in
+            let reply = XPCReplyOnce(continuation)
             let connection = NSXPCConnection(machServiceName: machServiceName, options: .privileged)
             connection.remoteObjectInterface = NSXPCInterface(with: PrivilegedUninstallXPCProtocol.self)
             connection.resume()
 
             let proxy = connection.remoteObjectProxyWithErrorHandler { _ in
                 connection.invalidate()
-                continuation.resume(returning: nil)
+                reply.resume(with: .success(nil))
             } as? PrivilegedUninstallXPCProtocol
 
             guard let proxy else {
                 connection.invalidate()
-                continuation.resume(returning: nil)
+                reply.resume(with: .success(nil))
                 return
             }
 
             proxy.helperVersion { version in
                 connection.invalidate()
-                continuation.resume(returning: version)
+                reply.resume(with: .success(version))
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.versionReplyTimeout) {
+                connection.invalidate()
+                reply.resume(with: .success(nil))
             }
         }
     }
@@ -249,6 +260,7 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
     @MainActor
     private func sendRequestData(_ data: Data) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
+            let reply = XPCReplyOnce(continuation)
             let connection = NSXPCConnection(
                 machServiceName: machServiceName,
                 options: .privileged
@@ -262,18 +274,22 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
 
             let proxy = connection.remoteObjectProxyWithErrorHandler { error in
                 connection.invalidate()
-                continuation.resume(throwing: error)
+                reply.resume(with: .failure(error))
             } as? PrivilegedUninstallXPCProtocol
 
             guard let proxy else {
                 connection.invalidate()
-                continuation.resume(throwing: XPCPrivilegedUninstallHelperError.proxyUnavailable)
+                reply.resume(with: .failure(XPCPrivilegedUninstallHelperError.proxyUnavailable))
                 return
             }
 
             proxy.moveItemsToTrash(requestData: data) { responseData in
                 connection.invalidate()
-                continuation.resume(returning: responseData)
+                reply.resume(with: .success(responseData))
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.requestReplyTimeout) {
+                connection.invalidate()
+                reply.resume(with: .failure(XPCPrivilegedUninstallHelperError.replyTimedOut))
             }
         }
     }
@@ -331,11 +347,40 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
 
 public enum XPCPrivilegedUninstallHelperError: Error, LocalizedError {
     case proxyUnavailable
+    case replyTimedOut
 
     public var errorDescription: String? {
         switch self {
         case .proxyUnavailable:
             "Unable to create privileged helper XPC proxy."
+        case .replyTimedOut:
+            "The privileged helper didn't respond. Nothing else was removed; try again."
         }
+    }
+}
+
+/// Resumes an XPC call's continuation exactly once: the reply, the error
+/// handler and the timeout can each fire, and invalidating the connection on
+/// timeout also triggers the error handler.
+final class XPCReplyOnce<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resume: ((Result<Value, Error>) -> Void)?
+
+    init(_ continuation: CheckedContinuation<Value, Error>) {
+        resume = { continuation.resume(with: $0) }
+    }
+
+    init(_ continuation: CheckedContinuation<Value, Never>) where Value: Sendable {
+        resume = { result in
+            if case .success(let value) = result { continuation.resume(returning: value) }
+        }
+    }
+
+    func resume(with result: Result<Value, Error>) {
+        let pending = lock.withLock {
+            defer { resume = nil }
+            return resume
+        }
+        pending?(result)
     }
 }
