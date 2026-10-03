@@ -42,8 +42,9 @@ struct FullModalContent: View {
                 .frame(height: 1)
 
             // Scrollable item list
+            let lastItemID = items.last?.id
             ScrollView {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(items) { item in
                         if item.safety == .protected_ {
                             AcknowledgeableItemRow(
@@ -54,7 +55,7 @@ struct FullModalContent: View {
                         } else {
                             ConfirmationItemRow(item: item)
                         }
-                        if item.id != items.last?.id {
+                        if item.id != lastItemID {
                             Rectangle()
                                 .fill(GargantuaColors.borderSoft)
                                 .frame(height: 1)

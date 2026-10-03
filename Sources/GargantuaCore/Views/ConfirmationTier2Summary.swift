@@ -96,10 +96,12 @@ struct SummaryDialogContent: View {
 
     @ViewBuilder
     private var reviewItemList: some View {
-        let listContent = VStack(spacing: 0) {
+        let reviewItems = reviewItems
+        let lastReviewID = reviewItems.last?.id
+        let listContent = LazyVStack(spacing: 0) {
             ForEach(reviewItems) { item in
                 ConfirmationItemRow(item: item)
-                if item.id != reviewItems.last?.id {
+                if item.id != lastReviewID {
                     Rectangle()
                         .fill(GargantuaColors.borderSoft)
                         .frame(height: 1)

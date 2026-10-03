@@ -54,12 +54,12 @@ struct ScanResultRowView: View {
 
     var body: some View {
         Group {
+            // One branch for both checkbox states, so toggling updates the row
+            // instead of tearing it down and building a new one.
             if isLocked {
                 protectedRow
-            } else if isSelected {
-                selectableRow(isSelected: true)
             } else {
-                selectableRow(isSelected: false)
+                selectableRow(isSelected: isSelected)
             }
         }
         .contextMenu { scanItemContextMenu }
