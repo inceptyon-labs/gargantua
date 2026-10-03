@@ -13,6 +13,8 @@ extension DeveloperToolPreviewAdapterTests {
                 stdout: """
                 Would remove: /Users/me/Library/Caches/Homebrew/foo--1.0 (12.5MB)
                 Would remove: /Users/me/Library/Caches/Homebrew/bar--2.0 (1GB)
+                Would remove: /Users/me/Library/Caches/Homebrew/bootsnap/3d3385fbb25b (0B)
+                ==> This operation would free approximately 1GB of disk space.
                 """,
                 stderr: "",
                 exitCode: 0
@@ -29,7 +31,9 @@ extension DeveloperToolPreviewAdapterTests {
 
         #expect(runner.calls.map(\.arguments) == [["cleanup", "-n"], ["autoremove", "-n"]])
         #expect(preview.commandPreview == [brew.path, "cleanup", "-n"])
-        #expect(preview.items.count == 2)
+        // The "==>" total isn't an item, and the hash in the bootsnap path
+        // isn't read as a size.
+        #expect(preview.items.count == 3)
         #expect(preview.reclaimableBytes == 1_012_500_000)
     }
 

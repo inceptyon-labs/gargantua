@@ -179,7 +179,9 @@ enum DeveloperToolPreviewOutputParser {
     ) -> [DeveloperToolPreviewItem] {
         output.split(separator: "\n").enumerated().compactMap { index, rawLine in
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty else { return nil }
+            // "==>" lines are headers and the closing "This operation would
+            // free approximately …" total, which would double the sum.
+            guard !line.isEmpty, !line.hasPrefix("==>") else { return nil }
             guard line.lowercased().contains("would") || line.lowercased().contains("remove") else {
                 return nil
             }
@@ -188,10 +190,21 @@ enum DeveloperToolPreviewOutputParser {
                 id: "homebrew-\(index)",
                 tool: .homebrew,
                 title: line,
-                reclaimableBytes: parseFirstSize(in: line),
+                reclaimableBytes: homebrewTrailingSize(in: line),
                 commandPreview: commandPreview
             )
         }
+    }
+
+    /// The size Homebrew appends in parentheses: "Would remove: /path (12.7MB)".
+    /// Only that field is read, so digits inside a path (a hash, a version)
+    /// can't be mistaken for a size.
+    static func homebrewTrailingSize(in line: String) -> Int64? {
+        guard let range = line.range(of: #"\(([0-9.]+\s*[KMGT]?B)\)$"#, options: .regularExpression) else {
+            return nil
+        }
+        let token = line[range].dropFirst().dropLast()
+        return parseSize(String(token))
     }
 
     private static func parseDockerSystemDF(
