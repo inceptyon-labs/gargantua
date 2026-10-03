@@ -261,6 +261,7 @@ public struct KeyboardShortcutsCheatSheet: View {
                             .foregroundStyle(GargantuaColors.ink3)
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
                     .accessibilityLabel("Close")
                 }
 

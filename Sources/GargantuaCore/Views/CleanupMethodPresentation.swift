@@ -59,7 +59,13 @@ extension CleanupMethod {
 }
 
 func cleanupTotalLineText(itemCount: Int, totalSize: Int64, method: CleanupMethod) -> String {
+    "Clean \(cleanupCountAndSize(itemCount: itemCount, totalSize: totalSize)) - \(method.displayTitle)"
+}
+
+/// "3 items (1.2 GB)". The size is left out when it's zero, which for a
+/// tool-native command means "no estimate", not "frees nothing".
+func cleanupCountAndSize(itemCount: Int, totalSize: Int64) -> String {
     let countText = itemCount == 1 ? "1 item" : "\(itemCount) items"
-    let sizeText = AlertItem.formatBytes(totalSize)
-    return "Clean \(countText) (\(sizeText)) - \(method.displayTitle)"
+    guard totalSize > 0 else { return countText }
+    return "\(countText) (\(AlertItem.formatBytes(totalSize)))"
 }

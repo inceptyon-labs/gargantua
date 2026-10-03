@@ -91,7 +91,10 @@ public enum ScanGrouper {
 
     static func groupBySafety(_ results: [ScanResult]) -> [ScanGroup] {
         let grouped = Dictionary(grouping: results) { $0.safety }
-        return SafetyLevel.allCases.map { level in
+        // An empty Safe or Review bucket says something ("nothing safe to
+        // clean"); an empty "Protected · 0" header is noise.
+        let levels = SafetyLevel.allCases.filter { $0 != .protected_ || grouped[$0] != nil }
+        return levels.map { level in
             let items = (grouped[level] ?? []).sorted { $0.size > $1.size }
             return ScanGroup(
                 id: "safety:\(level)",

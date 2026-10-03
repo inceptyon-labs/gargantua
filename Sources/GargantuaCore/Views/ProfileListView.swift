@@ -199,6 +199,8 @@ private struct ProfileCardView: View {
                                     .foregroundStyle(GargantuaColors.ink2)
                             }
                             .buttonStyle(.plain)
+                            .help("Edit profile")
+                            .accessibilityLabel("Edit \(profile.name)")
 
                             if let onDelete {
                                 Button(action: onDelete) {
@@ -207,6 +209,8 @@ private struct ProfileCardView: View {
                                         .foregroundStyle(GargantuaColors.protected_)
                                 }
                                 .buttonStyle(.plain)
+                                .help("Delete profile")
+                                .accessibilityLabel("Delete \(profile.name)")
                             }
                         }
                     }

@@ -5,6 +5,8 @@ import SwiftUI
 public struct ProfileContainerView: View {
     let persistence: PersistenceController
 
+    @State private var pendingDelete: PendingProfileDelete?
+
     @State private var profiles: [CleanupProfile] = []
     @State private var activeProfileID: String = "developer"
     @State private var editingProfile: CleanupProfile?
@@ -31,7 +33,7 @@ public struct ProfileContainerView: View {
                         editingProfile = nil
                     },
                     onDelete: editing.isCustom ? {
-                        deleteProfile(id: editing.id, closeEditor: true)
+                        pendingDelete = PendingProfileDelete(id: editing.id, name: editing.name, closeEditor: true)
                     } : nil
                 )
             } else {
@@ -57,12 +59,28 @@ public struct ProfileContainerView: View {
                         editingProfile = custom
                     },
                     onDelete: { id in
-                        deleteProfile(id: id, closeEditor: false)
+                        let name = profiles.first { $0.id == id }?.name ?? "this profile"
+                        pendingDelete = PendingProfileDelete(id: id, name: name, closeEditor: false)
                     }
                 )
             }
         }
         .onAppear { loadProfiles() }
+        .confirmationDialog(
+            "Delete \"\(pendingDelete?.name ?? "")\"?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { pending in
+            Button("Delete Profile", role: .destructive) {
+                deleteProfile(id: pending.id, closeEditor: pending.closeEditor)
+            }
+        } message: { _ in
+            Text("This can't be undone. If it's the active profile, Deep Clean switches to Developer.")
+        }
         .alert(
             "Profile Change Failed",
             isPresented: Binding(
@@ -165,4 +183,11 @@ public struct ProfileContainerView: View {
         PersistenceDiagnostics.logFailure(operation, error: error)
         persistenceErrorMessage = "\(message) \(error.localizedDescription)"
     }
+}
+
+/// A profile delete waiting on the user's confirmation.
+private struct PendingProfileDelete {
+    let id: String
+    let name: String
+    let closeEditor: Bool
 }

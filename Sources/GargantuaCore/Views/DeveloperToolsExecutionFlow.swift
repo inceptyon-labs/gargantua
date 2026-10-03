@@ -264,6 +264,9 @@ extension DeveloperToolsView {
     }
 
     func confirmExecution(_ request: ExecutionRequest) {
+        // A double-click on Confirm calls this twice before the modal goes
+        // away; only the first may run the command.
+        guard session.pendingExecution != nil else { return }
         session.pendingExecution = nil
         Task { await runGatedExecution(request) }
     }

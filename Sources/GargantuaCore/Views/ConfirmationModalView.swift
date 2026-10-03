@@ -217,10 +217,7 @@ struct ConfirmationButtons: View {
 
             // Confirm — accent for trash, protected_ for delete
             Button(action: onConfirm) {
-                let countText = itemCount == 1 ? "1 item" : "\(itemCount) items"
-                let sizeText = AlertItem.formatBytes(totalSize)
-
-                Text("\(cleanupMethod.actionTitle) \(countText) (\(sizeText))")
+                Text("\(cleanupMethod.actionTitle) \(cleanupCountAndSize(itemCount: itemCount, totalSize: totalSize))")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)

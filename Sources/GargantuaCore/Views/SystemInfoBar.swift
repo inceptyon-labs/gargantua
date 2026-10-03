@@ -195,12 +195,17 @@ struct SystemInfoBar: View {
 
     @MainActor
     private func refreshRuntimeStatusLoop() async {
+        var tick = 0
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             // Nothing to show while none of the app's windows is on screen;
             // the next visible tick catches up.
             guard NSApp.occlusionState.contains(.visible) else { continue }
             refreshRuntimeStatus()
+            // The disk line was read only on appear, so it went stale after
+            // every cleanup. Every 30 s is plenty for a GB-rounded figure.
+            tick += 1
+            if tick % 15 == 0 { refreshDisk() }
         }
     }
 
@@ -209,11 +214,13 @@ struct SystemInfoBar: View {
             forPath: NSHomeDirectory()
         ) {
             if let totalBytes = attrs[.systemSize] as? UInt64 {
-                diskTotalGB = Int(totalBytes / (1024 * 1024 * 1024))
+                let total = Int(totalBytes / (1024 * 1024 * 1024))
+                if total != diskTotalGB { diskTotalGB = total }
             }
             if let freeBytes = attrs[.systemFreeSize] as? UInt64,
                let totalBytes = attrs[.systemSize] as? UInt64 {
-                diskUsedGB = Int((totalBytes - freeBytes) / (1024 * 1024 * 1024))
+                let used = Int((totalBytes - freeBytes) / (1024 * 1024 * 1024))
+                if used != diskUsedGB { diskUsedGB = used }
             }
         }
     }

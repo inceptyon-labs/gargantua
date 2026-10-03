@@ -144,6 +144,12 @@ struct ConfirmationTotalTests {
         let expected = cleanupTotalLineText(itemCount: 1, totalSize: 100, method: .trash)
         #expect(expected.contains("Clean 1 item"))
     }
+
+    @Test("A zero total (no estimate) is left out instead of reading \"(0 bytes)\"")
+    func zeroTotalOmitsSize() {
+        #expect(cleanupCountAndSize(itemCount: 1, totalSize: 0) == "1 item")
+        #expect(cleanupTotalLineText(itemCount: 2, totalSize: 0, method: .toolNative).contains("(") == false)
+    }
 }
 
 // MARK: - Safety Level Tier Alignment

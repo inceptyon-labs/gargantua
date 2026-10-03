@@ -41,20 +41,19 @@ struct ScanGrouperSafetyTests {
         #expect(groups[2].id == "safety:protected_")
     }
 
-    @Test("Group includes empty groups when no items for a level")
+    @Test("Group keeps an empty Review group but drops an empty Protected one")
     func emptyGroups() {
         let results = [makeScanResult(id: "s1", safety: .safe)]
         let groups = ScanGrouper.group(results, mode: .safety)
-        #expect(groups.count == 3)
+        #expect(groups.map(\.id) == ["safety:safe", "safety:review"])
         #expect(groups[0].count == 1)
         #expect(groups[1].items.isEmpty)
-        #expect(groups[2].items.isEmpty)
     }
 
-    @Test("Group with empty input returns three empty groups")
+    @Test("Group with empty input returns empty Safe and Review groups")
     func emptyInput() {
         let groups = ScanGrouper.group([], mode: .safety)
-        #expect(groups.count == 3)
+        #expect(groups.count == 2)
         #expect(groups.allSatisfy { $0.items.isEmpty })
     }
 
@@ -70,8 +69,7 @@ struct ScanGrouperSafetyTests {
 
     @Test("Titles match expected labels")
     func titles() {
-        // Need items so subjects aren't empty for comparison; empty still returns all three.
-        let groups = ScanGrouper.group([], mode: .safety)
+        let groups = ScanGrouper.group([makeScanResult(id: "p1", safety: .protected_)], mode: .safety)
         #expect(groups[0].title == "Safe to Clean")
         #expect(groups[1].title == "Review Required")
         #expect(groups[2].title == "Protected")
