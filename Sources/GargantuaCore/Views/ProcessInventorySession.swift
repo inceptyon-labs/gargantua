@@ -9,6 +9,8 @@ import Foundation
 public final class ProcessInventorySession {
     public private(set) var scan: ProcessInventoryScan?
     public private(set) var isScanning = false
+    /// True while `isScanning` is a post-action refresh shown over the list.
+    public private(set) var isRefreshingInPlace = false
     /// Results of the active full-table search, or `nil` when not searching.
     /// Kept separate from `scan` so clearing the query restores the snapshot
     /// without a re-sample.
@@ -19,6 +21,9 @@ public final class ProcessInventorySession {
     /// IDs of processes currently being acted on. The row uses this to render
     /// a spinner inline so the user gets feedback while `kill(2)` runs.
     public private(set) var busyItemIDs: Set<String> = []
+    /// The metric the snapshot is ranked by. Lives here, with the snapshot,
+    /// so the toggle still matches the list after navigating away and back.
+    public var sortMetric: ProcessSortMetric = .cpu
 
     /// Cap on search matches resolved + displayed. Generous enough to cover any
     /// real query; guards against resolving identity for hundreds of rows when
@@ -48,10 +53,16 @@ public final class ProcessInventorySession {
         self.actionExecutor = actionExecutor
     }
 
-    public func scan(metric: ProcessSortMetric, topN: Int?) async {
+    /// - Parameter inPlace: a refresh after an action, which keeps the list
+    ///   on screen (and its scroll position) instead of the sampling view.
+    public func scan(metric: ProcessSortMetric, topN: Int?, inPlace: Bool = false) async {
         guard !isScanning else { return }
         isScanning = true
-        defer { isScanning = false }
+        isRefreshingInPlace = inPlace
+        defer {
+            isScanning = false
+            isRefreshingInPlace = false
+        }
 
         let scanner = self.scanner
         let result = await Task.detached(priority: .userInitiated) {
@@ -138,7 +149,7 @@ public final class ProcessInventorySession {
         }
 
         if outcome.succeeded, action == .stop {
-            await scan(metric: metric, topN: topN)
+            await scan(metric: metric, topN: topN, inPlace: true)
             // The visible list may be showing search results; re-run the
             // active search so the stopped row disappears instead of
             // lingering with a stale (possibly recycled) PID that a second

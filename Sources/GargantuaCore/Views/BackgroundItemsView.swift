@@ -49,7 +49,7 @@ public struct BackgroundItemsView: View {
                     isBusy: session.isScanning
                 )
 
-                if session.isScanning {
+                if session.isScanning, !session.isRefreshingInPlace {
                     scanningState
                 } else if let scan = session.scan {
                     resultsState(scan)

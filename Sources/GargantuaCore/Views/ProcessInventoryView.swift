@@ -13,7 +13,6 @@ import SwiftUI
 public struct ProcessInventoryView: View {
     @State var session: ProcessInventorySession
     @State var expandedID: String?
-    @State var sortMetric: ProcessSortMetric = .cpu
     @State var safetyFilter: ProcessSafetyFilter = .all
     @State var searchQuery: String = ""
     @FocusState var isSearchFocused: Bool
@@ -22,6 +21,11 @@ public struct ProcessInventoryView: View {
     let onExplain: ((ScanResult) -> Void)?
     let onTriage: (([ScanResult]) -> Void)?
     let onNavigateToBackgroundItems: ((_ plistPath: String) -> Void)?
+
+    var sortMetric: ProcessSortMetric {
+        get { session.sortMetric }
+        nonmutating set { session.sortMetric = newValue }
+    }
 
     /// Default top-N cap. Snapshot views shouldn't fight Activity Monitor for
     /// completeness — surfacing the top 50 keeps cognitive load low and lets
@@ -59,7 +63,7 @@ public struct ProcessInventoryView: View {
                     isBusy: session.isScanning
                 )
 
-                if session.isScanning {
+                if session.isScanning, !session.isRefreshingInPlace {
                     scanningState
                 } else if let scan = session.scan {
                     resultsState(scan)

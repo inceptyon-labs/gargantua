@@ -10,6 +10,8 @@ import SwiftUI
 public final class BackgroundItemsSession {
     public private(set) var scan: BackgroundItemScan?
     public private(set) var isScanning = false
+    /// True while `isScanning` is a post-action refresh shown over the list.
+    public private(set) var isRefreshingInPlace = false
     /// IDs of items currently being mutated. The row uses this to render a
     /// spinner inline so the user gets feedback while `launchctl` runs.
     public private(set) var busyItemIDs: Set<String> = []
@@ -56,10 +58,16 @@ public final class BackgroundItemsSession {
         self.runtimeProvider = runtimeProvider
     }
 
-    public func scan() async {
+    /// - Parameter inPlace: a refresh after an action, which keeps the list
+    ///   on screen (and its scroll position) instead of the scanning view.
+    public func scan(inPlace: Bool = false) async {
         guard !isScanning else { return }
         isScanning = true
-        defer { isScanning = false }
+        isRefreshingInPlace = inPlace
+        defer {
+            isScanning = false
+            isRefreshingInPlace = false
+        }
 
         let scanner = self.scanner
         let result = await Task.detached(priority: .userInitiated) {
@@ -154,7 +162,7 @@ public final class BackgroundItemsSession {
             case .enable, .delete:
                 sessionDisabledIDs.remove(item.id)
             }
-            await scan()
+            await scan(inPlace: true)
         }
         return outcome
     }
