@@ -37,6 +37,8 @@ Cleanup/reset commands:
 XPC smoke:
   mkdir -p /Applications/GargantuaPrivilegedSmoke.app/Contents/MacOS
   touch /Applications/GargantuaPrivilegedSmoke.app/Contents/MacOS/GargantuaPrivilegedSmoke
+  # Debug builds only (the flag is compiled out of release); dev-sign the
+  # binary with the team identity so the helper accepts the connection.
   "$APP_EXECUTABLE" --privileged-helper-smoke-trash /Applications/GargantuaPrivilegedSmoke.app
 
 EOF

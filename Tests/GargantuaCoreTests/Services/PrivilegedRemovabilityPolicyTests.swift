@@ -40,8 +40,15 @@ struct PrivilegedRemovabilityPolicyTests {
         for path in tier1Samples {
             #expect(policy.allows(path: path, isDirectory: false), "expected allowed: \(path)")
         }
-        // The root itself is allowed, not only descendants.
-        #expect(policy.allows(path: "/private/var/db/powerlog", isDirectory: true))
+    }
+
+    @Test("Only roots the rules remove whole are allowed as the root itself")
+    func subtreeRootItselfRejectedUnlessWholeRemovable() {
+        #expect(policy.allows(path: "/macOS Install Data", isDirectory: true))
+        #expect(policy.allows(path: "/Library/Apple/usr/share/rosetta/rosetta_update_bundle", isDirectory: true))
+        for root in ["/private/var/log", "/var/log", "/Library/Caches", "/private/var/db/powerlog", "/private/var/tmp"] {
+            #expect(!policy.allows(path: root, isDirectory: true), "root itself must be rejected: \(root)")
+        }
     }
 
     @Test("Canonical /var form matches the /private/var roots (firmlink regression)")

@@ -29,14 +29,19 @@ struct GargantuaApp: App {
         if CommandLine.arguments.contains("--privileged-helper-unregister") {
             Self.runPrivilegedHelperUnregister()
         }
-        if let index = CommandLine.arguments.firstIndex(of: "--privileged-helper-smoke-trash") {
-            let path = CommandLine.arguments.dropFirst(index + 1).first
-            Self.runPrivilegedHelperSmokeTrash(path: path)
-        }
-        if let index = CommandLine.arguments.firstIndex(of: "--privileged-helper-smoke-empty-trash") {
-            let path = CommandLine.arguments.dropFirst(index + 1).first
-            Self.runPrivilegedHelperSmokeEmptyTrash(path: path)
-        }
+        #if DEBUG
+            // Debug-only: these drive the root helper on an arbitrary path with no
+            // UI or confirmation. A shipped binary must not accept them, or any
+            // process running as the user could use the signed app to reach root.
+            if let index = CommandLine.arguments.firstIndex(of: "--privileged-helper-smoke-trash") {
+                let path = CommandLine.arguments.dropFirst(index + 1).first
+                Self.runPrivilegedHelperSmokeTrash(path: path)
+            }
+            if let index = CommandLine.arguments.firstIndex(of: "--privileged-helper-smoke-empty-trash") {
+                let path = CommandLine.arguments.dropFirst(index + 1).first
+                Self.runPrivilegedHelperSmokeEmptyTrash(path: path)
+            }
+        #endif
         _updateController = StateObject(wrappedValue: AppUpdateController())
         _menuBarStatusModel = StateObject(wrappedValue: MenuBarStatusModel())
     }
@@ -142,83 +147,85 @@ struct GargantuaApp: App {
         }
     }
 
-    private static func runPrivilegedHelperSmokeTrash(path: String?) -> Never {
-        guard let path, !path.isEmpty else {
-            fputs("usage: Gargantua --privileged-helper-smoke-trash /Applications/Example.app\n", stderr)
-            exit(EXIT_FAILURE)
-        }
-
-        let item = PrivilegedUninstallItem(
-            id: "smoke",
-            path: path,
-            category: RemnantCategory.other.rawValue,
-            size: 0
-        )
-        let request = PrivilegedUninstallRequest(planID: UUID(), items: [item], invokingUserID: getuid())
-        let helper = XPCPrivilegedUninstallHelper()
-
-        Task { @MainActor in
-            let results = await helper.movePrivilegedItemsToTrash(
-                request,
-                authorization: .privilegedHelperApproved
-            )
-            guard let result = results.first else {
-                fputs("privileged-helper smoke failed: no result returned\n", stderr)
+    #if DEBUG
+        private static func runPrivilegedHelperSmokeTrash(path: String?) -> Never {
+            guard let path, !path.isEmpty else {
+                fputs("usage: Gargantua --privileged-helper-smoke-trash /Applications/Example.app\n", stderr)
                 exit(EXIT_FAILURE)
             }
 
-            if result.succeeded {
-                print("privileged-helper smoke moved: \(result.item.path)")
-                if let trashURL = result.trashURL {
-                    print("trash: \(trashURL.path)")
+            let item = PrivilegedUninstallItem(
+                id: "smoke",
+                path: path,
+                category: RemnantCategory.other.rawValue,
+                size: 0
+            )
+            let request = PrivilegedUninstallRequest(planID: UUID(), items: [item], invokingUserID: getuid())
+            let helper = XPCPrivilegedUninstallHelper()
+
+            Task { @MainActor in
+                let results = await helper.movePrivilegedItemsToTrash(
+                    request,
+                    authorization: .privilegedHelperApproved
+                )
+                guard let result = results.first else {
+                    fputs("privileged-helper smoke failed: no result returned\n", stderr)
+                    exit(EXIT_FAILURE)
                 }
-                exit(EXIT_SUCCESS)
-            } else {
-                fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)
-                exit(EXIT_FAILURE)
-            }
-        }
-        RunLoop.main.run()
-        exit(EXIT_FAILURE)
-    }
 
-    private static func runPrivilegedHelperSmokeEmptyTrash(path: String?) -> Never {
-        guard let path, !path.isEmpty else {
-            fputs("usage: Gargantua --privileged-helper-smoke-empty-trash ~/.Trash/Item\n", stderr)
+                if result.succeeded {
+                    print("privileged-helper smoke moved: \(result.item.path)")
+                    if let trashURL = result.trashURL {
+                        print("trash: \(trashURL.path)")
+                    }
+                    exit(EXIT_SUCCESS)
+                } else {
+                    fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)
+                    exit(EXIT_FAILURE)
+                }
+            }
+            RunLoop.main.run()
             exit(EXIT_FAILURE)
         }
 
-        let item = PrivilegedUninstallItem(
-            id: "smoke",
-            path: path,
-            category: RemnantCategory.other.rawValue,
-            size: 0,
-            operation: .deleteFromTrash
-        )
-        let request = PrivilegedUninstallRequest(planID: UUID(), items: [item], invokingUserID: getuid())
-        let helper = XPCPrivilegedUninstallHelper()
+        private static func runPrivilegedHelperSmokeEmptyTrash(path: String?) -> Never {
+            guard let path, !path.isEmpty else {
+                fputs("usage: Gargantua --privileged-helper-smoke-empty-trash ~/.Trash/Item\n", stderr)
+                exit(EXIT_FAILURE)
+            }
 
-        Task { @MainActor in
-            let results = await helper.movePrivilegedItemsToTrash(
-                request,
-                authorization: .privilegedHelperApproved
+            let item = PrivilegedUninstallItem(
+                id: "smoke",
+                path: path,
+                category: RemnantCategory.other.rawValue,
+                size: 0,
+                operation: .deleteFromTrash
             )
-            guard let result = results.first else {
-                fputs("privileged-helper smoke failed: no result returned\n", stderr)
-                exit(EXIT_FAILURE)
-            }
+            let request = PrivilegedUninstallRequest(planID: UUID(), items: [item], invokingUserID: getuid())
+            let helper = XPCPrivilegedUninstallHelper()
 
-            if result.succeeded {
-                print("privileged-helper smoke deleted from Trash: \(result.item.path)")
-                exit(EXIT_SUCCESS)
-            } else {
-                fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)
-                exit(EXIT_FAILURE)
+            Task { @MainActor in
+                let results = await helper.movePrivilegedItemsToTrash(
+                    request,
+                    authorization: .privilegedHelperApproved
+                )
+                guard let result = results.first else {
+                    fputs("privileged-helper smoke failed: no result returned\n", stderr)
+                    exit(EXIT_FAILURE)
+                }
+
+                if result.succeeded {
+                    print("privileged-helper smoke deleted from Trash: \(result.item.path)")
+                    exit(EXIT_SUCCESS)
+                } else {
+                    fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)
+                    exit(EXIT_FAILURE)
+                }
             }
+            RunLoop.main.run()
+            exit(EXIT_FAILURE)
         }
-        RunLoop.main.run()
-        exit(EXIT_FAILURE)
-    }
+    #endif
 }
 
 // MARK: - App Delegate

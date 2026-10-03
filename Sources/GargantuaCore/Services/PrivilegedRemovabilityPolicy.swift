@@ -19,8 +19,8 @@ import Foundation
 public struct PrivilegedRemovabilityPolicy: Sendable {
     public static let shared = PrivilegedRemovabilityPolicy()
 
-    /// Recursive system roots whose descendants (and the root itself) may be
-    /// removed as root. Every entry is a vetted, regenerable location drawn from
+    /// Recursive system roots whose descendants may be removed as root. The
+    /// root itself is allowed only when it is also in `wholeRemovableRoots`. Every entry is a vetted, regenerable location drawn from
     /// `cleanup_rules/system/privileged.yaml`. See
     /// `docs/designs/2026-06-06-unified-removability.md` for the tiering rationale.
     ///
@@ -41,6 +41,15 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
         "/private/var/db/powerlog",
         "/private/var/db/DiagnosticPipeline",
         "/private/var/db/reportmemoryexception/MemoryLimitViolations",
+    ]
+
+    /// Subtree roots the rules remove whole (an installer payload, the Rosetta
+    /// update bundle). Every other root allows only its descendants: removing
+    /// all of `/private/var/log` or `/Library/Caches` is never a cleanup the
+    /// rules propose, so the helper must not accept it.
+    public static let wholeRemovableRoots: Set<String> = [
+        "/macOS Install Data",
+        "/Library/Apple/usr/share/rosetta/rosetta_update_bundle",
     ]
 
     /// Files matching a suffix under a root that is itself too broad to allow
@@ -105,13 +114,17 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
 
         // Tier-1 system roots (recursive). Roots are canonicalized too so the
         // `/private/var/...` entries match the canonical `/var/...` candidate.
-        if Self.subtreeRoots.contains(where: { isInSubtree(path, root: Self.canonical($0)) }) {
+        if Self.subtreeRoots.contains(where: { root in
+            let canonicalRoot = Self.canonical(root)
+            return isStrictDescendant(path, of: canonicalRoot)
+                || (path == canonicalRoot && Self.wholeRemovableRoots.contains(root))
+        }) {
             return true
         }
 
         // Narrow suffix-in-root carve-outs.
         if Self.suffixUnderRoot.contains(where: {
-            path.hasSuffix($0.suffix) && isInSubtree(path, root: Self.canonical($0.root))
+            path.hasSuffix($0.suffix) && isStrictDescendant(path, of: Self.canonical($0.root))
         }) {
             return true
         }
@@ -141,9 +154,9 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
         URL(fileURLWithPath: path).deletingLastPathComponent().path == parent
     }
 
-    /// True when `path` is `root` itself or lives anywhere beneath it. Guards
+    /// True when `path` lives anywhere beneath `root` (not `root` itself). Guards
     /// against the `/foo` vs `/foobar` prefix trap by requiring a `/` boundary.
-    private func isInSubtree(_ path: String, root: String) -> Bool {
-        path == root || path.hasPrefix(root + "/")
+    private func isStrictDescendant(_ path: String, of root: String) -> Bool {
+        path.hasPrefix(root + "/")
     }
 }
