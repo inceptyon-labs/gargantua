@@ -62,9 +62,6 @@ struct AIRuleSafetyContractTests {
         "~/Library/Application Support/Code/User/workspaceStorage/abc123/state.vscdb",
     ]
 
-    /// Filename suffixes no rule may declare directly, wherever it is anchored.
-    private static let databaseSuffixes = [".db", ".db-wal", ".db-shm", ".sqlite", ".sqlite3", ".vscdb"]
-
     @Test("No rule can reach a credential, settings file, or live database")
     func noRuleReachesProtectedFile() throws {
         let rules = try loader.loadRules(from: rulesDirectory).rules
@@ -93,18 +90,37 @@ struct AIRuleSafetyContractTests {
         }
     }
 
-    @Test("No rule declares a database path directly")
-    func noRuleDeclaresDatabasePath() throws {
+    @Test("A rule that declares a database path names the processes that own it")
+    func databaseRulesAreProcessGuarded() throws {
         let rules = try loader.loadRules(from: rulesDirectory).rules
 
         for rule in rules {
-            for declared in rule.paths where Self.databaseSuffixes.contains(where: declared.hasSuffix) {
-                Issue.record(
+            for declared in rule.paths where SQLiteDatabaseFiles.isDatabase(declared) {
+                #expect(
+                    !rule.skipIfProcessRunning.isEmpty,
                     """
-                    Rule \(rule.id) targets \(declared). Removing a live database without its \
-                    -wal/-shm sidecars can corrupt the owning tool, and the running-process \
-                    guard only sees GUI apps, so a CLI cannot be guarded.
+                    Rule \(rule.id) targets \(declared) without skip_if_process_running. The engine \
+                    removes a database together with its -wal/-shm/-journal, but removing one its \
+                    owner has open still loses the owner's state: name the owner's bundle ID and, \
+                    for a command-line owner, its executable name.
                     """
+                )
+            }
+        }
+    }
+
+    @Test("No rule declares a database sidecar directly")
+    func noRuleDeclaresDatabaseSidecar() throws {
+        let rules = try loader.loadRules(from: rulesDirectory).rules
+
+        for rule in rules {
+            for declared in rule.paths {
+                let isSidecar = SQLiteDatabaseFiles.sidecarSuffixes.contains { suffix in
+                    SQLiteDatabaseFiles.suffixes.contains { declared.lowercased().hasSuffix($0 + suffix) }
+                }
+                #expect(
+                    !isSidecar,
+                    "Rule \(rule.id) targets \(declared). Sidecars go with their database, never on their own."
                 )
             }
         }

@@ -259,6 +259,44 @@ rules:
       - ai
       - cache
 
+  - id: codex_logs_database
+    name: Codex Logs Database
+    paths:
+      - "~/.codex/logs_*.sqlite"
+    skip_if_process_running:
+      - com.openai.codex
+      - codex
+    safety: safe
+    confidence: 85
+    explanation: "Codex's log database: diagnostic records of past runs. Codex creates a new one the next time it starts. Removed together with its -wal and -shm files, and never while Codex is running."
+    source:
+      name: Codex
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - logs
+
+  - id: codex_thread_history
+    name: Codex Thread History Database
+    paths:
+      - "~/.codex/thread_history_*.sqlite"
+    skip_if_process_running:
+      - com.openai.codex
+      - codex
+    safety: review
+    confidence: 75
+    explanation: "Codex's index of past conversations, built from the rollout transcripts in ~/.codex/sessions. Codex starts a new one and rebuilds each thread from its transcript when the thread is next opened; threads whose transcripts were already removed will not come back. Removed together with its -wal and -shm files, and never while Codex is running."
+    source:
+      name: Codex
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
   - id: codex_computer_use_screenshots
     name: Codex Computer-Use Screenshots
     paths:
