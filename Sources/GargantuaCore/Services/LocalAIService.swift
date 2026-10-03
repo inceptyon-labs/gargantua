@@ -105,8 +105,11 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         idleTask?.cancel()
         idleTask = nil
         engine.unload()
-        modelMemoryUsage = 0
-        lifecycleState = .unloaded
+        // @Published fires on every assignment, and this service is observed
+        // at the window root: writing unchanged values re-rendered the whole
+        // window 60 s after every AI call, even with nothing loaded.
+        if modelMemoryUsage != 0 { modelMemoryUsage = 0 }
+        if lifecycleState != .unloaded { lifecycleState = .unloaded }
     }
 
     // MARK: - Private
