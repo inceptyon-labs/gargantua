@@ -5,10 +5,13 @@ import Foundation
 /// Two rules can propose the same path, or a folder plus something inside it:
 /// the broad `user_caches` rule lists every `~/Library/Caches/<app>` folder
 /// while a browser rule lists a cache inside one, locked while the browser
-/// runs. Cleaning the folder removes everything in it, so the folder takes the
-/// strictest safety level and any running-app lock among the results it
-/// contains. Command actions, Ollama models and Hugging Face revision prunes
-/// aren't plain removals of their `path`, so they don't take part.
+/// runs. Cleaning the folder removes everything in it, so a folder takes any
+/// running-app lock, and any protected status, among the results it contains.
+/// A contained `review` result does not demote the folder: generic review
+/// rules (e.g. Application Support `Cache_Data`) also match inside folders a
+/// specific rule knows are safe, like Claude's or Discord's own cache.
+/// Command actions, Ollama models and Hugging Face revision prunes aren't plain
+/// removals of their `path`, so they don't take part.
 enum ScanResultOverlapReconciler {
     /// Of two results for the same path, keep the one with the stricter safety
     /// (its explanation matches), carrying over the other's app lock if the
@@ -22,8 +25,8 @@ enum ScanResultOverlapReconciler {
         return kept
     }
 
-    /// Merge exact duplicates (first occurrence keeps its position), then raise
-    /// every folder to the strictest safety and lock among the results inside it.
+    /// Merge exact duplicates (first occurrence keeps its position), then give
+    /// every folder the locks and protected status of the results inside it.
     static func reconcile(_ results: [ScanResult]) -> [ScanResult] {
         var merged: [ScanResult] = []
         var indexByPath: [String: Int] = [:]
@@ -57,8 +60,8 @@ enum ScanResultOverlapReconciler {
 
     private static func raising(_ container: ScanResult, toward contained: ScanResult) -> ScanResult {
         var raised = container
-        if rank(contained.safety) > rank(raised.safety) {
-            raised.safety = contained.safety
+        if contained.safety == .protected_ {
+            raised.safety = .protected_
         }
         if raised.blockedByApp == nil {
             raised.blockedByApp = contained.blockedByApp

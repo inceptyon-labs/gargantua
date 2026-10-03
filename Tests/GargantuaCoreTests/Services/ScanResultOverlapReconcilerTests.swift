@@ -21,21 +21,23 @@ struct ScanResultOverlapReconcilerTests {
         #expect(reconciled[0].blockedByApp == brave)
     }
 
-    @Test("A folder takes the strictest safety and lock of results inside it")
+    @Test("A folder takes the app locks and protected status of results inside it, not review")
     func folderInheritsFromContents() {
         let folder = result("folder", "/u/Library/Caches/BraveSoftware", .safe)
         var inner = result("inner", "/u/Library/Caches/BraveSoftware/Brave-Browser/Default/Cache", .safe)
         inner.blockedByApp = brave
-        let deeper = result("deeper", "/u/Library/Caches/BraveSoftware/Models/x", .review)
+        let reviewInside = result("reviewInside", "/u/Library/Caches/BraveSoftware/Models/x", .review)
         let sibling = result("sibling", "/u/Library/Caches/BraveSoftwareExtra", .safe)
+        let other = result("other", "/u/Library/Caches/com.acme", .safe)
+        let protectedInside = result("protectedInside", "/u/Library/Caches/com.acme/keys", .protected_)
 
-        let reconciled = ScanResultOverlapReconciler.reconcile([folder, inner, deeper, sibling])
+        let reconciled = ScanResultOverlapReconciler.reconcile([folder, inner, reviewInside, sibling, other, protectedInside])
         let byID = Dictionary(uniqueKeysWithValues: reconciled.map { ($0.id, $0) })
 
-        #expect(byID["folder"]?.safety == .review)
         #expect(byID["folder"]?.blockedByApp == brave)
-        #expect(byID["sibling"]?.safety == .safe)
+        #expect(byID["folder"]?.safety == .safe)
         #expect(byID["sibling"]?.blockedByApp == nil)
+        #expect(byID["other"]?.safety == .protected_)
     }
 
     private func result(_ id: String, _ path: String, _ safety: SafetyLevel) -> ScanResult {
