@@ -18,6 +18,7 @@ public struct DeepCleanView: View {
     private let onAdvisory: (([ScanResult]) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
     private let onCleanupCompleted: ((CleanupResult) -> Void)?
+    private let onAddToExclusions: ((ScanResult) -> Void)?
     private let staleVersionPinnedPaths: Set<String>
 
     public init(
@@ -28,8 +29,10 @@ public struct DeepCleanView: View {
         onExplain: ((ScanResult) -> Void)? = nil,
         onAdvisory: (([ScanResult]) -> Void)? = nil,
         onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
-        onCleanupCompleted: ((CleanupResult) -> Void)? = nil
+        onCleanupCompleted: ((CleanupResult) -> Void)? = nil,
+        onAddToExclusions: ((ScanResult) -> Void)? = nil
     ) {
+        self.onAddToExclusions = onAddToExclusions
         self.profile = profile
         self.adapterOverride = adapter
         self.session = session
@@ -254,6 +257,12 @@ public struct DeepCleanView: View {
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
                 onRescan: { startScan() },
+                onAddToExclusions: onAddToExclusions.map { add in
+                    { item in
+                        add(item)
+                        session.dropResults([item.id])
+                    }
+                },
                 onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter
             )

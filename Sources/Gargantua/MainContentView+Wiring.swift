@@ -176,6 +176,15 @@ extension MainContentView {
         return urls.isEmpty ? nil : urls
     }
 
+    /// Settings › Exclusions entry for a scan row's path; later scans skip it.
+    func addToExclusions(_ item: ScanResult) {
+        do {
+            try persistence?.addExclusionEntry(pattern: item.path, note: "Added from Deep Clean")
+        } catch {
+            PersistenceDiagnostics.logFailure("addExclusionEntry", error: error)
+        }
+    }
+
     var pathExclusionPatterns: Set<String> {
         guard let persistence else { return [] }
         do {

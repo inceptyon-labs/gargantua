@@ -234,6 +234,15 @@ public final class DeepCleanSessionState {
         phase = .summary
     }
 
+    /// Removes results from the list and the selection (e.g. a path the user
+    /// just excluded).
+    public func dropResults(_ ids: Set<String>) {
+        if let current = scanResults {
+            scanResults = current.filter { !ids.contains($0.id) }
+        }
+        selectedResultIDs.subtract(ids)
+    }
+
     /// Folds a summary-screen retry into the session: recovered items leave the
     /// results list and selection, and the stored cleanup result reflects the
     /// retry, so coming back to the summary doesn't offer them again.

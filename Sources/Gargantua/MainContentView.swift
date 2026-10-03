@@ -146,7 +146,8 @@ struct MainContentView: View {
                                     onExplain: explainHandler,
                                     onAdvisory: advisoryHandler,
                                     onResolveFilter: scanFilterHandler,
-                                    onCleanupCompleted: dashboardCleanupHandler
+                                    onCleanupCompleted: dashboardCleanupHandler,
+                                    onAddToExclusions: persistence == nil ? nil : { addToExclusions($0) }
                                 )
                             case "smartUninstaller":
                                 SmartUninstallerView(viewModel: smartUninstallerViewModel)

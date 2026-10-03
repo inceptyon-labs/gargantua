@@ -164,18 +164,26 @@ struct ScanResultRowView: View {
             Label("Copy Path", systemImage: "doc.on.doc")
         }
 
-        Divider()
-
-        Button {
-            onAddToExclusions?(item)
-        } label: {
-            Label("Add to Exclusions", systemImage: "shield.slash")
+        // Only offered where the screen wires them up; they used to show
+        // everywhere and do nothing.
+        if onAddToExclusions != nil || onViewRule != nil {
+            Divider()
         }
 
-        Button {
-            onViewRule?(item)
-        } label: {
-            Label("View Rule", systemImage: "doc.text.magnifyingglass")
+        if let onAddToExclusions {
+            Button {
+                onAddToExclusions(item)
+            } label: {
+                Label("Add to Exclusions", systemImage: "shield.slash")
+            }
+        }
+
+        if let onViewRule {
+            Button {
+                onViewRule(item)
+            } label: {
+                Label("View Rule", systemImage: "doc.text.magnifyingglass")
+            }
         }
     }
 }

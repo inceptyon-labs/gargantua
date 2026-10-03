@@ -112,6 +112,20 @@ struct DeepCleanSessionStateTests {
         #expect(session.cleanupResult?.failedItems.isEmpty == true)
     }
 
+    @Test("dropResults removes excluded items from the list and the selection")
+    @MainActor
+    func dropResultsRemovesItems() {
+        let session = DeepCleanSessionState()
+        let kept = makeItem(id: "kept", safety: .safe)
+        let excluded = makeItem(id: "excluded", safety: .safe)
+        session.finishScan(results: [kept, excluded], duration: 0.5)
+
+        session.dropResults([excluded.id])
+
+        #expect(session.scanResults?.map(\.id) == [kept.id])
+        #expect(session.selectedResultIDs == [kept.id])
+    }
+
     @Test("dismissSummary returns to results when items remain")
     @MainActor
     func dismissSummaryReturnsToResultsWhenSomeRemain() {
