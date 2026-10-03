@@ -246,19 +246,26 @@ public struct DeepCleanView: View {
     // MARK: - Actions
 
     private func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
-        session.beginCleanup(method: method)
-        session.activeTask = Task {
-            // License gate fronts every Deep Clean execute. On blocked, sever
-            // the cleanup phase and present the Unlock sheet instead.
+        session.showConfirmation = false
+        Task {
+            // License gate fronts every Deep Clean execute. Authorize before
+            // leaving the results, so a blocked license shows the Unlock sheet
+            // over the list instead of discarding the scan.
             let authorization: DestructiveActionAuthorization
             switch await LicenseGate.shared.authorize(.deepClean) {
             case .failure(let reason):
-                session.severTether()
                 blockedReason = reason
                 return
             case .success(let granted):
                 authorization = granted
             }
+            runCleanup(items, method: method, authorization: authorization)
+        }
+    }
+
+    private func runCleanup(_ items: [ScanResult], method: CleanupMethod, authorization: DestructiveActionAuthorization) {
+        session.beginCleanup(method: method)
+        session.activeTask = Task {
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(
                 items, method: method, observer: session.pathStream, authorization: authorization
