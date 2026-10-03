@@ -36,7 +36,7 @@ extension CloudAIService {
         let configuration = configurationStore.load()
         guard configuration.isEnabled else { return false }
         if configuration.provider == .anthropic {
-            return (try? keyStore(for: .anthropic).hasKey()) ?? false
+            return (try? keyStore(for: configuration).hasKey()) ?? false
         }
         return true
     }

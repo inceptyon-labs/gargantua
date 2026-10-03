@@ -36,8 +36,8 @@ public final class CloudAIService: ObservableObject {
     }
 
     /// Keychain store for `provider`, honoring a test override.
-    func keyStore(for provider: CloudAIProvider) -> any CloudAPIKeyStore {
-        keyStoreOverride ?? CloudAPIKeyStores.store(for: provider)
+    func keyStore(for configuration: CloudAIConfiguration) -> any CloudAPIKeyStore {
+        keyStoreOverride ?? CloudAPIKeyStores.store(for: configuration)
     }
 
     /// Transport for the configured provider, honoring a test override.
@@ -47,19 +47,19 @@ public final class CloudAIService: ObservableObject {
 
     /// Stores an API key for the active provider in the keychain.
     public func saveAPIKey(_ apiKey: String) throws {
-        try keyStore(for: configurationStore.load().provider).save(apiKey)
+        try keyStore(for: configurationStore.load()).save(apiKey)
     }
 
     /// Removes the stored API key for the active provider from the keychain.
     public func revokeAPIKey() throws {
-        try keyStore(for: configurationStore.load().provider).delete()
+        try keyStore(for: configurationStore.load()).delete()
     }
 
     /// Returns the combined Cloud AI readiness and usage status.
     public func status() async -> CloudAIStatus {
         await CloudAIStatusProvider.snapshot(
             configurationStore: configurationStore,
-            keyStore: keyStore(for: configurationStore.load().provider),
+            keyStore: keyStore(for: configurationStore.load()),
             usageLedger: usageLedger
         )
     }
@@ -77,7 +77,7 @@ public final class CloudAIService: ObservableObject {
         // Anthropic requires a key; OpenAI-compatible may not (local servers
         // like Ollama ignore auth), so a missing key there means "send none".
         let provider = configuration.provider
-        let storedKey = try keyStore(for: provider).read()
+        let storedKey = try keyStore(for: configuration).read()
         let apiKey: String
         if provider == .anthropic {
             guard let key = storedKey else { throw CloudAIError.missingAPIKey }

@@ -240,13 +240,43 @@ struct CloudAIProviderConfigTests {
         #expect(CloudAPIKeyValidation.anthropic.accepts("sk-ant-api03-\(String(repeating: "a", count: 32))"))
     }
 
-    @Test("Provider key stores use distinct keychain accounts")
-    func distinctAccounts() {
-        // Different provider stores are different instances (separate accounts),
-        // so a key saved under one provider survives toggling to the other.
-        let anthropic = CloudAPIKeyStores.store(for: .anthropic)
-        let openAI = CloudAPIKeyStores.store(for: .openAICompatible)
-        #expect(anthropic is KeychainCloudAPIKeyStore)
-        #expect(openAI is KeychainCloudAPIKeyStore)
+    @Test("An OpenAI-compatible key is stored per endpoint origin")
+    func keyAccountIsPerOrigin() throws {
+        func account(_ url: String) throws -> String {
+            CloudAPIKeyStores.openAIAccount(origin: CloudAPIKeyStores.origin(of: try #require(URL(string: url))))
+        }
+        #expect(try account("https://API.openai.com/v1") == account("https://api.openai.com:443/v2"))
+        #expect(try account("https://api.openai.com/v1") != account("https://openrouter.ai/api/v1"))
+        #expect(try account("http://192.168.2.222:11434/v1") != account("http://192.168.2.222:1234/v1"))
+        #expect(try account("https://api.openai.com/v1") != CloudAPIKeyStores.legacyOpenAIAccount)
     }
+
+    @Test("A key saved before origin binding carries over only to OpenAI's own endpoint")
+    func legacyKeyMigratesOnlyToDefaultOrigin() throws {
+        let defaultOrigin = CloudAPIKeyStores.origin(of: try #require(URL(string: "https://api.openai.com/v1")))
+        let otherOrigin = CloudAPIKeyStores.origin(of: try #require(URL(string: "https://openrouter.ai/api/v1")))
+
+        let legacy = MemoryKeyStore("sk-old")
+        let other = MemoryKeyStore(nil)
+        CloudAPIKeyStores.migrateLegacyOpenAIKey(to: other, origin: otherOrigin, legacy: legacy)
+        #expect(try other.read() == nil)
+        #expect(try legacy.read() == "sk-old")
+
+        let openAI = MemoryKeyStore(nil)
+        CloudAPIKeyStores.migrateLegacyOpenAIKey(to: openAI, origin: defaultOrigin, legacy: legacy)
+        #expect(try openAI.read() == "sk-old")
+        #expect(try legacy.read() == nil)
+    }
+}
+
+private final class MemoryKeyStore: CloudAPIKeyStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var key: String?
+
+    init(_ key: String?) { self.key = key }
+
+    func save(_ apiKey: String) throws { lock.withLock { key = apiKey } }
+    func read() throws -> String? { lock.withLock { key } }
+    func delete() throws { lock.withLock { key = nil } }
+    func hasKey() throws -> Bool { try read() != nil }
 }

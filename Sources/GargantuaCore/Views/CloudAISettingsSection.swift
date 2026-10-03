@@ -11,7 +11,7 @@ struct CloudAISettingsSection: View {
 
     /// Keychain store for the currently selected provider.
     var activeKeyStore: any CloudAPIKeyStore {
-        CloudAPIKeyStores.store(for: configuration.provider)
+        CloudAPIKeyStores.store(for: configuration)
     }
 
     private var isOpenAICompatible: Bool {

@@ -39,14 +39,58 @@ public enum CloudAPIKeyValidation: Sendable {
 
 /// Resolves the keychain store for each provider — separate accounts so a key
 /// for one provider survives toggling to the other and back.
+///
+/// An OpenAI-compatible key is stored per endpoint origin (scheme, host,
+/// port). The base URL lives in UserDefaults, which any process running as
+/// the user can rewrite; with one key for every endpoint, pointing the URL
+/// somewhere else (or picking another preset) sent the key there. A key now
+/// only goes to the origin it was saved for.
 public enum CloudAPIKeyStores {
-    public static func store(for provider: CloudAIProvider) -> any CloudAPIKeyStore {
-        switch provider {
+    public static func store(for configuration: CloudAIConfiguration) -> any CloudAPIKeyStore {
+        switch configuration.provider {
         case .anthropic:
             return KeychainCloudAPIKeyStore(account: "anthropic-api-key", validation: .anthropic)
         case .openAICompatible:
-            return KeychainCloudAPIKeyStore(account: "openai-api-key", validation: .permissive)
+            let origin = configuration.resolvedOpenAIBaseURL.flatMap(origin(of:))
+            let store = KeychainCloudAPIKeyStore(account: openAIAccount(origin: origin), validation: .permissive)
+            migrateLegacyOpenAIKey(to: store, origin: origin)
+            return store
         }
+    }
+
+    /// Before keys were bound to an origin, the one OpenAI-compatible key was
+    /// stored under this account.
+    static let legacyOpenAIAccount = "openai-api-key"
+
+    static func openAIAccount(origin: String?) -> String {
+        guard let origin else { return legacyOpenAIAccount + "@invalid" }
+        return "\(legacyOpenAIAccount)@\(origin)"
+    }
+
+    /// `https://api.openai.com:443/v1` → `https://api.openai.com:443`; the
+    /// port is spelled out so `:443` and an implicit 443 are the same origin.
+    static func origin(of url: URL) -> String? {
+        guard let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased() else { return nil }
+        let port = url.port ?? (scheme == "https" ? 443 : scheme == "http" ? 80 : -1)
+        return "\(scheme)://\(host):\(port)"
+    }
+
+    /// Carries a key saved before origin binding over to OpenAI's own
+    /// endpoint, the one origin it can be trusted for without knowing which
+    /// URL it was entered for. With any other endpoint configured, the old
+    /// key is left unused and has to be entered again.
+    static func migrateLegacyOpenAIKey(
+        to store: any CloudAPIKeyStore,
+        origin: String?,
+        legacy: any CloudAPIKeyStore = KeychainCloudAPIKeyStore(account: legacyOpenAIAccount, validation: .permissive)
+    ) {
+        let defaultOrigin = URL(string: CloudAIProvider.openAICompatible.defaultBaseURL).flatMap(origin(of:))
+        guard origin == defaultOrigin,
+              (try? legacy.hasKey()) == true,
+              (try? store.hasKey()) != true,
+              let key = try? legacy.read() else { return }
+        try? store.save(key)
+        try? legacy.delete()
     }
 }
 

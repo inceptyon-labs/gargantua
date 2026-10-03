@@ -409,6 +409,10 @@ extension CloudAISettingsSection {
         )
         if status?.hasAPIKey == true, apiKeyStatus == "Not configured" {
             apiKeyStatus = "API key stored in Keychain"
+        } else if status?.hasAPIKey == false, apiKeyStatus == "API key stored in Keychain" {
+            // A key belongs to the endpoint it was saved for; a new base URL
+            // starts without one.
+            apiKeyStatus = "Not configured"
         }
     }
 }
