@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A single remnant row in the plan review list — checkbox (locked when
@@ -63,6 +64,19 @@ struct RemnantRow: View {
         .padding(.horizontal, GargantuaSpacing.space3)
         .background(item.safety.tintBackground)
         .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        .contextMenu {
+            Button {
+                NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(item.path, forType: .string)
+            } label: {
+                Label("Copy Path", systemImage: "doc.on.doc")
+            }
+        }
     }
 
     private var checkboxColor: Color {
