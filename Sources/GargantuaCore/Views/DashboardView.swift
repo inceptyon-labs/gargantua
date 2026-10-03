@@ -21,12 +21,12 @@ public struct DashboardView: View {
     @Bindable private var session: DashboardSessionState
     private let persistence: PersistenceController?
     private let homebrewReclaimableProvider: HomebrewReclaimableProvider
-    /// Opens a fresh store for reads the scheduler process writes. The app's
-    /// boot-time `persistence` caches settings in its long-lived context and
-    /// never sees another process's write, so — like the menu bar — the
-    /// scheduled-scan summary is read through a newly-opened controller to
-    /// avoid showing stale data until relaunch.
-    private let makeFreshPersistence: @MainActor () throws -> PersistenceController
+    /// Reads the scheduler process's writes. The app's boot-time `persistence`
+    /// caches settings in its long-lived context and never sees another
+    /// process's write, so the scheduled-scan summary is read through a new
+    /// context (`freshReader()`) to avoid showing stale data until relaunch.
+    /// Tests inject a factory instead.
+    private let makeFreshPersistence: (@MainActor () throws -> PersistenceController)?
 
     @State private var diskUsedGB: Int = 0
     @State private var diskTotalGB: Int = 0
@@ -54,7 +54,7 @@ public struct DashboardView: View {
         sidebarSelection: Binding<String?>,
         session: DashboardSessionState,
         persistence: PersistenceController? = nil,
-        makeFreshPersistence: @escaping @MainActor () throws -> PersistenceController = { try PersistenceController() },
+        makeFreshPersistence: (@MainActor () throws -> PersistenceController)? = nil,
         homebrewReclaimableProvider: @escaping HomebrewReclaimableProvider = { HomebrewReclaimableProbe.probe() }
     ) {
         self._sidebarSelection = sidebarSelection
@@ -312,9 +312,14 @@ public struct DashboardView: View {
         diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
         diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
         diskUsage = metrics.diskUsage
-        scheduledScanSummary = try? makeFreshPersistence().fetchPendingScheduledScanSummary()
+        scheduledScanSummary = try? freshPersistence()?.fetchPendingScheduledScanSummary()
         installedAppCount = await Self.countInstalledApps()
         isLoading = false
+    }
+
+    private func freshPersistence() throws -> PersistenceController? {
+        if let makeFreshPersistence { return try makeFreshPersistence() }
+        return persistence?.freshReader()
     }
 
     /// Cheap user-installed-app count for the Smart Uninstaller roadmap pill.
@@ -330,7 +335,7 @@ public struct DashboardView: View {
     private func acknowledgeScheduledScanSummary() {
         scheduledScanSummary = nil
         do {
-            try makeFreshPersistence().acknowledgeScheduledScanSummary()
+            try freshPersistence()?.acknowledgeScheduledScanSummary()
         } catch {
             // A failed acknowledge means the card comes back next launch. The
             // dismissal still holds for this session; log it so the resurrection

@@ -32,6 +32,38 @@ struct MenuBarStatusModelTests {
         #expect(model.snapshot.pendingItemCount == 4)
     }
 
+    @Test("refreshes reuse one store and still see summaries written after the first refresh")
+    @MainActor
+    func refreshReusesStoreAndSeesNewWrites() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        var opens = 0
+        let model = MenuBarStatusModel(
+            scanner: StubMenuBarStatusScanner(results: []),
+            makePersistence: {
+                opens += 1
+                return persistence
+            },
+            defaults: try makeDefaults(),
+            now: { Date(timeIntervalSince1970: 5_100) }
+        )
+
+        await model.refresh()
+        #expect(model.snapshot.pendingItemCount == 0)
+
+        try persistence.freshReader().recordScheduledScanSummary(ScheduledScanSummary(
+            date: Date(timeIntervalSince1970: 5_000),
+            profileID: "light",
+            itemCount: 3,
+            reclaimableBytes: 9_000
+        ))
+        await model.refresh()
+        await model.refresh()
+
+        #expect(opens == 1)
+        #expect(model.snapshot.pendingItemCount == 3)
+    }
+
     @Test("pending scheduled alert is not hidden by newer timestamp-only scan date")
     @MainActor
     func scheduledSummaryOutranksPlainLastScanDate() async throws {

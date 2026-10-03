@@ -104,6 +104,9 @@ public final class MenuBarStatusModel: ObservableObject {
     private let now: () -> Date
     private let snoozeInterval: TimeInterval
     private var quickScanSummary: MenuBarStatusSummary?
+    /// Opened once; each refresh reads through a new context on it (see
+    /// `PersistenceController.freshReader()`).
+    private var persistenceBase: PersistenceController?
 
     public init(
         scanner: any MenuBarStatusScanning = NativeMenuBarStatusScanner(),
@@ -122,7 +125,7 @@ public final class MenuBarStatusModel: ObservableObject {
 
     public func refresh() async {
         do {
-            let persistence = try makePersistence()
+            let persistence = try freshPersistence()
             try persistence.bootstrap()
             let summary = try bestSummary(from: persistence)
             snapshot = makeSnapshot(summary: summary, isScanning: false, errorMessage: nil)
@@ -143,7 +146,7 @@ public final class MenuBarStatusModel: ObservableObject {
         )
 
         do {
-            let persistence = try makePersistence()
+            let persistence = try freshPersistence()
             try persistence.bootstrap()
             let settings = try persistence.fetchSettings()
             let scanRoots = ScanRootSettings.resolvedURLs(from: settings.scanRoots)
@@ -191,6 +194,15 @@ public final class MenuBarStatusModel: ObservableObject {
             snoozedUntil: until,
             errorMessage: snapshot.errorMessage
         )
+    }
+
+    private func freshPersistence() throws -> PersistenceController {
+        if let persistenceBase {
+            return persistenceBase.freshReader()
+        }
+        let base = try makePersistence()
+        persistenceBase = base
+        return base
     }
 
     private func bestSummary(from persistence: PersistenceController) throws -> MenuBarStatusSummary? {

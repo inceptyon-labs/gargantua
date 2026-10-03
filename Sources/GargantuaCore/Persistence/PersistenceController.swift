@@ -36,6 +36,22 @@ public final class PersistenceController {
         self.context = container.mainContext
     }
 
+    private init(container: ModelContainer, context: ModelContext) {
+        self.container = container
+        self.context = context
+    }
+
+    /// A controller over this container that reads through a new context, so it
+    /// sees what another process (the scheduler) wrote after this controller's
+    /// long-lived context cached its objects. Opening a new `ModelContainer` per
+    /// read instead left a SwiftData run-loop observer alive per open, and every
+    /// main-thread run-loop pass paid for all of them.
+    public func freshReader() -> PersistenceController {
+        let reader = ModelContext(container)
+        reader.autosaveEnabled = false
+        return PersistenceController(container: container, context: reader)
+    }
+
     // MARK: - Bootstrap
 
     /// Seed built-in profiles and default settings on first launch.
