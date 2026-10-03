@@ -224,6 +224,16 @@ public struct DeepCleanView: View {
                 isBusy: session.isScanning
             )
 
+            // Rules that hit unreadable folders or caps still finish; say so
+            // instead of silently showing fewer results (Dev Purge does too).
+            if !session.scanProgress.errors.isEmpty {
+                DevArtifactScanWarningsBanner(errors: session.scanProgress.errors)
+
+                Rectangle()
+                    .fill(GargantuaColors.border)
+                    .frame(height: 1)
+            }
+
             // Three-bucket scan results
             ScanBucketListView(
                 results: results,
