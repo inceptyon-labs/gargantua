@@ -12,9 +12,13 @@ struct DashboardRoadmapPlanner {
     /// User-installed app count for the Smart Uninstaller pill. `0` falls
     /// back to a generic label so a not-yet-loaded count doesn't show "0 apps".
     var installedAppCount: Int = 0
+    /// Error from the last triage run, when it failed. A failed run has no
+    /// findings, which must not read as "nothing to clean".
+    var triageFailure: String?
 
     var headline: String {
         if scanProgress.isScanning { return "Building the cleanup roadmap" }
+        if triageFailure != nil { return "Triage didn't finish — run it again" }
         if !hasRunTriageScan { return "Run triage, then follow the tool roadmap" }
         if triageIsStale {
             return "Triage is \(triageAgeLabel) — refresh before acting"
@@ -26,6 +30,10 @@ struct DashboardRoadmapPlanner {
     var detail: String {
         if scanProgress.isScanning {
             return "The triage scan is checking lightweight local rules and grouping findings by the tool that should handle them."
+        }
+        if let triageFailure {
+            return "The last triage failed (\(triageFailure)), so there are no current findings to rank. "
+                + "Run it again before relying on the roadmap below."
         }
         if !hasRunTriageScan {
             return "Triage checks caches, logs, trash, installers, and developer artifacts. "
@@ -46,6 +54,7 @@ struct DashboardRoadmapPlanner {
 
     var statusPill: String {
         if scanProgress.isScanning { return "triage running" }
+        if triageFailure != nil { return "triage failed" }
         if !hasRunTriageScan { return "triage not run" }
         if triageIsStale { return "triage \(triageAgeLabel) · refresh" }
         if alerts.isEmpty { return "triage clear" }

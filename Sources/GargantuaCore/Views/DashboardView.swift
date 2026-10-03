@@ -268,6 +268,8 @@ public struct DashboardView: View {
                 progress.recordError(error.localizedDescription)
                 progress.finish(itemsFound: 0)
                 session.triageFailure = error.localizedDescription
+                // Findings from an earlier run no longer describe the disk.
+                session.alerts = []
             }
         }
     }
@@ -358,7 +360,8 @@ private extension DashboardView {
             triageAgeLabel: session.triageAgeLabel,
             diskUsage: diskUsage,
             freeDiskGB: freeDiskGB,
-            installedAppCount: installedAppCount
+            installedAppCount: installedAppCount,
+            triageFailure: session.triageFailure
         )
     }
 

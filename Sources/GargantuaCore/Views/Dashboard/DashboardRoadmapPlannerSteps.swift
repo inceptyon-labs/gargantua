@@ -4,7 +4,7 @@ extension DashboardRoadmapPlanner {
             return scanningRoadmap
         }
 
-        if !hasRunTriageScan && !scanProgress.isScanning {
+        if triageFailure != nil || !hasRunTriageScan {
             return preTriageRoadmap
         }
 
