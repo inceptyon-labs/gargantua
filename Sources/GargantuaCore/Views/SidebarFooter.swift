@@ -2,11 +2,16 @@ import SwiftUI
 
 struct SidebarFooter: View {
     @ObservedObject var mcpStatusModel: MCPServerStatusViewModel
+    let updateModel: AppUpdateSettingsViewModel?
     let isCollapsed: Bool
     let onToggleCollapse: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
+            if let updateModel {
+                SidebarUpdateRow(model: updateModel, isCollapsed: isCollapsed)
+            }
+
             Rectangle()
                 .fill(GargantuaColors.border)
                 .frame(height: 1)

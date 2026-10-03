@@ -48,7 +48,11 @@ struct MainContentView: View {
                 PermissionRequestFlowView(isComplete: $hasCompletedOnboarding)
             } else {
                 HStack(spacing: 0) {
-                    SidebarView(selection: $sidebarSelection, mcpStatusModel: mcpStatusModel)
+                    SidebarView(
+                        selection: $sidebarSelection,
+                        mcpStatusModel: mcpStatusModel,
+                        updateModel: updateSettingsViewModel
+                    )
 
                     // Content area
                     VStack(spacing: 0) {

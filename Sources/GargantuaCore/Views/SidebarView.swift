@@ -17,6 +17,7 @@ public struct SidebarView: View {
     @Binding public var selection: String?
     public var sections: [SidebarSection]
     @ObservedObject private var mcpStatusModel: MCPServerStatusViewModel
+    private let updateModel: AppUpdateSettingsViewModel?
     @AppStorage("sidebar.collapsed") private var isCollapsed: Bool = false
 
     private static let expandedWidth: CGFloat = 200
@@ -30,17 +31,20 @@ public struct SidebarView: View {
         self._selection = selection
         self.sections = sections
         self.mcpStatusModel = MCPServerStatusViewModel()
+        self.updateModel = nil
     }
 
     @MainActor
     public init(
         selection: Binding<String?>,
         sections: [SidebarSection] = SidebarSection.defaultSections,
-        mcpStatusModel: MCPServerStatusViewModel
+        mcpStatusModel: MCPServerStatusViewModel,
+        updateModel: AppUpdateSettingsViewModel? = nil
     ) {
         self._selection = selection
         self.sections = sections
         self.mcpStatusModel = mcpStatusModel
+        self.updateModel = updateModel
     }
 
     /// All items flattened in section order, for keyboard shortcut indexing.
@@ -85,6 +89,7 @@ public struct SidebarView: View {
 
             SidebarFooter(
                 mcpStatusModel: mcpStatusModel,
+                updateModel: updateModel,
                 isCollapsed: isCollapsed,
                 onToggleCollapse: toggleCollapsed
             )
