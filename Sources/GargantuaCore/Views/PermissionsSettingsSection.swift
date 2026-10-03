@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 
@@ -20,9 +21,6 @@ struct PermissionsSettingsSection: View {
     private let isHelperBundled: Bool
 
     @Environment(\.openURL) private var openURL
-
-    /// Reflects grants made directly in System Settings without a manual refresh.
-    private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     /// Computed exactly once per process, regardless of how many times this
     /// view struct is initialized, unlike a plain stored-property default would be.
@@ -51,20 +49,33 @@ struct PermissionsSettingsSection: View {
 
             privilegedHelperRow
         }
-        .onReceive(timer) { _ in
-            hasFullDiskAccess = PermissionChecker.hasFullDiskAccess
-            let polledStatus = SMAppServicePrivilegedHelperInstaller().status()
-            if Self.pollClearsRegisterError(previous: helperStatus, polled: polledStatus) {
-                // A stale `registerError` from an earlier failed `register()`
-                // call would otherwise outlive the condition it described —
-                // e.g. the user fixes things in System Settings and the row
-                // still shows a red "could not register" message next to a
-                // green "Granted" badge until relaunch. Any polled status
-                // change means the world has moved since that error, so drop it.
-                registerError = nil
+        // Reflects grants made directly in System Settings without a manual
+        // refresh. The checks (a TCC probe and an SMAppService query) run off
+        // the main thread, and not at all while no window is on screen.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled, NSApp.occlusionState.contains(.visible) else { continue }
+                let (fullDiskAccess, polledStatus) = await Task.detached(priority: .utility) {
+                    (PermissionChecker.hasFullDiskAccess, SMAppServicePrivilegedHelperInstaller().status())
+                }.value
+                applyPoll(fullDiskAccess: fullDiskAccess, helperStatus: polledStatus)
             }
-            helperStatus = polledStatus
         }
+    }
+
+    private func applyPoll(fullDiskAccess: Bool, helperStatus polledStatus: PrivilegedHelperStatus) {
+        if hasFullDiskAccess != fullDiskAccess { hasFullDiskAccess = fullDiskAccess }
+        if Self.pollClearsRegisterError(previous: helperStatus, polled: polledStatus) {
+            // A stale `registerError` from an earlier failed `register()`
+            // call would otherwise outlive the condition it described —
+            // e.g. the user fixes things in System Settings and the row
+            // still shows a red "could not register" message next to a
+            // green "Granted" badge until relaunch. Any polled status
+            // change means the world has moved since that error, so drop it.
+            registerError = nil
+        }
+        if helperStatus != polledStatus { helperStatus = polledStatus }
     }
 
     // MARK: - Privileged helper

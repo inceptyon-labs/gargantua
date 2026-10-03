@@ -34,6 +34,20 @@ private final class StubDetailedVerifier: DetailedCodeSignatureVerifying, @unche
 @Suite("BinaryIdentityResolver")
 struct BinaryIdentityResolverTests {
 
+    @Test("The identity cache stays bounded across many distinct binaries")
+    func cacheIsBounded() {
+        let resolver = DefaultBinaryIdentityResolver(
+            bundleReader: StubBundleReader(metadata: [:]),
+            signatureVerifier: StubDetailedVerifier(details: [:]),
+            registry: .default,
+            modificationDate: { _ in nil }
+        )
+        for index in 0 ... DefaultBinaryIdentityResolver.cacheLimit {
+            _ = resolver.resolve(binaryPath: "/tmp/gargantua-bin-\(index)")
+        }
+        #expect(resolver.cachedBinaryCount <= DefaultBinaryIdentityResolver.cacheLimit)
+    }
+
     // MARK: - Bundle walk-up
 
     @Test("Walk-up finds .app from helper executable inside Contents/MacOS")

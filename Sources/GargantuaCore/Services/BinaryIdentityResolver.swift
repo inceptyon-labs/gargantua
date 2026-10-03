@@ -33,8 +33,10 @@ extension BinaryIdentityResolving {
 /// binary swapped in at the same path (new mtime) misses the cache and
 /// re-resolves automatically. That makes the cache safe to keep across passes —
 /// callers no longer need to `clearCache()` between scans to avoid a replaced
-/// binary retaining its prior trusted classification. The cache is unbounded;
-/// instances may live for a long-running app session.
+/// binary retaining its prior trusted classification. The cache holds at most
+/// `cacheLimit` binaries and starts over when full: instances live for the
+/// whole app session, and paths that come and go (updated apps, temporary
+/// helpers) would otherwise accumulate for good.
 public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unchecked Sendable {
     private let bundleReader: AppBundleReading
     private let signatureVerifier: any DetailedCodeSignatureVerifying
@@ -48,6 +50,8 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
 
     private let cacheLock = NSLock()
     private var cache: [String: CacheEntry] = [:]
+    /// Comfortably above one Background Items + Processes pass.
+    static let cacheLimit = 2_048
 
     public init(
         bundleReader: AppBundleReading = DefaultAppBundleReader(),
@@ -100,8 +104,15 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
 
     private func storeCachedIdentity(_ identity: BinaryIdentity, for path: String, mtime: Date?) {
         cacheLock.lock()
+        if cache[path] == nil, cache.count >= Self.cacheLimit {
+            cache.removeAll(keepingCapacity: true)
+        }
         cache[path] = CacheEntry(mtime: mtime, identity: identity)
         cacheLock.unlock()
+    }
+
+    var cachedBinaryCount: Int {
+        cacheLock.withLock { cache.count }
     }
 
     // MARK: - Resolution
