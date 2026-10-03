@@ -267,6 +267,20 @@ public struct PathExpander: Sendable {
         state: WalkState
     ) -> [ChildEntry] {
         if state.shouldStop { return [] }
+        // `contentsOfDirectory` and `resourceValues` hand back autoreleased
+        // objects. Drained per directory here; otherwise a `**` walk holds every
+        // URL it listed until the rule finishes, about 50 MB per walk with a
+        // dozen walks running at once (the ~900 MB Deep Clean peak).
+        return autoreleasepool {
+            listChildren(atPath: path, includeHidden: includeHidden, state: state)
+        }
+    }
+
+    private func listChildren(
+        atPath path: String,
+        includeHidden: Bool,
+        state: WalkState
+    ) -> [ChildEntry] {
         let fm = FileManager.default
         let url = URL(fileURLWithPath: path)
         let options: FileManager.DirectoryEnumerationOptions = includeHidden ? [] : [.skipsHiddenFiles]
