@@ -14,10 +14,10 @@ extension EventHorizonConsoleView {
                             .foregroundStyle(GargantuaColors.ink4)
                             .padding(.vertical, GargantuaSpacing.space2)
                     }
-                    ForEach(Array(stream.events.enumerated()), id: \.offset) { offset, event in
-                        let seq = stream.firstSequence + offset
-                        eventRow(event, seq: seq)
-                            .id(seq)
+                    // Keyed by stable sequence number, so when the buffer rolls
+                    // over only the dropped and added rows change.
+                    ForEach(stream.sequencedEvents) { item in
+                        eventRow(item.event, seq: item.id)
                     }
                     Color.clear
                         .frame(height: 1)
@@ -32,7 +32,7 @@ extension EventHorizonConsoleView {
                     .stroke(GargantuaColors.borderSoft, lineWidth: 1)
             )
             .frame(maxHeight: .infinity)
-            .onChange(of: stream.events.count) { _, _ in
+            .onChange(of: stream.nextSequence) { _, _ in
                 withAnimation(.easeOut(duration: 0.1)) {
                     proxy.scrollTo("tail", anchor: .bottom)
                 }

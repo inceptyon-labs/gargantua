@@ -65,7 +65,7 @@ public struct EventHorizonConsoleView: View {
         .background(GargantuaColors.void_)
         .onAppear { resetPhaseTracking() }
         .onChange(of: context.phaseKey) { _, _ in resetPhaseTracking() }
-        .onChange(of: stream.events.count) { oldCount, newCount in
+        .onChange(of: stream.nextSequence) { oldCount, newCount in
             updateActivityRate(delta: max(newCount - oldCount, 0))
             tripTimeDilationIfDue()
         }
@@ -262,7 +262,7 @@ public struct EventHorizonConsoleView: View {
         // Anchor the executing baseline to the next sequence ID that will
         // be assigned. Any event already in the buffer belongs to a prior
         // phase (e.g. scan matches) and must not be spaghettified.
-        executingBaselineSeq = stream.firstSequence + stream.events.count
+        executingBaselineSeq = stream.nextSequence
         if !context.isExecuting {
             showTimeDilation = false
         }

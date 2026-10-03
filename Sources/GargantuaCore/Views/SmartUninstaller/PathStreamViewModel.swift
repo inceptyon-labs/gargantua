@@ -30,6 +30,24 @@ public final class PathStreamViewModel: ScanProgressObserving {
 
     public let bufferCap: Int
 
+    /// Sequence number the next appended event will get. Unlike `events.count`
+    /// it keeps climbing after the buffer fills, so views can react to every
+    /// new event.
+    public var nextSequence: Int {
+        firstSequence + events.count
+    }
+
+    /// One buffered event with its stable sequence number, for row identity
+    /// that survives buffer rollover.
+    public struct SequencedEvent: Identifiable {
+        public let id: Int
+        public let event: ScanProgressEvent
+    }
+
+    public var sequencedEvents: [SequencedEvent] {
+        events.enumerated().map { SequencedEvent(id: firstSequence + $0.offset, event: $0.element) }
+    }
+
     /// Nonisolated staging buffer so a scanner emitting thousands of events from
     /// a background task batches them into one main-actor hop per runloop tick
     /// instead of scheduling one `Task` per event.
@@ -46,9 +64,7 @@ public final class PathStreamViewModel: ScanProgressObserving {
         guard pending.stage(event) else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            for event in self.pending.drain() {
-                self.append(event)
-            }
+            self.append(contentsOf: self.pending.drain())
         }
     }
 
@@ -81,21 +97,42 @@ public final class PathStreamViewModel: ScanProgressObserving {
 
     /// Main-actor append used directly from tests and internal callers.
     public func append(_ event: ScanProgressEvent) {
-        events.append(event)
-        if events.count > bufferCap {
-            let dropped = events.count - bufferCap
-            events.removeFirst(dropped)
-            firstSequence += dropped
+        append(contentsOf: [event])
+    }
+
+    /// Appends a drained batch with one write per property, so observers see a
+    /// single change per batch instead of one per event.
+    public func append(contentsOf batch: [ScanProgressEvent]) {
+        guard !batch.isEmpty else { return }
+        var updated = events
+        updated.append(contentsOf: batch)
+        let dropped = updated.count - bufferCap
+        if dropped > 0 {
+            updated.removeFirst(dropped)
         }
-        switch event.outcome {
-        case .match:
-            matchCount += 1
-            totalBytes += event.bytes ?? 0
-        case .failed:
-            failureCount += 1
-        case .checked, .skipped:
-            break
+
+        var matches = 0
+        var failures = 0
+        var bytes: Int64 = 0
+        for event in batch {
+            switch event.outcome {
+            case .match:
+                matches += 1
+                bytes += event.bytes ?? 0
+            case .failed:
+                failures += 1
+            case .checked, .skipped:
+                break
+            }
         }
+
+        events = updated
+        if dropped > 0 { firstSequence += dropped }
+        if matches > 0 {
+            matchCount += matches
+            totalBytes += bytes
+        }
+        if failures > 0 { failureCount += failures }
     }
 
     /// Reset the buffer and all aggregate counters. The sequence counter is

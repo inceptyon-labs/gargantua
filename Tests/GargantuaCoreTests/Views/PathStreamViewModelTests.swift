@@ -95,6 +95,16 @@ struct PathStreamViewModelTests {
         #expect(vm.firstSequence == afterClear)
     }
 
+    @Test("Sequence numbers keep climbing and stay attached to events after the buffer fills")
+    func sequencesSurviveRollover() {
+        let vm = PathStreamViewModel(bufferCap: 3)
+        vm.append(contentsOf: (0 ..< 5).map { ScanProgressEvent(path: "/tmp/\($0)", outcome: .checked) })
+
+        #expect(vm.nextSequence == 5)
+        #expect(vm.sequencedEvents.map(\.id) == [2, 3, 4])
+        #expect(vm.sequencedEvents.map(\.event.path) == ["/tmp/2", "/tmp/3", "/tmp/4"])
+    }
+
     @Test("didEmit from nonisolated context forwards to main actor in order")
     func nonisolatedForwarding() async {
         let vm = PathStreamViewModel()
