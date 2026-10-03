@@ -62,8 +62,14 @@ extension ModelDownloadManager {
     private func handleProgress(currentFileBytes: Int64) {
         let total = modelInfo.expectedSize
         let bytesReceived = completedBytes + max(0, currentFileBytes)
-        let progress = total > 0 ? Double(bytesReceived) / Double(total) : 0
-        state = .downloading(progress: min(progress, 1.0), bytesReceived: bytesReceived)
+        let progress = min(total > 0 ? Double(bytesReceived) / Double(total) : 0, 1.0)
+        // URLSession reports progress tens to hundreds of times a second, and
+        // every `state` change re-renders the views observing the manager
+        // (the main window among them). Publish at 0.1% steps instead.
+        if case .downloading(let shown, _) = state, Int(shown * 1000) == Int(progress * 1000) {
+            return
+        }
+        state = .downloading(progress: progress, bytesReceived: bytesReceived)
     }
 
     private func handleDownloadedFile(at scratch: URL) {
