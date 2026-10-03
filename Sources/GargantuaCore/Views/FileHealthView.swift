@@ -47,6 +47,7 @@ public struct FileHealthView: View {
         onSuggestClusters: ClusterSuggestionHandler? = nil
     ) {
         self.results = results
+        self.tabs = FileHealthGrouper.group(results)
         self.warnings = warnings
         self.session = session ?? FileHealthSessionState()
         self.onExplain = onExplain
@@ -56,9 +57,10 @@ public struct FileHealthView: View {
         self.onSuggestClusters = onSuggestClusters
     }
 
-    private var tabs: [FileHealthCategoryTab] {
-        FileHealthGrouper.group(results)
-    }
+    /// Grouped once per set of results. As a computed property it re-bucketed
+    /// every finding on each of its ~10 reads per render, and every checkbox
+    /// click re-renders this view.
+    private let tabs: [FileHealthCategoryTab]
 
     private var selectedTab: FileHealthCategoryTab? {
         guard let selectedTabID else { return tabs.first }
