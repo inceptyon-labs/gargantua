@@ -255,6 +255,13 @@ public final class CleanupEngine: Sendable {
         return nil
     }
 
+    /// The helper moves only `item.path`; a database moved without its sidecars
+    /// leaves a `-wal` that SQLite can replay into the next database.
+    private static func hasRemainingSidecars(_ item: ScanResult) -> Bool {
+        SQLiteDatabaseFiles.isDatabase(item.path)
+            && !SQLiteDatabaseFiles.existingSidecars(of: item.path).isEmpty
+    }
+
     /// Retry permission-class failures through the root-privileged helper.
     ///
     /// Full Disk Access lets us read root-owned paths but not delete them; the
@@ -275,6 +282,7 @@ public final class CleanupEngine: Sendable {
                 && !result.item.isOllamaModel
                 && !result.item.isHuggingFaceRevisionPrune
                 && CleanupFailureClassifier.isElevatable(result.error)
+                && !Self.hasRemainingSidecars(result.item)
         }
         guard !escalatable.isEmpty else { return results }
 

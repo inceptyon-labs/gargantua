@@ -6,16 +6,18 @@ import Testing
 @MainActor
 private final class SelectiveTrashMover: TrashMoving {
     private let failing: Set<String>
+    private let message: String
     private(set) var movedPaths: [String] = []
 
-    init(failing: Set<String> = []) {
+    init(failing: Set<String> = [], message: String = "boom") {
         self.failing = failing
+        self.message = message
     }
 
     func moveToTrash(_ url: URL) async throws -> URL? {
         movedPaths.append(url.path)
         if failing.contains(url.lastPathComponent) {
-            throw TrashMoveFailure(message: "boom")
+            throw TrashMoveFailure(message: message)
         }
         return nil
     }
@@ -150,5 +152,36 @@ struct CleanupEngineSQLiteTests {
         #expect(Self.scan(rule, path: db.path) != nil)
         try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: wal.path)
         #expect(Self.scan(rule, path: db.path) == nil)
+    }
+
+    @Test("a database whose sidecar hit a permission error is not escalated")
+    @MainActor
+    func permissionSidecarFailureSkipsEscalation() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = try Self.write(dir, "x.sqlite")
+        try Self.write(dir, "x.sqlite-wal")
+        let mover = SelectiveTrashMover(failing: ["x.sqlite-wal"], message: "Operation not permitted")
+        let helper = StubPrivilegedHelper(mode: .succeedAll)
+        let engine = CleanupEngine(homeDirectoryForTesting: dir, trashMover: mover, privilegedHelper: helper)
+        let result = await engine.clean([Self.item(db)], method: .trash, authorization: .unchecked(.deepClean))
+        #expect(helper.received.isEmpty)
+        #expect(!result.allSucceeded)
+        #expect(FileManager.default.fileExists(atPath: db.path))
+    }
+
+    @Test("a database without sidecars still escalates on a permission error")
+    @MainActor
+    func sidecarlessDatabaseEscalates() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = try Self.write(dir, "y.sqlite")
+        let mover = SelectiveTrashMover(failing: ["y.sqlite"], message: "Operation not permitted")
+        let helper = StubPrivilegedHelper(mode: .succeedAll)
+        let engine = CleanupEngine(homeDirectoryForTesting: dir, trashMover: mover, privilegedHelper: helper)
+        let result = await engine.clean([Self.item(db)], method: .trash, authorization: .unchecked(.deepClean))
+        #expect(helper.received.count == 1)
+        #expect(helper.received.first?.items.first?.path == db.path)
+        #expect(result.allSucceeded)
     }
 }
