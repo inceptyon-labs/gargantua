@@ -100,7 +100,7 @@ public enum CloudOrganizerProposer {
         return """
         \(instructionPrefix)
 
-        Folder: \(folderName)
+        Folder: \(CloudAIRedactor.sanitizeContent(folderName))
 
         \(body)
         """
@@ -108,8 +108,10 @@ public enum CloudOrganizerProposer {
 
     private static func render(cluster: OrganizerCluster) -> String {
         let totalSize = ByteCountFormatter.string(fromByteCount: cluster.totalBytes, countStyle: .file)
+        // File names leave the machine: give them the same secret and
+        // personal-detail scrub as every other cloud request.
         let samples = cluster.sampleNames(limit: 10)
-            .map { "  - \($0)" }
+            .map { "  - \(CloudAIRedactor.sanitizeContent($0))" }
             .joined(separator: "\n")
         let remaining = cluster.items.count - min(10, cluster.items.count)
         let remainingLine = remaining > 0 ? "\n  [\(remaining) more]" : ""

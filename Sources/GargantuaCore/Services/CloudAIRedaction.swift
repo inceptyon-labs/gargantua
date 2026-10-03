@@ -95,7 +95,7 @@ public enum CloudAIRedactor {
     }
 
     public static func sanitizeContent(_ value: String) -> String {
-        let redacted = redactSensitivePatterns(value)
+        let redacted = redactPersonalDetails(redactSensitivePatterns(value))
         let scalars = redacted.unicodeScalars.map { scalar -> Character in
             if CharacterSet.controlCharacters.contains(scalar), scalar != "\n", scalar != "\t" {
                 return " "
@@ -111,6 +111,20 @@ public enum CloudAIRedactor {
         }
         let end = collapsed.index(collapsed.startIndex, offsetBy: maxContentPreviewCharacters)
         return String(collapsed[..<end])
+    }
+
+    /// The macOS account name doesn't need to leave the machine: rewrite the
+    /// home folder to `~`, and mask email addresses.
+    static func redactPersonalDetails(_ value: String, home: String = NSHomeDirectory()) -> String {
+        var output = value
+        if home.count > 1 {
+            output = output.replacingOccurrences(of: home, with: "~")
+        }
+        return output.replacingOccurrences(
+            of: #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#,
+            with: "[REDACTED_EMAIL]",
+            options: .regularExpression
+        )
     }
 
     private static func redactSensitivePatterns(_ value: String) -> String {
