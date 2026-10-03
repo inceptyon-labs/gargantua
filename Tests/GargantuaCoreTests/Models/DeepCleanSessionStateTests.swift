@@ -93,6 +93,25 @@ struct DeepCleanSessionStateTests {
         #expect(session.selectedResultIDs == [untouched.id])
     }
 
+    @Test("A summary retry removes recovered items from the list and the stored result")
+    @MainActor
+    func applyRetryDropsRecoveredItems() {
+        let session = DeepCleanSessionState()
+        let failed = makeItem(id: "failed", safety: .safe)
+        let other = makeItem(id: "other", safety: .safe)
+        session.finishScan(results: [failed, other], duration: 0.5)
+        session.finishCleanup(result: CleanupResult(itemResults: [
+            CleanupItemResult(item: failed, succeeded: false, error: "Permission denied"),
+        ]))
+        session.selectedResultIDs = [failed.id, other.id]
+
+        session.applyRetry(CleanupResult(itemResults: [CleanupItemResult(item: failed, succeeded: true)]))
+
+        #expect(session.scanResults?.map(\.id) == [other.id])
+        #expect(session.selectedResultIDs == [other.id])
+        #expect(session.cleanupResult?.failedItems.isEmpty == true)
+    }
+
     @Test("dismissSummary returns to results when items remain")
     @MainActor
     func dismissSummaryReturnsToResultsWhenSomeRemain() {

@@ -399,7 +399,7 @@ extension CleanupSummaryView {
     // MARK: - Actions
 
     func revealTrash() {
-        TrashRevealer().revealCleanupResult(result)
+        TrashRevealer().revealCleanupResult(shown)
     }
 
     var auditTrailExists: Bool {

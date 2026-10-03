@@ -234,6 +234,23 @@ public final class DeepCleanSessionState {
         phase = .summary
     }
 
+    /// Folds a summary-screen retry into the session: recovered items leave the
+    /// results list and selection, and the stored cleanup result reflects the
+    /// retry, so coming back to the summary doesn't offer them again.
+    public func applyRetry(_ retry: CleanupResult) {
+        let succeededIDs = Set(retry.succeededItems.map(\.item.id))
+        if let current = scanResults {
+            scanResults = current.filter { !succeededIDs.contains($0.id) }
+        }
+        selectedResultIDs.subtract(succeededIDs)
+        if let previous = cleanupResult {
+            cleanupResult = CleanupResult(
+                itemResults: CleanupSummaryView.mergeRetry(into: previous.itemResults, retry: retry.itemResults),
+                cleanupMethod: previous.cleanupMethod
+            )
+        }
+    }
+
     public func dismissSummary() {
         activeTask?.cancel()
         activeTask = nil

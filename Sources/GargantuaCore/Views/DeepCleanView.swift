@@ -129,9 +129,16 @@ public struct DeepCleanView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: result, outcomeAccent: accent, onExplain: onExplain, onRetried: onCleanupCompleted) {
-                dismissSummary()
-            }
+            CleanupSummaryView(
+                result: result,
+                outcomeAccent: accent,
+                onExplain: onExplain,
+                onRetried: { retry in
+                    session.applyRetry(retry)
+                    onCleanupCompleted?(retry)
+                },
+                onDismiss: { dismissSummary() }
+            )
             Spacer()
         }
         .padding(GargantuaSpacing.space6)
