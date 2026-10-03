@@ -95,11 +95,11 @@ struct AIRuleSafetyContractTests {
         let rules = try loader.loadRules(from: rulesDirectory).rules
 
         for rule in rules {
-            for declared in rule.paths where SQLiteDatabaseFiles.isDatabase(declared) {
+            for declared in Self.selectors(of: rule) where SQLiteDatabaseFiles.isDatabase(declared) {
                 #expect(
                     !rule.skipIfProcessRunning.isEmpty,
                     """
-                    Rule \(rule.id) targets \(declared) without skip_if_process_running. The engine \
+                    Rule \(rule.id) selects \(declared) without skip_if_process_running. The engine \
                     removes a database together with its -wal/-shm/-journal, but removing one its \
                     owner has open still loses the owner's state: name the owner's bundle ID and, \
                     for a command-line owner, its executable name.
@@ -114,15 +114,28 @@ struct AIRuleSafetyContractTests {
         let rules = try loader.loadRules(from: rulesDirectory).rules
 
         for rule in rules {
-            for declared in rule.paths {
-                let isSidecar = SQLiteDatabaseFiles.sidecarSuffixes.contains { suffix in
-                    SQLiteDatabaseFiles.suffixes.contains { declared.lowercased().hasSuffix($0 + suffix) }
-                }
+            for declared in Self.selectors(of: rule) {
                 #expect(
-                    !isSidecar,
-                    "Rule \(rule.id) targets \(declared). Sidecars go with their database, never on their own."
+                    !Self.selectsSidecar(declared),
+                    "Rule \(rule.id) selects \(declared). Sidecars go with their database, never on their own."
                 )
             }
+        }
+    }
+
+    /// The globs a rule selects files with: its declared paths, plus its
+    /// `pattern`, which picks children inside those paths.
+    private static func selectors(of rule: ScanRule) -> [String] {
+        rule.paths + [rule.pattern].compactMap { $0 }
+    }
+
+    /// Whether a glob selects SQLite sidecars, either of a named database
+    /// (`state.db-wal`) or of any file (`*-wal`).
+    private static func selectsSidecar(_ glob: String) -> Bool {
+        let lowered = glob.lowercased()
+        return SQLiteDatabaseFiles.sidecarSuffixes.contains { suffix in
+            lowered.hasSuffix("*" + suffix)
+                || SQLiteDatabaseFiles.suffixes.contains { lowered.hasSuffix($0 + suffix) }
         }
     }
 

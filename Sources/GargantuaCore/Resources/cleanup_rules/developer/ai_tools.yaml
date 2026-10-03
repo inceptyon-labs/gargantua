@@ -287,10 +287,10 @@ rules:
       - codex
     safety: review
     confidence: 75
-    explanation: "Codex's index of past conversations, built from the rollout transcripts in ~/.codex/sessions. Codex starts a new one and rebuilds each thread from its transcript when the thread is next opened; threads whose transcripts were already removed will not come back. Removed together with its -wal and -shm files, and never while Codex is running."
+    explanation: "Codex's copy of past conversations, kept alongside the rollout transcripts in ~/.codex/sessions. Codex starts a new one and rebuilds each thread from its transcript when the thread is next opened; threads whose transcripts were already removed will not come back. Removed together with its -wal and -shm files, and never while Codex is running."
     source:
       name: Codex
-    regenerates: true
+    regenerates: false
     category: dev_artifacts
     tags:
       - developer
