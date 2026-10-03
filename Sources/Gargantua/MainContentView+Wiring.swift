@@ -7,19 +7,25 @@ import SwiftUI
 // stays under the length policy; stored properties are internal (not private)
 // so this extension can reach them.
 extension MainContentView {
-    /// True when local AI is selected but hasn't returned its first inference
-    /// yet — the cue to surface "Compiling shaders for first use…" while
-    /// the MLX backend JIT-compiles GPU kernels.
-    var aiEngineNeedsFirstWarmup: Bool {
-        activeAIEngineKind == .mlx && !aiService.hasCompletedFirstMLXInference
-    }
-
-    /// The user's persisted toggle preference, decoupled from whatever the
-    /// factory actually selected (MLX may have fallen back to Template if the
-    /// model isn't downloaded). Used for honest CTA labeling.
-    var preferredAIEngine: AIEnginePreference {
-        AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
-    }
+    // The window's sessions and AI objects, held by `WindowState`.
+    var downloadManager: ModelDownloadManager { window.downloadManager }
+    var aiService: LocalAIService { window.aiService }
+    var aiExplanation: AIExplanationController { window.aiExplanation }
+    var aiAdvisory: AIAdvisoryController { window.aiAdvisory }
+    var mcpStatusModel: MCPServerStatusViewModel { window.mcpStatusModel }
+    var organizerSession: OrganizerSessionState { window.organizerSession }
+    var dashboardSession: DashboardSessionState { window.dashboardSession }
+    var deepCleanSession: DeepCleanSessionState { window.deepCleanSession }
+    var smartUninstallerViewModel: SmartUninstallerViewModel { window.smartUninstallerViewModel }
+    var fileHealthState: FileHealthContainerState { window.fileHealthState }
+    var duplicateFinderState: DuplicateFinderContainerState { window.duplicateFinderState }
+    var diskExplorerState: DiskExplorerState { window.diskExplorerState }
+    var aiModelsSession: AIModelsState { window.aiModelsSession }
+    var devToolsSession: DeveloperToolsSessionState { window.devToolsSession }
+    var devPurgeSession: DevArtifactSessionState { window.devPurgeSession }
+    var backgroundItemsSession: BackgroundItemsSession { window.backgroundItemsSession }
+    var processInventorySession: ProcessInventorySession { window.processInventorySession }
+    var agentRunControllers: AgentRunControllers { window.agentRunControllers }
 
     /// Closure handed to scan views so their per-row Explain button can kick
     /// off an explanation without knowing about the controller.
@@ -95,19 +101,12 @@ extension MainContentView {
         AuditRetention.purgeInBackground(retentionDays: retentionDays)
     }
 
-    /// Reconcile the long-lived AI service with the persisted preference and
-    /// current model availability. This lets Settings changes take effect
-    /// without replacing the controllers that already hold the service.
-    func refreshAIEngineSelection() {
-        let preference = AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
-        let selectedEngine = AIInferenceEngineFactory.select(
-            preference: preference,
-            modelState: downloadManager.state
-        )
-        guard selectedEngine.kind != activeAIEngineKind else { return }
-
-        aiService.configureEngine(selectedEngine.engine)
-        activeAIEngineKind = selectedEngine.kind
+    /// Re-read the settings the panes are built from (see the stored
+    /// properties' note in `MainContentView`).
+    func refreshPersistedSettings() {
+        activeDeepCleanProfile = fetchActiveDeepCleanProfile()
+        resolvedScanRoots = fetchScanRoots()
+        pathExclusionPatterns = fetchPathExclusionPatterns()
     }
 
     /// Resolve the cleanup profile to use for Deep Clean.
@@ -116,7 +115,7 @@ extension MainContentView {
     /// in persisted profiles first, then built-ins. Falls back to `.deep` when
     /// persistence isn't ready yet or the stored ID doesn't match anything so
     /// Deep Clean always has a safe, broad default.
-    var activeDeepCleanProfile: CleanupProfile {
+    func fetchActiveDeepCleanProfile() -> CleanupProfile {
         guard let persistence else { return .deep }
 
         let settings: PersistedSettings
@@ -157,7 +156,7 @@ extension MainContentView {
     /// Stored entries are trimmed and tilde-expanded; anything empty, a bare `/`,
     /// or a bare `~` is dropped to prevent accidentally widening scan scope to
     /// the whole filesystem or home directory.
-    var resolvedScanRoots: [URL]? {
+    func fetchScanRoots() -> [URL]? {
         guard let persistence else { return nil }
 
         let stored: [String]
@@ -180,12 +179,13 @@ extension MainContentView {
     func addToExclusions(_ item: ScanResult) {
         do {
             try persistence?.addExclusionEntry(pattern: item.path, note: "Added from Deep Clean")
+            pathExclusionPatterns = fetchPathExclusionPatterns()
         } catch {
             PersistenceDiagnostics.logFailure("addExclusionEntry", error: error)
         }
     }
 
-    var pathExclusionPatterns: Set<String> {
+    func fetchPathExclusionPatterns() -> Set<String> {
         guard let persistence else { return [] }
         do {
             return Set(try persistence.fetchExclusionEntries().map(\.pattern))

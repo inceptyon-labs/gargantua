@@ -13,7 +13,6 @@ import SwiftUI
 // that extension can reach them.
 struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding = false
-    @AppStorage(AIEnginePreference.userDefaultsKey) var preferredAIEngineRawValue = AIEnginePreference.template.rawValue
     @State var sidebarSelection: String? = "dashboard"
     /// Toggled by ⌘/ (via the Help-menu command) to show the shortcut cheat sheet.
     @State var showKeyboardCheatSheet = false
@@ -24,85 +23,20 @@ struct MainContentView: View {
     @State var pendingBackgroundItemPlistPath: String?
     @State var persistence: PersistenceController?
     @State var activationLinkModel = LicenseActivationLinkModel.shared
-    @State var dashboardSession = DashboardSessionState()
-    @State var deepCleanSession = DeepCleanSessionState()
-    @State var smartUninstallerViewModel = SmartUninstallerView.makeDefaultViewModel()
-    @State var fileHealthState = FileHealthContainerState()
-    @State var duplicateFinderState = DuplicateFinderContainerState()
     @State var duplicateFinderSelection: Set<String> = []
-    @State var diskExplorerState = DiskExplorerState()
-    @State var aiModelsSession = AIModelsState()
-    @State var devToolsSession = DeveloperToolsSessionState()
-    @State var devPurgeSession = DevArtifactSessionState()
-    @State var backgroundItemsSession = BackgroundItemsSession()
-    @State var processInventorySession = ProcessInventorySession()
-    @State var agentRunControllers = AgentRunControllers()
-    @StateObject var organizerSession: OrganizerSessionState
-    @StateObject var cloudAIService: CloudAIService
-    @State var activeAIEngineKind: AIEnginePreference
-
-    // App-shared AI plumbing. One `ModelDownloadManager` so Settings' download
-    // button + every scan view's "model available?" check observe the same
-    // state; one `LocalAIService` so the engine lazy-load / 60-s idle-unload
-    // lifecycle doesn't reset between screens; one `AIExplanationController`
-    // so the presentation sheet can render at this top level regardless of
-    // which scan view fired `onExplain`.
-    @StateObject var downloadManager: ModelDownloadManager
-    @StateObject var aiService: LocalAIService
-    @StateObject var aiExplanation: AIExplanationController
-    @StateObject var aiAdvisory: AIAdvisoryController
-    @StateObject var mcpStatusModel: MCPServerStatusViewModel
+    /// Settings the panes are built from, read from SwiftData when the window
+    /// appears, on every navigation, and after "Add to Exclusions", instead of
+    /// on every body evaluation. They only change in Settings and Profiles,
+    /// which the user has to navigate away from to see the effect.
+    @State var activeDeepCleanProfile: CleanupProfile = .deep
+    @State var resolvedScanRoots: [URL]?
+    @State var pathExclusionPatterns: Set<String> = []
+    @StateObject var window: WindowState
     let updateSettingsViewModel: AppUpdateSettingsViewModel
 
     init(updateSettingsViewModel: AppUpdateSettingsViewModel) {
-        let manager = ModelDownloadManager()
-        let selectedEngine = AIInferenceEngineFactory.select(
-            preference: AIEnginePreference.stored(),
-            modelState: manager.state
-        )
         self.updateSettingsViewModel = updateSettingsViewModel
-        let service = LocalAIService(downloadManager: manager, engine: selectedEngine.engine)
-        _activeAIEngineKind = State(initialValue: selectedEngine.kind)
-        _downloadManager = StateObject(wrappedValue: manager)
-        _aiService = StateObject(wrappedValue: service)
-
-        // Cloud service is needed before the explanation controller so the
-        // explanation router can route inline and deeper requests to the
-        // engine assigned to each job (local / Cloud / Claude Code / Codex).
-        let cloudAI = CloudAIService()
-        let router = ExplanationRouter(local: service, cloud: cloudAI)
-        _aiExplanation = StateObject(wrappedValue: AIExplanationController(
-            service: service,
-            inlineExplain: { result, rule in
-                try await router.explain(.inlineExplain, result: result, rule: rule)
-            },
-            deeperExplain: { result, rule in
-                try await router.explain(.deeperExplain, result: result, rule: rule)
-            },
-            deeperAvailable: { router.isAvailable(.deeperExplain) }
-        ))
-        // Advisories ("Review Advisories" / "Suspicious Triage") route through
-        // the same engine-assignment matrix as inline explanations, so the user
-        // can point them at the local model, Cloud, or a CLI agent.
-        let advisoryRouter = AdvisoryRouter(local: service, cloud: cloudAI)
-        _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(
-            service: service,
-            advise: { results, rules, includeNonReview in
-                try await advisoryRouter.advisory(
-                    for: results,
-                    rules: rules,
-                    includeNonReview: includeNonReview
-                )
-            }
-        ))
-        _mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
-
-        let mlxProposer = MLXOrganizerProposer(aiService: service)
-        _cloudAIService = StateObject(wrappedValue: cloudAI)
-        _organizerSession = StateObject(wrappedValue: OrganizerSessionState(
-            cloudService: cloudAI,
-            mlxProposer: mlxProposer
-        ))
+        _window = StateObject(wrappedValue: WindowState())
     }
 
     var body: some View {
@@ -248,37 +182,14 @@ struct MainContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .environment(\.cleanupNarrator, narrateHandler)
-                .environment(\.activeAIEngineKind, activeAIEngineKind)
-                .environment(\.preferredAIEngineKind, preferredAIEngine)
-                .environment(\.aiEngineNeedsFirstWarmup, aiEngineNeedsFirstWarmup)
                 .environment(\.openAIModelSettings, { sidebarSelection = "settings" })
+                .modifier(AIRootModifier(window: window, onOpenSettings: { sidebarSelection = "settings" }))
                 .onAppear {
                     initializePersistenceIfNeeded()
-                    refreshAIEngineSelection()
+                    refreshPersistedSettings()
                 }
-                .onChange(of: preferredAIEngineRawValue) { _, _ in
-                    refreshAIEngineSelection()
-                }
-                .onChange(of: downloadManager.state) { _, _ in
-                    refreshAIEngineSelection()
-                }
-                .sheet(item: Binding(
-                    get: { aiExplanation.presentation },
-                    set: { if $0 == nil { aiExplanation.dismiss() } }
-                )) { _ in
-                    AIExplanationSheet(
-                        controller: aiExplanation,
-                        onOpenSettings: { sidebarSelection = "settings" }
-                    )
-                }
-                .sheet(item: Binding(
-                    get: { aiAdvisory.presentation },
-                    set: { if $0 == nil { aiAdvisory.dismiss() } }
-                )) { _ in
-                    AIAdvisorySheet(
-                        controller: aiAdvisory,
-                        onOpenSettings: { sidebarSelection = "settings" }
-                    )
+                .onChange(of: sidebarSelection) { _, _ in
+                    refreshPersistedSettings()
                 }
             }
         }
