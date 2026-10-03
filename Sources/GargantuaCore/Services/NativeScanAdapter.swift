@@ -129,7 +129,7 @@ public struct NativeScanAdapter: ScanAdapter {
         )
 
         var results: [ScanResult] = []
-        var seenPaths: Set<String> = []
+        var indexByPath: [String: Int] = [:]
 
         // Fire-and-forget sizing updates so the UI ticks per child path during a
         // rule whose `directorySize` walk would otherwise sit silent for seconds.
@@ -177,7 +177,14 @@ public struct NativeScanAdapter: ScanAdapter {
             }
             // Deduplicate by path across rules so overlapping rules don't double-count
             // bytes or trigger a second recycle attempt after the first succeeds.
-            for result in evaluation.results where seenPaths.insert(result.path).inserted {
+            // The surviving entry takes the stricter rule's safety and any app
+            // lock, so a broad safe rule can't unlock a path a specific rule guards.
+            for result in evaluation.results {
+                if let existing = indexByPath[result.path] {
+                    results[existing] = ScanResultOverlapReconciler.stricter(results[existing], result)
+                    continue
+                }
+                indexByPath[result.path] = results.count
                 results.append(result)
                 observerRef?.didEmit(ScanProgressEvent(
                     path: result.path,

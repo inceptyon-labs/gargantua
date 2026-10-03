@@ -48,6 +48,6 @@ public struct CompositeScanAdapter: ScanAdapter {
                 // executor issue can't bring down the whole scan.
             }
         }
-        return exclusions.filter(combined)
+        return ScanResultOverlapReconciler.reconcile(exclusions.filter(combined))
     }
 }

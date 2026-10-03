@@ -179,6 +179,7 @@ struct NativeScanAdapterTests {
                 id: "shared_docker_cache",
                 name: "Shared Docker Cache",
                 paths: [sharedCache.path],
+                safety: .review,
                 category: "docker"
             ),
         ]
@@ -187,6 +188,8 @@ struct NativeScanAdapterTests {
 
         #expect(results.count == 1)
         #expect(results.first?.path == sharedCache.path)
+        // The surviving entry takes the stricter rule's safety.
+        #expect(results.first?.safety == .review)
     }
 
     @Test("rule.pattern filters children inside matched directories")
