@@ -41,6 +41,33 @@ extension AuditWriterTests {
         #expect(entries[0].bytesFreed == 100)
     }
 
+    @Test("recentEntries returns the newest entries for one transport, refreshed when the log grows")
+    func recentEntriesFiltersAndRefreshes() throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+        let writer = AuditWriter(logDirectory: dir)
+        func entry(_ command: String, transport: String?, at seconds: TimeInterval) -> AuditEntry {
+            AuditEntry(
+                timestamp: Date(timeIntervalSince1970: seconds),
+                tool: "native",
+                command: command,
+                files: [],
+                safetyLevel: .safe,
+                confirmationMethod: .singleButton,
+                bytesFreed: 0,
+                transport: transport
+            )
+        }
+        try writer.write(entry("old-mcp", transport: "mcp", at: 1))
+        try writer.write(entry("gui", transport: nil, at: 2))
+        try writer.write(entry("new-mcp", transport: "mcp", at: 3))
+
+        #expect(try writer.recentEntries(transport: "mcp", limit: 1).map(\.command) == ["new-mcp"])
+
+        try writer.write(entry("newest-mcp", transport: "mcp", at: 4))
+        #expect(try writer.recentEntries(transport: "mcp", limit: 1).map(\.command) == ["newest-mcp"])
+    }
+
     @Test("readEntries surfaces an orphaned attempted entry")
     func readEntriesSurfacesOrphanedAttempt() throws {
         let dir = try makeTempDir()

@@ -30,9 +30,12 @@ public final class MCPServerStatusViewModel: ObservableObject {
         stopAction: @escaping ControlAction = {
             try MCPServerStatusPersistence().stopRunningServer()
         },
-        // Capture one writer so its mtime+size read cache survives across
-        // refresh ticks; a fresh instance per call would re-decode every time.
-        auditReader: @escaping AuditReader = { [writer = AuditWriter()] in try writer.readEntries() }
+        // Capture one writer so its mtime+size cache survives across refresh
+        // ticks. `recentEntries` keeps only the three rows shown, not the
+        // whole decoded log.
+        auditReader: @escaping AuditReader = { [writer = AuditWriter()] in
+            try writer.recentEntries(transport: "mcp", limit: 3)
+        }
     ) {
         self.snapshot = initialSnapshot
         self.snapshotProvider = snapshotProvider
