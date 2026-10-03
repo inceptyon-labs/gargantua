@@ -60,6 +60,12 @@ final class FileHealthScanCoordinator {
         activeScanTask = nil
         state.showConfirmation = false
         scanGeneration &+= 1
+        // The cancelled scan's completion is discarded, so nothing else would
+        // ever leave the scanning phase; `state` outlives this view, and the
+        // scanning screen has no way out.
+        if state.phase == .scanning {
+            state.clearResults()
+        }
     }
 
     static func resolvedScanRoots(_ scanRoots: [URL]?) -> [URL] {

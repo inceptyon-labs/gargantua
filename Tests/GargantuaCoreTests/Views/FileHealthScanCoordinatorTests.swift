@@ -30,6 +30,31 @@ struct FileHealthScanCoordinatorTests {
         #expect(state.scanWarnings == ["partial czkawka warning"])
     }
 
+    @Test("cancelling a running scan returns to idle instead of staying on the scanning screen")
+    func cancelReturnsToIdle() async throws {
+        let state = FileHealthContainerState()
+        let coordinator = FileHealthScanCoordinator()
+
+        coordinator.startScan(
+            state: state,
+            scanRoots: [URL(fileURLWithPath: "/tmp/file-health-root")],
+            profile: .deep,
+            engineFactory: { _, _ in HangingAdapter() }
+        )
+        #expect(state.phase == .scanning)
+
+        coordinator.cancelActiveScan(state: state)
+
+        #expect(state.phase == .idle)
+    }
+
+    private struct HangingAdapter: ScanAdapter {
+        func scan(progress: ScanProgress?) async throws -> [ScanResult] {
+            try await Task.sleep(for: .seconds(60))
+            return []
+        }
+    }
+
     private final class StubAdapter: ScanAdapter, @unchecked Sendable {
         let results: [ScanResult]
         let warnings: [String]
