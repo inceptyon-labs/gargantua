@@ -2,7 +2,7 @@
   "$comment": "Records which gargantua-rules commit the bundled rule snapshot was reconciled against. Maintained by Scripts/sync-rules.sh \u2014 do not hand-edit. localOnly = rule files authored in this repo, absent upstream, preserved by sync. pendingFromUpstream = maintainer-managed files never auto-overwritten by sync, held divergent in either direction (upstream ahead and not yet reviewed in, or bundle ahead and not yet backflowed).",
   "upstream": "https://github.com/inceptyon-labs/gargantua-rules",
   "ref": "main",
-  "commit": "8a3c06eea42e9311f068fee6febdd3de7992fef7",
+  "commit": "426df87618f50f1487f0b5cf5911862b43fcd9e0",
   "syncedAt": "2026-10-03",
   "bundledRuleCounts": {
     "cleanup": 312,

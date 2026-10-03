@@ -266,6 +266,8 @@ rules:
     skip_if_process_running:
       - com.openai.codex
       - codex
+      - codex-aarch64-apple-darwin
+      - codex-x86_64-apple-darwin
     safety: safe
     confidence: 85
     explanation: "Codex's log database: diagnostic records of past runs. Codex creates a new one the next time it starts. Removed together with its -wal and -shm files, and never while Codex is running."
@@ -285,6 +287,8 @@ rules:
     skip_if_process_running:
       - com.openai.codex
       - codex
+      - codex-aarch64-apple-darwin
+      - codex-x86_64-apple-darwin
     safety: review
     confidence: 75
     explanation: "Codex's copy of past conversations, kept alongside the rollout transcripts in ~/.codex/sessions. Codex starts a new one and rebuilds each thread from its transcript when the thread is next opened; threads whose transcripts were already removed will not come back. Removed together with its -wal and -shm files, and never while Codex is running."

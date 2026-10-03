@@ -39,11 +39,13 @@ rules:
   - id: dropbox_sync_state
     name: Dropbox Sync State
     paths:
-      - "~/Library/Application Support/Dropbox/instance*/config.db*"
-      - "~/Library/Application Support/Dropbox/instance*/filecache.db*"
+      - "~/Library/Application Support/Dropbox/instance*/config.db"
+      - "~/Library/Application Support/Dropbox/instance*/filecache.db"
+    skip_if_process_running:
+      - com.getdropbox.dropbox
     safety: review
     confidence: 74
-    explanation: "Sync metadata and cache indexes may require Dropbox to re-index or re-download content. Review before removing."
+    explanation: "Sync metadata and cache indexes may require Dropbox to re-index or re-download content. Review before removing. Removed together with their -wal and -shm files, and never while Dropbox is running."
     source:
       name: Dropbox
       bundle_id: com.getdropbox.dropbox

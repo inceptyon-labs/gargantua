@@ -95,7 +95,7 @@ struct AIRuleSafetyContractTests {
         let rules = try loader.loadRules(from: rulesDirectory).rules
 
         for rule in rules {
-            for declared in Self.selectors(of: rule) where SQLiteDatabaseFiles.isDatabase(declared) {
+            for declared in Self.selectors(of: rule) where Self.selectsDatabase(declared) {
                 #expect(
                     !rule.skipIfProcessRunning.isEmpty,
                     """
@@ -129,14 +129,79 @@ struct AIRuleSafetyContractTests {
         rule.paths + [rule.pattern].compactMap { $0 }
     }
 
-    /// Whether a glob selects SQLite sidecars, either of a named database
-    /// (`state.db-wal`) or of any file (`*-wal`).
-    private static func selectsSidecar(_ glob: String) -> Bool {
-        let lowered = glob.lowercased()
-        return SQLiteDatabaseFiles.sidecarSuffixes.contains { suffix in
-            lowered.hasSuffix("*" + suffix)
-                || SQLiteDatabaseFiles.suffixes.contains { lowered.hasSuffix($0 + suffix) }
+    /// Whether a glob can select a SQLite database file.
+    static func selectsDatabase(_ glob: String) -> Bool {
+        let name = lastComponent(glob)
+        return databaseProbes(for: name).contains { fnmatch(name, $0, 0) == 0 }
+    }
+
+    /// Whether a glob can select a SQLite sidecar (`x.db-wal`, `*-wal`, `x.db*`).
+    static func selectsSidecar(_ glob: String) -> Bool {
+        let name = lastComponent(glob)
+        let probes = databaseProbes(for: name).flatMap { database in
+            SQLiteDatabaseFiles.sidecarSuffixes.map { database + $0 }
         }
+        return probes.contains { fnmatch(name, $0, 0) == 0 }
+    }
+
+    private static func lastComponent(_ glob: String) -> String {
+        (glob as NSString).lastPathComponent.lowercased()
+    }
+
+    /// Concrete database filenames a glob is matched against: its text with the
+    /// wildcards dropped and its leading literal part, each with every database
+    /// suffix added. Empty unless the glob mentions a database or sidecar
+    /// suffix, so a bare `*` (covered by `protectedDatabases` where a database
+    /// actually lives) isn't flagged everywhere.
+    private static func databaseProbes(for name: String) -> [String] {
+        let wildcards: Set<Character> = ["*", "?", "[", "]"]
+        guard mentionsDatabaseSuffix(name, wildcards: wildcards) else { return [] }
+        let stripped = String(name.filter { !wildcards.contains($0) })
+        let prefix = String(name.prefix { !wildcards.contains($0) })
+        var bases = [stripped, prefix, prefix + "x", "x"]
+        for sidecar in SQLiteDatabaseFiles.sidecarSuffixes where stripped.hasSuffix(sidecar) {
+            bases.append(String(stripped.dropLast(sidecar.count)))
+        }
+        let candidates = bases + bases.flatMap { base in SQLiteDatabaseFiles.suffixes.map { base + $0 } }
+        return candidates.filter(SQLiteDatabaseFiles.isDatabase)
+    }
+
+    /// Whether a database or sidecar suffix appears as a suffix: at the end of
+    /// the name or before a wildcard or a sidecar's `-`. `.db` inside
+    /// `com.dbeaver.*` doesn't count.
+    private static func mentionsDatabaseSuffix(_ name: String, wildcards: Set<Character>) -> Bool {
+        let markers = SQLiteDatabaseFiles.suffixes + SQLiteDatabaseFiles.sidecarSuffixes
+        return markers.contains { marker in
+            var searchStart = name.startIndex
+            while let found = name.range(of: marker, range: searchStart ..< name.endIndex) {
+                if found.upperBound == name.endIndex { return true }
+                let next = name[found.upperBound]
+                if wildcards.contains(next) || next == "-" { return true }
+                searchStart = name.index(after: found.lowerBound)
+            }
+            return false
+        }
+    }
+
+    @Test(
+        "Database and sidecar selectors are judged by what their globs match",
+        arguments: [
+            ("~/.codex/logs_*.sqlite", true, false),
+            ("~/.codex/logs_*.sqlite*", true, true),
+            ("~/.codex/logs_*.sqlite-w*", true, true),
+            ("~/Library/Caches/com.dbeaver.*", false, false),
+            ("*-wal", false, true),
+            ("~/Library/Application Support/Dropbox/instance*/config.db*", true, true),
+            ("~/Library/Application Support/Dropbox/instance*/config.db", true, false),
+            ("state.vscdb-shm", false, true),
+            ("*", false, false),
+            ("*.png", false, false),
+            ("rollout-*.jsonl", false, false),
+        ]
+    )
+    func selectorClassification(glob: String, database: Bool, sidecar: Bool) {
+        #expect(Self.selectsDatabase(glob) == database, "selectsDatabase(\(glob))")
+        #expect(Self.selectsSidecar(glob) == sidecar, "selectsSidecar(\(glob))")
     }
 
     @Test("Every ai_history rule is gated on a minimum age, not merely on some filter")
