@@ -67,6 +67,9 @@ public final class DiskExplorerState {
     /// detection — once the user has made an explicit choice, the auto flip
     /// stops fighting them. Reset by every navigation entry point.
     public var displayModeIsExplicit: Bool = false
+    /// True while `.focus` is showing because auto-promote picked it, not the
+    /// user, so the next directory starts from the treemap again.
+    private var displayModeWasAutoPromoted = false
     public var phase: DiskExplorerPhase = .idle
     public var scanGeneration: Int = 0
     /// Controls the Rescan confirmation dialog. The view flips this true
@@ -178,6 +181,7 @@ public final class DiskExplorerState {
     public func setDisplayMode(_ mode: DiskExplorerDisplayMode) {
         displayMode = mode
         displayModeIsExplicit = true
+        displayModeWasAutoPromoted = false
     }
 
     /// Synchronously hydrate `items` from `pathCache` if possible. Called from
@@ -190,6 +194,10 @@ public final class DiskExplorerState {
         // bleed into a sibling that would benefit from focus mode (or vice
         // versa).
         displayModeIsExplicit = false
+        if displayModeWasAutoPromoted {
+            displayMode = .treemap
+            displayModeWasAutoPromoted = false
+        }
         if let cached = pathCache[currentPath] {
             items = cached
             maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
@@ -251,8 +259,10 @@ public final class DiskExplorerState {
     /// callers should gate on that.
     public var dominantChild: DirectoryItem? {
         guard !isLoading else { return nil }
+        // "(Files)" and "Others" aren't folders: a big loose-files total isn't
+        // a folder to focus on or drill into.
         let sized = items
-            .filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 }
+            .filter { !$0.isPermissionDenied && !$0.isSizing && $0.size > 0 && !$0.isFilesAggregate && !$0.isOthersAggregate }
             .sorted { $0.size > $1.size }
         guard let largest = sized.first else { return nil }
         guard sized.count > 1 else { return largest }
@@ -269,6 +279,7 @@ public final class DiskExplorerState {
         guard !displayModeIsExplicit, displayMode == .treemap else { return }
         if dominantChild != nil {
             displayMode = .focus
+            displayModeWasAutoPromoted = true
         }
     }
 }

@@ -306,4 +306,31 @@ struct DiskExplorerStateTests {
         state.refreshCurrent()
         #expect(state.scanLoadKey != key)
     }
+
+    @Test("Auto-promoted Focus resets to the treemap in the next folder")
+    @MainActor
+    func autoFocusResetsOnNavigation() {
+        let state = DiskExplorerState()
+        state.items = [makeItem(name: "huge", size: 1_000), makeItem(name: "tiny", size: 10)]
+        state.completeLoad(for: state.currentPath)
+        #expect(state.displayMode == .focus)
+
+        let balanced = makeItem(name: "balanced", size: 500)
+        state.pathCache[balanced.path] = [makeItem(name: "a", size: 300), makeItem(name: "b", size: 250)]
+        state.drillDown(into: balanced)
+
+        #expect(state.displayMode == .treemap)
+    }
+
+    @Test("The loose-files row is never the dominant folder")
+    @MainActor
+    func filesAggregateIsNotDominant() {
+        let state = DiskExplorerState()
+        let files = DirectoryItem(name: "(Files)", path: "/tmp/disk-explorer/(Files)", size: 1_000, isFilesAggregate: true)
+        state.items = [files, makeItem(name: "a", size: 100), makeItem(name: "b", size: 90)]
+        state.completeLoad(for: state.currentPath)
+
+        #expect(state.dominantChild == nil)
+        #expect(state.displayMode == .treemap)
+    }
 }
