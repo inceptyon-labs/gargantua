@@ -46,8 +46,9 @@ public struct ConfirmationModalView: View {
         confirmationTier(for: items)
     }
 
+    /// Nested items count once: trashing a folder takes what's inside it.
     private var totalSize: Int64 {
-        items.reduce(Int64(0)) { $0 + $1.size }
+        ScanResultOverlapReconciler.distinctBytes(items)
     }
 
     public var body: some View {

@@ -67,7 +67,7 @@ public final class ScheduledScanRunner {
                 scanRoots: roots.isEmpty ? nil : roots
             ))
             let actionable = results.filter(\.safety.isActionable)
-            let reclaimableBytes = actionable.reduce(Int64(0)) { $0 + $1.size }
+            let reclaimableBytes = ScanResultOverlapReconciler.distinctBytes(actionable)
             let summary = ScheduledScanSummary(
                 date: runDate,
                 profileID: profile.id,

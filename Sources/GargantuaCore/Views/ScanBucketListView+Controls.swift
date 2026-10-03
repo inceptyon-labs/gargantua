@@ -58,7 +58,7 @@ extension ScanBucketListView {
     private var controlsSummary: String {
         let count = displayedResults.count
         let countText = "\(count) item\(count == 1 ? "" : "s")"
-        let totalBytes = displayedResults.reduce(Int64(0)) { $0 + $1.size }
+        let totalBytes = distinctBytes(displayedResults)
         let totalText = AlertItem.formatBytes(totalBytes)
         let durationText = formattedScanDuration
 

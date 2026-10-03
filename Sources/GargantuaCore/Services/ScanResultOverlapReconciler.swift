@@ -58,6 +58,46 @@ enum ScanResultOverlapReconciler {
         return reconciled
     }
 
+    /// For each result inside another result's folder, the IDs of the results
+    /// containing it. A later result for an already-seen path counts as
+    /// contained by the first.
+    static func containers(in results: [ScanResult]) -> [String: [String]] {
+        var idByPath: [String: String] = [:]
+        var containers: [String: [String]] = [:]
+        for result in results where participates(result) {
+            let key = normalized(result.path)
+            if let first = idByPath[key], first != result.id {
+                containers[result.id, default: []].append(first)
+            } else if idByPath[key] == nil {
+                idByPath[key] = result.id
+            }
+        }
+        for result in results where participates(result) {
+            var ancestor = (normalized(result.path) as NSString).deletingLastPathComponent
+            while ancestor.count > 1 {
+                if let containerID = idByPath[ancestor] {
+                    containers[result.id, default: []].append(containerID)
+                }
+                ancestor = (ancestor as NSString).deletingLastPathComponent
+            }
+        }
+        return containers
+    }
+
+    /// Total size of `results`, counting a result inside another one in the
+    /// same set only once: the folder's size already includes it.
+    static func distinctBytes(_ results: [ScanResult], containers: [String: [String]]? = nil) -> Int64 {
+        let containers = containers ?? self.containers(in: results)
+        let ids = Set(results.map(\.id))
+        return results.reduce(Int64(0)) { total, result in
+            if let outer = containers[result.id], outer.contains(where: ids.contains) {
+                return total
+            }
+            let (sum, overflow) = total.addingReportingOverflow(result.size)
+            return overflow ? .max : sum
+        }
+    }
+
     private static func raising(_ container: ScanResult, toward contained: ScanResult) -> ScanResult {
         var raised = container
         if contained.safety == .protected_ {

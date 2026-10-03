@@ -55,6 +55,17 @@ struct PathStreamViewModelTests {
         #expect(vm.totalBytes == 100)
     }
 
+    @Test("a match inside an already-matched folder adds no bytes, in either order")
+    func nestedMatchesCountOnce() {
+        let vm = PathStreamViewModel()
+        vm.append(ScanProgressEvent(path: "/c/Chrome/Default/Cache", outcome: .match, bytes: 40))
+        vm.append(ScanProgressEvent(path: "/c/Chrome", outcome: .match, bytes: 100))
+        vm.append(ScanProgressEvent(path: "/c/Chrome/GrShaderCache", outcome: .match, bytes: 5))
+        vm.append(ScanProgressEvent(path: "/c/ChromeHelper", outcome: .match, bytes: 7))
+        #expect(vm.matchCount == 4)
+        #expect(vm.totalBytes == 107)
+    }
+
     @Test("clear resets buffer and aggregates")
     func clearResets() {
         let vm = PathStreamViewModel()

@@ -101,8 +101,13 @@ public struct ScanBucketListView: View {
         groupMemo.groups(results: results, mode: groupingMode, filter: activeFilter)
     }
 
+    /// Nested results (a folder and something inside it) count once.
     var reclaimableBytes: Int64 {
-        displayedResults.filter { selectedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
+        distinctBytes(displayedResults.filter { selectedIDs.contains($0.id) })
+    }
+
+    func distinctBytes(_ subset: [ScanResult]) -> Int64 {
+        ScanResultOverlapReconciler.distinctBytes(subset, containers: groupMemo.containers(results: results))
     }
 
     private var hasReviewItems: Bool {
@@ -114,9 +119,7 @@ public struct ScanBucketListView: View {
     }
 
     private var reviewReclaimableBytes: Int64 {
-        displayedResults
-            .filter { $0.safety == .review }
-            .reduce(0) { $0 + $1.size }
+        distinctBytes(displayedResults.filter { $0.safety == .review })
     }
 
     var hasRefinementTools: Bool {
@@ -229,6 +232,15 @@ final class ScanGroupMemo {
 
     private var key: Key?
     private var cached: [ScanGroup] = []
+    private var containersKey: Int?
+    private var cachedContainers: [String: [String]] = [:]
+
+    func containers(results: [ScanResult]) -> [String: [String]] {
+        if containersKey == results.count { return cachedContainers }
+        cachedContainers = ScanResultOverlapReconciler.containers(in: results)
+        containersKey = results.count
+        return cachedContainers
+    }
 
     func groups(results: [ScanResult], mode: ScanGroupingMode, filter: ScanFilterSet?) -> [ScanGroup] {
         let key = Key(mode: mode, filter: filter, resultCount: results.count)

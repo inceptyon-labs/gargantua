@@ -33,9 +33,19 @@ public struct ScanGroup: Identifiable {
     public let subtitle: String?
     public let kind: ScanGroupKind
     public let items: [ScanResult]
+    /// Nested results count once: a folder's size already includes them.
+    public let totalSize: Int64
+
+    public init(id: String, title: String, subtitle: String?, kind: ScanGroupKind, items: [ScanResult]) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.kind = kind
+        self.items = items
+        self.totalSize = ScanResultOverlapReconciler.distinctBytes(items)
+    }
 
     public var count: Int { items.count }
-    public var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
 
     /// IDs of items eligible for bulk selection — protected rows are skipped
     /// since they can never be cleaned.

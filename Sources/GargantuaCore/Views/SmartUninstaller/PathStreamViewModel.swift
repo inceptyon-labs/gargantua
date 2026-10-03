@@ -25,8 +25,13 @@ public final class PathStreamViewModel: ScanProgressObserving {
     /// Running count of `.failed` outcomes since the last `clear()`.
     public private(set) var failureCount: Int = 0
 
-    /// Running sum of `bytes` on match events, in bytes.
+    /// Running sum of `bytes` on match events, in bytes. A match inside an
+    /// already-matched folder adds nothing, and a folder matched after
+    /// something inside it replaces that item's bytes.
     public private(set) var totalBytes: Int64 = 0
+
+    /// Bytes counted per matched path, for `totalBytes`' nesting rule.
+    private var countedBytesByPath: [String: Int64] = [:]
 
     public let bufferCap: Int
 
@@ -118,7 +123,7 @@ public final class PathStreamViewModel: ScanProgressObserving {
             switch event.outcome {
             case .match:
                 matches += 1
-                bytes += event.bytes ?? 0
+                bytes += distinctMatchBytes(path: event.path, bytes: event.bytes ?? 0)
             case .failed:
                 failures += 1
             case .checked, .skipped:
@@ -144,5 +149,22 @@ public final class PathStreamViewModel: ScanProgressObserving {
         matchCount = 0
         failureCount = 0
         totalBytes = 0
+        countedBytesByPath = [:]
+    }
+
+    private func distinctMatchBytes(path: String, bytes: Int64) -> Int64 {
+        guard countedBytesByPath[path] == nil else { return 0 }
+        var ancestor = (path as NSString).deletingLastPathComponent
+        while ancestor.count > 1 {
+            if countedBytesByPath[ancestor] != nil { return 0 }
+            ancestor = (ancestor as NSString).deletingLastPathComponent
+        }
+        let prefix = path.hasSuffix("/") ? path : path + "/"
+        let nested = countedBytesByPath.filter { $0.key.hasPrefix(prefix) }
+        for key in nested.keys {
+            countedBytesByPath[key] = nil
+        }
+        countedBytesByPath[path] = bytes
+        return bytes - nested.values.reduce(0, +)
     }
 }

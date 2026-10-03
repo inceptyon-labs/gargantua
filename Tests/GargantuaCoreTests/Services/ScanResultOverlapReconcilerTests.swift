@@ -40,12 +40,26 @@ struct ScanResultOverlapReconcilerTests {
         #expect(byID["other"]?.safety == .protected_)
     }
 
-    private func result(_ id: String, _ path: String, _ safety: SafetyLevel) -> ScanResult {
+    @Test("Totals count a result inside another result's folder once")
+    func distinctBytesSkipsNestedResults() {
+        let chrome = result("chrome", "/u/Library/Caches/Google/Chrome", .review, size: 100)
+        let profile = result("profile", "/u/Library/Caches/Google/Chrome/Default/Cache", .review, size: 40)
+        let sibling = result("sibling", "/u/Library/Caches/Google/ChromeHelper", .safe, size: 7)
+
+        #expect(ScanResultOverlapReconciler.distinctBytes([chrome, profile, sibling]) == 107)
+        // Without its folder in the set, the nested result counts.
+        #expect(ScanResultOverlapReconciler.distinctBytes([profile, sibling]) == 47)
+        // A containment map built over the full scan still applies to a subset.
+        let containers = ScanResultOverlapReconciler.containers(in: [chrome, profile, sibling])
+        #expect(ScanResultOverlapReconciler.distinctBytes([profile], containers: containers) == 40)
+    }
+
+    private func result(_ id: String, _ path: String, _ safety: SafetyLevel, size: Int64 = 1) -> ScanResult {
         ScanResult(
             id: id,
             name: id,
             path: path,
-            size: 1,
+            size: size,
             safety: safety,
             confidence: 90,
             explanation: "x",
