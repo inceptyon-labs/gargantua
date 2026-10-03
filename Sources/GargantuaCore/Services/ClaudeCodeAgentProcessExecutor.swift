@@ -30,10 +30,14 @@ public final class FoundationClaudeCodeProcessExecutor: ClaudeCodeAgentProcessEx
         workingDirectory: URL?,
         onOutput: @escaping @Sendable (ClaudeCodeProcessOutput) -> Void
     ) async throws -> Int32 {
+        // Same pre-exec check DefaultProcessRunner applies to every other tool.
+        try ExecutableTrustPolicy.verify(executable)
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
-        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+        process.environment = ProcessInfo.processInfo.environment
+            .filter { !$0.key.hasPrefix("DYLD_") }
+            .merging(environment) { _, new in new }
         process.currentDirectoryURL = workingDirectory
 
         let stdout = Pipe()

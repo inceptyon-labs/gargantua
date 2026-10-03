@@ -33,6 +33,7 @@ public struct ClaudeCodeOneShotRunner: @unchecked Sendable {
     /// Run one completion and return stdout. `model` may be empty to use the
     /// CLI's default model.
     public func run(executable: URL, prompt: String, model: String) async throws -> String {
+        try ExecutableTrustPolicy.verify(executable)
         // Stop claude from probing MCP servers, allowed tools, or any other
         // agentic discovery — we want a one-shot completion only. A minimal
         // empty MCP config + --strict-mcp-config short-circuits the search.

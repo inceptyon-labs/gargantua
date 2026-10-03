@@ -29,6 +29,7 @@ public struct CodexOneShotRunner: @unchecked Sendable {
     }
 
     public func run(executable: URL, prompt: String, model: String) async throws -> String {
+        try ExecutableTrustPolicy.verify(executable)
         let lastMessageFile = fileManager.temporaryDirectory
             .appendingPathComponent("gargantua-codex-out-\(UUID().uuidString).txt")
         defer { try? fileManager.removeItem(at: lastMessageFile) }
