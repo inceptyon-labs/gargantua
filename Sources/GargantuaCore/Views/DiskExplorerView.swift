@@ -360,10 +360,7 @@ public struct DiskExplorerView: View {
         // `isLoading`, there's nothing to scan.
         guard state.isLoading else { return }
 
-        for await item in DirectorySizeScanner.streamChildren(of: path) {
-            if Task.isCancelled { return }
-            state.upsert(item)
-        }
+        await DiskExplorerStreamLoader.stream(path, into: state)
 
         if !Task.isCancelled {
             if state.items.isEmpty {

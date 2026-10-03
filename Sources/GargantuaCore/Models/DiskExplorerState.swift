@@ -213,17 +213,34 @@ public final class DiskExplorerState {
     /// Insert or replace `item` (keyed by `item.id`), then keep `items`
     /// sorted largest-first with permission-denied rows pushed to the bottom.
     public func upsert(_ item: DirectoryItem) {
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index] = item
-        } else {
-            items.append(item)
+        upsert(contentsOf: [item])
+    }
+
+    /// Batch form of `upsert`: one merge, one sort, one `items` write, so a
+    /// streamed folder of thousands of children isn't re-sorted (and the view
+    /// re-rendered) once per child.
+    public func upsert(contentsOf batch: [DirectoryItem]) {
+        guard !batch.isEmpty else { return }
+        var merged = items
+        var indexByID: [String: Int] = [:]
+        for (index, existing) in merged.enumerated() where indexByID[existing.id] == nil {
+            indexByID[existing.id] = index
         }
-        items.sort { lhs, rhs in
+        for item in batch {
+            if let index = indexByID[item.id] {
+                merged[index] = item
+            } else {
+                indexByID[item.id] = merged.count
+                merged.append(item)
+            }
+        }
+        merged.sort { lhs, rhs in
             if lhs.isPermissionDenied != rhs.isPermissionDenied {
                 return !lhs.isPermissionDenied
             }
             return lhs.size > rhs.size
         }
+        items = merged
         maxSize = items.first(where: { !$0.isPermissionDenied && !$0.isSizing })?.size ?? 1
     }
 
