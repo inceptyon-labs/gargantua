@@ -235,7 +235,7 @@ public struct NativeScanAdapter: ScanAdapter {
                     referenceDate: referenceDate
                 )
                 // A cancelled scan starts no further rules.
-                group.addTaskUnlessCancelled {
+                _ = group.addTaskUnlessCancelled {
                     (idx, Self.evaluate(rule: rule, context: context, onSizing: onSizing))
                 }
                 next += 1
