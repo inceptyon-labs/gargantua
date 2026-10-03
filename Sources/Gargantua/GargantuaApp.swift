@@ -63,9 +63,15 @@ struct GargantuaApp: App {
                 .onOpenURL { url in
                     LicenseActivationLink.handle(url)
                 }
+                // Let the open window take gargantua:// links instead of
+                // SwiftUI opening another window for each one.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .defaultSize(width: 900, height: 600)
         .commands {
+            // One main window: every session lives in MainContentView, so a
+            // second window would run its own scans and cleanups in parallel.
+            CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesCommand(viewModel: updateController.settingsViewModel)
             }
