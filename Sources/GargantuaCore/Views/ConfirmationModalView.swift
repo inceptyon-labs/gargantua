@@ -135,18 +135,30 @@ struct ModalChrome<Content: View>: View {
                 .ignoresSafeArea()
                 .onTapGesture(perform: onCancel)
 
-            // Modal card
-            content
-                .background(GargantuaColors.surface3)
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.large))
-                .overlay(
-                    RoundedRectangle(cornerRadius: GargantuaRadius.large)
-                        .stroke(GargantuaColors.border, lineWidth: 1)
-                )
-                .frame(maxWidth: 480)
-                .padding(GargantuaSpacing.space6)
+            // Modal card. When the card is taller than the window (a short
+            // window, or a long review list), it scrolls instead of pushing
+            // the Cancel/Confirm row off-screen.
+            ViewThatFits(in: .vertical) {
+                card(content)
+                ScrollView {
+                    card(content)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
+            .frame(maxWidth: 480)
+            .padding(GargantuaSpacing.space6)
         }
         .onExitCommand(perform: onCancel)
+    }
+
+    private func card(_ body: some View) -> some View {
+        body
+            .background(GargantuaColors.surface3)
+            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.large))
+            .overlay(
+                RoundedRectangle(cornerRadius: GargantuaRadius.large)
+                    .stroke(GargantuaColors.border, lineWidth: 1)
+            )
     }
 }
 
