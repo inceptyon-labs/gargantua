@@ -50,9 +50,10 @@ extension SmartUninstallerViewModel {
     /// (review-classified by default) would surface a "0 items" modal.
     public func quickUninstall(_ app: AppInfo) async {
         await selectApp(app)
-        if let plan = currentPlan {
-            selectedIDs = Set(plan.actionableItems.map(\.id))
-        }
+        // Severed while planning: don't leave the confirm flag set, or the
+        // modal would pop on the next app the user opens.
+        guard !Task.isCancelled, let plan = currentPlan else { return }
+        selectedIDs = Set(plan.actionableItems.map(\.id))
         quickConfirmActive = true
     }
 

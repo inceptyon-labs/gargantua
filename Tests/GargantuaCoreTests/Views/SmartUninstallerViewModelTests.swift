@@ -281,3 +281,25 @@ struct SmartUninstallerPlanReviewTests {
         #expect(vm.selectedTotalBytes == 6_000_000)
     }
 }
+
+@Suite("SmartUninstallerViewModel — quick uninstall")
+@MainActor
+struct SmartUninstallerQuickUninstallTests {
+    @Test("Severing a Quick Uninstall while it plans leaves no confirmation pending")
+    func severedQuickUninstallLeavesNoConfirmation() async {
+        let app = makeApp(bundleID: "a", name: "Alpha")
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: [app]),
+            planner: StubPlanner(build: { app, _ in makePlan(app: app) }),
+            executor: StubExecutor(result: .success(makeExecutionResult(plan: makePlan(app: app))))
+        )
+        await vm.loadApps()
+
+        await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await vm.quickUninstall(app)
+        }.value
+
+        #expect(!vm.quickConfirmActive)
+    }
+}
