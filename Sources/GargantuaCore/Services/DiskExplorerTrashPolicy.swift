@@ -68,7 +68,7 @@ enum DiskExplorerTrashPolicy {
         let targetComponents = firmlinkResolvedComponents(path)
         if targetComponents.count > homeComponents.count,
            Array(targetComponents.prefix(homeComponents.count)) == homeComponents {
-            return .home
+            return credentialBlock(targetComponents: targetComponents, homeComponents: homeComponents) ?? .home
         }
         if isLexicallyInsideHome(path, home: home) {
             return .blocked(reason: "This item can't be trashed from Disk Explorer")
@@ -95,6 +95,7 @@ enum DiskExplorerTrashPolicy {
     ) -> DiskExplorerTrashDecision {
         guard path.hasPrefix("/") else { return .blocked(reason: "Invalid path") }
         if isLexicallyInsideHome(path, home: home) {
+            if let blocked = credentialBlock(path: path, home: home) { return blocked }
             return canTrash(path: path, home: home, isMountRoot: isMountRoot)
                 ? .home
                 : .blocked(reason: "This item can't be trashed from Disk Explorer")
@@ -420,26 +421,6 @@ enum DiskExplorerTrashPolicy {
                 completion(DiskExplorerTrashError.blocked(reason: reason))
             }
         }
-    }
-
-    /// `home`, standardized and fully resolved — Home itself is never a
-    /// symlink leaf we need to preserve.
-    private static func normalizedHome(_ home: String) -> URL {
-        URL(fileURLWithPath: home).standardizedFileURL.resolvingSymlinksInPath()
-    }
-
-    /// `path`, with only its parent directory chain resolved through
-    /// symlinks; the leaf component is kept as-is. `recycle` trashes the item
-    /// AT the given URL, so a symlink leaf must stay a symlink leaf — only
-    /// the directories that led to it matter for the Home-containment check.
-    private static func normalizedTarget(_ path: String) -> URL {
-        let standardized = URL(fileURLWithPath: path).standardizedFileURL
-        guard standardized.pathComponents.count > 1 else {
-            return standardized.resolvingSymlinksInPath()
-        }
-        let leaf = standardized.lastPathComponent
-        let resolvedParent = standardized.deletingLastPathComponent().resolvingSymlinksInPath()
-        return resolvedParent.appendingPathComponent(leaf)
     }
 
     private static func url(fromComponents components: [String]) -> URL {
