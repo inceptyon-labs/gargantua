@@ -184,6 +184,10 @@ struct MainContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .environment(\.cleanupNarrator, narrateHandler)
                 .environment(\.openAIModelSettings, { sidebarSelection = "settings" })
+                .environment(\.openLicenseSettings, {
+                    SettingsView.selectLicenseTab()
+                    sidebarSelection = "settings"
+                })
                 .modifier(AIRootModifier(window: window, onOpenSettings: { sidebarSelection = "settings" }))
                 .onAppear {
                     initializePersistenceIfNeeded()

@@ -38,6 +38,8 @@ public struct PageHeaderView<Trailing: View>: View {
         self.trailing = trailing
     }
 
+    @Environment(\.openLicenseSettings) private var openLicenseSettings
+
     public var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: GargantuaSpacing.space3) {
@@ -54,7 +56,7 @@ public struct PageHeaderView<Trailing: View>: View {
 
                 trailing()
 
-                TrialStatusChip()
+                TrialStatusChip(onTap: openLicenseSettings)
 
                 GargantuaBrandMark()
                     .frame(width: 40, height: 40)

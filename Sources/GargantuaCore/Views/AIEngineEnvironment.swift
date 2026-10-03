@@ -23,6 +23,10 @@ private struct AIEngineNeedsFirstWarmupKey: EnvironmentKey {
     static let defaultValue: Bool = false
 }
 
+private struct OpenLicenseSettingsKey: EnvironmentKey {
+    static let defaultValue: (@MainActor @Sendable () -> Void)? = nil
+}
+
 private struct OpenAIModelSettingsKey: EnvironmentKey {
     // Permanently nil; the value is only ever supplied per-view via
     // .environment(\.openAIModelSettings, …) on the main actor.
@@ -64,5 +68,11 @@ public extension EnvironmentValues {
     var openAIModelSettings: (@MainActor @Sendable () -> Void)? {
         get { self[OpenAIModelSettingsKey.self] }
         set { self[OpenAIModelSettingsKey.self] = newValue }
+    }
+
+    /// Opens Settings on its License tab; the trial chip's action.
+    var openLicenseSettings: (@MainActor @Sendable () -> Void)? {
+        get { self[OpenLicenseSettingsKey.self] }
+        set { self[OpenLicenseSettingsKey.self] = newValue }
     }
 }

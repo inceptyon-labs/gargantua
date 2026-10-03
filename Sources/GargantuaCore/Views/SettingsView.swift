@@ -28,8 +28,17 @@ public struct SettingsView: View {
     @State var scheduledScanError: String?
     @State var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     @State var launchAtLoginError: String?
-    @State private var selectedTab: SettingsTab = .ai
+    @AppStorage(SettingsTab.selectedTabKey) private var selectedTabRaw = SettingsTab.ai.rawValue
     @State var isShowingDeleteModelConfirm = false
+
+    private var selectedTab: SettingsTab {
+        SettingsTab(rawValue: selectedTabRaw) ?? .ai
+    }
+
+    /// Makes Settings open on its License tab the next time it appears.
+    public static func selectLicenseTab() {
+        UserDefaults.standard.set(SettingsTab.license.rawValue, forKey: SettingsTab.selectedTabKey)
+    }
 
     public init(persistence: PersistenceController) {
         let manager = ModelDownloadManager()
@@ -63,9 +72,12 @@ public struct SettingsView: View {
                 subtitleStyle: .voice
             )
 
-            SettingsTabBar(selection: $selectedTab)
-                .padding(.horizontal, GargantuaSpacing.space4)
-                .padding(.vertical, GargantuaSpacing.space3)
+            SettingsTabBar(selection: Binding(
+                get: { selectedTab },
+                set: { selectedTabRaw = $0.rawValue }
+            ))
+            .padding(.horizontal, GargantuaSpacing.space4)
+            .padding(.vertical, GargantuaSpacing.space3)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space5) {

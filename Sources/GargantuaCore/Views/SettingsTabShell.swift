@@ -1,6 +1,10 @@
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
+    /// UserDefaults key for the tab Settings opens on. Remembers the last tab,
+    /// and lets a link elsewhere (the trial chip) pick the License tab.
+    static let selectedTabKey = "settings.selectedTab"
+
     case ai = "AI"
     case automation = "General"
     case network = "Network"

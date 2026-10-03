@@ -57,20 +57,25 @@ public struct TrialStatusChip: View {
             }
         }()
 
-        Button(action: { onTap?() }, label: {
-            Text(label)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(foreground)
-                .padding(.horizontal, GargantuaSpacing.space3)
-                .padding(.vertical, GargantuaSpacing.space1)
-                .background(background)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(foreground.opacity(0.25), lineWidth: 1)
-                )
-        })
-        .buttonStyle(.plain)
-        .disabled(onTap == nil)
-        .help("Open License settings")
+        let capsule = Text(label)
+            .font(GargantuaFonts.caption)
+            .foregroundStyle(foreground)
+            .padding(.horizontal, GargantuaSpacing.space3)
+            .padding(.vertical, GargantuaSpacing.space1)
+            .background(background)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(foreground.opacity(0.25), lineWidth: 1)
+            )
+
+        // A plain label when there's nowhere to go, rather than a disabled
+        // button promising to open settings.
+        if let onTap {
+            Button(action: onTap) { capsule }
+                .buttonStyle(.plain)
+                .help("Open License settings")
+        } else {
+            capsule
+        }
     }
 }

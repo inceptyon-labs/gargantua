@@ -183,6 +183,15 @@ extension CleanupSummaryView {
                                     .foregroundStyle(GargantuaColors.ink)
                                     .lineLimit(1)
 
+                                if failed.item.path.hasPrefix("/") {
+                                    Text(failed.item.path)
+                                        .font(GargantuaFonts.monoPath)
+                                        .foregroundStyle(GargantuaColors.ink3)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .textSelection(.enabled)
+                                }
+
                                 Text(CleanupFailureClassifier.friendlyReason(for: failed.error))
                                     .font(GargantuaFonts.caption)
                                     .foregroundStyle(GargantuaColors.ink3)
@@ -208,6 +217,22 @@ extension CleanupSummaryView {
                                 .foregroundStyle(GargantuaColors.ink3)
                         }
                         .padding(.vertical, GargantuaSpacing.space1)
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            if failed.item.path.hasPrefix("/") {
+                                Button {
+                                    NSWorkspace.shared.selectFile(failed.item.path, inFileViewerRootedAtPath: "")
+                                } label: {
+                                    Label("Reveal in Finder", systemImage: "folder")
+                                }
+                                Button {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(failed.item.path, forType: .string)
+                                } label: {
+                                    Label("Copy Path", systemImage: "doc.on.doc")
+                                }
+                            }
+                        }
                     }
                 }
             }
