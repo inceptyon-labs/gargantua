@@ -201,3 +201,13 @@ extension MainContentView {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+/// Agent Run controllers live with the window, not in their views, so a run
+/// keeps going with its transcript and approval gates when the user switches
+/// screens, and Start can't launch a second run beside an unseen one. Lazy so
+/// the window's state setup doesn't build them until Agent Run is opened.
+@MainActor
+final class AgentRunControllers {
+    lazy var claude = ClaudeCodeAgentSessionController()
+    lazy var codex = CodexAgentRunController()
+}

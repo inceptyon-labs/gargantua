@@ -36,6 +36,7 @@ struct MainContentView: View {
     @State var devPurgeSession = DevArtifactSessionState()
     @State var backgroundItemsSession = BackgroundItemsSession()
     @State var processInventorySession = ProcessInventorySession()
+    @State var agentRunControllers = AgentRunControllers()
     @StateObject var organizerSession: OrganizerSessionState
     @StateObject var cloudAIService: CloudAIService
     @State var activeAIEngineKind: AIEnginePreference
@@ -222,9 +223,9 @@ struct MainContentView: View {
                             case "agentSessions":
                                 switch AIEngineAssignments.engine(for: .maintenance) {
                                 case .codex:
-                                    CodexAgentView()
+                                    CodexAgentView(controller: agentRunControllers.codex)
                                 default:
-                                    ClaudeCodeAgentView()
+                                    ClaudeCodeAgentView(controller: agentRunControllers.claude)
                                 }
                             case "settings":
                                 if let persistence {
