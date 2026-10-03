@@ -31,6 +31,10 @@ public struct DirectoryItem: Identifiable, Sendable {
     /// rectangle. Not drillable; surfaced only in the treemap view.
     public let isOthersAggregate: Bool
 
+    /// `true` for a single regular file, listed when the "(Files)" row is
+    /// expanded. Revealable and trashable, but not drillable or expandable.
+    public let isFile: Bool
+
     /// `true` when this row is a separate volume mounted here; listed but not
     /// sized until the user opens it.
     public let isMountRoot: Bool
@@ -54,6 +58,7 @@ public struct DirectoryItem: Identifiable, Sendable {
         isSizing: Bool = false,
         isFilesAggregate: Bool = false,
         isOthersAggregate: Bool = false,
+        isFile: Bool = false,
         isMountRoot: Bool = false,
         isNetworkVolume: Bool = false,
         sharedCloneBytes: Int64 = 0,
@@ -74,9 +79,20 @@ public struct DirectoryItem: Identifiable, Sendable {
         self.isSizing = isSizing
         self.isFilesAggregate = isFilesAggregate
         self.isOthersAggregate = isOthersAggregate
+        self.isFile = isFile
         self.isMountRoot = isMountRoot
         self.isNetworkVolume = isNetworkVolume
         self.sharedCloneBytes = sharedCloneBytes
         self.children = children
     }
+
+    /// The directory whose loose files a "(Files)" row stands for; `nil` for
+    /// every other row.
+    public var filesAggregateDirectory: String? {
+        guard isFilesAggregate else { return nil }
+        let directory = String(path.dropLast(DirectoryItem.filesAggregateSuffix.count))
+        return directory.isEmpty ? "/" : directory
+    }
+
+    static let filesAggregateSuffix = "/(files)"
 }

@@ -50,18 +50,23 @@ struct DirectoryTreemapCellView: View {
                     cellBody
                 }
                 .buttonStyle(.plain)
-            } else if item.isOthersAggregate {
+            } else if item.isOthersAggregate || item.isFilesAggregate {
                 // Not drillable — there is no single directory behind it — but
                 // it must not be a dead end either. The owner routes this to
-                // list mode, where each folded-away folder gets its own row.
+                // list mode, where each folded-away folder or loose file gets
+                // its own row.
                 Button {
                     onDrillDown()
                 } label: {
                     cellBody
                 }
                 .buttonStyle(.plain)
-                .help("Smaller folders — show them as a list")
-                .accessibilityHint("Switches to list view, where these folders are listed individually")
+                .help(item.isFilesAggregate ? "Loose files in this folder — list them" : "Smaller folders — show them as a list")
+                .accessibilityHint(
+                    item.isFilesAggregate
+                        ? "Switches to list view and lists these files individually"
+                        : "Switches to list view, where these folders are listed individually"
+                )
             } else if item.isPermissionDenied {
                 Button {
                     openURL(Self.fullDiskAccessURL)
@@ -485,7 +490,7 @@ extension DirectoryTreemapCellView {
 
     var iconName: String {
         if item.isOthersAggregate { return "ellipsis.circle" }
-        if item.isFilesAggregate { return "doc" }
+        if item.isFilesAggregate { return "doc.on.doc" }
         if item.isPermissionDenied { return "lock.fill" }
         if item.isSizing { return "hourglass" }
         return "folder.fill"

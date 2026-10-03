@@ -203,6 +203,43 @@ public enum DirectorySizeScanner: Sendable {
         return items
     }
 
+    /// The loose files directly in `directoryPath` (what its "(Files)" row
+    /// totals), largest first. Sized with the same hard-link/clone accounting
+    /// as the aggregate so the rows add up to it.
+    public static func looseFiles(in directoryPath: String) async -> [DirectoryItem] {
+        await Task.detached {
+            let fm = FileManager.default
+            guard let contents = try? fm.contentsOfDirectory(
+                at: URL(fileURLWithPath: directoryPath),
+                includingPropertiesForKeys: [
+                    .isDirectoryKey,
+                    .totalFileAllocatedSizeKey,
+                    .isSymbolicLinkKey,
+                    .linkCountKey,
+                    .mayShareFileContentKey,
+                ],
+                options: []
+            ) else { return [] }
+
+            var files: [DirectoryItem] = []
+            var seenInodes: Set<InodeKey> = []
+            for child in contents {
+                guard case .file(let size) = classifyChild(child, fm: fm, mountRootCheck: defaultMountRootCheck) else {
+                    continue
+                }
+                let accounting = looseFileAccounting(for: child, allocated: size, seenInodes: &seenInodes)
+                files.append(DirectoryItem(
+                    name: child.lastPathComponent,
+                    path: child.path,
+                    size: accounting.countedSize,
+                    isFile: true,
+                    sharedCloneBytes: accounting.sharedCloneBytes
+                ))
+            }
+            return files.sorted { $0.size > $1.size }
+        }.value
+    }
+
     /// Stream the immediate children of `directoryPath` as their sizes are computed.
     ///
     /// Emission order:
@@ -306,7 +343,7 @@ public enum DirectorySizeScanner: Sendable {
                 if topLevelFilesSize > 0 {
                     continuation.yield(DirectoryItem(
                         name: "(Files)",
-                        path: directoryPath + "/(files)",
+                        path: directoryPath + DirectoryItem.filesAggregateSuffix,
                         size: topLevelFilesSize,
                         isFilesAggregate: true,
                         sharedCloneBytes: topLevelSharedCloneBytes

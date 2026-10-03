@@ -37,18 +37,22 @@ struct DirectoryRowView: View {
 
     var body: some View {
         Button {
-            if item.isOthersAggregate {
+            if item.isOthersAggregate || item.isFile {
                 // Aggregate row is informational; matches treemap behavior.
+                // A file has nothing to open; its menu reveals or trashes it.
             } else if item.isPermissionDenied {
                 openURL(Self.fullDiskAccessURL)
-            } else if !isFilesAggregate {
+            } else if isFilesAggregate, onExpand != nil {
+                toggleExpansion()
+            } else {
                 onDrillDown()
             }
         } label: {
             HStack(spacing: GargantuaSpacing.space3) {
-                // Expand/collapse chevron (directories only — not aggregates,
-                // not permission-denied).
-                if !isFilesAggregate && !item.isPermissionDenied && !item.isOthersAggregate {
+                // Expand/collapse chevron: directories, and "(Files)", which
+                // expands into its files. Not "Others", files, or
+                // permission-denied rows.
+                if onExpand != nil && !item.isPermissionDenied && !item.isOthersAggregate && !item.isFile {
                     expandButton
                 } else {
                     Color.clear
@@ -248,29 +252,6 @@ struct DirectoryRowView: View {
         }
     }
 
-    private var expandButton: some View {
-        Button {
-            guard let onExpand else { return }
-            Task {
-                isLoadingChildren = true
-                await onExpand()
-                isLoadingChildren = false
-            }
-        } label: {
-            Group {
-                if isLoadingChildren {
-                    AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
-                } else {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(GargantuaColors.ink3)
-                }
-            }
-            .frame(width: 16, height: 16)
-        }
-        .buttonStyle(.plain)
-    }
-
     private var grantAccessAffordance: some View {
         // Pure label — the surrounding row Button already routes
         // permission-denied taps to the Full Disk Access settings pane.
@@ -346,11 +327,41 @@ struct DirectoryRowView: View {
 
     private var iconName: String {
         if item.isOthersAggregate { return "ellipsis.circle" }
-        if isFilesAggregate { return "doc" }
+        if isFilesAggregate { return "doc.on.doc" }
+        if item.isFile { return "doc" }
         if item.isPermissionDenied { return "lock.fill" }
         if item.isMountRoot {
             return item.isNetworkVolume ? "externaldrive.connected.to.line.below" : "externaldrive"
         }
         return "folder.fill"
+    }
+}
+
+extension DirectoryRowView {
+    private func toggleExpansion() {
+        guard let onExpand, !isLoadingChildren else { return }
+        Task {
+            isLoadingChildren = true
+            await onExpand()
+            isLoadingChildren = false
+        }
+    }
+
+    private var expandButton: some View {
+        Button {
+            toggleExpansion()
+        } label: {
+            Group {
+                if isLoadingChildren {
+                    AccretionDiskView(activityRate: 18, size: 12, color: GargantuaColors.accretion)
+                } else {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+            .frame(width: 16, height: 16)
+        }
+        .buttonStyle(.plain)
     }
 }

@@ -80,6 +80,23 @@ struct DirectorySizeScannerTests {
         #expect(filesAggregate?.path.hasSuffix("/(files)") == true)
     }
 
+    @Test("The (Files) row expands into the loose files it totals")
+    func filesAggregateExpandsIntoLooseFiles() async throws {
+        let root = try makeFixture()
+        defer { cleanup(root) }
+
+        let items = await DirectorySizeScanner.scanChildren(of: root.path)
+        let aggregate = try #require(items.first { $0.isFilesAggregate })
+        let directory = try #require(aggregate.filesAggregateDirectory)
+        #expect(directory == root.path)
+
+        let files = await DirectorySizeScanner.looseFiles(in: directory)
+        #expect(files.map(\.name) == ["another.txt", "loose.txt"])
+        #expect(files.allSatisfy { $0.isFile && !$0.isFilesAggregate })
+        #expect(files.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        #expect(files.reduce(0) { $0 + $1.size } == aggregate.size)
+    }
+
     @Test("scanChildren final rows carry isSizing = false")
     func scanChildrenFinalRowsNotSizing() async throws {
         let root = try makeFixture()

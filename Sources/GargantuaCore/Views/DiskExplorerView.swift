@@ -270,16 +270,7 @@ public struct DiskExplorerView: View {
                         DirectoryTreemapCellView(
                             item: tile.item,
                             totalSiblingSize: totalSize,
-                            onDrillDown: {
-                                // The aggregate is an escape hatch, not a dead
-                                // end: the folders it stands for are all
-                                // individually listed in list mode.
-                                if tile.item.isOthersAggregate {
-                                    state.setDisplayMode(.list)
-                                } else {
-                                    drillDown(into: tile.item)
-                                }
-                            },
+                            onDrillDown: { open(tile.item) },
                             onItemTrashed: { refreshCurrent() },
                             onLicenseBlocked: { blockedReason = $0 }
                         )
@@ -339,7 +330,7 @@ public struct DiskExplorerView: View {
             dominant: dominant,
             items: state.items,
             maxSize: state.maxSize,
-            onDrillDown: { drillDown(into: $0) }
+            onDrillDown: { open($0) }
         )
     }
 
@@ -378,18 +369,45 @@ public struct DiskExplorerView: View {
             state.completeLoad(for: path)
         }
     }
+}
+
+extension DiskExplorerView {
+    /// Drill into a folder from the treemap or Focus view. The aggregates are
+    /// escape hatches, not dead ends: list mode lists the folders "Others"
+    /// stands for, and expands "(Files)" into its files.
+    private func open(_ item: DirectoryItem) {
+        if item.isOthersAggregate {
+            state.setDisplayMode(.list)
+        } else if item.isFilesAggregate {
+            state.setDisplayMode(.list)
+            Task { await expand(item) }
+        } else {
+            drillDown(into: item)
+        }
+    }
 
     private func toggleExpand(_ item: DirectoryItem) async {
         if state.expandedItems[item.path] != nil {
             // Collapse: hide the rows but keep the scanned children cached so a
             // re-expand doesn't re-walk the subtree.
             state.expandedItems.removeValue(forKey: item.path)
-        } else if let cached = state.expandedChildrenCache[item.path] {
-            state.expandedItems[item.path] = cached
         } else {
-            let children = await DirectorySizeScanner.scanChildren(of: item.path)
-            state.expandedChildrenCache[item.path] = children
-            state.expandedItems[item.path] = children
+            await expand(item)
         }
+    }
+
+    private func expand(_ item: DirectoryItem) async {
+        guard state.expandedItems[item.path] == nil else { return }
+        if let cached = state.expandedChildrenCache[item.path] {
+            state.expandedItems[item.path] = cached
+            return
+        }
+        let children = if let directory = item.filesAggregateDirectory {
+            await DirectorySizeScanner.looseFiles(in: directory)
+        } else {
+            await DirectorySizeScanner.scanChildren(of: item.path)
+        }
+        state.expandedChildrenCache[item.path] = children
+        state.expandedItems[item.path] = children
     }
 }

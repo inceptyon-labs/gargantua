@@ -78,7 +78,7 @@ extension DirectorySizeScanner {
         if topLevelFilesSize > 0 {
             items.append(DirectoryItem(
                 name: "(Files)",
-                path: directoryPath + "/(files)",
+                path: directoryPath + DirectoryItem.filesAggregateSuffix,
                 size: topLevelFilesSize,
                 isFilesAggregate: true,
                 sharedCloneBytes: topLevelSharedCloneBytes
