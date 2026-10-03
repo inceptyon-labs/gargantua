@@ -61,6 +61,13 @@ public struct MCPConnectionID: Hashable, Sendable {
     public static func sse(_ sessionID: String) -> MCPConnectionID {
         MCPConnectionID("sse:\(sessionID)")
     }
+
+    /// The clean rate-limit bucket for this connection. All SSE sessions
+    /// share one: any client can open a new session (a new id) whenever it
+    /// likes, so a per-session budget would reset on demand.
+    public var rateLimitShard: String {
+        rawValue.hasPrefix("sse:") ? "sse" : rawValue
+    }
 }
 
 /// Optional diagnostic log sink for dispatcher-side events (unexpected

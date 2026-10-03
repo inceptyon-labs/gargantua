@@ -312,7 +312,8 @@ let cleanHandler = MCPCleanToolHandler(
     // transport and cannot be re-declared by the peer. The declared name is
     // still what lands in the audit entry, which is where a human-meaningful
     // attribution belongs.
-    rateLimitKeyProvider: { String(describing: dispatcher.currentCallConnection()) },
+    // SSE sessions share one bucket (see `MCPConnectionID.rateLimitShard`).
+    rateLimitKeyProvider: { dispatcher.currentCallConnection().rateLimitShard },
     log: stderrLog
 )
 dispatcher.register(tool: .clean, handler: cleanHandler.toolHandler)

@@ -140,4 +140,10 @@ struct MCPCleanConsentFailClosedTests {
         )
         #expect(decision == .proceed)
     }
+
+    @Test("all SSE sessions share one rate-limit bucket; stdio has its own")
+    func sseSessionsShareShard() {
+        #expect(MCPConnectionID.sse("first").rateLimitShard == MCPConnectionID.sse("second").rateLimitShard)
+        #expect(MCPConnectionID.stdio.rateLimitShard != MCPConnectionID.sse("first").rateLimitShard)
+    }
 }
