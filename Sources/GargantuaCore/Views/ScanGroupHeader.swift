@@ -10,11 +10,12 @@ struct ScanGroupHeader: View {
     let group: ScanGroup
     let isExpanded: Bool
     let selectedIDs: Set<String>
+    var lockedIDs: Set<String> = []
     let onToggle: () -> Void
     let onToggleSelection: () -> Void
 
     private var selectionState: GroupSelectionState {
-        group.selectionState(selectedIDs: selectedIDs)
+        group.selectionState(selectedIDs: selectedIDs, lockedIDs: lockedIDs)
     }
 
     var body: some View {

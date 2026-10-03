@@ -57,8 +57,11 @@ public enum GroupSelectionState: Equatable {
 }
 
 public extension ScanGroup {
-    func selectionState(selectedIDs: Set<String>) -> GroupSelectionState {
-        let ids = selectableIDs
+    /// - Parameter lockedIDs: items the user can't select right now (view-only,
+    ///   or held by a running app). They're left out on both sides, matching
+    ///   what the group checkbox's toggle acts on.
+    func selectionState(selectedIDs: Set<String>, lockedIDs: Set<String> = []) -> GroupSelectionState {
+        let ids = selectableIDs.filter { !lockedIDs.contains($0) }
         guard !ids.isEmpty else { return .allProtected }
         let hits = ids.filter { selectedIDs.contains($0) }.count
         if hits == 0 { return .none }

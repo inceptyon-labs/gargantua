@@ -10,6 +10,7 @@ extension ScanBucketListView {
                 group: group,
                 isExpanded: isExpanded,
                 selectedIDs: selectedIDs,
+                lockedIDs: lockedIDs,
                 onToggle: { toggleGroup(group.id) },
                 onToggleSelection: { toggleGroupSelection(group) }
             )
@@ -134,6 +135,11 @@ extension ScanBucketListView {
     /// both complete to `.all`. This matches the user's mental model that the
     /// checkbox affordance is "fill the box".
     /// State is recomputed from live `selectedIDs` at call time.
+    /// View-only and app-blocked items: shown, but not selectable.
+    var lockedIDs: Set<String> {
+        Set(viewOnlyReasons.keys).union(blockedApps.keys)
+    }
+
     func toggleGroupSelection(_ group: ScanGroup) {
         // Drop view-only and app-blocked items so "fill the box" never queues
         // something locked.

@@ -248,4 +248,15 @@ struct ScanGroupSelectionTests {
         #expect(group.selectableIDs == ["s1"])
         #expect(group.selectionState(selectedIDs: ["s1"]) == .all)
     }
+
+    @Test("Locked items don't keep a fully selected group at partial")
+    func lockedItemsIgnored() {
+        let results = [
+            makeScanResult(id: "s1", safety: .safe, path: "/x/y/a"),
+            makeScanResult(id: "locked", safety: .safe, path: "/x/y/b"),
+        ]
+        let group = ScanGrouper.group(results, mode: .folder).first!
+        #expect(group.selectionState(selectedIDs: ["s1"], lockedIDs: ["locked"]) == .all)
+        #expect(group.selectionState(selectedIDs: [], lockedIDs: ["s1", "locked"]) == .allProtected)
+    }
 }
