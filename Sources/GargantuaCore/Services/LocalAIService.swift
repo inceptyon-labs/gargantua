@@ -125,14 +125,25 @@ public final class LocalAIService: ObservableObject, AIServiceProtocol {
         }
 
         lifecycleState = .loading
+        let loadingEngine = engine
 
         do {
-            try await engine.load(modelPath: path, modelSize: size)
+            try await loadingEngine.load(modelPath: path, modelSize: size)
         } catch {
-            engine.unload()
+            loadingEngine.unload()
+            guard loadingEngine === engine else { return }
             modelMemoryUsage = 0
             lifecycleState = .unloaded
             throw AIServiceError.loadFailed(underlying: error)
+        }
+
+        // `configureEngine` swapped engines while this one loaded: it already
+        // reset the lifecycle to `.unloaded`, so marking `.ready` here would
+        // claim the new, unloaded engine is loaded. Drop the stale one; the
+        // next call loads the current engine.
+        guard loadingEngine === engine else {
+            loadingEngine.unload()
+            return
         }
 
         // Resident-memory guard: on-disk size is pre-validated, but a real

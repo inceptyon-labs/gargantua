@@ -326,6 +326,13 @@ private final class ClaudeCodeLineBuffer: @unchecked Sendable {
     func append(_ text: String) {
         lock.lock()
         pending.append(text)
+        // Re-split only when a line ends. A large tool result arrives as many
+        // chunks of one line; splitting the whole growing buffer on each one
+        // copied it over and over (quadratic in the line's length).
+        guard text.contains(where: \.isNewline) else {
+            lock.unlock()
+            return
+        }
         let lines = pending.components(separatedBy: .newlines)
         pending = lines.last ?? ""
         let complete = lines.dropLast()
