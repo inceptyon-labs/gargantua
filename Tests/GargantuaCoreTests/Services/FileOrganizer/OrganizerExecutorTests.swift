@@ -222,7 +222,7 @@ struct OrganizerExecutorTests {
         #expect(try s.ledger.entries(forProposalID: p.id).count == 1)
     }
 
-    @Test("Undo on a deleted applied file counts as reversed (best-effort)")
+    @Test("Undo reports a file deleted after Apply as missing, not reversed")
     func undoOnDeletedAppliedFile() throws {
         let s = try Scratch()
         defer { s.cleanup() }
@@ -236,9 +236,30 @@ struct OrganizerExecutorTests {
 
         let result = try s.executor.undo(proposalID: p.id)
         #expect(result.failed.isEmpty)
-        #expect(result.reversed.count == 1)
+        #expect(result.reversed.isEmpty)
+        #expect(result.missing == [s.root.appendingPathComponent("a.pdf")])
         // Ledger row cleared.
         #expect(try s.ledger.entries(forProposalID: p.id).isEmpty)
+    }
+
+    @Test("A cancelled Apply stops between moves and says so")
+    func cancelledApplyStopsBetweenMoves() async throws {
+        let s = try Scratch()
+        defer { s.cleanup() }
+        _ = try s.touch("a.pdf")
+        _ = try s.touch("b.pdf")
+        let p = Self.proposal(root: s.root, plans: [("Documents", ["a.pdf", "b.pdf"])])
+        let executor = s.executor
+
+        let work = Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try executor.apply(p)
+        }
+        let result = try await work.value
+
+        #expect(result.wasCancelled)
+        #expect(result.succeeded.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: s.root.appendingPathComponent("a.pdf").path))
     }
 }
 

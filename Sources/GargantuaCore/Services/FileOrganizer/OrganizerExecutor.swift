@@ -33,9 +33,16 @@ public struct OrganizerExecutor: @unchecked Sendable {
         var skipped: [URL] = []
         var failed: [OrganizerMoveFailure] = []
         var createdFolders: [URL] = []
+        var wasCancelled = false
 
-        for plan in proposal.plans {
+        // Cancellation stops between moves; every finished move is in the
+        // ledger, so what moved can still be undone.
+        moves: for plan in proposal.plans {
             for move in plan.moves {
+                if Task.isCancelled {
+                    wasCancelled = true
+                    break moves
+                }
                 let outcome = applyOne(move, planID: plan.id, proposalID: proposal.id)
                 switch outcome {
                 case .success(let destination, let createdParent):
@@ -56,7 +63,8 @@ public struct OrganizerExecutor: @unchecked Sendable {
             succeeded: succeeded,
             skipped: skipped,
             failed: failed,
-            createdFolders: createdFolders
+            createdFolders: createdFolders,
+            wasCancelled: wasCancelled
         )
     }
 
@@ -112,7 +120,9 @@ public struct OrganizerExecutor: @unchecked Sendable {
             .sorted { $0.appliedAt > $1.appliedAt }
 
         var reversed: [URL] = []
+        var missing: [URL] = []
         var failed: [OrganizerMoveFailure] = []
+        var wasCancelled = false
         // Only folders Apply created are candidates for removal; a folder the
         // user already had stays even if the undo leaves it empty.
         let createdFolders = Set(
@@ -122,11 +132,19 @@ public struct OrganizerExecutor: @unchecked Sendable {
         )
 
         for entry in entries {
-            // If the applied file is gone (user deleted it after Apply),
-            // there is nothing to reverse — record as "reversed" so we
-            // still clear the ledger row.
+            if Task.isCancelled {
+                wasCancelled = true
+                break
+            }
+            // The applied file is gone. Back at its original place means an
+            // earlier Undo already restored it; otherwise it was trashed or
+            // moved after Apply and there is nothing to bring back.
             guard fileManager.fileExists(atPath: entry.appliedURL.path) else {
-                reversed.append(entry.originalURL)
+                if fileManager.fileExists(atPath: entry.originalURL.path) {
+                    reversed.append(entry.originalURL)
+                } else {
+                    missing.append(entry.originalURL)
+                }
                 continue
             }
             // Don't clobber: if the original slot was filled in since
@@ -158,14 +176,16 @@ public struct OrganizerExecutor: @unchecked Sendable {
             removeIfEmpty(folder)
         }
 
-        if failed.isEmpty {
+        if failed.isEmpty, !wasCancelled {
             try ledger.clear(proposalID: proposalID)
         }
 
         return OrganizerUndoResult(
             proposalID: proposalID,
             reversed: reversed,
-            failed: failed
+            missing: missing,
+            failed: failed,
+            wasCancelled: wasCancelled
         )
     }
 
@@ -198,6 +218,8 @@ public struct OrganizerExecutionResult: Sendable {
     /// Destination folders this Apply created. Only these are offered for
     /// Move to Trash afterwards; a pre-existing folder can hold other files.
     public let createdFolders: [URL]
+    /// Cancel stopped Apply before every move ran.
+    public let wasCancelled: Bool
 
     public var hasFailures: Bool { !failed.isEmpty }
     public var totalMoved: Int { succeeded.count }
@@ -207,26 +229,41 @@ public struct OrganizerExecutionResult: Sendable {
         succeeded: [URL],
         skipped: [URL],
         failed: [OrganizerMoveFailure],
-        createdFolders: [URL] = []
+        createdFolders: [URL] = [],
+        wasCancelled: Bool = false
     ) {
         self.proposalID = proposalID
         self.succeeded = succeeded
         self.skipped = skipped
         self.failed = failed
         self.createdFolders = createdFolders
+        self.wasCancelled = wasCancelled
     }
 }
 
 public struct OrganizerUndoResult: Sendable {
     public let proposalID: UUID
     public let reversed: [URL]
+    /// Files gone from where Apply put them (trashed or moved since), so
+    /// there was nothing to move back. Listed by their original location.
+    public let missing: [URL]
     public let failed: [OrganizerMoveFailure]
+    /// Cancel stopped Undo before every move was reversed.
+    public let wasCancelled: Bool
 
     public var hasFailures: Bool { !failed.isEmpty }
 
-    public init(proposalID: UUID, reversed: [URL], failed: [OrganizerMoveFailure]) {
+    public init(
+        proposalID: UUID,
+        reversed: [URL],
+        missing: [URL] = [],
+        failed: [OrganizerMoveFailure],
+        wasCancelled: Bool = false
+    ) {
         self.proposalID = proposalID
         self.reversed = reversed
+        self.missing = missing
         self.failed = failed
+        self.wasCancelled = wasCancelled
     }
 }

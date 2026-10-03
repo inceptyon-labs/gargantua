@@ -73,7 +73,7 @@ struct OrganizerPostApplyView: View {
                 Text("Moved \(summary.totalMoved) file\(summary.totalMoved == 1 ? "" : "s")")
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
-                if !summary.skipped.isEmpty || !summary.failed.isEmpty {
+                if !summary.skipped.isEmpty || !summary.failed.isEmpty || summary.wasCancelled {
                     Text(detailLine)
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
@@ -90,6 +90,7 @@ struct OrganizerPostApplyView: View {
         var parts: [String] = []
         if !summary.skipped.isEmpty { parts.append("\(summary.skipped.count) skipped") }
         if !summary.failed.isEmpty { parts.append("\(summary.failed.count) failed") }
+        if summary.wasCancelled { parts.append("stopped early; Undo moves these back") }
         return parts.joined(separator: " · ")
     }
 

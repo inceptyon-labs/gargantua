@@ -118,6 +118,10 @@ public final class OrganizerSessionState: ObservableObject {
 
     private var activeTask: Task<Void, Never>?
 
+    /// Cancels the detached Apply or Undo work behind `activeTask`.
+
+    private var cancelWork: (() -> Void)?
+
     public init(
         executor: OrganizerExecutor = OrganizerExecutor(),
         cloudService: CloudAIService? = nil,
@@ -211,9 +215,13 @@ public final class OrganizerSessionState: ObservableObject {
         phase = .applying
         let executor = executor
 
+        // Off the main thread, so the window stays responsive and Cancel can
+        // stop it between moves (see `cancelInProgress`).
+        let work = Task.detached(priority: .userInitiated) { try executor.apply(proposal) }
+        cancelWork = { work.cancel() }
         activeTask = Task { [weak self] in
             do {
-                let result = try executor.apply(proposal)
+                let result = try await work.value
                 guard !Task.isCancelled else { return }
                 self?.phase = .applied(summary: result)
             } catch {
@@ -228,10 +236,13 @@ public final class OrganizerSessionState: ObservableObject {
         cancelActiveTask()
         phase = .undoing
         let executor = executor
+        let proposalID = proposal.id
 
+        let work = Task.detached(priority: .userInitiated) { try executor.undo(proposalID: proposalID) }
+        cancelWork = { work.cancel() }
         activeTask = Task { [weak self] in
             do {
-                let result = try executor.undo(proposalID: proposal.id)
+                let result = try await work.value
                 guard !Task.isCancelled else { return }
                 self?.phase = .undone(summary: result)
             } catch {
@@ -277,9 +288,16 @@ public final class OrganizerSessionState: ObservableObject {
     /// active proposer task and returns the surface to idle so the user
     /// can pick a different engine or folder without navigating away.
     public func cancelInProgress() {
-        cancelActiveTask()
-        proposal = nil
-        phase = .idle
+        switch phase {
+        case .applying, .undoing:
+            // Stop after the current move. The partial result still lands,
+            // so what already moved can be undone (or re-undone).
+            cancelWork?()
+        default:
+            cancelActiveTask()
+            proposal = nil
+            phase = .idle
+        }
     }
 
     // MARK: - Internal
@@ -287,6 +305,8 @@ public final class OrganizerSessionState: ObservableObject {
     private func cancelActiveTask() {
         activeTask?.cancel()
         activeTask = nil
+        cancelWork?()
+        cancelWork = nil
     }
 
     // MARK: - Test seams
