@@ -31,6 +31,9 @@ public final class DeepCleanSessionState {
     private var blockedAppsByID: [String: BlockedApp] = [:]
     public var scanDuration: TimeInterval = 0
     public var selectedResultIDs: Set<String> = []
+    /// Set by a Dashboard link so the screen starts a scan when it appears,
+    /// instead of landing on the start screen.
+    public var scanRequestedOnOpen = false
     /// The results list's grouping, collapsed groups and search.
     public let listState = ScanBucketListState(groupingDefaultsKey: "results.grouping.deepClean")
     /// Per-result removability, reconciled at scan time (protected roots,

@@ -100,6 +100,11 @@ public struct DeepCleanView: View {
         }
         .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
         .destructiveActionGate(reason: $blockedReason)
+        .onAppear {
+            guard session.scanRequestedOnOpen else { return }
+            session.scanRequestedOnOpen = false
+            if session.phase == .idle { startScan() }
+        }
     }
 
     /// Asymmetric phase transition matching SmartUninstallerView so the

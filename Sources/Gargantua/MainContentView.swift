@@ -64,7 +64,8 @@ struct MainContentView: View {
                                 DashboardView(
                                     sidebarSelection: $sidebarSelection,
                                     session: dashboardSession,
-                                    persistence: persistence
+                                    persistence: persistence,
+                                    openPane: { openFromDashboard($0) }
                                 )
                             case "profiles":
                                 if let persistence {

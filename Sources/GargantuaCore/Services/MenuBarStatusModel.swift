@@ -104,6 +104,10 @@ public final class MenuBarStatusModel: ObservableObject {
     private let now: () -> Date
     private let snoozeInterval: TimeInterval
     private var quickScanSummary: MenuBarStatusSummary?
+    /// The popover's content (and its `refresh()` task) is rebuilt every time
+    /// it opens; without this a reopen mid-scan showed "not scanning" and let
+    /// a second Quick Scan start.
+    private var isQuickScanRunning = false
     /// Opened once; each refresh reads through a new context on it (see
     /// `PersistenceController.freshReader()`).
     private var persistenceBase: PersistenceController?
@@ -128,13 +132,20 @@ public final class MenuBarStatusModel: ObservableObject {
             let persistence = try freshPersistence()
             try persistence.bootstrap()
             let summary = try bestSummary(from: persistence)
-            snapshot = makeSnapshot(summary: summary, isScanning: false, errorMessage: nil)
+            snapshot = makeSnapshot(summary: summary, isScanning: isQuickScanRunning, errorMessage: nil)
         } catch {
-            snapshot = makeSnapshot(summary: quickScanSummary, isScanning: false, errorMessage: error.localizedDescription)
+            snapshot = makeSnapshot(
+                summary: quickScanSummary,
+                isScanning: isQuickScanRunning,
+                errorMessage: error.localizedDescription
+            )
         }
     }
 
     public func runQuickScan() async {
+        guard !isQuickScanRunning else { return }
+        isQuickScanRunning = true
+        defer { isQuickScanRunning = false }
         snapshot = MenuBarStatusSnapshot(
             isScanning: true,
             lastScanDate: snapshot.lastScanDate,

@@ -17,6 +17,10 @@ public struct DashboardView: View {
     public typealias HomebrewReclaimableProvider = @Sendable () -> Int64?
 
     @Binding var sidebarSelection: String?
+    /// Opens a pane from a Dashboard link. The owner starts that pane's scan
+    /// if it hasn't run, so the link lands on results; without an owner the
+    /// link just switches panes.
+    private let openPane: ((String) -> Void)?
 
     @Bindable private var session: DashboardSessionState
     private let persistence: PersistenceController?
@@ -54,12 +58,14 @@ public struct DashboardView: View {
         sidebarSelection: Binding<String?>,
         session: DashboardSessionState,
         persistence: PersistenceController? = nil,
+        openPane: ((String) -> Void)? = nil,
         makeFreshPersistence: (@MainActor () throws -> PersistenceController)? = nil,
         homebrewReclaimableProvider: @escaping HomebrewReclaimableProvider = { HomebrewReclaimableProbe.probe() }
     ) {
         self._sidebarSelection = sidebarSelection
         self.session = session
         self.persistence = persistence
+        self.openPane = openPane
         self.makeFreshPersistence = makeFreshPersistence
         self.homebrewReclaimableProvider = homebrewReclaimableProvider
     }
@@ -185,7 +191,7 @@ public struct DashboardView: View {
         if let bytes = session.homebrewReclaimableBytes, bytes > 0 {
             DashboardHomebrewSignpost(
                 reclaimableBytes: bytes,
-                onOpen: { sidebarSelection = "devTools" }
+                onOpen: { open("devTools") }
             )
         }
     }
@@ -226,9 +232,17 @@ public struct DashboardView: View {
 
     private func navigateTo(_ destination: AlertDestination) {
         switch destination {
-        case .deepClean: sidebarSelection = "deepClean"
-        case .devPurge: sidebarSelection = "devPurge"
-        case .diskExplorer: sidebarSelection = "diskExplorer"
+        case .deepClean: open("deepClean")
+        case .devPurge: open("devPurge")
+        case .diskExplorer: open("diskExplorer")
+        }
+    }
+
+    private func open(_ pane: String) {
+        if let openPane {
+            openPane(pane)
+        } else {
+            sidebarSelection = pane
         }
     }
 
@@ -237,7 +251,7 @@ public struct DashboardView: View {
         case .scan:
             startTriageScan()
         case .navigate(let selection):
-            sidebarSelection = selection
+            open(selection)
         }
     }
 

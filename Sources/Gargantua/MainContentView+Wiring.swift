@@ -175,6 +175,23 @@ extension MainContentView {
         return urls.isEmpty ? nil : urls
     }
 
+    /// A Dashboard link lands on results: a pane that hasn't scanned starts
+    /// its scan on arrival. Dev Purge is left on its bucket picker, which is
+    /// its first step rather than an empty start screen.
+    func openFromDashboard(_ pane: String) {
+        switch pane {
+        case "deepClean" where deepCleanSession.phase == .idle:
+            deepCleanSession.scanRequestedOnOpen = true
+        case "devTools" where devToolsSession.phase == .idle:
+            devToolsSession.scanRequestedOnOpen = true
+        case "diskExplorer" where diskExplorerState.phase == .idle:
+            diskExplorerState.startScan()
+        default:
+            break
+        }
+        sidebarSelection = pane
+    }
+
     /// Settings › Exclusions entry for a scan row's path; later scans skip it.
     func addToExclusions(_ item: ScanResult) {
         do {

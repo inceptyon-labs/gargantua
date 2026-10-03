@@ -9,6 +9,9 @@ import Observation
 @Observable @MainActor
 public final class DeveloperToolsSessionState {
     public var phase: DeveloperToolsView.Phase = .idle
+    /// Set by a Dashboard link so the screen loads its previews when it
+    /// appears, instead of landing on the start screen.
+    public var scanRequestedOnOpen = false
     public var pendingExecution: DeveloperToolsView.ExecutionRequest?
     public var executingOperationID: DeveloperToolCleanupOperation.ID?
     public var executionNotices: [DeveloperToolCleanupOperation.ID: DeveloperToolsView.ExecutionNotice] = [:]

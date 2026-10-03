@@ -131,6 +131,11 @@ public struct DeveloperToolsView: View {
         }
         .animation(.easeOut(duration: 0.15), value: session.pendingExecution)
         .destructiveActionGate(reason: $session.blockedReason)
+        .onAppear {
+            guard session.scanRequestedOnOpen else { return }
+            session.scanRequestedOnOpen = false
+            if session.phase == .idle { startScan() }
+        }
     }
 
     var currentAvailabilities: [DeveloperToolAvailability] {

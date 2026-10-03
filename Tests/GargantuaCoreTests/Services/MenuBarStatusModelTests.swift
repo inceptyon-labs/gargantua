@@ -121,6 +121,33 @@ struct MenuBarStatusModelTests {
         #expect(try persistence.fetchSettings().lastScanDate == runDate)
     }
 
+    @Test("reopening the popover mid-scan keeps the scan state and blocks a second scan")
+    @MainActor
+    func refreshDuringQuickScanKeepsScanning() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        let scanner = GatedMenuBarStatusScanner()
+        let model = MenuBarStatusModel(
+            scanner: scanner,
+            makePersistence: { persistence },
+            defaults: try makeDefaults()
+        )
+
+        let first = Task { await model.runQuickScan() }
+        while scanner.callCount == 0 { await Task.yield() }
+
+        await model.refresh()
+        #expect(model.snapshot.isScanning)
+        let second = Task { await model.runQuickScan() }
+        for _ in 0 ..< 100 { await Task.yield() }
+        #expect(scanner.callCount == 1)
+
+        scanner.open()
+        await first.value
+        await second.value
+        #expect(!model.snapshot.isScanning)
+    }
+
     @Test("quick scan leaves excluded paths out of the totals")
     @MainActor
     func quickScanAppliesExclusions() async throws {
@@ -204,5 +231,37 @@ private struct StubMenuBarStatusScanner: MenuBarStatusScanning {
 
     func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
         results
+    }
+}
+
+/// Holds every scan until `open()`, so a test can act while one is running.
+private final class GatedMenuBarStatusScanner: MenuBarStatusScanning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+    private var isOpen = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    var callCount: Int { lock.withLock { calls } }
+
+    func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
+        await withCheckedContinuation { continuation in
+            let resumeNow = lock.withLock {
+                calls += 1
+                if isOpen { return true }
+                waiting.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+        return []
+    }
+
+    func open() {
+        let resumable = lock.withLock {
+            isOpen = true
+            defer { waiting = [] }
+            return waiting
+        }
+        resumable.forEach { $0.resume() }
     }
 }
