@@ -36,7 +36,10 @@ extension RuleViewerView {
                             rule: rule,
                             isSelected: selectedRuleID == rule.id,
                             onSelect: {
-                                selectedCategory = rule.category
+                                // The browser groups rules (browser, apps, …),
+                                // not by `rule.category`.
+                                selectedCategory = categories
+                                    .first { $0.rules.contains { $0.id == rule.id } }?.name
                                 selectedRuleID = rule.id
                             }
                         )

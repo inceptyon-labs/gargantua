@@ -18,6 +18,9 @@ public struct RuleViewerView: View {
     @State var selectedCategory: String?
     @State var selectedRuleID: String?
     @State var ruleSearchQuery = ""
+    /// IDs of the user's own rules, which provenance must not label as part of
+    /// the bundled snapshot.
+    @State var customRuleIDs: Set<String> = []
     @State private var isLoading = true
     @State private var userRuleErrors: [String] = []
     /// Non-nil when the *bundled* rule set failed to load, as opposed to the
@@ -256,6 +259,7 @@ public struct RuleViewerView: View {
                 )
                 let customRules = Array(merged.rules.suffix(merged.rules.count - result.rules.count))
                 customRuleCount = customRules.count
+                customRuleIDs = Set(customRules.map(\.id))
                 if !customRules.isEmpty {
                     built.append(RuleCategory(name: "custom", rules: customRules.sorted { $0.name < $1.name }))
                 }
@@ -266,6 +270,7 @@ public struct RuleViewerView: View {
                 }
             } else {
                 customRuleCount = 0
+                customRuleIDs = []
             }
 
             categories = built

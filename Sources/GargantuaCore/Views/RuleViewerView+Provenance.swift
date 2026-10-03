@@ -31,6 +31,37 @@ extension RuleViewerView {
         return "source build"
     }
 
+    /// Origin and upstream rows for a rule from the bundled snapshot.
+    @ViewBuilder
+    private var bundledOrigin: some View {
+        provenanceRow(label: "Origin") {
+            Text("Bundled snapshot · \(Self.bundledSnapshotVersion)")
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.ink)
+        }
+
+        provenanceRow(label: "Upstream") {
+            Link(destination: Self.upstreamURL) {
+                HStack(spacing: GargantuaSpacing.space1) {
+                    Text(Self.upstreamLabel)
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .font(GargantuaFonts.label)
+                .foregroundStyle(GargantuaColors.accent)
+            }
+            .buttonStyle(.plain)
+            .help("Browse the public rule source-of-truth repository")
+
+            if let manifest = Self.syncManifest {
+                Text("synced \(manifest.syncedAt) · rules @ \(manifest.shortCommit)")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
     func ruleProvenance(_ rule: ScanRule) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
             Text("Provenance & Trust")
@@ -38,31 +69,18 @@ extension RuleViewerView {
                 .foregroundStyle(GargantuaColors.ink2)
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                provenanceRow(label: "Origin") {
-                    Text("Bundled snapshot · \(Self.bundledSnapshotVersion)")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
-                }
-
-                provenanceRow(label: "Upstream") {
-                    Link(destination: Self.upstreamURL) {
-                        HStack(spacing: GargantuaSpacing.space1) {
-                            Text(Self.upstreamLabel)
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Browse the public rule source-of-truth repository")
-
-                    if let manifest = Self.syncManifest {
-                        Text("synced \(manifest.syncedAt) · rules @ \(manifest.shortCommit)")
-                            .font(GargantuaFonts.caption)
+                if customRuleIDs.contains(rule.id) {
+                    provenanceRow(label: "Origin") {
+                        Text("Custom rule")
+                            .font(GargantuaFonts.label)
+                            .foregroundStyle(GargantuaColors.ink)
+                        Text((UserRuleDirectory.directory(for: .cleanup).path as NSString).abbreviatingWithTildeInPath)
+                            .font(GargantuaFonts.monoPath)
                             .foregroundStyle(GargantuaColors.ink3)
                             .textSelection(.enabled)
                     }
+                } else {
+                    bundledOrigin
                 }
 
                 provenanceRow(label: "Source") { sourceRowContent(rule) }
