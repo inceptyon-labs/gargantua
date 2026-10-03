@@ -397,9 +397,9 @@ public final class CleanupEngine: Sendable {
         let result: CleanupItemResult
         switch method {
         case .trash:
-            result = await recycleSingle(url: url, item: item)
+            result = await removeWithSQLiteSidecars(url: url, item: item, method: method)
         case .delete:
-            result = await deleteSingle(url: url, item: item)
+            result = await removeWithSQLiteSidecars(url: url, item: item, method: method)
         case .toolNative:
             return CleanupItemResult(
                 item: item,

@@ -239,8 +239,16 @@ extension NativeScanAdapter {
             .contentModificationDateKey,
         ])
         let isDirectory = values?.isDirectory ?? false
-        let lastAccessed = values?.contentAccessDate ?? values?.contentModificationDate
-        let modifiedAt = values?.contentModificationDate
+        var lastAccessed = values?.contentAccessDate ?? values?.contentModificationDate
+        var modifiedAt = values?.contentModificationDate
+        var sidecarBytes: Int64 = 0
+        // A database's sidecars count toward its age and size (see SQLiteDatabaseFiles).
+        if !isDirectory, SQLiteDatabaseFiles.isDatabase(path) {
+            let sidecars = SQLiteDatabaseFiles.sidecarStats(of: path, fileManager: fileManager)
+            modifiedAt = [modifiedAt, sidecars.modifiedAt].compactMap { $0 }.max()
+            lastAccessed = [lastAccessed, sidecars.accessedAt].compactMap { $0 }.max()
+            sidecarBytes = sidecars.bytes
+        }
 
         // Never target a mount point. Broad temp rules like /private/tmp/* would
         // otherwise match mounted read-only disk images (e.g. Xcode's mounted DDIs
@@ -268,7 +276,7 @@ extension NativeScanAdapter {
             }
         } else {
             let attrs = try? fileManager.attributesOfItem(atPath: path)
-            size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+            size = ((attrs?[.size] as? NSNumber)?.int64Value ?? 0) + sidecarBytes
         }
         guard size > 0 else { return nil }
         if let minSize = rule.minSize, size < minSize { return nil }
