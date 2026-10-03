@@ -66,6 +66,8 @@ public struct OrganizerStagedPreviewView: View {
                         ForEach(plans) { plan in
                             OrganizerPlanRow(
                                 plan: plan,
+                                isMoveIncluded: { session.isMoveIncluded($0) },
+                                onSetMoves: { session.setMoves($0, included: $1) },
                                 isExpanded: Binding(
                                     get: { expandedPlanIDs.contains(plan.id) },
                                     set: { isOn in
@@ -184,8 +186,8 @@ public struct OrganizerStagedPreviewView: View {
                 .background(GargantuaColors.accent)
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
                 .buttonStyle(.plain)
-                .disabled(session.proposal?.plans.isEmpty ?? true)
-                .opacity((session.proposal?.plans.isEmpty ?? true) ? 0.5 : 1)
+                .disabled(session.includedMoveCount == 0)
+                .opacity(session.includedMoveCount == 0 ? 0.5 : 1)
         }
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
@@ -203,7 +205,7 @@ public struct OrganizerStagedPreviewView: View {
     }
 
     private var applyButtonLabel: String {
-        let fileCount = session.proposal?.plans.reduce(0) { $0 + $1.moves.count } ?? 0
+        let fileCount = session.includedMoveCount
         return fileCount > 0 ? "Apply (\(fileCount) move\(fileCount == 1 ? "" : "s"))" : "Apply"
     }
 }

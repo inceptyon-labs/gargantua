@@ -103,6 +103,29 @@ struct OrganizerSessionStateTests {
         }
     }
 
+    @Test("Apply moves only the checked files, and the result covers only them")
+    func applyMovesOnlyCheckedFiles() async throws {
+        let root = try Self.scratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        _ = try Self.touch("a.pdf", in: root)
+        _ = try Self.touch("b.pdf", in: root)
+
+        let state = OrganizerSessionState(
+            executor: Self.makeExecutor(root.appendingPathComponent("ledger"))
+        )
+        state.injectProposalForTesting(Self.makeProposal(root: root))
+        let moves = try #require(state.proposal?.plans.first?.moves)
+        state.setMoves([moves[1].id], included: false)
+        #expect(state.includedMoveCount == 1)
+
+        state.applyAll()
+        await Self.waitUntil { if case .applied = state.phase { return true } else { return false } }
+
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Documents/a.pdf").path))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("b.pdf").path))
+        #expect(state.proposal?.plans.first?.moves.map(\.id) == [moves[0].id])
+    }
+
     // MARK: - Undo round-trip
 
     @Test("Undo after apply reverses moves and ends in .undone")

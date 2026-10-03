@@ -95,7 +95,11 @@ public enum OrganizerPhase: Equatable, Sendable {
 public final class OrganizerSessionState: ObservableObject {
     @Published public var selectedTarget: OrganizerTarget = .downloads
     @Published public private(set) var phase: OrganizerPhase = .idle
-    @Published public private(set) var proposal: OrganizationProposal?
+    @Published public private(set) var proposal: OrganizationProposal? {
+        didSet { excludedMoveIDs = [] }
+    }
+    /// Moves the user unchecked in the preview; Apply skips them.
+    @Published public private(set) var excludedMoveIDs: Set<UUID> = []
     /// Subfolder URLs the user has moved to Trash from the post-apply
     /// surface. Keyed by `path` so view binding stays stable across URL
     /// equality quirks (isDirectory flag, trailing slash, etc.).
@@ -179,8 +183,30 @@ public final class OrganizerSessionState: ObservableObject {
         }
     }
 
+    public func isMoveIncluded(_ moveID: UUID) -> Bool {
+        !excludedMoveIDs.contains(moveID)
+    }
+
+    public func setMoves(_ moveIDs: [UUID], included: Bool) {
+        if included {
+            excludedMoveIDs.subtract(moveIDs)
+        } else {
+            excludedMoveIDs.formUnion(moveIDs)
+        }
+    }
+
+    /// Moves Apply will make.
+    public var includedMoveCount: Int {
+        (proposal?.plans.reduce(0) { $0 + $1.moves.count } ?? 0) - excludedMoveIDs.count
+    }
+
+    /// Applies the checked moves. The proposal is narrowed to them first, so
+    /// the post-apply view and Undo cover only what moved.
     public func applyAll() {
-        guard let proposal else { return }
+        guard let full = proposal else { return }
+        let proposal = full.excluding(moveIDs: excludedMoveIDs)
+        guard !proposal.plans.isEmpty else { return }
+        self.proposal = proposal
         cancelActiveTask()
         phase = .applying
         let executor = executor

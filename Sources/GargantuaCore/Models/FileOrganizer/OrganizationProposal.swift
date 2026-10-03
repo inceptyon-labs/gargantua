@@ -29,6 +29,26 @@ public struct OrganizationProposal: Identifiable, Sendable, Codable, Equatable, 
     }
 }
 
+extension OrganizationProposal {
+    /// The same proposal (same id, so Undo still finds its moves) without
+    /// `moveIDs`, dropping plans left with no moves.
+    public func excluding(moveIDs: Set<UUID>) -> OrganizationProposal {
+        guard !moveIDs.isEmpty else { return self }
+        let kept = plans.compactMap { plan -> OrganizationPlan? in
+            let moves = plan.moves.filter { !moveIDs.contains($0.id) }
+            guard !moves.isEmpty else { return nil }
+            return OrganizationPlan(id: plan.id, name: plan.name, reasoning: plan.reasoning, moves: moves)
+        }
+        return OrganizationProposal(
+            id: id,
+            sourceFolder: sourceFolder,
+            generatedAt: generatedAt,
+            backend: backend,
+            plans: kept
+        )
+    }
+}
+
 // MARK: - Validation
 
 extension OrganizationProposal {
