@@ -273,6 +273,37 @@ struct BackgroundItemsSessionTests {
         #expect(provider.printCallCount == 2)
     }
 
+    @Test("more blocked fetches than the cooperative pool has threads all start")
+    func blockedFetchesDoNotHoldCooperativePoolThreads() async {
+        // printDetail blocks until released. Run on the cooperative pool
+        // (one thread per core), at most one blocked fetch per thread could
+        // be in flight, so the extra one would never start.
+        let count = ProcessInfo.processInfo.activeProcessorCount + 1
+        let items = (0 ..< count).map { index in
+            makeItem(id: "item-\(index)", label: "com.acme.tool\(index)", plistPath: "/tmp/tool\(index).plist")
+        }
+        let detail = LaunchdRuntimeDetail(isLoaded: true, state: "running", pid: 5036, lastExitStatus: nil)
+        let provider = GatedRuntimeProvider(detail: detail, expectedCalls: count)
+        let session = BackgroundItemsSession(
+            scanner: StubScanner(result: makeScan(items: items)),
+            actionExecutor: nil,
+            runtimeProvider: provider
+        )
+        await session.scan()
+
+        let loads = items.map { item in Task { await session.loadRuntimeDetail(for: item) } }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while provider.printCallCount < count, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(provider.printCallCount == count)
+
+        provider.releases.forEach { $0.signal() }
+        for load in loads {
+            await load.value
+        }
+    }
+
     @Test("perform(.delete) synthesizes the disabled reason for an override-disabled item")
     func performDeleteSynthesizesDisabledFromOverride() async {
         final class RecordingExecutor: BackgroundItemActionExecuting, @unchecked Sendable {
