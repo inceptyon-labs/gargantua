@@ -234,7 +234,8 @@ public struct NativeScanAdapter: ScanAdapter {
                     sizeCache: sizeCache,
                     referenceDate: referenceDate
                 )
-                group.addTask {
+                // A cancelled scan starts no further rules.
+                group.addTaskUnlessCancelled {
                     (idx, Self.evaluate(rule: rule, context: context, onSizing: onSizing))
                 }
                 next += 1

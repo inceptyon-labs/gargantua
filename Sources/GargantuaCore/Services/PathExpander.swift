@@ -378,6 +378,12 @@ private final class WalkState {
     }
 
     func incrementEntries() {
+        // A cancelled scan stops walking. Not a cap: nothing is reported as
+        // partial, the caller discards the result.
+        if Task.isCancelled {
+            aborted = true
+            return
+        }
         entries += 1
         if entries >= limits.maxEntries {
             recordCap(reason: "entries", abort: true)

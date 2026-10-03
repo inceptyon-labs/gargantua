@@ -40,6 +40,9 @@ public struct CompositeScanAdapter: ScanAdapter {
         var combined = try await primary.scan(progress: progress, observer: observer)
             .map { $0.recordingScanTimeAncestry() }
         for adapter in bestEffort {
+            // Cancelled: skip the remaining adapters (tool spawns, home walks);
+            // callers discard a cancelled scan's results.
+            if Task.isCancelled { break }
             do {
                 let extra = try await adapter.scan(progress: progress, observer: observer)
                 combined.append(contentsOf: extra.map { $0.recordingScanTimeAncestry() })

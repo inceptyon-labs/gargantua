@@ -89,6 +89,23 @@ struct PathExpanderTests {
         #expect(result.paths.isEmpty)
     }
 
+    @Test("A cancelled task stops walking without reporting a cap")
+    func cancelledWalkStops() async throws {
+        let fixture = try Self.makeFixture()
+        for index in 0 ..< 20 {
+            try fixture.makeFile("tree/dir\(index)/file.txt")
+        }
+        let pattern = fixture.root.appendingPathComponent("tree/**/file.txt").path
+
+        let result = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return PathExpander().expand(pattern: pattern, roots: [])
+        }.value
+
+        #expect(result.paths.isEmpty)
+        #expect(result.hitCap == false)
+    }
+
     // MARK: - Single-segment wildcards
 
     @Test("Single-segment wildcard matches immediate children")
