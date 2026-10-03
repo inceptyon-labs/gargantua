@@ -76,6 +76,11 @@ public final class ScanProgress {
         errors.append(message)
     }
 
+    /// Remove previously recorded errors equal to any of `messages`.
+    public func removeErrors(_ messages: Set<String>) {
+        errors.removeAll { messages.contains($0) }
+    }
+
     /// Signal that the scan has finished.
     public func finish(itemsFound: Int) {
         self.itemsFound = itemsFound

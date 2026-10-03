@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -62,12 +63,31 @@ public final class DeepCleanSessionState {
     public let pathStream: PathStreamViewModel
     private let appTerminator: any RunningApplicationTerminating
     private let processChecker: any RunningProcessChecking
+    private let runningExecutablePaths: @Sendable (String) -> [String]
+    private let bundlePathForApp: @Sendable (String) -> String?
+    private let namesRunningApp: @Sendable (String) -> Bool
+    /// "Still running" banner messages posted per blocking app, removed once a quit succeeds.
+    private var stillRunningMessages: [String: Set<String>] = [:]
 
     public init(
         pathStream: PathStreamViewModel = PathStreamViewModel(),
         appTerminator: any RunningApplicationTerminating = WorkspaceRunningApplicationTerminator(),
-        processChecker: any RunningProcessChecking = DefaultRunningProcessChecker()
+        processChecker: any RunningProcessChecking = DefaultRunningProcessChecker(),
+        runningExecutablePaths: (@Sendable (String) -> [String])? = nil,
+        bundlePathForApp: @escaping @Sendable (String) -> String? = {
+            NSRunningApplication.runningApplications(withBundleIdentifier: $0).first?.bundleURL?.path
+        },
+        namesRunningApp: @escaping @Sendable (String) -> Bool = { name in
+            let needle = name.lowercased()
+            return NSWorkspace.shared.runningApplications.contains { app in
+                app.localizedName?.lowercased() == needle
+                    || app.executableURL?.deletingPathExtension().lastPathComponent.lowercased() == needle
+            }
+        }
     ) {
+        self.runningExecutablePaths = runningExecutablePaths ?? { ProcessTable.executablePaths(named: $0) }
+        self.bundlePathForApp = bundlePathForApp
+        self.namesRunningApp = namesRunningApp
         self.pathStream = pathStream
         self.appTerminator = appTerminator
         self.processChecker = processChecker
@@ -185,21 +205,28 @@ public final class DeepCleanSessionState {
     /// included when the user proceeds to clean. Returns whether the app exited.
     public func quitBlockingApp(for id: String) async -> Bool {
         guard let app = blockedApp(for: id) else { return true }
+        let affectedResults = (scanResults ?? []).filter { $0.blockedByApp?.bundleID == app.bundleID }
+        var owners = Set(affectedResults.flatMap { $0.ownerProcesses ?? [] })
+        owners.remove(app.bundleID)
+
+        // Owners the quit won't stop: quitting the app would only cost the user their window.
+        let outside = outsideOwners(owners, quitting: app)
+        guard outside.isEmpty else {
+            postStillRunning(outside, for: app)
+            return false
+        }
+
         let exited = await appTerminator.terminateRunningApplications(
             bundleIdentifier: app.bundleID,
             timeout: 10
         )
-        let affectedResults = (scanResults ?? []).filter { $0.blockedByApp?.bundleID == app.bundleID }
-        let ownerStillRunning = affectedResults.contains { result in
-            ((result.ownerProcesses ?? []) + [app.bundleID]).contains { processChecker.isRunning(identifier: $0) }
-        }
-        guard exited, !ownerStillRunning else {
-            let message = "\(app.name) is still running, so its items stay locked. "
-                + "Quit it, including any \(app.name) command-line sessions, then rescan."
-            if !scanProgress.errors.contains(message) {
-                scanProgress.recordError(message)
-            }
+        let stillRunning = (owners.union([app.bundleID])).filter { processChecker.isRunning(identifier: $0) }
+        guard exited, stillRunning.isEmpty else {
+            postStillRunning(stillRunning.isEmpty ? [app.bundleID] : stillRunning, for: app)
             return false
+        }
+        if let posted = stillRunningMessages.removeValue(forKey: app.bundleID) {
+            scanProgress.removeErrors(posted)
         }
         unblockedResultIDs.formUnion(affectedResults.map(\.id))
         // Pre-select only what a fresh scan would: safe items. Review items
@@ -208,6 +235,29 @@ public final class DeepCleanSessionState {
             selectedResultIDs.insert(result.id)
         }
         return true
+    }
+
+    private func outsideOwners(_ owners: Set<String>, quitting app: BlockedApp) -> Set<String> {
+        let bundlePath = bundlePathForApp(app.bundleID)
+        return owners.filter { owner in
+            if owner.contains(".") { return processChecker.isRunning(identifier: owner) }
+            return runningExecutablePaths(owner).contains { path in
+                guard let bundlePath else { return true }
+                return !path.hasPrefix(bundlePath.hasSuffix("/") ? bundlePath : bundlePath + "/")
+            }
+        }
+    }
+
+    private func postStillRunning(_ identifiers: Set<String>, for app: BlockedApp) {
+        let names = identifiers.sorted().joined(separator: ", ")
+        var message = "\(names) is still running, so these items stay locked. Exit it, then rescan."
+        if identifiers.allSatisfy({ !$0.contains(".") && !namesRunningApp($0) }) {
+            message += " It's a command-line process; quitting the app won't stop it."
+        }
+        stillRunningMessages[app.bundleID, default: []].insert(message)
+        if !scanProgress.errors.contains(message) {
+            scanProgress.recordError(message)
+        }
     }
 
     /// The reason a result is view-only, if it is. `nil` when removable.

@@ -1,4 +1,5 @@
 import Darwin
+import Foundation
 
 /// Every process's PID and executable path, read through `proc_listpids` and
 /// `proc_pidpath`. Processes the caller can't introspect are left out.
@@ -32,5 +33,15 @@ enum ProcessTable {
         // swiftlint:disable:next optional_data_string_conversion
         let path = String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
         return path.isEmpty ? nil : path
+    }
+
+    /// Executable paths of running processes whose file name equals `name`, case-insensitively.
+    static func executablePaths(named name: String) -> [String] {
+        let needle = name.lowercased()
+        return pids().compactMap { pid -> String? in
+            guard pid > 0, let path = executablePath(for: pid),
+                  (path as NSString).lastPathComponent.lowercased() == needle else { return nil }
+            return path
+        }
     }
 }

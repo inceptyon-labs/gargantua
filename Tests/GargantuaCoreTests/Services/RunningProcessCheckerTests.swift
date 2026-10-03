@@ -21,3 +21,18 @@ struct RunningProcessCheckerTests {
         #expect(!DefaultRunningProcessChecker().isRunning(identifier: "com.example.not-running-\(UUID())"))
     }
 }
+
+@Suite("ProcessTable.executablePaths")
+struct ProcessTableExecutablePathsTests {
+    @Test("returns the probe's path while it runs and nothing after it stops")
+    func findsProbePath() throws {
+        let probe = try ProbeProcess()
+
+        let paths = ProcessTable.executablePaths(named: probe.name.uppercased())
+        #expect(paths.count == 1)
+        #expect(paths.first?.hasSuffix("/" + probe.name) == true)
+
+        probe.stop()
+        #expect(ProcessTable.executablePaths(named: probe.name).isEmpty)
+    }
+}

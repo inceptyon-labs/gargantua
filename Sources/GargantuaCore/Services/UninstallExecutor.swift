@@ -412,11 +412,21 @@ public final class WorkspaceRunningApplicationTerminator: RunningApplicationTerm
 
     @MainActor
     public func terminateRunningApplications(bundleIdentifier: String, timeout: TimeInterval) async -> Bool {
-        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+        var apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+        if apps.isEmpty {
+            // The identifier may name an app by display or executable name (a
+            // skip_if_process_running entry such as `Simulator`); match the way
+            // DefaultRunningProcessChecker does.
+            let needle = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            apps = needle.isEmpty ? [] : NSWorkspace.shared.runningApplications.filter { app in
+                app.localizedName?.lowercased() == needle
+                    || app.executableURL?.deletingPathExtension().lastPathComponent.lowercased() == needle
+            }
+        }
         guard !apps.isEmpty else {
-            // No app has this identifier, but it may name a command-line tool (a
-            // skip_if_process_running entry such as `codex`), which can't be quit
-            // from here. Report failure while it runs so the caller keeps its items locked.
+            // No app matches, but it may name a command-line tool (such as `codex`),
+            // which can't be quit from here. Report failure while it runs so the
+            // caller keeps its items locked.
             return !DefaultRunningProcessChecker().isRunning(identifier: bundleIdentifier)
         }
 
