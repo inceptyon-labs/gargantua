@@ -23,6 +23,10 @@ public final class DevArtifactSessionState {
     public var detectedEcosystemIDs: Set<String> = []
     /// Per-bucket size totals from the most recent scan. Keyed by bucket id.
     public var bucketEstimates: [String: Int64] = [:]
+    /// Size totals keyed by the exact set of buckets a result belongs to, so
+    /// a total over several selected buckets counts a Gradle log (JVM, Build
+    /// caches and Logs) once.
+    public var bucketSetEstimates: [Set<String>: Int64] = [:]
     public var scanProgress = ScanProgress()
     public var scanResults: [ScanResult]?
     public var scanDuration: TimeInterval = 0
@@ -66,14 +70,23 @@ public final class DevArtifactSessionState {
     public func finishScan(
         results: [ScanResult],
         duration: TimeInterval,
-        estimates: [String: Int64]
+        estimates: [String: Int64],
+        bucketSetEstimates: [Set<String>: Int64] = [:]
     ) {
         scanDuration = duration
         bucketEstimates = estimates
+        self.bucketSetEstimates = bucketSetEstimates
         selectedResultIDs = Set(results.filter { $0.safety == .safe }.map(\.id))
         scanResults = results
         isScanRequested = false
         phase = .results
+    }
+
+    /// Estimated bytes across `bucketIDs`, each result counted once.
+    public func estimatedBytes(forBuckets bucketIDs: Set<String>) -> Int64 {
+        bucketSetEstimates.reduce(Int64(0)) { total, entry in
+            entry.key.isDisjoint(with: bucketIDs) ? total : total + entry.value
+        }
     }
 
     public func failScan(_ message: String) {

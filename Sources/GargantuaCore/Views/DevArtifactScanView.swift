@@ -35,6 +35,7 @@ public struct DevArtifactScanView: View {
     @State private var blockedReason: BlockReason?
 
     private let onExplain: ((ScanResult) -> Void)?
+    private let onAdvisory: (([ScanResult]) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
     private let onCleanupCompleted: ((CleanupResult) -> Void)?
     private let onOpenDeveloperTools: (() -> Void)?
@@ -46,6 +47,7 @@ public struct DevArtifactScanView: View {
         adapter: (any ScanAdapter)? = nil,
         staleVersionPinnedPaths: Set<String> = [],
         onExplain: ((ScanResult) -> Void)? = nil,
+        onAdvisory: (([ScanResult]) -> Void)? = nil,
         onResolveFilter: ((String) async -> ScanFilterSet?)? = nil,
         onCleanupCompleted: ((CleanupResult) -> Void)? = nil,
         onOpenDeveloperTools: (() -> Void)? = nil
@@ -56,6 +58,7 @@ public struct DevArtifactScanView: View {
         self.adapterOverride = adapter
         self.staleVersionPinnedPaths = staleVersionPinnedPaths
         self.onExplain = onExplain
+        self.onAdvisory = onAdvisory
         self.onResolveFilter = onResolveFilter
         self.onCleanupCompleted = onCleanupCompleted
         self.onOpenDeveloperTools = onOpenDeveloperTools
@@ -75,6 +78,7 @@ public struct DevArtifactScanView: View {
                         selectedBucketIDs: session.selectedBucketIDs,
                         detectedEcosystemIDs: session.detectedEcosystemIDs,
                         bucketEstimates: session.bucketEstimates,
+                        selectedEstimate: session.estimatedBytes(forBuckets: session.selectedBucketIDs),
                         scanProgress: session.scanProgress,
                         isScanRequested: session.isScanRequested,
                         onSelectAll: selectAllBuckets,
@@ -104,6 +108,7 @@ public struct DevArtifactScanView: View {
                             selectedResultIDs: $session.selectedResultIDs,
                             scanProgress: session.scanProgress,
                             onExplain: onExplain,
+                            onAdvisory: onAdvisory,
                             onClean: { session.showConfirmation = true },
                             onBack: { session.returnToIdle() },
                             onRescan: startScan,
@@ -335,13 +340,22 @@ extension DevArtifactScanView {
                 session.finishScan(
                     results: filtered,
                     duration: Date().timeIntervalSince(start),
-                    estimates: Self.estimatedSizes(from: results)
+                    estimates: Self.estimatedSizes(from: results),
+                    bucketSetEstimates: Self.estimatedSizesByBucketSet(from: results)
                 )
             } catch {
                 guard !Task.isCancelled else { return }
                 session.failScan(error.localizedDescription)
             }
         }
+    }
+
+    static func estimatedSizesByBucketSet(from results: [ScanResult]) -> [Set<String>: Int64] {
+        var totals: [Set<String>: Int64] = [:]
+        for result in results {
+            totals[Set(DevArtifactBucket.derive(from: result).map(\.id)), default: 0] += result.size
+        }
+        return totals
     }
 
     static func estimatedSizes(from results: [ScanResult]) -> [String: Int64] {

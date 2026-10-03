@@ -40,6 +40,22 @@ struct DevArtifactSessionStateTests {
         #expect(!session.isScanRequested)
     }
 
+    @Test("A result in several selected buckets counts once in the estimate total")
+    @MainActor
+    func selectedEstimateCountsCrossCuttingResultsOnce() {
+        let session = DevArtifactSessionState()
+        session.finishScan(
+            results: [],
+            duration: 0.1,
+            estimates: ["jvm": 100, "build_cache": 100, "logs": 100, "node": 50],
+            bucketSetEstimates: [["jvm", "build_cache", "logs"]: 100, ["node"]: 50]
+        )
+
+        #expect(session.estimatedBytes(forBuckets: ["jvm", "build_cache", "logs"]) == 100)
+        #expect(session.estimatedBytes(forBuckets: ["logs", "node"]) == 150)
+        #expect(session.estimatedBytes(forBuckets: []) == 0)
+    }
+
     @Test("mid-clean state survives outside the view: cleaning phase holds until finishCleanup lands the summary")
     @MainActor
     func cleanupCompletionLandsInSession() {

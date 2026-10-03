@@ -6,6 +6,9 @@ struct DevArtifactCategorySelectionView: View {
     let selectedBucketIDs: Set<String>
     let detectedEcosystemIDs: Set<String>
     let bucketEstimates: [String: Int64]
+    /// Estimated bytes across the selected buckets, each result counted once
+    /// even when it belongs to several of them.
+    let selectedEstimate: Int64
     let scanProgress: ScanProgress
     let isScanRequested: Bool
     let onSelectAll: () -> Void
@@ -283,9 +286,7 @@ private extension DevArtifactCategorySelectionView {
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
         } else {
-            let estimatedTotal = selectedBucketIDs.reduce(into: Int64(0)) { sum, id in
-                sum += bucketEstimates[id, default: 0]
-            }
+            let estimatedTotal = selectedEstimate
             HStack(spacing: GargantuaSpacing.space2) {
                 Text("\(selectedBucketIDs.count) selected")
                     .font(GargantuaFonts.caption)

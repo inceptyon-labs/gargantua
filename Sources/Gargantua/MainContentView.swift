@@ -215,6 +215,7 @@ struct MainContentView: View {
                                     scanRoots: resolvedScanRoots,
                                     staleVersionPinnedPaths: pathExclusionPatterns,
                                     onExplain: explainHandler,
+                                    onAdvisory: advisoryHandler,
                                     onResolveFilter: scanFilterHandler,
                                     onCleanupCompleted: dashboardCleanupHandler,
                                     onOpenDeveloperTools: { sidebarSelection = "devTools" }

@@ -7,6 +7,7 @@ struct DevArtifactResultsView: View {
     @Binding var selectedResultIDs: Set<String>
     let scanProgress: ScanProgress
     let onExplain: ((ScanResult) -> Void)?
+    let onAdvisory: (([ScanResult]) -> Void)?
     let onClean: () -> Void
     let onBack: () -> Void
     let onRescan: () -> Void
@@ -44,6 +45,7 @@ struct DevArtifactResultsView: View {
                 onExplain: onExplain,
                 onClean: onClean,
                 onRescan: onRescan,
+                onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter
             )
         }
