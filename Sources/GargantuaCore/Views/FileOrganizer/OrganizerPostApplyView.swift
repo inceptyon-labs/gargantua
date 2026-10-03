@@ -8,6 +8,7 @@ import SwiftUI
 struct OrganizerPostApplyView: View {
     @ObservedObject var session: OrganizerSessionState
     let summary: OrganizerExecutionResult
+    @State private var pendingTrash: OrganizationPlan?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,27 @@ struct OrganizerPostApplyView: View {
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .confirmationDialog(
+            "Move \"\(pendingTrash?.name ?? "")\" to the Trash?",
+            isPresented: Binding(
+                get: { pendingTrash != nil },
+                set: { if !$0 { pendingTrash = nil } }
+            ),
+            presenting: pendingTrash
+        ) { plan in
+            Button("Move to Trash", role: .destructive) {
+                session.trashSubfolder(at: destinationFolderURL(for: plan))
+            }
+        } message: { plan in
+            Text("The folder and the \(plan.moves.count) file\(plan.moves.count == 1 ? "" : "s") moved into it go to the Trash.")
+        }
+    }
+
+    /// Only folders this Apply created can be trashed from here: a folder the
+    /// user already had may hold files the organizer never touched.
+    private func wasCreatedByApply(_ folderURL: URL) -> Bool {
+        let key = folderURL.standardizedFileURL.path
+        return summary.createdFolders.contains { $0.standardizedFileURL.path == key }
     }
 
     // MARK: - Header
@@ -110,8 +132,13 @@ struct OrganizerPostApplyView: View {
                         .padding(.vertical, 4)
                         .background(GargantuaColors.surface3)
                         .clipShape(Capsule())
+                } else if !wasCreatedByApply(folderURL) {
+                    Text("Existing folder")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                        .help("This folder existed before Apply, so it may hold other files. Undo moves the organized files back.")
                 } else {
-                    Button("Move to Trash") { session.trashSubfolder(at: folderURL) }
+                    Button("Move to Trash") { pendingTrash = plan }
                         .buttonStyle(.plain)
                         .font(GargantuaFonts.label)
                         .foregroundStyle(GargantuaColors.review)

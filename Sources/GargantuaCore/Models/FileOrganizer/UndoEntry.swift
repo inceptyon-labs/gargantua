@@ -11,6 +11,10 @@ public struct UndoEntry: Identifiable, Sendable, Codable, Equatable, Hashable {
     public let appliedAt: Date
     public let planID: UUID
     public let proposalID: UUID
+    /// True when this move created `appliedURL`'s parent folder. Undo removes
+    /// only folders Apply created, never one the user already had. Optional
+    /// so ledger lines written before this field existed still decode.
+    public let createdParentDirectory: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -18,7 +22,8 @@ public struct UndoEntry: Identifiable, Sendable, Codable, Equatable, Hashable {
         appliedURL: URL,
         appliedAt: Date,
         planID: UUID,
-        proposalID: UUID
+        proposalID: UUID,
+        createdParentDirectory: Bool = false
     ) {
         self.id = id
         self.originalURL = originalURL
@@ -26,5 +31,6 @@ public struct UndoEntry: Identifiable, Sendable, Codable, Equatable, Hashable {
         self.appliedAt = appliedAt
         self.planID = planID
         self.proposalID = proposalID
+        self.createdParentDirectory = createdParentDirectory
     }
 }

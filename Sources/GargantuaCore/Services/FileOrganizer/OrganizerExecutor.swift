@@ -32,13 +32,17 @@ public struct OrganizerExecutor: @unchecked Sendable {
         var succeeded: [URL] = []
         var skipped: [URL] = []
         var failed: [OrganizerMoveFailure] = []
+        var createdFolders: [URL] = []
 
         for plan in proposal.plans {
             for move in plan.moves {
                 let outcome = applyOne(move, planID: plan.id, proposalID: proposal.id)
                 switch outcome {
-                case .success(let destination):
+                case .success(let destination, let createdParent):
                     succeeded.append(destination)
+                    if createdParent {
+                        createdFolders.append(destination.deletingLastPathComponent())
+                    }
                 case .skippedMissingSource:
                     skipped.append(move.sourceURL)
                 case .failure(let reason):
@@ -51,12 +55,13 @@ public struct OrganizerExecutor: @unchecked Sendable {
             proposalID: proposal.id,
             succeeded: succeeded,
             skipped: skipped,
-            failed: failed
+            failed: failed,
+            createdFolders: createdFolders
         )
     }
 
     private enum MoveOutcome {
-        case success(URL)
+        case success(URL, createdParent: Bool)
         case skippedMissingSource
         case failure(String)
     }
@@ -69,6 +74,7 @@ public struct OrganizerExecutor: @unchecked Sendable {
             return .failure("Destination already exists: \(move.destinationURL.path)")
         }
         let parent = move.destinationURL.deletingLastPathComponent()
+        let parentExisted = fileManager.fileExists(atPath: parent.path)
         do {
             try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
             try fileManager.moveItem(at: move.sourceURL, to: move.destinationURL)
@@ -80,7 +86,8 @@ public struct OrganizerExecutor: @unchecked Sendable {
             appliedURL: move.destinationURL,
             appliedAt: now(),
             planID: planID,
-            proposalID: proposalID
+            proposalID: proposalID,
+            createdParentDirectory: !parentExisted
         )
         do {
             try ledger.append(entry)
@@ -91,7 +98,7 @@ public struct OrganizerExecutor: @unchecked Sendable {
             try? fileManager.moveItem(at: move.destinationURL, to: move.sourceURL)
             return .failure("Ledger write failed: \(error.localizedDescription)")
         }
-        return .success(move.destinationURL)
+        return .success(move.destinationURL, createdParent: !parentExisted)
     }
 
     // MARK: - Undo
@@ -106,7 +113,13 @@ public struct OrganizerExecutor: @unchecked Sendable {
 
         var reversed: [URL] = []
         var failed: [OrganizerMoveFailure] = []
-        var emptiedFolders: Set<URL> = []
+        // Only folders Apply created are candidates for removal; a folder the
+        // user already had stays even if the undo leaves it empty.
+        let createdFolders = Set(
+            entries
+                .filter { $0.createdParentDirectory == true }
+                .map { $0.appliedURL.deletingLastPathComponent() }
+        )
 
         for entry in entries {
             // If the applied file is gone (user deleted it after Apply),
@@ -114,7 +127,6 @@ public struct OrganizerExecutor: @unchecked Sendable {
             // still clear the ledger row.
             guard fileManager.fileExists(atPath: entry.appliedURL.path) else {
                 reversed.append(entry.originalURL)
-                emptiedFolders.insert(entry.appliedURL.deletingLastPathComponent())
                 continue
             }
             // Don't clobber: if the original slot was filled in since
@@ -131,7 +143,6 @@ public struct OrganizerExecutor: @unchecked Sendable {
                 try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
                 try fileManager.moveItem(at: entry.appliedURL, to: entry.originalURL)
                 reversed.append(entry.originalURL)
-                emptiedFolders.insert(entry.appliedURL.deletingLastPathComponent())
             } catch {
                 failed.append(OrganizerMoveFailure(
                     sourceURL: entry.appliedURL,
@@ -143,7 +154,7 @@ public struct OrganizerExecutor: @unchecked Sendable {
         // Best-effort cleanup: remove any subfolder that's now empty.
         // This restores the pre-Apply directory shape so a follow-up
         // re-scan doesn't see ghost folders.
-        for folder in emptiedFolders {
+        for folder in createdFolders {
             removeIfEmpty(folder)
         }
 
@@ -159,12 +170,10 @@ public struct OrganizerExecutor: @unchecked Sendable {
     }
 
     private func removeIfEmpty(_ folder: URL) {
-        guard let contents = try? fileManager.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return }
-        guard contents.isEmpty else { return }
+        // Hidden files count: anything the user added keeps the folder. Only
+        // Finder's own .DS_Store is ignored.
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: folder.path) else { return }
+        guard contents.allSatisfy({ $0 == ".DS_Store" }) else { return }
         try? fileManager.removeItem(at: folder)
     }
 }
@@ -186,6 +195,9 @@ public struct OrganizerExecutionResult: Sendable {
     public let succeeded: [URL]
     public let skipped: [URL]
     public let failed: [OrganizerMoveFailure]
+    /// Destination folders this Apply created. Only these are offered for
+    /// Move to Trash afterwards; a pre-existing folder can hold other files.
+    public let createdFolders: [URL]
 
     public var hasFailures: Bool { !failed.isEmpty }
     public var totalMoved: Int { succeeded.count }
@@ -194,12 +206,14 @@ public struct OrganizerExecutionResult: Sendable {
         proposalID: UUID,
         succeeded: [URL],
         skipped: [URL],
-        failed: [OrganizerMoveFailure]
+        failed: [OrganizerMoveFailure],
+        createdFolders: [URL] = []
     ) {
         self.proposalID = proposalID
         self.succeeded = succeeded
         self.skipped = skipped
         self.failed = failed
+        self.createdFolders = createdFolders
     }
 }
 

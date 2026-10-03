@@ -163,6 +163,40 @@ struct OrganizerExecutorTests {
         #expect(try s.ledger.entries(forProposalID: p.id).isEmpty)
     }
 
+    @Test("Apply reports only the folders it created; Undo leaves pre-existing folders in place")
+    func createdFoldersAreTracked() throws {
+        let s = try Scratch()
+        defer { s.cleanup() }
+        _ = try s.touch("a.pdf", contents: "a")
+        _ = try s.touch("shot.png", contents: "s")
+        let existing = s.root.appendingPathComponent("Screenshots", isDirectory: true)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        try Data("keep".utf8).write(to: existing.appendingPathComponent(".keep"))
+
+        _ = try s.touch("pic.jpg", contents: "p")
+        let existingEmpty = s.root.appendingPathComponent("Images", isDirectory: true)
+        try FileManager.default.createDirectory(at: existingEmpty, withIntermediateDirectories: true)
+        _ = try s.touch("b.zip", contents: "b")
+
+        let p = Self.proposal(root: s.root, plans: [
+            ("Documents", ["a.pdf"]),
+            ("Screenshots", ["shot.png"]),
+            ("Images", ["pic.jpg"]),
+            ("Archives", ["b.zip"]),
+        ])
+        let applied = try s.executor.apply(p)
+        // Something the user added to a created folder after Apply keeps it.
+        let archives = s.root.appendingPathComponent("Archives", isDirectory: true)
+        try Data("n".utf8).write(to: archives.appendingPathComponent(".notes"))
+        _ = try s.executor.undo(proposalID: p.id)
+
+        #expect(applied.createdFolders.map(\.lastPathComponent).sorted() == ["Archives", "Documents"])
+        #expect(!FileManager.default.fileExists(atPath: s.root.appendingPathComponent("Documents").path))
+        #expect(FileManager.default.fileExists(atPath: existing.appendingPathComponent(".keep").path))
+        #expect(FileManager.default.fileExists(atPath: existingEmpty.path))
+        #expect(FileManager.default.fileExists(atPath: archives.appendingPathComponent(".notes").path))
+    }
+
     @Test("Undo refuses to clobber a re-created original")
     func undoDoesNotClobber() throws {
         let s = try Scratch()
