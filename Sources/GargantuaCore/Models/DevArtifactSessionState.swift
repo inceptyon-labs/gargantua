@@ -32,6 +32,8 @@ public final class DevArtifactSessionState {
     public var isCleaning = false
     public var activeCleanupMethod: CleanupMethod = .trash
     public var cleanupResult: CleanupResult?
+    /// The last cleanup's audit entry couldn't be written; the summary says so.
+    public var auditWriteFailed = false
     public var phase: DeepCleanPhase = .idle
     /// In-flight scan or cleanup task. Held so "Sever Tether" can cancel
     /// from inside the EventHorizon console. Always overwrite when starting
@@ -83,6 +85,7 @@ public final class DevArtifactSessionState {
     public func beginCleanup(method: CleanupMethod) {
         activeTask?.cancel()
         activeTask = nil
+        auditWriteFailed = false
         showConfirmation = false
         isCleaning = true
         activeCleanupMethod = method

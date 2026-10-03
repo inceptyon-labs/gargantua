@@ -163,9 +163,14 @@ public struct DevArtifactScanView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: result, outcomeAccent: accent, onExplain: onExplain, onRetried: onCleanupCompleted) {
-                dismissSummary()
-            }
+            CleanupSummaryView(
+                result: result,
+                outcomeAccent: accent,
+                auditWriteFailed: session.auditWriteFailed,
+                onExplain: onExplain,
+                onRetried: onCleanupCompleted,
+                onDismiss: { dismissSummary() }
+            )
             Spacer()
         }
         .padding(GargantuaSpacing.space6)
@@ -216,6 +221,7 @@ extension DevArtifactScanView {
                 try AuditWriter().record(result: result)
             } catch {
                 logger.warning("Failed to write audit entry: \(error.localizedDescription)")
+                session.auditWriteFailed = true
             }
             // Mirror SmartUninstaller / Deep Clean: hold the EventHorizon
             // console on screen long enough for spaghettify swallow

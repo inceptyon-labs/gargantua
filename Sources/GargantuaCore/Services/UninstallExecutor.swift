@@ -2,6 +2,9 @@ import AppKit
 import Foundation
 import GargantuaLicensing
 import Security
+import os
+
+private let uninstallLogger = Logger(subsystem: "com.gargantua.core", category: "UninstallExecutor")
 
 /// Authorization token passed to privileged uninstall helpers.
 ///
@@ -268,7 +271,16 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         }
 
         let cleanupResult = CleanupResult(itemResults: itemResults, cleanupMethod: .trash)
-        let auditWritten = try recordAudit(result: cleanupResult, confirmationMethod: options.confirmationMethod)
+        // The items are already in the Trash. A failed audit write must not
+        // turn that into a thrown error, which reported a completed uninstall
+        // as failed; it's surfaced through `auditWritten` instead.
+        let auditWritten: Bool
+        do {
+            auditWritten = try recordAudit(result: cleanupResult, confirmationMethod: options.confirmationMethod)
+        } catch {
+            uninstallLogger.error("Uninstall audit write failed: \(error.localizedDescription, privacy: .public)")
+            auditWritten = false
+        }
 
         return UninstallExecutionResult(
             cleanupResult: cleanupResult,

@@ -135,6 +135,7 @@ public struct DeepCleanView: View {
             CleanupSummaryView(
                 result: result,
                 outcomeAccent: accent,
+                auditWriteFailed: session.auditWriteFailed,
                 onExplain: onExplain,
                 onRetried: { retry in
                     session.applyRetry(retry)
@@ -300,6 +301,7 @@ public struct DeepCleanView: View {
                 try AuditWriter().record(result: result)
             } catch {
                 logger.warning("Failed to write audit entry: \(error.localizedDescription)")
+                session.auditWriteFailed = true
             }
             // Mirror SmartUninstaller: hold the EventHorizon console on
             // screen long enough for spaghettify swallow animations to play

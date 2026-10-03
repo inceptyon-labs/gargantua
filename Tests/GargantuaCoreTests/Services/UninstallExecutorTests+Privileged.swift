@@ -151,3 +151,34 @@ extension UninstallExecutorTests {
         #expect(helper.removedPaths.isEmpty)
     }
 }
+
+@MainActor
+final class FailingUninstallAuditRecorder: UninstallAuditRecording {
+    struct WriteFailed: Error {}
+    func write(_ entry: AuditEntry) throws {
+        throw WriteFailed()
+    }
+}
+
+extension UninstallExecutorTests {
+    @Test("A failed audit write doesn't report a completed uninstall as failed")
+    @MainActor
+    func auditFailureKeepsResult() async throws {
+        let remover = SpyUninstallRemover()
+        let item = Self.makeRemnant(id: "a", category: .caches, path: "/Users/test/Library/Caches/demo-a", safety: .review)
+        let executor = UninstallExecutor(
+            remover: remover,
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: FailingUninstallAuditRecorder()
+        )
+
+        let result = try await executor.execute(
+            Self.makePlan(remnants: [item]),
+            options: UninstallExecutionOptions(confirmationMethod: .fullModal),
+            authorization: .unchecked(.uninstaller)
+        )
+
+        #expect(result.cleanupResult.allSucceeded)
+        #expect(!result.auditWritten)
+    }
+}

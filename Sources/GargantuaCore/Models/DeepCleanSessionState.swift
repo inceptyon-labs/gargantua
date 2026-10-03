@@ -44,6 +44,8 @@ public final class DeepCleanSessionState {
     public var isCleaning = false
     public var activeCleanupMethod: CleanupMethod = .trash
     public var cleanupResult: CleanupResult?
+    /// The last cleanup's audit entry couldn't be written; the summary says so.
+    public var auditWriteFailed = false
     /// In-flight scan or cleanup task. Stored so "Sever Tether" can cancel it
     /// from the EventHorizon console. Cleared by `prepareForScan` /
     /// `beginCleanup` / `clearResults` so a stale handle from a prior phase
@@ -212,6 +214,7 @@ public final class DeepCleanSessionState {
     public func beginCleanup(method: CleanupMethod) {
         activeTask?.cancel()
         activeTask = nil
+        auditWriteFailed = false
         showConfirmation = false
         isCleaning = true
         activeCleanupMethod = method
