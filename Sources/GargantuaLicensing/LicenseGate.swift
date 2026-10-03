@@ -3,6 +3,16 @@ import Foundation
 public actor LicenseGate {
     public static let shared = LicenseGate.makeDefault()
 
+    /// Whether this build checks licenses at all. Source builds report a
+    /// permanent `.licensed` state, which is not a real activation.
+    public static let enforcesLicensing: Bool = {
+        #if GARGANTUA_LICENSING
+            true
+        #else
+            false
+        #endif
+    }()
+
     private let store: LicenseStore
     private let clock: TrialClock
 

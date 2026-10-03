@@ -25,9 +25,32 @@ public final class LicenseActivationLinkModel {
 
     public var outcome: Outcome?
 
+    /// A link carrying a different key arrived while this Mac is already
+    /// activated. Waits for the user, since following it would replace the
+    /// current license and release its activation.
+    public struct PendingReplacement: Identifiable, Equatable {
+        public let id = UUID()
+        let key: String
+        public let currentLicensee: String
+    }
+
+    public var pendingReplacement: PendingReplacement?
+
     public init() {}
 
     public func dismiss() { outcome = nil }
+
+    public func keepCurrentLicense() { pendingReplacement = nil }
+
+    /// Releases the current activation, then activates the link's key.
+    public func replaceLicense() {
+        guard let pending = pendingReplacement else { return }
+        pendingReplacement = nil
+        Task { @MainActor in
+            _ = await LicenseStateModel.shared.deactivate()
+            await LicenseActivationLink.activate(key: pending.key)
+        }
+    }
 }
 
 /// Handles the `gargantua://activate?key=GARG-…` deep link. Polar's
@@ -47,21 +70,37 @@ public enum LicenseActivationLink {
         }
 
         Task { @MainActor in
-            let result = await LicenseStateModel.shared.activate(key: key)
-            switch result {
-            case .success:
-                logger.info("Activated via deep link")
-                LicenseActivationLinkModel.shared.outcome = .init(
-                    succeeded: true,
-                    message: "Gargantua is unlocked on this Mac."
+            let model = LicenseStateModel.shared
+            await model.refresh()
+            // A link (from email, a web page, or anything that can open a URL)
+            // must not silently swap out a working license.
+            if LicenseGate.enforcesLicensing, case .licensed(let email, let name, _) = model.state {
+                LicenseActivationLinkModel.shared.pendingReplacement = .init(
+                    key: key,
+                    currentLicensee: email.isEmpty ? name : email
                 )
-            case .failure(let error):
-                logger.warning("Deep-link activation failed: \(String(describing: error))")
-                LicenseActivationLinkModel.shared.outcome = .init(
-                    succeeded: false,
-                    message: LicenseErrorCopy.message(for: error)
-                )
+                return
             }
+            await activate(key: key)
+        }
+    }
+
+    @MainActor
+    static func activate(key: String) async {
+        let result = await LicenseStateModel.shared.activate(key: key)
+        switch result {
+        case .success:
+            logger.info("Activated via deep link")
+            LicenseActivationLinkModel.shared.outcome = .init(
+                succeeded: true,
+                message: "Gargantua is unlocked on this Mac."
+            )
+        case .failure(let error):
+            logger.warning("Deep-link activation failed: \(String(describing: error))")
+            LicenseActivationLinkModel.shared.outcome = .init(
+                succeeded: false,
+                message: LicenseErrorCopy.message(for: error)
+            )
         }
     }
 }

@@ -218,6 +218,22 @@ struct MainContentView: View {
         } message: {
             Text(activationOutcome?.message ?? "")
         }
+        .alert(
+            "Replace this Mac's license?",
+            isPresented: Binding(
+                get: { activationLinkModel.pendingReplacement != nil },
+                set: { if !$0 { activationLinkModel.keepCurrentLicense() } }
+            ),
+            presenting: activationLinkModel.pendingReplacement
+        ) { _ in
+            Button("Replace License", role: .destructive) { activationLinkModel.replaceLicense() }
+            Button("Keep Current", role: .cancel) { activationLinkModel.keepCurrentLicense() }
+        } message: { pending in
+            Text(
+                "This Mac is activated for \(pending.currentLicensee). An activation link asked to use a different "
+                    + "license key here; replacing releases the current activation."
+            )
+        }
         .focusedSceneValue(\.keyboardCheatSheet, $showKeyboardCheatSheet)
     }
 
