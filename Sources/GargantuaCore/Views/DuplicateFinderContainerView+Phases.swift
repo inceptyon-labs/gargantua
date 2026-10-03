@@ -77,6 +77,7 @@ struct DuplicateFinderIdleView: View {
 
 struct DuplicateFinderScanningView: View {
     let progress: ScanProgress
+    var onCancel: (() -> Void)?
 
     var body: some View {
         VStack(spacing: GargantuaSpacing.space4) {
@@ -96,6 +97,12 @@ struct DuplicateFinderScanningView: View {
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                 }
+            }
+
+            if let onCancel {
+                Button("Cancel Scan", action: onCancel)
+                    .buttonStyle(AIModalButtonStyle(tone: .secondary))
+                    .keyboardShortcut(.cancelAction)
             }
         }
     }

@@ -56,7 +56,8 @@ public struct FileHealthContainerView: View {
                 case .scanning:
                     FileHealthScanningView(
                         progress: state.scanProgress,
-                        scanRootCount: resolvedScanRoots().count
+                        scanRootCount: resolvedScanRoots().count,
+                        onCancel: cancelActiveScan
                     )
                 case .cleaning:
                     cleanupProgressView

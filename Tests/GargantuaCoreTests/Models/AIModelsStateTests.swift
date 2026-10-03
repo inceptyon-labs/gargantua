@@ -17,6 +17,21 @@ struct AIModelsStateTests {
         )
     }
 
+    @Test("cancelScan stops the scan and returns to idle")
+    @MainActor
+    func cancelScanReturnsToIdle() {
+        let state = AIModelsState()
+        state.prepareForScan()
+        let task = Task<Void, Never> { try? await Task.sleep(for: .seconds(60)) }
+        state.activeScanTask = task
+
+        state.cancelScan()
+
+        #expect(state.phase == .idle)
+        #expect(!state.isScanning)
+        #expect(task.isCancelled)
+    }
+
     @Test("prepareForScan moves to scanning and clears prior results")
     @MainActor
     func prepareForScanResetsState() {

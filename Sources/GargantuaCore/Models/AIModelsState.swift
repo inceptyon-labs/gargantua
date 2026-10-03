@@ -61,6 +61,19 @@ public final class AIModelsState {
         phase = .results
     }
 
+    /// In-flight scan, so the console's Sever Tether can stop it.
+    public var activeScanTask: Task<Void, Never>?
+
+    /// Stops the running scan and returns to the start screen.
+    public func cancelScan() {
+        activeScanTask?.cancel()
+        activeScanTask = nil
+        isScanning = false
+        scanProgress = ScanProgress()
+        pathStream.clear()
+        phase = .idle
+    }
+
     public func failScan(_ message: String) {
         scanProgress.recordError(message)
         isScanning = false

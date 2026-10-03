@@ -85,7 +85,7 @@ public struct DuplicateFinderContainerView: View {
                         onStartScan: startScan
                     )
                 case .scanning:
-                    DuplicateFinderScanningView(progress: state.scanProgress)
+                    DuplicateFinderScanningView(progress: state.scanProgress, onCancel: { state.cancelScan() })
                 case .cleaning:
                     DuplicateFinderCleaningView()
                 case .summary(let result, let priorResults):

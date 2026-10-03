@@ -79,7 +79,8 @@ public struct AIModelsView: View {
                 case .scanning, .cleaning:
                     EventHorizonConsoleView(
                         context: .aiModels(phase: session.phase, profileName: profile.name),
-                        stream: session.pathStream
+                        stream: session.pathStream,
+                        onAbort: session.phase == .scanning ? { session.cancelScan() } : nil
                     )
                     .transition(phaseTransition)
                 case .results:
@@ -322,7 +323,7 @@ extension AIModelsView {
 
     fileprivate func startScan() {
         session.prepareForScan()
-        Task {
+        session.activeScanTask = Task {
             let start = Date()
             do {
                 let adapter: any ScanAdapter = try adapterOverride
@@ -332,10 +333,12 @@ extension AIModelsView {
                         pathExclusions: aiModelExcludedPaths
                     )
                 let results = try await adapter.scan(progress: session.scanProgress, observer: session.pathStream)
+                guard !Task.isCancelled else { return }
 
                 let duration = Date().timeIntervalSince(start)
                 session.finishScan(results: results, duration: duration)
             } catch {
+                guard !Task.isCancelled else { return }
                 session.failScan(error.localizedDescription)
             }
         }

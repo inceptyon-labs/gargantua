@@ -88,6 +88,7 @@ struct FileHealthIdleView: View {
 struct FileHealthScanningView: View {
     let progress: ScanProgress
     let scanRootCount: Int
+    var onCancel: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -119,6 +120,11 @@ struct FileHealthScanningView: View {
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
                 Spacer()
+                if let onCancel {
+                    Button("Cancel Scan", action: onCancel)
+                        .buttonStyle(AIModalButtonStyle(tone: .secondary))
+                        .keyboardShortcut(.cancelAction)
+                }
             }
         }
         .padding(GargantuaSpacing.space5)

@@ -232,4 +232,21 @@ struct DuplicateFinderContainerStateTests {
         }
         #expect(message == "disk unavailable")
     }
+
+    @Test("cancelScan stops the running scan and returns to idle")
+    @MainActor
+    func cancelScanReturnsToIdle() {
+        let state = DuplicateFinderContainerState()
+        state.prepareForScan()
+        let task = Task<Void, Never> { try? await Task.sleep(for: .seconds(60)) }
+        state.activeScanTask = task
+
+        state.cancelScan()
+
+        guard case .idle = state.scanState else {
+            Issue.record("expected idle, got \(state.scanState)")
+            return
+        }
+        #expect(task.isCancelled)
+    }
 }

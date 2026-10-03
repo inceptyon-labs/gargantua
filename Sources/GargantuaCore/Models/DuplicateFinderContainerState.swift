@@ -127,6 +127,15 @@ public final class DuplicateFinderContainerState {
         scanState = .idle
     }
 
+    /// Stops the running scan (its fclones process is killed through task
+    /// cancellation) and returns to the start screen.
+    public func cancelScan() {
+        activeScanTask?.cancel()
+        activeScanTask = nil
+        scanGeneration &+= 1
+        scanState = .idle
+    }
+
     // MARK: - Pure helpers
 
     /// Derive the terminal scan state from a finished scan's results + the
