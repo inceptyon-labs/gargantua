@@ -53,8 +53,9 @@ public struct SidebarView: View {
         ("4", .command), ("5", .command), ("6", .command),
         ("7", .command), ("8", .command), ("9", .command),
         ("0", .command),
-        ("1", [.command, .shift]), ("2", [.command, .shift]),
-        ("3", [.command, .shift]), ("4", [.command, .shift]),
+        // Not ⇧⌘: ⇧⌘3/4/5 are macOS screenshot shortcuts.
+        ("1", [.command, .option]), ("2", [.command, .option]), ("3", [.command, .option]),
+        ("4", [.command, .option]), ("5", [.command, .option]), ("6", [.command, .option]),
     ]
 
     private static func shortcut(
@@ -100,7 +101,7 @@ public struct SidebarView: View {
             // Hidden buttons covering all sidebar items:
             //   Items 1–9 → Cmd+1…Cmd+9
             //   Item 10   → Cmd+0
-            //   Items 11+ → Cmd+Shift+1…
+            //   Items 11+ → Cmd+Option+1…
             ForEach(Array(allItems.enumerated()), id: \.element.id) { index, item in
                 if let shortcut = Self.shortcut(for: index) {
                     Button("") { selection = item.id }
@@ -108,6 +109,11 @@ public struct SidebarView: View {
                         .hidden()
                 }
             }
+
+            // Cmd+, opens Settings, as in other Mac apps.
+            Button("") { selection = "settings" }
+                .keyboardShortcut(",", modifiers: .command)
+                .hidden()
 
             // Cmd+Option+S to toggle the sidebar.
             Button("", action: toggleCollapsed)

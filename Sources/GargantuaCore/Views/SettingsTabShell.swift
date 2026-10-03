@@ -78,7 +78,8 @@ struct SettingsTabBar: View {
             .contentShape(Rectangle())
         })
         .buttonStyle(.plain)
-        .keyboardShortcut(KeyEquivalent(shortcutCharacter), modifiers: .command)
-        .help("\(tab.helpText) (⌘\(index + 1))")
+        // ⌃⌘, not ⌘: the sidebar owns ⌘1–⌘9 and stays mounted beside Settings.
+        .keyboardShortcut(KeyEquivalent(shortcutCharacter), modifiers: [.command, .control])
+        .help("\(tab.helpText) (⌃⌘\(index + 1))")
     }
 }

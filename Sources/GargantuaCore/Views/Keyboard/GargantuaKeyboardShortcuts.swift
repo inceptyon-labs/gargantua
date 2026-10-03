@@ -232,7 +232,9 @@ public struct KeyboardShortcutsCheatSheet: View {
             Shortcut(keys: "Esc", action: "Clear focus, then go back"),
         ]),
         Section(title: "App", shortcuts: [
-            Shortcut(keys: "⌘1–9, ⌘0", action: "Jump to a sidebar tool"),
+            Shortcut(keys: "⌘1–9, ⌘0, ⌥⌘1–6", action: "Jump to a sidebar tool"),
+            Shortcut(keys: "⌘,", action: "Open Settings"),
+            Shortcut(keys: "⌃⌘1–6", action: "Switch Settings tab"),
             Shortcut(keys: "⌥⌘S", action: "Toggle the sidebar"),
             Shortcut(keys: "⌘/", action: "Show this card"),
         ]),
