@@ -13,6 +13,12 @@ final class MLXLifecycleController {
         let directory = try Self.resolveModelDirectory(modelPath)
         try Self.validateModelDirectory(directory)
 
+        // Bound MLX's buffer cache. By default it keeps freed buffers around,
+        // so weights released without an explicit `unload()` (the window
+        // closing, an engine swap) stayed resident: about 700 MB for the
+        // default model. Set here rather than at launch because touching MLX
+        // initializes Metal.
+        MLX.Memory.cacheLimit = Self.bufferCacheLimit
         let baseline = MLX.Memory.activeMemory
         let tokenizerLoader = SwiftTransformersTokenizerLoader()
         let container = try await LLMModelFactory.shared.loadContainer(
@@ -25,6 +31,8 @@ final class MLXLifecycleController {
         memoryUsage = Int64(max(0, after - baseline))
         isLoaded = true
     }
+
+    static let bufferCacheLimit = 64 * 1024 * 1024
 
     func unload() {
         let wasLoaded = isLoaded
