@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 public enum ClaudeCodeProcessOutput: Sendable, Equatable {
     case stdout(String)
@@ -156,14 +157,13 @@ private final class ResumeState<Value: Sendable>: @unchecked Sendable {
 /// turned that whole chunk into "" (`String(data:encoding:)` fails), losing
 /// a block of the agent's output. The incomplete tail is held for the next
 /// chunk instead.
-final class UTF8ChunkDecoder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var pending = Data()
+final class UTF8ChunkDecoder: Sendable {
+    private let pending = OSAllocatedUnfairLock(initialState: Data())
 
     /// - Parameter isFinal: no more bytes follow; a leftover partial
     ///   character is decoded as U+FFFD rather than held.
     func decode(_ data: Data, isFinal: Bool = false) -> String {
-        let bytes: Data = lock.withLock {
+        let bytes: Data = pending.withLock { pending in
             var combined = pending
             combined.append(data)
             let keep = isFinal ? 0 : Self.incompleteTailLength(combined)

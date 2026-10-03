@@ -141,7 +141,7 @@ extension ScanBucketListView {
         )
     }
 
-    static func reconcileSelection(
+    nonisolated static func reconcileSelection(
         selected: Set<String>,
         hiddenByFilter: Set<String>,
         visible: Set<String>,

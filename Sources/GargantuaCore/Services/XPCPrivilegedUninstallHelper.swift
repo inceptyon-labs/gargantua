@@ -1,4 +1,5 @@
 import Foundation
+import os
 @preconcurrency import ServiceManagement
 
 public enum PrivilegedHelperConfiguration {
@@ -362,22 +363,25 @@ public enum XPCPrivilegedUninstallHelperError: Error, LocalizedError {
 /// Resumes an XPC call's continuation exactly once: the reply, the error
 /// handler and the timeout can each fire, and invalidating the connection on
 /// timeout also triggers the error handler.
-final class XPCReplyOnce<Value: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var resume: ((Result<Value, Error>) -> Void)?
+final class XPCReplyOnce<Value: Sendable>: Sendable {
+    private typealias Resume = @Sendable (Result<Value, Error>) -> Void
+
+    private let resume: OSAllocatedUnfairLock<Resume?>
 
     init(_ continuation: CheckedContinuation<Value, Error>) {
-        resume = { continuation.resume(with: $0) }
+        let resume: Resume = { continuation.resume(with: $0) }
+        self.resume = OSAllocatedUnfairLock(initialState: resume)
     }
 
     init(_ continuation: CheckedContinuation<Value, Never>) where Value: Sendable {
-        resume = { result in
+        let resume: Resume = { result in
             if case .success(let value) = result { continuation.resume(returning: value) }
         }
+        self.resume = OSAllocatedUnfairLock(initialState: resume)
     }
 
     func resume(with result: Result<Value, Error>) {
-        let pending = lock.withLock {
+        let pending = resume.withLock { resume in
             defer { resume = nil }
             return resume
         }

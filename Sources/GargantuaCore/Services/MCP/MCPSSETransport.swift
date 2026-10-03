@@ -171,9 +171,18 @@ public final class MCPSSETransport: @unchecked Sendable {
     }
 
     /// Per-connection state of the request read. Touched only on `queue`.
-    private final class RequestProgress: @unchecked Sendable {
-        var requestReceived = false
-        var headerChecked = false
+    private final class RequestProgress: Sendable {
+        private let state = OSAllocatedUnfairLock(initialState: (requestReceived: false, headerChecked: false))
+
+        var requestReceived: Bool {
+            get { state.withLock { $0.requestReceived } }
+            set { state.withLock { $0.requestReceived = newValue } }
+        }
+
+        var headerChecked: Bool {
+            get { state.withLock { $0.headerChecked } }
+            set { state.withLock { $0.headerChecked = newValue } }
+        }
     }
 
     /// Records a connection so `stop()` can find it, dropping any entries
