@@ -150,6 +150,23 @@ struct DevArtifactSessionStateTests {
         #expect(session.selectedBucketIDs == ["node", "logs"])
     }
 
+    @Test("After a cleanup, Done returns to the remaining results")
+    @MainActor
+    func dismissSummaryKeepsRemainingResults() {
+        let session = DevArtifactSessionState()
+        let cleaned = makeItem(id: "cleaned", safety: .safe)
+        let remaining = makeItem(id: "remaining", safety: .review)
+        session.finishScan(results: [cleaned, remaining], duration: 0.5, estimates: [:])
+        session.selectedResultIDs = [cleaned.id]
+
+        session.finishCleanup(result: CleanupResult(itemResults: [CleanupItemResult(item: cleaned, succeeded: true)]))
+        session.dismissSummary()
+
+        #expect(session.phase == .results)
+        #expect(session.scanResults?.map(\.id) == [remaining.id])
+        #expect(session.selectedResultIDs.isEmpty)
+    }
+
     @Test("prepareForScan clears a lingering confirmation flag")
     @MainActor
     func prepareForScanClearsConfirmation() {

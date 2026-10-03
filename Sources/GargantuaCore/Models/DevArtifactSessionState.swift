@@ -97,6 +97,13 @@ public final class DevArtifactSessionState {
         activeTask = nil
         isCleaning = false
         cleanupResult = result
+        // Drop what was cleaned so Done returns to the remaining results, as
+        // Deep Clean does, instead of discarding them and forcing a rescan.
+        if let current = scanResults {
+            let succeededIDs = Set(result.succeededItems.map(\.item.id))
+            scanResults = current.filter { !succeededIDs.contains($0.id) }
+            selectedResultIDs.subtract(succeededIDs)
+        }
         phase = .summary
     }
 
@@ -121,11 +128,15 @@ public final class DevArtifactSessionState {
 
     public func dismissSummary() {
         cleanupResult = nil
-        scanResults = nil
         showConfirmation = false
         activeCleanupMethod = .trash
         pathStream.clear()
-        phase = .idle
+        if let remaining = scanResults, !remaining.isEmpty {
+            phase = .results
+        } else {
+            scanResults = nil
+            phase = .idle
+        }
     }
 
     /// Back / cancel from the results view — drop results, keep bucket
