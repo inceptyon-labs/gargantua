@@ -20,7 +20,9 @@ extension CleanupEngine {
     func removeStaleSidecars(of url: URL, item: ScanResult, method: CleanupMethod) async -> CleanupItemResult? {
         guard !fileExists(url.path), SQLiteDatabaseFiles.isDatabase(url.path),
               !SQLiteDatabaseFiles.existingSidecars(of: url.path).isEmpty else { return nil }
-        if let skipped = ownerRunningSkip(item: item) { return skipped }
+        // Same guards, same order, as any removal: protected root, owner, symlink swap.
+        if let skipped = protectedRootSkip(url: url, item: item) ?? ownerRunningSkip(item: item)
+            ?? symlinkSwapSkip(url: url, item: item) { return skipped }
         for sidecar in SQLiteDatabaseFiles.existingSidecars(of: url.path) {
             let sidecarURL = URL(fileURLWithPath: sidecar)
             let removed = method == .trash

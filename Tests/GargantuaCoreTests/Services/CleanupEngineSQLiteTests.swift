@@ -227,4 +227,53 @@ struct CleanupEngineSQLiteTests {
         #expect(result.itemResults.first?.succeeded == false)
         #expect(FileManager.default.fileExists(atPath: wal.path))
     }
+
+    @Test("Stale sidecars are not removed when the parent was swapped for a symlink")
+    @MainActor
+    func goneDatabaseSymlinkSwapKeepsSidecars() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let real = dir.appendingPathComponent("dir", isDirectory: true)
+        let elsewhere = dir.appendingPathComponent("elsewhere", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        let wal = try Self.write(elsewhere, "x.sqlite-wal")
+        let item = Self.item(real.appendingPathComponent("x.sqlite")).recordingScanTimeAncestry()
+        try FileManager.default.removeItem(at: real)
+        try FileManager.default.createSymbolicLink(at: real, withDestinationURL: elsewhere)
+
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: dir,
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            isAppRunning: { _ in false }
+        )
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
+
+        #expect(result.itemResults.first?.succeeded == false)
+        #expect(result.itemResults.first?.error?.contains("symlink") == true)
+        #expect(FileManager.default.fileExists(atPath: wal.path))
+    }
+
+    @Test("Stale sidecars under a protected root are not removed")
+    @MainActor
+    func goneDatabaseProtectedRootKeepsSidecars() async throws {
+        let dir = try Self.makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let db = dir.appendingPathComponent("x.sqlite")
+        let wal = try Self.write(dir, "x.sqlite-wal")
+
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: dir,
+            protectedRootPolicy: ProtectedRootPolicy(entries: [
+                ProtectedRootEntry(path: db.path, reason: "protected test root"),
+            ]),
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            isAppRunning: { _ in false }
+        )
+        let result = await engine.clean([Self.item(db)], method: .delete, authorization: .unchecked(.deepClean))
+
+        #expect(result.itemResults.first?.succeeded == false)
+        #expect(result.itemResults.first?.error?.contains("protected test root") == true)
+        #expect(FileManager.default.fileExists(atPath: wal.path))
+    }
 }

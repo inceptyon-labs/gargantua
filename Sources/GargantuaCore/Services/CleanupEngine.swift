@@ -236,14 +236,24 @@ public final class CleanupEngine: Sendable {
         if !fileExists(url.path) {
             return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
         }
-        if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
-            return CleanupItemResult(
-                item: item,
-                succeeded: false,
-                error: "Skipped \(protectedRoot): \(url.path)"
-            )
-        }
+        if let skipped = protectedRootSkip(url: url, item: item) { return skipped }
         return ownerRunningSkip(item: item)
+    }
+
+    func protectedRootSkip(url: URL, item: ScanResult) -> CleanupItemResult? {
+        guard let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) else {
+            return nil
+        }
+        return CleanupItemResult(item: item, succeeded: false, error: "Skipped \(protectedRoot): \(url.path)")
+    }
+
+    func symlinkSwapSkip(url: URL, item: ScanResult) -> CleanupItemResult? {
+        guard !SymlinkSwapGuard.isUnchanged(url, scanTimeResolvedParent: item.scanTimeResolvedParent) else { return nil }
+        return CleanupItemResult(
+            item: item,
+            succeeded: false,
+            error: "Skipped (path now resolves through a symlink): \(url.path)"
+        )
     }
 
     /// The helper moves only `item.path`; a database moved without its sidecars
@@ -384,13 +394,7 @@ public final class CleanupEngine: Sendable {
         // the scan already resolved through (a symlinked scan root) is allowed;
         // only a post-scan change is a swap. The privileged path enforces the
         // same rule in the helper.
-        guard SymlinkSwapGuard.isUnchanged(url, scanTimeResolvedParent: item.scanTimeResolvedParent) else {
-            return CleanupItemResult(
-                item: item,
-                succeeded: false,
-                error: "Skipped (path now resolves through a symlink): \(url.path)"
-            )
-        }
+        if let skipped = symlinkSwapSkip(url: url, item: item) { return skipped }
 
         // A linked worktree's registration in .git/worktrees outlives its
         // working tree, and the next scan would offer it again as prunable.
