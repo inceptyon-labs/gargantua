@@ -52,6 +52,7 @@ struct OrganizerPostApplyView: View {
         } message: { plan in
             Text("The folder and the \(plan.moves.count) file\(plan.moves.count == 1 ? "" : "s") moved into it go to the Trash.")
         }
+        .destructiveActionGate(reason: $session.blockedReason)
     }
 
     /// Only folders this Apply created can be trashed from here: a folder the

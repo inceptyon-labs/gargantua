@@ -30,11 +30,15 @@ extension BlockReason: Error {}
 /// sites by convention, not by the type system — unlike the four boundaries,
 /// a future call site that skips `authorize` would still compile.
 ///
-/// Two shipping features destroy user data outside that boundary and are
-/// deliberately not enumerated here: Background Items
-/// (`DefaultBackgroundItemTrasher`) and the File Organizer
-/// (`OrganizerExecutor`). Whether they should require a license is a product
-/// decision that has not been made; do not read their absence as coverage.
+/// `.fileOrganizer` is the same kind of convention gate: the File Organizer's
+/// post-apply "Move to Trash" (`OrganizerSessionState.trashSubfolder(at:)`)
+/// authorizes before trashing a folder Apply created. Organizing itself (the
+/// moves, and Undo) is not destructive and stays ungated.
+///
+/// Background Items (`DefaultBackgroundItemTrasher`) destroys user data
+/// outside these boundaries and is deliberately not enumerated here. Whether
+/// it should require a license is a product decision that has not been made;
+/// do not read its absence as coverage.
 public enum DestructiveSurface: String, CaseIterable, Sendable {
     case deepClean
     case devArtifacts
@@ -48,6 +52,7 @@ public enum DestructiveSurface: String, CaseIterable, Sendable {
     case mcpClean
     case claudeCodeAgent
     case diskExplorer
+    case fileOrganizer
 }
 
 /// Proof that ``LicenseGate/canExecuteDestructiveAction()`` was consulted and

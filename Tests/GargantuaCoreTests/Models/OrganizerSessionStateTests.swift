@@ -1,5 +1,7 @@
 import Testing
 import Foundation
+import GargantuaLicensing
+import os
 @testable import GargantuaCore
 
 @MainActor
@@ -167,12 +169,44 @@ struct OrganizerSessionStateTests {
         try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
         try Data("x".utf8).write(to: sub.appendingPathComponent("a.pdf"))
 
-        let state = OrganizerSessionState()
-        state.trashSubfolder(at: sub)
+        let state = OrganizerSessionState(auditRecorder: { _ in })
+        state.trashSubfolder(at: sub, authorization: .unchecked(.fileOrganizer))
 
         #expect(state.trashedFolderPaths.contains(sub.standardizedFileURL.path))
         #expect(state.folderTrashErrors[sub.standardizedFileURL.path] == nil)
         #expect(!FileManager.default.fileExists(atPath: sub.path))
+    }
+
+    @Test("Trashing a folder needs a license: refused, the folder stays and the unlock reason is set")
+    func trashSubfolderIsLicenseGated() async throws {
+        let s = try Self.scratchRoot()
+        defer { try? FileManager.default.removeItem(at: s) }
+        let sub = s.appendingPathComponent("Receipts", isDirectory: true)
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+
+        let state = OrganizerSessionState(authorize: { _ in .failure(.trialExpired) }, auditRecorder: { _ in })
+        state.trashSubfolder(at: sub)
+        await Self.waitUntil { state.blockedReason != nil }
+
+        #expect(state.blockedReason == .trialExpired)
+        #expect(FileManager.default.fileExists(atPath: sub.path))
+    }
+
+    @Test("A trashed folder is recorded in the audit log")
+    func trashSubfolderIsAudited() throws {
+        let s = try Self.scratchRoot()
+        defer { try? FileManager.default.removeItem(at: s) }
+        let sub = s.appendingPathComponent("Receipts", isDirectory: true)
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: sub.appendingPathComponent("a.pdf"))
+        let recorded = OSAllocatedUnfairLock<[AuditEntry]>(initialState: [])
+
+        let state = OrganizerSessionState(auditRecorder: { entry in recorded.withLock { $0.append(entry) } })
+        state.trashSubfolder(at: sub, authorization: .unchecked(.fileOrganizer))
+
+        let entry = try #require(recorded.withLock { $0 }.first)
+        #expect(entry.tool == "file-organizer")
+        #expect(entry.files.map(\.path) == [sub.path])
     }
 
     @Test("trashSubfolder on a missing folder records success (file already gone)")
@@ -181,8 +215,8 @@ struct OrganizerSessionStateTests {
         defer { try? FileManager.default.removeItem(at: s) }
         let missing = s.appendingPathComponent("Never-Existed", isDirectory: true)
 
-        let state = OrganizerSessionState()
-        state.trashSubfolder(at: missing)
+        let state = OrganizerSessionState(auditRecorder: { _ in })
+        state.trashSubfolder(at: missing, authorization: .unchecked(.fileOrganizer))
 
         #expect(state.trashedFolderPaths.contains(missing.standardizedFileURL.path))
         #expect(state.folderTrashErrors[missing.standardizedFileURL.path] == nil)
@@ -195,8 +229,8 @@ struct OrganizerSessionStateTests {
         let sub = s.appendingPathComponent("Receipts", isDirectory: true)
         try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
 
-        let state = OrganizerSessionState()
-        state.trashSubfolder(at: sub)
+        let state = OrganizerSessionState(auditRecorder: { _ in })
+        state.trashSubfolder(at: sub, authorization: .unchecked(.fileOrganizer))
         #expect(!state.trashedFolderPaths.isEmpty)
 
         state.reset()

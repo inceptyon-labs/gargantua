@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import SwiftUI
 
 /// One folder the organizer can scan. Built-in cases resolve to
@@ -119,8 +120,13 @@ public final class OrganizerSessionState: ObservableObject {
     private var activeTask: Task<Void, Never>?
 
     /// Cancels the detached Apply or Undo work behind `activeTask`.
-
     private var cancelWork: (() -> Void)?
+
+    /// Set when the license gate refuses a folder trash; the view shows the
+    /// unlock sheet for it.
+    @Published public var blockedReason: BlockReason?
+    private let authorize: @Sendable (DestructiveSurface) async -> Result<DestructiveActionAuthorization, BlockReason>
+    private let auditRecorder: @Sendable (AuditEntry) throws -> Void
 
     public init(
         executor: OrganizerExecutor = OrganizerExecutor(),
@@ -131,7 +137,11 @@ public final class OrganizerSessionState: ObservableObject {
         codexProposer: CodexOrganizerProposer = CodexOrganizerProposer(),
         preferenceProvider: @escaping @MainActor () -> OrganizerBackendPreference = {
             OrganizerBackendPreference.stored()
-        }
+        },
+        authorize: @escaping @Sendable (DestructiveSurface) async -> Result<DestructiveActionAuthorization, BlockReason> = {
+            await LicenseGate.shared.authorize($0)
+        },
+        auditRecorder: @escaping @Sendable (AuditEntry) throws -> Void = { try AuditWriter().write($0) }
     ) {
         self.executor = executor
         self.cloudService = cloudService
@@ -140,6 +150,8 @@ public final class OrganizerSessionState: ObservableObject {
         self.claudeCodeProposer = claudeCodeProposer
         self.codexProposer = codexProposer
         self.preferenceProvider = preferenceProvider
+        self.authorize = authorize
+        self.auditRecorder = auditRecorder
     }
 
     // MARK: - Public actions
@@ -260,12 +272,30 @@ public final class OrganizerSessionState: ObservableObject {
         phase = .idle
     }
 
-    /// Move one of the just-created subfolders to the Trash. Called by
-    /// the post-apply structure view. Best-effort: a path that's
-    /// already gone is reported as success (file already gone is the
-    /// state the user wanted); other errors land in `folderTrashErrors`
-    /// so the row can render an inline failure note.
-    public func trashSubfolder(at url: URL, fileManager: FileManager = .default) {
+    /// Move one of the just-created subfolders to the Trash, behind the
+    /// license gate like every other destructive action. Called by the
+    /// post-apply structure view after its confirmation.
+    public func trashSubfolder(at url: URL) {
+        Task { [weak self] in
+            guard let self else { return }
+            switch await self.authorize(.fileOrganizer) {
+            case .failure(let reason):
+                self.blockedReason = reason
+            case .success(let authorization):
+                self.trashSubfolder(at: url, authorization: authorization)
+            }
+        }
+    }
+
+    /// Best-effort: a path that's already gone is reported as success (file
+    /// already gone is the state the user wanted); other errors land in
+    /// `folderTrashErrors` so the row can render an inline failure note.
+    /// A completed trash is recorded in the audit log.
+    func trashSubfolder(
+        at url: URL,
+        authorization _: DestructiveActionAuthorization,
+        fileManager: FileManager = .default
+    ) {
         let key = url.standardizedFileURL.path
 
         guard fileManager.fileExists(atPath: url.path) else {
@@ -274,6 +304,7 @@ public final class OrganizerSessionState: ObservableObject {
             return
         }
 
+        let size = DirectorySizeScanner.directorySize(at: url.path).totalSize
         do {
             var resulting: NSURL?
             try fileManager.trashItem(at: url, resultingItemURL: &resulting)
@@ -281,7 +312,17 @@ public final class OrganizerSessionState: ObservableObject {
             folderTrashErrors.removeValue(forKey: key)
         } catch {
             folderTrashErrors[key] = error.localizedDescription
+            return
         }
+        try? auditRecorder(AuditEntry(
+            tool: "file-organizer",
+            command: "trash-folder",
+            files: [AuditFile(path: url.path, size: size)],
+            safetyLevel: .review,
+            confirmationMethod: .singleButton,
+            cleanupMethod: .trash,
+            bytesFreed: size
+        ))
     }
 
     /// User-initiated cancel from the in-progress spinner. Kills the
