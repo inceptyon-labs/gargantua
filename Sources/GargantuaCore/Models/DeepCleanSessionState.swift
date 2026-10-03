@@ -22,7 +22,13 @@ public enum DeepCleanPhase: Sendable, Equatable {
 public final class DeepCleanSessionState {
     public var phase: DeepCleanPhase = .idle
     public var scanProgress = ScanProgress()
-    public var scanResults: [ScanResult]?
+    public var scanResults: [ScanResult]? {
+        didSet { blockedAppsByID = Self.blockedApps(in: scanResults) }
+    }
+
+    /// `blockedByApp` per result ID, rebuilt whenever `scanResults` changes so
+    /// per-row and confirmation-time lookups don't search the whole list.
+    private var blockedAppsByID: [String: BlockedApp] = [:]
     public var scanDuration: TimeInterval = 0
     public var selectedResultIDs: Set<String> = []
     /// Per-result removability, reconciled at scan time (protected roots,
@@ -110,12 +116,18 @@ public final class DeepCleanSessionState {
         phase = .scanning
     }
 
-    public func finishScan(results: [ScanResult], duration: TimeInterval) {
+    /// - Parameter precomputedRemovability: the reconciled map when the caller
+    ///   already built it off the main actor; reconciled here otherwise.
+    public func finishScan(
+        results: [ScanResult],
+        duration: TimeInterval,
+        precomputedRemovability: [String: Removability]? = nil
+    ) {
         scanDuration = duration
         // Reconcile removability fresh each scan so user-added protected roots
         // are current. View-only items are excluded from the default selection;
         // only removable, rule-`safe` items pre-select.
-        let map = RemovabilityReconciler().map(for: results)
+        let map = precomputedRemovability ?? RemovabilityReconciler().map(for: results)
         removability = map
         unblockedResultIDs = []
         selectedResultIDs = Set(
@@ -144,7 +156,17 @@ public final class DeepCleanSessionState {
     /// this session.
     public func blockedApp(for id: String) -> BlockedApp? {
         guard !unblockedResultIDs.contains(id) else { return nil }
-        return scanResults?.first { $0.id == id }?.blockedByApp
+        return blockedAppsByID[id]
+    }
+
+    private static func blockedApps(in results: [ScanResult]?) -> [String: BlockedApp] {
+        var byID: [String: BlockedApp] = [:]
+        for result in results ?? [] where byID[result.id] == nil {
+            if let app = result.blockedByApp {
+                byID[result.id] = app
+            }
+        }
+        return byID
     }
 
     /// Quit the app blocking `id`. On success, unlock and select every item that

@@ -301,7 +301,17 @@ public struct DeepCleanView: View {
                     observer: session.pathStream
                 )
                 guard !Task.isCancelled else { return }
-                session.finishScan(results: results, duration: Date().timeIntervalSince(start))
+                // Reconcile removability off the main actor: it checks every
+                // result against the protected-root policy.
+                let removability = await Task.detached(priority: .userInitiated) {
+                    RemovabilityReconciler().map(for: results)
+                }.value
+                guard !Task.isCancelled else { return }
+                session.finishScan(
+                    results: results,
+                    duration: Date().timeIntervalSince(start),
+                    precomputedRemovability: removability
+                )
             } catch {
                 guard !Task.isCancelled else { return }
                 session.failScan(error.localizedDescription)

@@ -30,10 +30,18 @@ public struct ProtectedRootEntry: Codable, Sendable, Equatable, Identifiable {
 public struct ProtectedRootPolicy: Sendable {
     public let entries: [ProtectedRootEntry]
     private let failClosedReason: String?
+    /// Entries normalized once for the current user's home, so checking a
+    /// scan's results doesn't re-expand, re-standardize and re-resolve every
+    /// entry for every item. Other homes (tests) are prepared per call.
+    private let defaultHomePath: String
+    private let preparedForDefaultHome: [PreparedEntry]
 
     public init(entries: [ProtectedRootEntry], failClosedReason: String? = nil) {
         self.entries = entries
         self.failClosedReason = failClosedReason
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        self.defaultHomePath = home.standardizedFileURL.path
+        self.preparedForDefaultHome = Self.prepare(entries, homeDirectory: home)
     }
 
     public static func failClosed(_ reason: String) -> ProtectedRootPolicy {
@@ -80,11 +88,16 @@ public struct ProtectedRootPolicy: Sendable {
             return failClosedReason
         }
 
+        let prepared = homeDirectory.standardizedFileURL.path == defaultHomePath
+            ? preparedForDefaultHome
+            : Self.prepare(entries, homeDirectory: homeDirectory)
         let candidates = Set([
             Self.normalizedPath(url.path, homeDirectory: homeDirectory, resolvesSymlinks: true),
             Self.normalizedPath(url.path, homeDirectory: homeDirectory, resolvesSymlinks: false),
         ])
         let foldedCandidates = Set(candidates.map { $0.lowercased() })
+        let candidateComponents = candidates.map(\.pathComponentsForPolicy)
+        let foldedCandidateComponents = foldedCandidates.map(\.pathComponentsForPolicy)
 
         // Entries whose authored spelling missed but whose case-folded
         // spelling hit — deferred to the on-disk case check below so exact
@@ -92,9 +105,14 @@ public struct ProtectedRootPolicy: Sendable {
         // costs no extra filesystem work.
         var caseScreened: [ScreenedEntry] = []
 
-        for entry in entries {
-            guard !entry.path.isEmpty else { continue }
-            switch Self.match(entry, candidates: candidates, foldedCandidates: foldedCandidates, homeDirectory: homeDirectory) {
+        for entry in prepared {
+            switch Self.match(
+                entry,
+                candidates: candidates,
+                foldedCandidates: foldedCandidates,
+                candidateComponents: candidateComponents,
+                foldedCandidateComponents: foldedCandidateComponents
+            ) {
             case .authoredSpelling:
                 return entry.reason
             case .caseFoldedOnly(let screened):
@@ -119,30 +137,68 @@ public struct ProtectedRootPolicy: Sendable {
         let paths: Set<String>
     }
 
-    private static func match(
-        _ entry: ProtectedRootEntry,
-        candidates: Set<String>,
-        foldedCandidates: Set<String>,
-        homeDirectory: URL
-    ) -> EntryMatch {
-        if entry.path.contains("*") {
-            let pattern = normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: false)
-            if candidates.contains(where: { globMatches(pattern, path: $0) }) {
-                return .authoredSpelling
+    /// One entry with its path spellings computed for a given home directory.
+    /// A glob keeps its normalized pattern and components (authored and
+    /// case-folded); a literal keeps its symlink-resolved and unresolved
+    /// spellings.
+    private struct PreparedEntry: Sendable {
+        let reason: String
+        let globPattern: String?
+        let globComponents: [String]
+        let foldedGlobComponents: [String]
+        let paths: Set<String>
+        let foldedPaths: Set<String>
+    }
+
+    private static func prepare(_ entries: [ProtectedRootEntry], homeDirectory: URL) -> [PreparedEntry] {
+        entries.compactMap { entry in
+            guard !entry.path.isEmpty else { return nil }
+            if entry.path.contains("*") {
+                let pattern = normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: false)
+                return PreparedEntry(
+                    reason: entry.reason,
+                    globPattern: pattern,
+                    globComponents: pattern.pathComponentsForPolicy,
+                    foldedGlobComponents: pattern.lowercased().pathComponentsForPolicy,
+                    paths: [],
+                    foldedPaths: []
+                )
             }
-            if foldedCandidates.contains(where: { globMatches(pattern.lowercased(), path: $0) }) {
-                return .caseFoldedOnly(ScreenedEntry(reason: entry.reason, isGlob: true, paths: [pattern]))
-            }
-        } else {
-            let protectedPaths = Set([
+            let paths = Set([
                 normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: true),
                 normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: false),
             ])
-            if !candidates.isDisjoint(with: protectedPaths) {
+            return PreparedEntry(
+                reason: entry.reason,
+                globPattern: nil,
+                globComponents: [],
+                foldedGlobComponents: [],
+                paths: paths,
+                foldedPaths: Set(paths.map { $0.lowercased() })
+            )
+        }
+    }
+
+    private static func match(
+        _ entry: PreparedEntry,
+        candidates: Set<String>,
+        foldedCandidates: Set<String>,
+        candidateComponents: [[String]],
+        foldedCandidateComponents: [[String]]
+    ) -> EntryMatch {
+        if let pattern = entry.globPattern {
+            if candidateComponents.contains(where: { componentsMatch(entry.globComponents, $0) }) {
                 return .authoredSpelling
             }
-            if !foldedCandidates.isDisjoint(with: Set(protectedPaths.map { $0.lowercased() })) {
-                return .caseFoldedOnly(ScreenedEntry(reason: entry.reason, isGlob: false, paths: protectedPaths))
+            if foldedCandidateComponents.contains(where: { componentsMatch(entry.foldedGlobComponents, $0) }) {
+                return .caseFoldedOnly(ScreenedEntry(reason: entry.reason, isGlob: true, paths: [pattern]))
+            }
+        } else {
+            if !candidates.isDisjoint(with: entry.paths) {
+                return .authoredSpelling
+            }
+            if !foldedCandidates.isDisjoint(with: entry.foldedPaths) {
+                return .caseFoldedOnly(ScreenedEntry(reason: entry.reason, isGlob: false, paths: entry.paths))
             }
         }
         return .none
@@ -228,8 +284,10 @@ public struct ProtectedRootPolicy: Sendable {
     /// Component-count-anchored glob match; `normalizedPattern` must already
     /// be normalized (tokens expanded, standardized).
     private static func globMatches(_ normalizedPattern: String, path: String) -> Bool {
-        let patternComponents = normalizedPattern.pathComponentsForPolicy
-        let pathComponents = path.pathComponentsForPolicy
+        componentsMatch(normalizedPattern.pathComponentsForPolicy, path.pathComponentsForPolicy)
+    }
+
+    private static func componentsMatch(_ patternComponents: [String], _ pathComponents: [String]) -> Bool {
         guard patternComponents.count == pathComponents.count else { return false }
 
         return zip(patternComponents, pathComponents).allSatisfy { patternComponent, pathComponent in
