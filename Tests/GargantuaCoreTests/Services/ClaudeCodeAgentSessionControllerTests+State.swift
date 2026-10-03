@@ -12,6 +12,23 @@ extension ClaudeCodeAgentSessionControllerTests {
         #expect(controller.activeSessionID == nil)
     }
 
+    @Test("The raw transcript keeps the latest lines and shortens huge ones")
+    func rawTranscriptIsCapped() {
+        let controller = ClaudeCodeAgentSessionController()
+        let limit = ClaudeCodeAgentSessionController.rawTranscriptLimit
+        for index in 0 ..< limit + 20 {
+            controller.appendRawEvent(ClaudeCodeAgentTranscriptEvent(stream: .stdout, message: "line \(index)"))
+        }
+        controller.appendRawEvent(ClaudeCodeAgentTranscriptEvent(
+            stream: .stdout,
+            message: String(repeating: "x", count: 1_000_000)
+        ))
+
+        #expect(controller.events.count == limit)
+        #expect(controller.events.first?.message == "line 21")
+        #expect((controller.events.last?.message.utf8.count ?? 0) < ClaudeCodeAgentSessionController.rawLineLimit + 64)
+    }
+
     @Test("cancel() while idle is a no-op — status remains idle")
     func cancelWhileIdleIsNoOp() {
         let controller = ClaudeCodeAgentSessionController()

@@ -49,6 +49,24 @@ extension ClaudeCodeAgentSessionController {
         )
     }
 
+    func appendRawEvent(_ event: ClaudeCodeAgentTranscriptEvent) {
+        var kept = event
+        if event.message.utf8.count > Self.rawLineLimit {
+            let shown = String(event.message.prefix(Self.rawLineLimit))
+            let omitted = event.message.utf8.count - shown.utf8.count
+            kept = ClaudeCodeAgentTranscriptEvent(
+                id: event.id,
+                timestamp: event.timestamp,
+                stream: event.stream,
+                message: shown + " … (\(AlertItem.formatBytes(Int64(omitted))) more)"
+            )
+        }
+        events.append(kept)
+        if events.count > Self.rawTranscriptLimit {
+            events.removeFirst(events.count - Self.rawTranscriptLimit)
+        }
+    }
+
     func appendStreamEvent(_ event: ClaudeCodeStreamEvent) {
         streamEvents.append(event)
         if case .terminal(let result) = event {

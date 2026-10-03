@@ -29,7 +29,13 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     public typealias GateAuthorizationProvider = @Sendable () async -> DestructiveAuthorizationResult
 
     @Published public private(set) var status: ClaudeCodeAgentSessionStatus = .idle
-    @Published public private(set) var events: [ClaudeCodeAgentTranscriptEvent] = []
+    /// The raw transcript, for the "Raw transcript" disclosure. Capped in
+    /// count and per line: the parsed `streamEvents` and `scanCache` already
+    /// hold the run's content, and keeping every raw chunk (scan results
+    /// arrive as multi-MB JSON lines) stored the transcript three times.
+    @Published public internal(set) var events: [ClaudeCodeAgentTranscriptEvent] = []
+    static let rawTranscriptLimit = 500
+    static let rawLineLimit = 4_096
     @Published public internal(set) var streamEvents: [ClaudeCodeStreamEvent] = []
     @Published public internal(set) var terminalResult: ClaudeCodeStreamTerminalResult?
     @Published public internal(set) var approvalGates: [ClaudeCodeAgentApprovalGate] = []
@@ -140,7 +146,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
                     workingDirectory: workingDirectory,
                     onEvent: { event in
                         Task { @MainActor [weak self] in
-                            self?.events.append(event)
+                            self?.appendRawEvent(event)
                         }
                     },
                     onGate: { gate in
@@ -182,7 +188,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             } catch {
                 await MainActor.run {
                     self.status = .failed(error.localizedDescription)
-                    self.events.append(ClaudeCodeAgentTranscriptEvent(stream: .system, message: error.localizedDescription))
+                    self.appendRawEvent(ClaudeCodeAgentTranscriptEvent(stream: .system, message: error.localizedDescription))
                 }
             }
         }
@@ -227,7 +233,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         }
         if !blocked.isEmpty {
             let ids = blocked.map(\.id).joined(separator: ", ")
-            events.append(ClaudeCodeAgentTranscriptEvent(
+            appendRawEvent(ClaudeCodeAgentTranscriptEvent(
                 stream: .system,
                 message: "Skipped protected agent cleanup item(s): \(ids). Safety comes from Gargantua scan rules."
             ))
@@ -259,7 +265,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
         pendingApproval = nil
         let cleanupItems = pending.items.filter(\.safety.isActionable)
         if cleanupItems.count != pending.items.count {
-            events.append(ClaudeCodeAgentTranscriptEvent(
+            appendRawEvent(ClaudeCodeAgentTranscriptEvent(
                 stream: .system,
                 message: "Skipped protected cleanup item(s) before execution. Safety comes from Gargantua scan rules."
             ))
@@ -274,7 +280,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             case .success(let token):
                 authorization = token
             case .failure(let reason):
-                events.append(ClaudeCodeAgentTranscriptEvent(
+                appendRawEvent(ClaudeCodeAgentTranscriptEvent(
                     stream: .system,
                     message: Self.blockedCleanupMessage(for: reason)
                 ))
@@ -309,7 +315,7 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             } catch {
                 // Audit write failure doesn't unwind cleanup — log and continue,
                 // matching DeepCleanView's behavior in the same situation.
-                events.append(ClaudeCodeAgentTranscriptEvent(
+                appendRawEvent(ClaudeCodeAgentTranscriptEvent(
                     stream: .system,
                     message: "Audit write failed: \(error.localizedDescription)"
                 ))
