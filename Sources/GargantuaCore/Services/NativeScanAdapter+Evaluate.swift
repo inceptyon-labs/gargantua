@@ -175,6 +175,31 @@ extension NativeScanAdapter {
                 continue
             }
             if !rule.exclude.isEmpty, isExcluded(child: child, excludes: rule.exclude) { continue }
+            if rule.pattern == nil, holdsExcludedEntry(child, excludes: rule.exclude, fileManager: fileManager) {
+                // Removing this child would take the excluded entry with it
+                // (`*/device.plist` in a simulator's device folder), so offer
+                // the child's other entries instead.
+                let grandchildren = (try? fileManager.contentsOfDirectory(
+                    at: child,
+                    includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
+                    options: [.skipsHiddenFiles]
+                )) ?? []
+                for grandchild in grandchildren where !isExcluded(child: grandchild, excludes: rule.exclude) {
+                    onSizing(grandchild.path)
+                    if let result = makeResult(
+                        rule: rule,
+                        path: grandchild.path,
+                        counter: &counter,
+                        classifier: classifier,
+                        profile: profile,
+                        sizeCache: sizeCache,
+                        now: now
+                    ) {
+                        out.append(result)
+                    }
+                }
+                continue
+            }
             onSizing(child.path)
             if let result = makeResult(
                 rule: rule,
@@ -345,6 +370,13 @@ extension NativeScanAdapter {
         let url = URL(fileURLWithPath: path)
         let last = url.lastPathComponent
         let parent = url.deletingLastPathComponent().lastPathComponent
+        // An entry offered from inside a child (see `holdsExcludedEntry`):
+        // name the child too, since every device folder has a `data`.
+        let grandparent = url.deletingLastPathComponent().deletingLastPathComponent().path
+        if rule.exclude.contains(where: { $0.hasPrefix("*/") }),
+           rule.paths.contains(where: { expandTilde($0) == grandparent }) {
+            return "\(rule.name) — \(parent)/\(last)"
+        }
 
         // Repeated leaf names (node_modules, target, DerivedData, .venv, etc.) tell the
         // user nothing on their own — disambiguate with the parent directory name.
@@ -356,6 +388,21 @@ extension NativeScanAdapter {
             return "\(rule.name) — \(parent)"
         }
         return "\(rule.name) — \(last)"
+    }
+
+    /// Whether `child` is a folder holding an entry a `*/name` exclude names.
+    /// Excludes are matched against the rule directory's children, so
+    /// `*/Google` drops the child named Google; but `*/device.plist` names a
+    /// file inside each child, which taking the child whole would delete.
+    static func holdsExcludedEntry(_ child: URL, excludes: [String], fileManager: FileManager = .default) -> Bool {
+        let nestedNames = excludes.compactMap { pattern -> String? in
+            guard pattern.hasPrefix("*/") else { return nil }
+            let name = String(pattern.dropFirst(2))
+            return name.contains("/") ? nil : name
+        }
+        guard !nestedNames.isEmpty,
+              let entries = try? fileManager.contentsOfDirectory(atPath: child.path) else { return false }
+        return entries.contains { entry in nestedNames.contains { fnmatch(pattern: $0, name: entry) } }
     }
 
     static func isExcluded(child: URL, excludes: [String]) -> Bool {

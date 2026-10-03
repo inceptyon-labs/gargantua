@@ -73,7 +73,15 @@ extension NativeScanAdapter {
             } else if !isGlob, !rule.exclude.isEmpty {
                 // Literal directory with excludes: immediate children are
                 // enumerated, so the parent must be the literal directory.
-                if g == parent, !isExcluded(child: excludesURL, excludes: rule.exclude) {
+                if g == parent, !isExcluded(child: excludesURL, excludes: rule.exclude),
+                   !holdsExcludedEntry(excludesURL, excludes: rule.exclude) {
+                    return true
+                }
+                // An entry offered from inside a child that holds an excluded
+                // entry (`*/device.plist`).
+                let grandparent = (parent as NSString).deletingLastPathComponent
+                if g == grandparent, !isExcluded(child: excludesURL, excludes: rule.exclude),
+                   holdsExcludedEntry(URL(fileURLWithPath: parent), excludes: rule.exclude) {
                     return true
                 }
             } else {

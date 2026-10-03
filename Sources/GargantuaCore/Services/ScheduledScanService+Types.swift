@@ -164,12 +164,43 @@ public struct ScheduledScanCronExpression: Equatable, Sendable {
 
     /// Returns whether the expression matches the given date components.
     public func matches(_ date: Date, calendar: Calendar = .current) -> Bool {
-        let components = calendar.dateComponents([.minute, .hour, .day, .month, .weekday], from: date)
-        return matches(minute, components.minute)
+        matches(calendar.dateComponents([.minute, .hour, .day, .month, .weekday], from: date))
+    }
+
+    private func matches(_ components: DateComponents) -> Bool {
+        matches(minute, components.minute)
             && matches(hour, components.hour)
             && matches(dayOfMonth, components.day)
             && matches(month, components.month)
             && matches(weekday, components.weekday)
+    }
+
+    /// The fall-back hour repeats its wall-clock minutes. The second pass of
+    /// one isn't a new occurrence: like cron, run once, on the first pass.
+    private func isRepeatedWallClockMinute(_ minuteStart: Date, calendar: Calendar) -> Bool {
+        let keys: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute]
+        let earlier = minuteStart.addingTimeInterval(-3600)
+        return calendar.dateComponents(keys, from: earlier) == calendar.dateComponents(keys, from: minuteStart)
+    }
+
+    /// The spring-forward jump skips wall-clock minutes (2:00–2:59). Like cron,
+    /// a job scheduled in the gap runs right after it instead of not at all.
+    private func matchesSkippedMinute(after previous: Date, before minuteStart: Date, calendar: Calendar) -> Bool {
+        let keys: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute, .weekday]
+        let before = calendar.dateComponents(keys, from: previous)
+        let after = calendar.dateComponents(keys, from: minuteStart)
+        guard before.year == after.year, before.month == after.month, before.day == after.day,
+              let beforeHour = before.hour, let beforeMinute = before.minute,
+              let afterHour = after.hour, let afterMinute = after.minute else { return false }
+        let from = beforeHour * 60 + beforeMinute + 1
+        let until = afterHour * 60 + afterMinute
+        guard from < until else { return false }
+        return (from ..< until).contains { minuteOfDay in
+            var skipped = after
+            skipped.hour = minuteOfDay / 60
+            skipped.minute = minuteOfDay % 60
+            return matches(skipped)
+        }
     }
 
     /// Returns whether a matching scheduled minute occurred since the previous run.
@@ -198,14 +229,18 @@ public struct ScheduledScanCronExpression: Equatable, Sendable {
         }
 
         var cursor = calendar.dateInterval(of: .minute, for: earliestStart)?.start ?? earliestStart
+        var previous: Date?
         while cursor <= nowMinute {
-            if matches(cursor, calendar: calendar) {
+            if matches(cursor, calendar: calendar), !isRepeatedWallClockMinute(cursor, calendar: calendar) {
                 return true
             }
-            guard let next = calendar.date(byAdding: .minute, value: 1, to: cursor) else {
-                return false
+            if let previous, matchesSkippedMinute(after: previous, before: cursor, calendar: calendar) {
+                return true
             }
-            cursor = next
+            previous = cursor
+            // Step in absolute time; `byAdding: .minute` works in wall-clock
+            // terms and would walk around the DST transitions this handles.
+            cursor = cursor.addingTimeInterval(60)
         }
         return false
     }

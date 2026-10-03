@@ -213,6 +213,32 @@ struct NativeScanAdapterTests {
         #expect(results.first?.name == "Installer Images — tool.dmg")
     }
 
+    @Test("A */name exclude protects that file inside each child folder")
+    func nestedExcludeProtectsFileInsideChildren() async throws {
+        let fixture = try Self.makeFixture()
+        let devices = try fixture.makeDir("Devices")
+        try fixture.makeFile("Devices/A/device.plist")
+        let dataA = try fixture.makeDir("Devices/A/data")
+        try fixture.makeFile("Devices/A/data/app.bin", byteCount: 4096)
+        let other = try fixture.makeDir("Devices/B")
+        try fixture.makeFile("Devices/B/cache.bin", byteCount: 4096)
+        let rule = Self.rule(
+            id: "xcode_simulators",
+            name: "iOS Simulator Data",
+            paths: [devices.path],
+            exclude: ["*/device.plist"],
+            category: "dev_artifacts"
+        )
+
+        let adapter = NativeScanAdapter(rules: [rule], profile: .devPurge)
+        let results = try await adapter.scan()
+
+        #expect(Set(results.map(\.path)) == [dataA.path, other.path])
+        #expect(results.first { $0.path == dataA.path }?.name == "iOS Simulator Data — A/data")
+        #expect(adapter.classify(path: dataA.path) != nil)
+        #expect(adapter.classify(path: devices.appendingPathComponent("A").path) == nil)
+    }
+
     @Test("min_size filters out files below the byte threshold")
     func minSizeFiltersSmallFiles() async throws {
         let fixture = try Self.makeFixture()
