@@ -118,6 +118,11 @@ public final class CleanupEngine: Sendable {
     /// (e.g. a browser that wiped its cache on quit). Injectable so tests that
     /// exercise the trash mover with synthetic paths aren't short-circuited.
     let fileExists: @Sendable (String) -> Bool
+    /// Whether an app with this bundle ID is running. An item a running app
+    /// holds (`ScanResult.blockedByApp`) is skipped at clean time, whichever
+    /// surface sent it: MCP, an Agent proposal, or a list where the app was
+    /// relaunched after the scan.
+    let isAppRunning: @Sendable (String) -> Bool
 
     /// - Parameter privilegedHelper: pass `XPCPrivilegedUninstallHelper()` from
     ///   interactive flows to recover root-owned items that POSIX `EPERM`
@@ -132,6 +137,7 @@ public final class CleanupEngine: Sendable {
         self.ollamaModelRunner = OllamaModelCleanupRouter.production()
         self.privilegedHelper = privilegedHelper
         self.fileExists = { FileManager.default.fileExists(atPath: $0) }
+        self.isAppRunning = { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }
     }
 
     /// Test-only initializer. Use the default `init()` in app code. `fileExists`
@@ -144,7 +150,8 @@ public final class CleanupEngine: Sendable {
         commandActionRunner: CommandActionCleanupRouter = .disabled,
         ollamaModelRunner: OllamaModelCleanupRouter = .disabled,
         privilegedHelper: (any PrivilegedUninstallHelping)? = nil,
-        fileExists: @escaping @Sendable (String) -> Bool = { _ in true }
+        fileExists: @escaping @Sendable (String) -> Bool = { _ in true },
+        isAppRunning: @escaping @Sendable (String) -> Bool = { _ in false }
     ) {
         self.homeDirectory = homeDirectoryForTesting
         self.trashMover = trashMover
@@ -153,6 +160,7 @@ public final class CleanupEngine: Sendable {
         self.ollamaModelRunner = ollamaModelRunner
         self.privilegedHelper = privilegedHelper
         self.fileExists = fileExists
+        self.isAppRunning = isAppRunning
     }
 
     /// Remove the given scan results with the selected cleanup method.
@@ -217,6 +225,30 @@ public final class CleanupEngine: Sendable {
 
         let recovered = await escalatePermissionFailures(results, observer: observer)
         return CleanupResult(itemResults: recovered, cleanupMethod: method)
+    }
+
+    /// The result for an item that must not be touched: already gone (counted
+    /// as removed, zero bytes), under a protected root, or held by an app that
+    /// is still running. `nil` when cleanup may proceed.
+    private func preflightSkip(url: URL, item: ScanResult) -> CleanupItemResult? {
+        if !fileExists(url.path) {
+            return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
+        }
+        if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: "Skipped \(protectedRoot): \(url.path)"
+            )
+        }
+        if let app = item.blockedByApp, isAppRunning(app.bundleID) {
+            return CleanupItemResult(
+                item: item,
+                succeeded: false,
+                error: "Skipped while \(app.name) is running. Quit it, then clean again."
+            )
+        }
+        return nil
     }
 
     /// Retry permission-class failures through the root-privileged helper.
@@ -327,16 +359,8 @@ public final class CleanupEngine: Sendable {
         // it as removed instead of reporting a confusing "couldn't be removed",
         // but credit zero bytes: we didn't reclaim the scan-time size, something
         // else already did.
-        if !fileExists(url.path) {
-            return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
-        }
-
-        if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
-            return CleanupItemResult(
-                item: item,
-                succeeded: false,
-                error: "Skipped \(protectedRoot): \(url.path)"
-            )
+        if let skipped = preflightSkip(url: url, item: item) {
+            return skipped
         }
 
         // Special case: the Trash container itself cannot be removed or

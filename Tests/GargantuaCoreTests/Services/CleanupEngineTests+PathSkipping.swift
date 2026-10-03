@@ -119,3 +119,24 @@ extension CleanupResultTests {
         #expect(mover.movedURLs == [URL(fileURLWithPath: path)])
     }
 }
+
+extension CleanupResultTests {
+    @Test("An item held by an app that is still running is skipped at clean time")
+    @MainActor
+    func itemHeldByRunningAppIsSkipped() async throws {
+        let mover = RecordingTrashMover(outcome: .success(nil))
+        var item = makeItem(id: "cache", path: "/tmp/gargantua-held-by-app")
+        item.blockedByApp = BlockedApp(bundleID: "com.brave.Browser", name: "Brave")
+        let running = CleanupEngine(
+            homeDirectoryForTesting: FileManager.default.temporaryDirectory,
+            trashMover: mover,
+            isAppRunning: { $0 == "com.brave.Browser" }
+        )
+
+        let result = await running.clean([item], authorization: .unchecked(.mcpClean))
+
+        #expect(!result.allSucceeded)
+        #expect(mover.movedURLs.isEmpty)
+        #expect(result.failedItems.first?.error?.contains("Brave") == true)
+    }
+}
