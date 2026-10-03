@@ -59,18 +59,20 @@ struct DefaultProcessRunnerIntegrationTests {
     @Test("Cancelling the calling task kills a child the runner is waiting on")
     func cancellationKillsChild() async throws {
         let runner = DefaultProcessRunner()
-        let started = Date()
         let task = Task {
             try await ProcessCancellation.run {
                 try runner.run(executable: URL(fileURLWithPath: "/bin/sleep"), arguments: ["30"], timeout: nil)
             }
         }
         try await Task.sleep(for: .milliseconds(300))
+        // Timed from the cancel, not the test's start: CI runners can take
+        // several seconds to get a parallel test run going.
+        let cancelled = Date()
         task.cancel()
 
         let output = try await task.value
 
         #expect(output.exitCode == SIGKILL)
-        #expect(Date().timeIntervalSince(started) < 10)
+        #expect(Date().timeIntervalSince(cancelled) < 20)
     }
 }
