@@ -108,9 +108,13 @@ public final class BackgroundItemsSession {
         let provider = runtimeProvider
         let label = item.label
         let source = item.source
-        let detail = await Task.detached(priority: .userInitiated) {
-            provider.printDetail(label: label, source: source)
-        }.value
+        // printDetail runs `launchctl print` and blocks until it exits, so run
+        // it on a GCD thread rather than holding a thread of the cooperative pool.
+        let detail = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: provider.printDetail(label: label, source: source))
+            }
+        }
         // A rescan may have invalidated the cache while the fetch was
         // suspended — its result describes the previous generation's world.
         guard generation == detailGeneration else { return }
