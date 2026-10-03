@@ -27,6 +27,8 @@ public struct DuplicateFinderView: View {
     @State var expandedGroupIDs: Set<String>
     @State private var derivation: DuplicateFinderDerivation
     @State private var personalRoots: [URL]
+    /// Groups that would lose every copy, shown in a warning before Trash.
+    @State private var groupsWithoutSurvivor: [DuplicateGroup] = []
     /// When `true`, drop both the personal-scope whitelist and the
     /// managed-tree blacklist — show every byte-identical group fclones
     /// surfaced. Default off: most matches outside the personal scope are
@@ -169,6 +171,25 @@ public struct DuplicateFinderView: View {
             personalRoots = Self.loadPersonalRoots(from: persistence)
         }
         .focusedSceneValue(\.resultsActions, keyboardActions)
+        .confirmationDialog(
+            "Every copy is selected in \(groupsWithoutSurvivor.count) group\(groupsWithoutSurvivor.count == 1 ? "" : "s")",
+            isPresented: Binding(
+                get: { !groupsWithoutSurvivor.isEmpty },
+                set: { if !$0 { groupsWithoutSurvivor = [] } }
+            )
+        ) {
+            Button("Keep One Copy of Each") {
+                selectedIDs = DuplicateFinderSelection.keepingOneCopy(groups, selectedIDs: selectedIDs)
+                groupsWithoutSurvivor = []
+                onSendToTrash?(selectedResults)
+            }
+            Button("Remove Every Copy", role: .destructive) {
+                groupsWithoutSurvivor = []
+                onSendToTrash?(selectedResults)
+            }
+        } message: {
+            Text("Nothing would be left of those files. Keep one copy of each, or remove every copy.")
+        }
     }
 
     // MARK: - Summary Bar
@@ -328,6 +349,11 @@ extension DuplicateFinderView {
 extension DuplicateFinderView {
     func triggerTrash() {
         guard !selectedIDs.isEmpty else { return }
+        let emptied = DuplicateFinderSelection.groupsWithoutSurvivor(groups, selectedIDs: selectedIDs)
+        guard emptied.isEmpty else {
+            groupsWithoutSurvivor = emptied
+            return
+        }
         onSendToTrash?(selectedResults)
     }
 
@@ -340,13 +366,8 @@ extension DuplicateFinderView {
     }
 
     func toggleGroupSelection(_ group: DuplicateGroup) {
-        let ids = group.selectableIDs
-        guard !ids.isEmpty else { return }
-        if ids.allSatisfy(selectedIDs.contains) {
-            selectedIDs.subtract(ids)
-        } else {
-            selectedIDs.formUnion(ids)
-        }
+        guard !group.selectableIDs.isEmpty else { return }
+        selectedIDs = DuplicateFinderSelection.toggledGroup(group, selectedIDs: selectedIDs)
     }
 
     func selectAllButFirst(in group: DuplicateGroup) {
@@ -377,7 +398,7 @@ extension DuplicateFinderView {
     }
 
     func invertSelection() {
-        selectedIDs = Set(selectableByID.keys).subtracting(selectedIDs)
+        selectedIDs = DuplicateFinderSelection.inverted(groups, selectedIDs: selectedIDs)
     }
 
     func expandAll() {

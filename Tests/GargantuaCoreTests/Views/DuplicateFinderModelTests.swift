@@ -395,3 +395,42 @@ struct TotalReclaimableTests {
         #expect(total == Int64.max)
     }
 }
+
+@Suite("DuplicateFinderSelection keep-one guards")
+struct DuplicateFinderKeepOneTests {
+    private func group(_ prefix: String, groupID: Int, count: Int = 3) -> DuplicateGroup {
+        let results = (0 ..< count).map {
+            makeFclonesResult(id: "\(prefix)\($0)", groupID: groupID, path: "/x/\(prefix)\($0)")
+        }
+        return DuplicateGrouper.group(results)[0]
+    }
+
+    @Test("The group checkbox selects all but the first copy, then clears the group")
+    func groupToggleKeepsOne() {
+        let photos = group("p", groupID: 1)
+
+        let selected = DuplicateFinderSelection.toggledGroup(photos, selectedIDs: [])
+        #expect(selected == ["p1", "p2"])
+        #expect(DuplicateFinderSelection.toggledGroup(photos, selectedIDs: selected).isEmpty)
+    }
+
+    @Test("Invert never empties a group")
+    func invertKeepsOne() {
+        let photos = group("p", groupID: 1)
+        let docs = group("d", groupID: 2)
+
+        let inverted = DuplicateFinderSelection.inverted([photos, docs], selectedIDs: ["d1"])
+
+        #expect(inverted == ["p1", "p2", "d0", "d2"])
+    }
+
+    @Test("Groups with every copy selected are reported")
+    func reportsGroupsWithoutSurvivor() {
+        let photos = group("p", groupID: 1, count: 2)
+        let docs = group("d", groupID: 2, count: 2)
+
+        let emptied = DuplicateFinderSelection.groupsWithoutSurvivor([photos, docs], selectedIDs: ["p0", "p1", "d1"])
+
+        #expect(emptied.map(\.files.first?.id) == ["p0"])
+    }
+}

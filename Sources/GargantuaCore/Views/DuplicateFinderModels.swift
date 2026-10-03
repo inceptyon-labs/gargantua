@@ -191,6 +191,52 @@ public enum DuplicateFinderSelection {
     /// group. "First" is defined by `DuplicateGrouper`'s path-ascending sort,
     /// so the choice is stable across runs. Protected files are never
     /// selected for trash — they are filtered out of the candidate set.
+    /// Group-header checkbox: clears the group when any of its files is
+    /// selected, otherwise selects every copy but the first, so a click never
+    /// queues all copies.
+    public static func toggledGroup(_ group: DuplicateGroup, selectedIDs: Set<String>) -> Set<String> {
+        var updated = selectedIDs
+        let groupIDs = Set(group.files.map(\.id))
+        if !updated.isDisjoint(with: groupIDs) {
+            updated.subtract(groupIDs)
+        } else {
+            updated.formUnion(selectAllButFirst(in: group))
+        }
+        return updated
+    }
+
+    /// Inverts the selection within each group, then keeps the first file of
+    /// any group the inversion would empty entirely.
+    public static func inverted(_ groups: [DuplicateGroup], selectedIDs: Set<String>) -> Set<String> {
+        var updated = selectedIDs
+        for group in groups {
+            let selectable = Set(group.selectableIDs)
+            let inverted = selectable.subtracting(selectedIDs)
+            updated.subtract(selectable)
+            updated.formUnion(inverted)
+        }
+        return keepingOneCopy(groups, selectedIDs: updated)
+    }
+
+    /// Groups in which every file is selected, so nothing would be kept.
+    public static func groupsWithoutSurvivor(_ groups: [DuplicateGroup], selectedIDs: Set<String>) -> [DuplicateGroup] {
+        groups.filter { group in
+            group.files.count >= 2 && group.files.allSatisfy { selectedIDs.contains($0.id) }
+        }
+    }
+
+    /// Deselects the first file of every group that would otherwise lose all
+    /// of its copies.
+    public static func keepingOneCopy(_ groups: [DuplicateGroup], selectedIDs: Set<String>) -> Set<String> {
+        var updated = selectedIDs
+        for group in groupsWithoutSurvivor(groups, selectedIDs: selectedIDs) {
+            if let first = group.files.first {
+                updated.remove(first.id)
+            }
+        }
+        return updated
+    }
+
     public static func selectAllButFirst(in group: DuplicateGroup) -> Set<String> {
         guard group.files.count >= 2 else { return [] }
         return Set(

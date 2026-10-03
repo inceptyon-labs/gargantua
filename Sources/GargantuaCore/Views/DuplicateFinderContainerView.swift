@@ -57,6 +57,12 @@ public struct DuplicateFinderContainerView: View {
         }
     }
 
+    private var pendingTrashEmptiesAGroup: Bool {
+        guard case .results(let results) = state.scanState else { return false }
+        let selected = Set(pendingTrashItems.map(\.id))
+        return !DuplicateFinderSelection.groupsWithoutSurvivor(DuplicateGrouper.group(results), selectedIDs: selected).isEmpty
+    }
+
     private var trashHandler: (([ScanResult]) -> Void) {
         onSendToTrash ?? { items in
             pendingTrashItems = items
@@ -112,6 +118,9 @@ public struct DuplicateFinderContainerView: View {
             if showConfirmation, !pendingTrashItems.isEmpty {
                 ConfirmationModalView(
                     items: pendingTrashItems,
+                    // Permanent delete is off when a group would lose every copy:
+                    // Trash keeps that recoverable.
+                    allowsPermanentDelete: !pendingTrashEmptiesAGroup,
                     onConfirm: { method in
                         showConfirmation = false
                         let items = pendingTrashItems
