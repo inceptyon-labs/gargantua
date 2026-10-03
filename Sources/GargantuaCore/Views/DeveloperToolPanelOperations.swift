@@ -55,7 +55,10 @@ extension DeveloperToolPanel {
                         .lineLimit(2)
                     }
                     if let bytes = operation.estimatedReclaimableBytes(in: preview) {
-                        Text(Self.formatBytes(bytes) + " previewed" + Self.autoremoveFormulaSuffix(operation, preview: preview))
+                        Text(
+                            (operation.estimateIsUpperBound ? "Up to " : "") + Self.formatBytes(bytes) + " previewed"
+                                + Self.autoremoveFormulaSuffix(operation, preview: preview)
+                        )
                             .font(GargantuaFonts.monoData)
                             .foregroundStyle(GargantuaColors.ink2)
                     } else {

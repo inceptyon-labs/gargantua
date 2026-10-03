@@ -116,6 +116,19 @@ enum DeveloperToolPreviewOutputParser {
         return parseSize(sizePart)
     }
 
+    /// The bytes a Docker prune says it freed: `Total reclaimed space: 1.2GB`
+    /// (image, container, volume and system prune) or buildkit's
+    /// `Total:\t1.2GB` (builder prune).
+    static func parseDockerReclaimedSpace(_ output: String) -> Int64? {
+        for line in output.split(whereSeparator: \.isNewline).reversed() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            for prefix in ["Total reclaimed space:", "Total:"] where trimmed.hasPrefix(prefix) {
+                return parseSize(String(trimmed.dropFirst(prefix.count)))
+            }
+        }
+        return nil
+    }
+
     static func parseFirstSize(in line: String) -> Int64? {
         let pattern = #"(?i)(\d+(?:\.\d+)?)\s*([KMGT]?B)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }

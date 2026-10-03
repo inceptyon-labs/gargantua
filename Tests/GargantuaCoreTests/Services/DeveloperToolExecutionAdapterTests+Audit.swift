@@ -32,6 +32,39 @@ extension DeveloperToolExecutionAdapterTests {
         #expect(entry.bytesFreed == 900)
     }
 
+    @Test("A Docker prune audits the space Docker reports freeing, not the preview")
+    func dockerAuditsReportedReclaimedSpace() throws {
+        let docker = try makeScratchBinary(name: "docker")
+        defer { try? FileManager.default.removeItem(at: docker.deletingLastPathComponent()) }
+
+        let audit = AuditSpy()
+        let runner = StubRunner(outputs: [
+            "docker volume prune --force": ProcessOutput(
+                stdout: "Deleted Volumes:\na\n\nTotal reclaimed space: 300B\n", stderr: "", exitCode: 0
+            ),
+        ])
+        let adapter = DeveloperToolExecutionAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.dockerEnvVarName: docker.path,
+            ]),
+            runner: runner,
+            auditRecorder: audit
+        )
+
+        let result = try adapter.execute(.dockerVolumePrune, preview: dockerPreview(volumeBytes: 900), confirmationMethod: .fullModal)
+
+        #expect(result.estimatedBytesFreed == 300)
+        #expect(audit.entries.last?.bytesFreed == 300)
+    }
+
+    @Test("Docker's reclaimed-space lines parse for every prune shape")
+    func parseDockerReclaimedSpace() {
+        #expect(DeveloperToolPreviewOutputParser.parseDockerReclaimedSpace("Deleted Images:\nx\n\nTotal reclaimed space: 1.5GB\n") == 1_500_000_000)
+        #expect(DeveloperToolPreviewOutputParser.parseDockerReclaimedSpace("ID\tRECLAIMABLE\nabc\ttrue\nTotal:\t12.3MB\n") == 12_300_000)
+        #expect(DeveloperToolPreviewOutputParser.parseDockerReclaimedSpace("Total reclaimed space: 0B") == 0)
+        #expect(DeveloperToolPreviewOutputParser.parseDockerReclaimedSpace("Deleted Volumes:\na\n") == nil)
+    }
+
     @Test("successful execution writes developer-tools audit entry shape")
     func auditEntryShape() throws {
         let brew = try makeScratchBinary(name: "brew")

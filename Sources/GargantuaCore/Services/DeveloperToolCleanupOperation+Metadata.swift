@@ -85,7 +85,26 @@ extension DeveloperToolCleanupOperation {
     }
 
     public var confirmationExplanation: String {
-        [detail, riskDetail].compactMap(\.self).joined(separator: " ")
+        [detail, riskDetail, upperBoundDetail].compactMap(\.self).joined(separator: " ")
+    }
+
+    /// `true` when the preview figure counts more than the command removes.
+    /// `docker system df` reports every unused image, volume and build-cache
+    /// record as reclaimable, but these prunes run without `-a`, so they
+    /// remove only dangling images, anonymous volumes and dangling cache.
+    public var estimateIsUpperBound: Bool {
+        switch self {
+        case .dockerImagePrune, .dockerVolumePrune, .dockerBuilderPrune, .dockerSystemPrune:
+            true
+        default:
+            false
+        }
+    }
+
+    private var upperBoundDetail: String? {
+        guard estimateIsUpperBound else { return nil }
+        return "Docker's preview counts everything unused, so this can free less than shown. " +
+            "Gargantua records the amount Docker reports freeing."
     }
 
     public var safety: SafetyLevel {

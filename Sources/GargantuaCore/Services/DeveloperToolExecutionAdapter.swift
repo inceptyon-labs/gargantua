@@ -182,11 +182,18 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             )
         }
 
+        // Docker's preview overstates most prunes (`estimateIsUpperBound`),
+        // but the prune itself prints what it freed; record that when present.
+        let reportedBytes = operation.tool == .docker
+            ? DeveloperToolPreviewOutputParser.parseDockerReclaimedSpace(output.stdout)
+            : nil
+        let bytesFreed = reportedBytes ?? estimatedBytes
+
         try auditRecorder.write(toolAuditEntry(
             entryID: entryID,
             operation: operation,
             confirmationMethod: confirmationMethod,
-            bytesFreed: estimatedBytes,
+            bytesFreed: bytesFreed,
             status: .completed
         ))
 
@@ -194,7 +201,7 @@ public struct DeveloperToolExecutionAdapter: Sendable {
             operation: operation,
             commandPreview: commandPreview,
             output: output,
-            estimatedBytesFreed: estimatedBytes
+            estimatedBytesFreed: bytesFreed
         )
     }
 
