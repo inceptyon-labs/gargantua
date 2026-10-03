@@ -156,14 +156,40 @@ struct AIRuleSafetyContractTests {
     private static func databaseProbes(for name: String) -> [String] {
         let wildcards: Set<Character> = ["*", "?", "[", "]"]
         guard mentionsDatabaseSuffix(name, wildcards: wildcards) else { return [] }
-        let stripped = String(name.filter { !wildcards.contains($0) })
+        let filled = filledIn(name)
         let prefix = String(name.prefix { !wildcards.contains($0) })
-        var bases = [stripped, prefix, prefix + "x", "x"]
-        for sidecar in SQLiteDatabaseFiles.sidecarSuffixes where stripped.hasSuffix(sidecar) {
-            bases.append(String(stripped.dropLast(sidecar.count)))
+        var bases = [filled, prefix, prefix + "x", "x"]
+        for sidecar in SQLiteDatabaseFiles.sidecarSuffixes where filled.hasSuffix(sidecar) {
+            bases.append(String(filled.dropLast(sidecar.count)))
         }
         let candidates = bases + bases.flatMap { base in SQLiteDatabaseFiles.suffixes.map { base + $0 } }
         return candidates.filter(SQLiteDatabaseFiles.isDatabase)
+    }
+
+    /// One concrete name a glob matches: `*` matches nothing, `?` an `x`, and a
+    /// `[...]` class its first member.
+    private static func filledIn(_ glob: String) -> String {
+        var result = ""
+        var index = glob.startIndex
+        while index < glob.endIndex {
+            let character = glob[index]
+            switch character {
+            case "*":
+                break
+            case "?":
+                result.append("x")
+            case "[":
+                let close = glob[index...].firstIndex(of: "]") ?? glob.endIndex
+                let members = glob[glob.index(after: index) ..< close].filter { $0 != "!" && $0 != "^" }
+                if let first = members.first { result.append(first) }
+                index = close == glob.endIndex ? close : glob.index(after: close)
+                continue
+            default:
+                result.append(character)
+            }
+            index = glob.index(after: index)
+        }
+        return result
     }
 
     /// Whether a database or sidecar suffix appears as a suffix: at the end of
@@ -190,6 +216,10 @@ struct AIRuleSafetyContractTests {
             ("~/.codex/logs_*.sqlite*", true, true),
             ("~/.codex/logs_*.sqlite-w*", true, true),
             ("~/Library/Caches/com.dbeaver.*", false, false),
+            ("logs_??.sqlite", true, false),
+            ("logs_[0-9].sqlite", true, false),
+            ("[cC]onfig.db", true, false),
+            ("logs_*_?.sqlite", true, false),
             ("*-wal", false, true),
             ("~/Library/Application Support/Dropbox/instance*/config.db*", true, true),
             ("~/Library/Application Support/Dropbox/instance*/config.db", true, false),

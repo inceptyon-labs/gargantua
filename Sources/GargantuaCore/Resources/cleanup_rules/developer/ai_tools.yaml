@@ -289,17 +289,19 @@ rules:
       - codex
       - codex-aarch64-apple-darwin
       - codex-x86_64-apple-darwin
+    match_filters:
+      - "mtime > 30d"
     safety: review
     confidence: 75
-    explanation: "Codex's copy of past conversations, kept alongside the rollout transcripts in ~/.codex/sessions. Codex starts a new one and rebuilds each thread from its transcript when the thread is next opened; threads whose transcripts were already removed will not come back. Removed together with its -wal and -shm files, and never while Codex is running."
+    explanation: "Codex's copy of past conversations, kept alongside the rollout transcripts in ~/.codex/sessions. Codex starts a new one and rebuilds each thread from its transcript when the thread is next opened; threads whose transcripts were already removed will not come back. Removed together with its -wal and -shm files, and never while Codex is running. Only offered once Codex has gone 30 days without writing to it."
     source:
       name: Codex
     regenerates: false
     category: dev_artifacts
     tags:
       - developer
-      - ai
-      - cache
+      - ai_history
+      - review
 
   - id: codex_computer_use_screenshots
     name: Codex Computer-Use Screenshots
