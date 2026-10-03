@@ -22,6 +22,7 @@ enum ScanResultOverlapReconciler {
         if kept.blockedByApp == nil {
             kept.blockedByApp = other.blockedByApp
         }
+        kept.ownerProcesses = unionOwners(kept.ownerProcesses, other.ownerProcesses)
         return kept
     }
 
@@ -106,7 +107,15 @@ enum ScanResultOverlapReconciler {
         if raised.blockedByApp == nil {
             raised.blockedByApp = contained.blockedByApp
         }
+        raised.ownerProcesses = unionOwners(raised.ownerProcesses, contained.ownerProcesses)
         return raised
+    }
+
+    /// Order-preserving union of two owner lists; `nil` when both are empty.
+    private static func unionOwners(_ first: [String]?, _ second: [String]?) -> [String]? {
+        var seen = Set<String>()
+        let merged = ((first ?? []) + (second ?? [])).filter { seen.insert($0).inserted }
+        return merged.isEmpty ? nil : merged
     }
 
     private static func participates(_ result: ScanResult) -> Bool {

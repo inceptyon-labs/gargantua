@@ -46,6 +46,11 @@ public struct ScanResult: Codable, Sendable, Identifiable {
     /// unblocks it. `nil` when nothing blocks removal.
     public var blockedByApp: BlockedApp?
 
+    /// The owning rule's `skip_if_process_running` identifiers. Checked again at
+    /// clean time, so an owner started after the scan still protects the item.
+    /// `nil` when the rule names none.
+    public var ownerProcesses: [String]?
+
     /// Where `path`'s parent directory chain resolved at scan time. Recorded
     /// by the scan pipeline so the pre-delete `SymlinkSwapGuard` can tell a
     /// legitimate symlink ancestor that already existed when the item was
@@ -69,6 +74,7 @@ public struct ScanResult: Codable, Sendable, Identifiable {
         regenerates: Bool = false,
         regenerateCommand: String? = nil,
         blockedByApp: BlockedApp? = nil,
+        ownerProcesses: [String]? = nil,
         scanTimeResolvedParent: String? = nil
     ) {
         self.id = id
@@ -85,6 +91,7 @@ public struct ScanResult: Codable, Sendable, Identifiable {
         self.regenerates = regenerates
         self.regenerateCommand = regenerateCommand
         self.blockedByApp = blockedByApp
+        self.ownerProcesses = ownerProcesses
         self.scanTimeResolvedParent = scanTimeResolvedParent
     }
 

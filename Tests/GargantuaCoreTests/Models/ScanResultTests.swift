@@ -23,6 +23,23 @@ struct ScanResultTests {
         regenerates: true
     )
 
+    @Test("A result encoded without ownerProcesses still decodes")
+    func decodesWithoutOwnerProcesses() throws {
+        var withOwners = Self.sampleResult
+        withOwners.ownerProcesses = ["codex"]
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var object = try #require(JSONSerialization.jsonObject(with: encoder.encode(withOwners)) as? [String: Any])
+        #expect(object["ownerProcesses"] != nil)
+        object.removeValue(forKey: "ownerProcesses")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(ScanResult.self, from: JSONSerialization.data(withJSONObject: object))
+
+        #expect(decoded.ownerProcesses == nil)
+    }
+
     @Test("Codable round-trip preserves all fields")
     func codableRoundTrip() throws {
         let encoder = JSONEncoder()

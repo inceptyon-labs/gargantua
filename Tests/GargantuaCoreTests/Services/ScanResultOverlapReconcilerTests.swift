@@ -40,6 +40,30 @@ struct ScanResultOverlapReconcilerTests {
         #expect(byID["other"]?.safety == .protected_)
     }
 
+    @Test("A duplicate path merges owner lists, order-preserving without duplicates")
+    func duplicateMergesOwners() {
+        var first = result("first", "/u/Library/Caches/com.acme", .safe)
+        first.ownerProcesses = ["a"]
+        var second = result("second", "/u/Library/Caches/com.acme", .safe)
+        second.ownerProcesses = ["b", "a"]
+
+        let reconciled = ScanResultOverlapReconciler.reconcile([first, second])
+
+        #expect(reconciled.count == 1)
+        #expect(reconciled[0].ownerProcesses == ["a", "b"])
+    }
+
+    @Test("A folder takes the owners of results inside it")
+    func folderInheritsOwners() {
+        let folder = result("folder", "/u/Library/Caches/Acme", .safe)
+        var inner = result("inner", "/u/Library/Caches/Acme/Data", .safe)
+        inner.ownerProcesses = ["codex"]
+
+        let byID = Dictionary(uniqueKeysWithValues: ScanResultOverlapReconciler.reconcile([folder, inner]).map { ($0.id, $0) })
+
+        #expect(byID["folder"]?.ownerProcesses == ["codex"])
+    }
+
     @Test("Totals count a result inside another result's folder once")
     func distinctBytesSkipsNestedResults() {
         let chrome = result("chrome", "/u/Library/Caches/Google/Chrome", .review, size: 100)

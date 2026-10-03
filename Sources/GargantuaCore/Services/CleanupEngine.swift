@@ -118,10 +118,12 @@ public final class CleanupEngine: Sendable {
     /// (e.g. a browser that wiped its cache on quit). Injectable so tests that
     /// exercise the trash mover with synthetic paths aren't short-circuited.
     let fileExists: @Sendable (String) -> Bool
-    /// Whether an app with this bundle ID is running. An item a running app
-    /// holds (`ScanResult.blockedByApp`) is skipped at clean time, whichever
-    /// surface sent it: MCP, an Agent proposal, or a list where the app was
-    /// relaunched after the scan.
+    /// Whether a process with this identifier (bundle ID, app name, or CLI
+    /// executable name) is running. An item a running app holds
+    /// (`ScanResult.blockedByApp`) or whose rule names an owner process
+    /// (`ScanResult.ownerProcesses`) is skipped at clean time, whichever
+    /// surface sent it: MCP, an Agent proposal, or a list where the owner was
+    /// started after the scan.
     let isAppRunning: @Sendable (String) -> Bool
 
     /// - Parameter privilegedHelper: pass `XPCPrivilegedUninstallHelper()` from
@@ -137,7 +139,7 @@ public final class CleanupEngine: Sendable {
         self.ollamaModelRunner = OllamaModelCleanupRouter.production()
         self.privilegedHelper = privilegedHelper
         self.fileExists = { FileManager.default.fileExists(atPath: $0) }
-        self.isAppRunning = { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }
+        self.isAppRunning = { DefaultRunningProcessChecker().isRunning(identifier: $0) }
     }
 
     /// Test-only initializer. Use the default `init()` in app code. `fileExists`
@@ -241,11 +243,13 @@ public final class CleanupEngine: Sendable {
                 error: "Skipped \(protectedRoot): \(url.path)"
             )
         }
-        if let app = item.blockedByApp, isAppRunning(app.bundleID) {
+        let owners = (item.ownerProcesses ?? []) + [item.blockedByApp?.bundleID].compactMap { $0 }
+        if owners.contains(where: isAppRunning) {
+            let name = item.blockedByApp?.name ?? item.source.name
             return CleanupItemResult(
                 item: item,
                 succeeded: false,
-                error: "Skipped while \(app.name) is running. Quit it, then clean again."
+                error: "Skipped while \(name) is running. Quit it, then clean again."
             )
         }
         return nil

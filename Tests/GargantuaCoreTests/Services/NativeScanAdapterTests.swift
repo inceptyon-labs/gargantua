@@ -298,6 +298,9 @@ struct NativeScanAdapterTests {
         // Stopped: surfaced normally, no block.
         #expect(stoppedResults.map(\.path) == [firefoxCache.path])
         #expect(stoppedResults.first?.blockedByApp == nil)
+        // Every result carries the rule's owner list, running or not.
+        #expect(runningResults.first?.ownerProcesses == ["org.mozilla.firefox"])
+        #expect(stoppedResults.first?.ownerProcesses == ["org.mozilla.firefox"])
     }
 
     @Test("presence and content guards skip protected app-specific caches")

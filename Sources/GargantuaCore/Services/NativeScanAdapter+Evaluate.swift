@@ -143,10 +143,17 @@ extension NativeScanAdapter {
             }
         }
 
-        if let blockedByApp {
-            for index in out.indices { out[index].blockedByApp = blockedByApp }
-        }
+        tagOwners(of: &out, rule: rule, blockedByApp: blockedByApp)
         return RuleEvaluation(results: out, warnings: warnings)
+    }
+
+    /// Stamp the rule's running-owner lock and owner list onto its results.
+    private static func tagOwners(of results: inout [ScanResult], rule: ScanRule, blockedByApp: BlockedApp?) {
+        let owners = rule.skipIfProcessRunning.isEmpty ? nil : rule.skipIfProcessRunning
+        for index in results.indices {
+            if let blockedByApp { results[index].blockedByApp = blockedByApp }
+            if let owners { results[index].ownerProcesses = owners }
+        }
     }
 
     // swiftlint:disable:next function_parameter_count

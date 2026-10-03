@@ -413,7 +413,12 @@ public final class WorkspaceRunningApplicationTerminator: RunningApplicationTerm
     @MainActor
     public func terminateRunningApplications(bundleIdentifier: String, timeout: TimeInterval) async -> Bool {
         let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
-        guard !apps.isEmpty else { return true }
+        guard !apps.isEmpty else {
+            // No app has this identifier, but it may name a command-line tool (a
+            // skip_if_process_running entry such as `codex`), which can't be quit
+            // from here. Report failure while it runs so the caller keeps its items locked.
+            return !DefaultRunningProcessChecker().isRunning(identifier: bundleIdentifier)
+        }
 
         for app in apps where !app.isTerminated {
             app.terminate()
