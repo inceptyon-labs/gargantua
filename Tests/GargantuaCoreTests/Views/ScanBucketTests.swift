@@ -259,4 +259,20 @@ struct ScanGroupSelectionTests {
         #expect(group.selectionState(selectedIDs: ["s1"], lockedIDs: ["locked"]) == .all)
         #expect(group.selectionState(selectedIDs: [], lockedIDs: ["s1", "locked"]) == .allProtected)
     }
+
+    @Test("A filter parks hidden selections and clearing it restores them")
+    func filterRestoresHiddenSelection() {
+        let all: Set<String> = ["a", "b", "c"]
+        let filtered = ScanBucketListView.reconcileSelection(
+            selected: ["a", "b"], hiddenByFilter: [], visible: ["a"], existing: all
+        )
+        #expect(filtered.selected == ["a"])
+        #expect(filtered.hiddenByFilter == ["b"])
+
+        let cleared = ScanBucketListView.reconcileSelection(
+            selected: filtered.selected, hiddenByFilter: filtered.hiddenByFilter, visible: all, existing: all
+        )
+        #expect(cleared.selected == ["a", "b"])
+        #expect(cleared.hiddenByFilter.isEmpty)
+    }
 }

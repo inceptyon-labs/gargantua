@@ -48,6 +48,10 @@ public struct ScanBucketListView: View {
     @State var isResolvingFilter = false
     @State var showsRefineControls = false
     @State var showsHelpLegend = false
+    /// Selected items the current filter hides. Only visible items can be
+    /// cleaned while filtering; these come back when the filter changes or
+    /// clears.
+    @State var selectionHiddenByFilter: Set<String> = []
     /// Memoizes the expensive grouping/sort so unrelated body re-evals (a
     /// checkbox toggle, a focus move) on a large result set don't re-group.
     @State private var groupMemo = ScanGroupMemo()
@@ -190,7 +194,7 @@ public struct ScanBucketListView: View {
             actionBar
         }
         .onChange(of: activeFilter) { _, _ in
-            trimSelectionToDisplayedResults()
+            reconcileSelectionWithFilter()
             expandedGroupIDs = Set(groups.map(\.id))
             focusedItemID = nil
         }

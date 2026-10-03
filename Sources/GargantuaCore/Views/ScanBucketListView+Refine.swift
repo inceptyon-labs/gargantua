@@ -129,8 +129,25 @@ extension ScanBucketListView {
         }
     }
 
-    func trimSelectionToDisplayedResults() {
-        let visible = Set(displayedResults.map(\.id))
-        selectedIDs.formIntersection(visible)
+    /// Keeps only visible items selected while a filter is active, and parks
+    /// the hidden ones so they're selected again when a later filter (or no
+    /// filter) shows them. Previously a search dropped them for good.
+    func reconcileSelectionWithFilter() {
+        (selectedIDs, selectionHiddenByFilter) = Self.reconcileSelection(
+            selected: selectedIDs,
+            hiddenByFilter: selectionHiddenByFilter,
+            visible: Set(displayedResults.map(\.id)),
+            existing: Set(results.map(\.id))
+        )
+    }
+
+    static func reconcileSelection(
+        selected: Set<String>,
+        hiddenByFilter: Set<String>,
+        visible: Set<String>,
+        existing: Set<String>
+    ) -> (selected: Set<String>, hiddenByFilter: Set<String>) {
+        let wanted = selected.union(hiddenByFilter).intersection(existing)
+        return (wanted.intersection(visible), wanted.subtracting(visible))
     }
 }
