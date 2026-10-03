@@ -133,10 +133,9 @@ rules:
     paths:
       - "~/.claude/cache"
       - "~/.claude/statsig"
-      - "~/.claude/ide"
     safety: safe
     confidence: 93
-    explanation: "Claude Code CLI scratch cache, telemetry cache, and IDE handshake lockfiles. Rebuilt on the next session; settings, skills, commands, agents, and plugins are not matched."
+    explanation: "Claude Code CLI scratch cache and telemetry cache. Rebuilt on the next session; settings, skills, commands, agents, and plugins are not matched. The IDE handshake lockfiles in ~/.claude/ide are not matched: a running editor holds them, and removing one breaks IDE discovery until the extension restarts."
     source:
       name: Claude Code
     regenerates: true
@@ -153,9 +152,9 @@ rules:
     pattern: "*"
     match_filters:
       - "mtime > 7d"
-    safety: safe
-    confidence: 90
-    explanation: "Snapshots of your shell environment captured so a session can reproduce it. Claude Code writes a fresh one per session; snapshots older than a week belong to sessions that have ended."
+    safety: review
+    confidence: 80
+    explanation: "Snapshots of your shell environment captured so a session can reproduce it. Claude Code writes a fresh one per session, so most older than a week belong to sessions that have ended. A session still running after a week keeps sourcing its snapshot and loses its PATH and aliases if it is removed."
     source:
       name: Claude Code
     regenerates: true
@@ -163,7 +162,7 @@ rules:
     tags:
       - developer
       - ai
-      - cache
+      - review
 
   - id: claude_code_pasted_content
     name: Claude Code Pasted Content
@@ -226,13 +225,14 @@ rules:
   - id: codex_session_rollouts
     name: Codex Session Rollouts
     paths:
-      - "~/.codex/sessions/*/*"
+      - "~/.codex/sessions/*/*/*"
       - "~/.codex/archived_sessions"
+    pattern: "rollout-*.jsonl"
     match_filters:
       - "mtime > 90d"
     safety: review
     confidence: 74
-    explanation: "Codex rollout transcripts, filed by year and month. They are the record of past Codex conversations and are only needed to resume or re-read an old thread."
+    explanation: "One Codex rollout transcript, the record of a past Codex conversation, only needed to resume or re-read that thread. Age is measured per transcript because resuming appends to an existing file without touching its year, month, or day folder."
     source:
       name: Codex
     regenerates: false
@@ -262,13 +262,14 @@ rules:
   - id: codex_computer_use_screenshots
     name: Codex Computer-Use Screenshots
     paths:
-      - "~/.codex/computer-use"
-    pattern: "*"
+      - "~/.codex/computer-use/*.png"
+      - "~/.codex/computer-use/*.jpg"
+      - "~/.codex/computer-use/*.jpeg"
     match_filters:
       - "mtime > 14d"
     safety: safe
     confidence: 88
-    explanation: "Screenshots Codex captured while driving the screen. Captured fresh each run and not referenced once the turn is over."
+    explanation: "Screenshots Codex captured while driving the screen. Captured fresh each run and not referenced once the turn is over. Only image files are matched: the folder also holds the Codex Computer Use helper app and its config.json."
     source:
       name: Codex
     regenerates: true
