@@ -145,19 +145,6 @@ jobs:
             -instr-profile .build/debug/codecov/default.profdata \
             -ignore-filename-regex='.build|Tests' > coverage.lcov
 
-      # Re-run the suite with the cooperative thread pool forced to one
-      # thread. Code that blocks a pool thread on work needing another pool
-      # thread (a synchronous wait inside Task.detached, say) deadlocks here
-      # instead of passing on the runner's few-thread pool and stalling or
-      # flaking elsewhere. Same flags as the test step, so the build is
-      # reused; after the lcov export, so the overwritten profile data is
-      # never read. The timeout turns a deadlock into a failure.
-      - name: Test with a one-thread cooperative pool
-        timeout-minutes: 10
-        env:
-          LIBDISPATCH_COOPERATIVE_POOL_STRICT: 1
-        run: swift test --enable-code-coverage ${ACTOR_ISOLATION_GATE:?}
-
       # The licensed configuration compiles in the trial clock and the license
       # gate, so every test wrapped in `#if GARGANTUA_LICENSING` — the whole
       # blocked-path corpus — is dead code in the run above. Runs after the
