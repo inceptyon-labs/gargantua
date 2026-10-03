@@ -39,6 +39,10 @@ final class WindowState: ObservableObject {
     let processInventorySession = ProcessInventorySession()
     let agentRunControllers = AgentRunControllers()
 
+    /// The sidebar pane on screen; memory-pressure relief leaves it alone.
+    var visiblePane: String?
+    private var memoryPressureSource: (any DispatchSourceMemoryPressure)?
+
     init() {
         let manager = ModelDownloadManager()
         let selectedEngine = AIInferenceEngineFactory.select(
@@ -84,6 +88,42 @@ final class WindowState: ObservableObject {
             cloudService: cloudAI,
             mlxProposer: MLXOrganizerProposer(aiService: service)
         )
+        watchMemoryPressure()
+    }
+
+    /// Each pane keeps its last scan for the window's lifetime, and a few of
+    /// them can hold thousands of results (or hundreds of MiB of fclones and
+    /// czkawka output). When the system warns of memory pressure, drop the
+    /// results of panes that are off screen and only showing results; a scan
+    /// or cleanup in flight, and a cleanup summary, are kept.
+    private func watchMemoryPressure() {
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.releaseHiddenResults() }
+        }
+        source.resume()
+        memoryPressureSource = source
+    }
+
+    func releaseHiddenResults() {
+        if visiblePane != "deepClean", deepCleanSession.phase == .results {
+            deepCleanSession.clearResults()
+        }
+        if visiblePane != "devPurge", devPurgeSession.phase == .results {
+            devPurgeSession.returnToIdle()
+        }
+        if visiblePane != "aiModels", aiModelsSession.phase == .results {
+            aiModelsSession.clearResults()
+        }
+        if visiblePane != "fileHealth", fileHealthState.phase == .results {
+            fileHealthState.clearResults()
+        }
+        if visiblePane != "duplicateFinder" {
+            duplicateFinderState.releaseResults()
+        }
+        if visiblePane != "diskExplorer", diskExplorerState.phase == .results {
+            diskExplorerState.exitToIdle()
+        }
     }
 }
 

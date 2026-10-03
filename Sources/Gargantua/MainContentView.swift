@@ -187,9 +187,11 @@ struct MainContentView: View {
                 .onAppear {
                     initializePersistenceIfNeeded()
                     refreshPersistedSettings()
+                    window.visiblePane = sidebarSelection
                 }
-                .onChange(of: sidebarSelection) { _, _ in
+                .onChange(of: sidebarSelection) { _, pane in
                     refreshPersistedSettings()
+                    window.visiblePane = pane
                 }
             }
         }

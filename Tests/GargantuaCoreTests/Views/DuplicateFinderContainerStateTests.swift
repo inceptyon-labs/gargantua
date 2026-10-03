@@ -114,6 +114,28 @@ struct DuplicateFinderContainerStateTests {
         #expect(state.cachedAt != nil)
     }
 
+    @Test("releaseResults drops shown and cached results but never a running scan")
+    @MainActor
+    func releaseResultsSparesRunningScan() {
+        let state = DuplicateFinderContainerState()
+        state.prepareForScan()
+        state.finishScan(results: [Self.makeResult(id: "a")], errors: [])
+
+        state.releaseResults()
+        guard case .idle = state.scanState else {
+            Issue.record("Expected .idle, got \(state.scanState)")
+            return
+        }
+        #expect(state.cachedResults == nil)
+
+        state.prepareForScan()
+        state.releaseResults()
+        guard case .scanning = state.scanState else {
+            Issue.record("Expected .scanning, got \(state.scanState)")
+            return
+        }
+    }
+
     @Test("finishScan with a silent failure does not populate the cache")
     @MainActor
     func finishScanFailureSkipsCache() {

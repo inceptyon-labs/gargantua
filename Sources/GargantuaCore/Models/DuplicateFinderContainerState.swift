@@ -127,6 +127,20 @@ public final class DuplicateFinderContainerState {
         scanState = .idle
     }
 
+    /// Drops the scan output (shown and cached) under memory pressure while
+    /// the pane is hidden. A running scan, a delete in flight and its summary
+    /// are left alone.
+    public func releaseResults() {
+        switch scanState {
+        case .idle, .results, .error:
+            scanState = .idle
+            cachedResults = nil
+            cachedAt = nil
+        case .scanning, .cleaning, .summary:
+            return
+        }
+    }
+
     /// Stops the running scan (its fclones process is killed through task
     /// cancellation) and returns to the start screen.
     public func cancelScan() {
