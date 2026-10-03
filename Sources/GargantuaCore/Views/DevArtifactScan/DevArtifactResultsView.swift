@@ -9,7 +9,6 @@ struct DevArtifactResultsView: View {
     let onExplain: ((ScanResult) -> Void)?
     let onClean: () -> Void
     let onBack: () -> Void
-    let onCancel: () -> Void
     let onRescan: () -> Void
     let onResolveFilter: ((String) async -> ScanFilterSet?)?
 
@@ -44,7 +43,7 @@ struct DevArtifactResultsView: View {
                 selectedIDs: $selectedResultIDs,
                 onExplain: onExplain,
                 onClean: onClean,
-                onCancel: onCancel,
+                onRescan: onRescan,
                 onResolveNaturalLanguageFilter: onResolveFilter
             )
         }

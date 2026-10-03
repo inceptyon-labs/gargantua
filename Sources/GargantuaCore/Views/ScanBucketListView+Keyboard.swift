@@ -35,12 +35,9 @@ extension ScanBucketListView {
         onClean?()
     }
 
+    /// Esc only clears row focus; leaving the results is the Back button.
     func handleEscape() {
-        if focusedItemID != nil {
-            focusedItemID = nil
-        } else {
-            onCancel?()
-        }
+        focusedItemID = nil
     }
 
     func jumpToNextGroup() {
@@ -109,8 +106,10 @@ extension ScanBucketListView {
             collapseAll: { collapseAll() },
             cleanSelected: (onClean != nil && !selectedIDs.isEmpty) ? { triggerClean() } : nil,
             revealInFinder: (focusedItemID != nil || !selectedIDs.isEmpty) ? { revealFocusedInFinder() } : nil,
-            rescan: nil,
-            cancel: onCancel.map { callback in { callback() } },
+            rescan: onRescan,
+            // Nothing is running on the results screen; ⌘. cancels a scan or
+            // clean from the console instead.
+            cancel: nil,
             focusFilter: hasRefinementTools ? { focusFilterField() } : nil,
             isEditingText: isSearchFocused
         )

@@ -106,7 +106,6 @@ public struct DevArtifactScanView: View {
                             onExplain: onExplain,
                             onClean: { session.showConfirmation = true },
                             onBack: { session.returnToIdle() },
-                            onCancel: { session.returnToIdle() },
                             onRescan: startScan,
                             onResolveFilter: onResolveFilter
                         )

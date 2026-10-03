@@ -236,7 +236,7 @@ public struct DeepCleanView: View {
                 },
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
-                onCancel: { session.clearResults() },
+                onRescan: { startScan() },
                 onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter
             )

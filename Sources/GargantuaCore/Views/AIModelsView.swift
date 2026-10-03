@@ -236,7 +236,7 @@ public struct AIModelsView: View {
                 initialGroupingMode: .folder,
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
-                onCancel: { session.clearResults() },
+                onRescan: { startScan() },
                 onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter
             )

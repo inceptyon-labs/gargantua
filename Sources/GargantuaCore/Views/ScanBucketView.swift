@@ -15,7 +15,7 @@ import SwiftUI
 /// - Cmd+A: select all safe items
 /// - Enter: trigger clean flow
 /// - Tab: jump to next group
-/// - Escape: clear focus or cancel
+/// - Escape: clear focus
 public struct ScanBucketListView: View {
     public let results: [ScanResult]
     public let scanDuration: TimeInterval
@@ -31,7 +31,9 @@ public struct ScanBucketListView: View {
     public let onQuitBlockingApp: ((String) -> Void)?
     public let onExplain: ((ScanResult) -> Void)?
     public let onClean: (() -> Void)?
-    public let onCancel: (() -> Void)?
+    /// Runs a fresh scan (⌘R). Leaving the results is the header's Back
+    /// button; Esc and ⌘. never discard them.
+    public let onRescan: (() -> Void)?
     public let onAddToExclusions: ((ScanResult) -> Void)?
     public let onViewRule: ((ScanResult) -> Void)?
     public let onAdvisoryForReview: (([ScanResult]) -> Void)?
@@ -61,7 +63,7 @@ public struct ScanBucketListView: View {
         onQuitBlockingApp: ((String) -> Void)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
         onClean: (() -> Void)? = nil,
-        onCancel: (() -> Void)? = nil,
+        onRescan: (() -> Void)? = nil,
         onAddToExclusions: ((ScanResult) -> Void)? = nil,
         onViewRule: ((ScanResult) -> Void)? = nil,
         onAdvisoryForReview: (([ScanResult]) -> Void)? = nil,
@@ -75,7 +77,7 @@ public struct ScanBucketListView: View {
         self.onQuitBlockingApp = onQuitBlockingApp
         self.onExplain = onExplain
         self.onClean = onClean
-        self.onCancel = onCancel
+        self.onRescan = onRescan
         self.onAddToExclusions = onAddToExclusions
         self.onViewRule = onViewRule
         self.onAdvisoryForReview = onAdvisoryForReview

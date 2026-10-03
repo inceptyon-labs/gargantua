@@ -69,6 +69,12 @@ public struct EventHorizonConsoleView: View {
             updateActivityRate(delta: max(newCount - oldCount, 0))
             tripTimeDilationIfDue()
         }
+        // ⌘. ("Cancel the running scan or clean") reaches the same abort as
+        // the Sever Tether button.
+        .focusedSceneValue(
+            \.resultsActions,
+            ResultsKeyboardActions(cancel: context.isInProgress ? onAbort : nil)
+        )
     }
 
     // MARK: - Header
