@@ -189,6 +189,11 @@ public final class InMemoryTrialClockStorage: TrialClockStorage, @unchecked Send
 
 public final class TrialClock: @unchecked Sendable {
     public static let trialDuration: TimeInterval = 14 * 24 * 60 * 60
+    /// How far the clock may sit behind the first-launch stamp before the
+    /// trial reads as over. A stamp further in the future means the clock was
+    /// set ahead at first launch (or wound back since), which used to give a
+    /// trial that never ran down. The slack covers ordinary clock corrections.
+    public static let futureStampTolerance: TimeInterval = 48 * 60 * 60
 
     private let storage: any TrialClockStorage
     private let now: @Sendable () -> Date
@@ -217,10 +222,11 @@ public final class TrialClock: @unchecked Sendable {
         // as elapsed time, not as a negative interval that would inflate the
         // ceiling math.
         let launch = firstLaunchDate()
-        // A clock moved behind the recorded launch date reads as negative
-        // elapsed time; clamp so backdating never mints more than the full
-        // trial window.
-        let elapsed = max(0, now().timeIntervalSince(launch))
+        let rawElapsed = now().timeIntervalSince(launch)
+        if rawElapsed < -Self.futureStampTolerance { return 0 }
+        // A clock a little behind the recorded launch date reads as negative
+        // elapsed time; clamp so it never mints more than the full window.
+        let elapsed = max(0, rawElapsed)
         let remaining = Self.trialDuration - elapsed
         if remaining <= 0 { return 0 }
         return Int(ceil(remaining / (24 * 60 * 60)))

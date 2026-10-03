@@ -46,14 +46,25 @@ struct TrialClockTests {
         #expect(clock.isExpired())
     }
 
-    @Test("Backdated clock can't inflate daysRemaining past the trial length")
-    func backdatedClockCapsAtTrialLength() {
+    @Test("A clock a day behind the launch stamp still shows the full trial")
+    func slightlyBackdatedClockCapsAtTrialLength() {
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let storage = InMemoryTrialClockStorage(initialDate: start)
+        let oneDayEarlier = start.addingTimeInterval(-24 * 60 * 60)
+        let clock = TrialClock(storage: storage, now: { oneDayEarlier })
+
+        #expect(clock.daysRemaining() == 14)
+    }
+
+    @Test("A launch stamp more than 48 h in the future reads as expired")
+    func futureLaunchStampExpires() {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
         let storage = InMemoryTrialClockStorage(initialDate: start)
         let thirtyDaysEarlier = start.addingTimeInterval(-30 * 24 * 60 * 60)
         let clock = TrialClock(storage: storage, now: { thirtyDaysEarlier })
 
-        #expect(clock.daysRemaining() == 14)
+        #expect(clock.daysRemaining() == 0)
+        #expect(clock.isExpired())
     }
 
     @Test("daysRemaining stays at zero past expiry")
