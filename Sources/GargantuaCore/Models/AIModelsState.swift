@@ -14,6 +14,8 @@ public final class AIModelsState {
     public var scanResults: [ScanResult]?
     public var scanDuration: TimeInterval = 0
     public var selectedResultIDs: Set<String> = []
+    /// The results list's grouping, collapsed groups and search.
+    public let listState = ScanBucketListState(groupingDefaultsKey: "results.grouping.aiModels", defaultGrouping: .folder)
     public var isScanning = false
     public var showConfirmation = false
     public var isCleaning = false
@@ -53,6 +55,7 @@ public final class AIModelsState {
 
     public func finishScan(results: [ScanResult], duration: TimeInterval) {
         scanDuration = duration
+        listState.resetForNewResults()
         // Pre-check `safe` items so the user can fast-path the obvious wins.
         // AI model rules are mostly `review`, so this nudges nothing destructive.
         selectedResultIDs = Set(results.filter { $0.safety == .safe }.map(\.id))

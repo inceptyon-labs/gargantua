@@ -3,7 +3,7 @@ import SwiftUI
 extension ScanBucketListView {
     @ViewBuilder
     func groupSection(_ group: ScanGroup) -> some View {
-        let isExpanded = expandedGroupIDs.contains(group.id)
+        let isExpanded = isGroupExpanded(group.id)
 
         ZStack(alignment: .trailing) {
             ScanGroupHeader(
@@ -123,10 +123,10 @@ extension ScanBucketListView {
     }
 
     func toggleGroup(_ id: String) {
-        if expandedGroupIDs.contains(id) {
-            expandedGroupIDs.remove(id)
+        if listState.collapsedGroupIDs.contains(id) {
+            listState.collapsedGroupIDs.remove(id)
         } else {
-            expandedGroupIDs.insert(id)
+            listState.collapsedGroupIDs.insert(id)
         }
     }
 

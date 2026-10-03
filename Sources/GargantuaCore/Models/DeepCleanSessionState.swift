@@ -31,6 +31,8 @@ public final class DeepCleanSessionState {
     private var blockedAppsByID: [String: BlockedApp] = [:]
     public var scanDuration: TimeInterval = 0
     public var selectedResultIDs: Set<String> = []
+    /// The results list's grouping, collapsed groups and search.
+    public let listState = ScanBucketListState(groupingDefaultsKey: "results.grouping.deepClean")
     /// Per-result removability, reconciled at scan time (protected roots,
     /// `protected` safety, and the privileged allowlist). View-only items are
     /// surfaced but never selectable or executed. Keyed by `ScanResult.id`;
@@ -126,6 +128,7 @@ public final class DeepCleanSessionState {
         precomputedRemovability: [String: Removability]? = nil
     ) {
         scanDuration = duration
+        listState.resetForNewResults()
         // Reconcile removability fresh each scan so user-added protected roots
         // are current. View-only items are excluded from the default selection;
         // only removable, rule-`safe` items pre-select.

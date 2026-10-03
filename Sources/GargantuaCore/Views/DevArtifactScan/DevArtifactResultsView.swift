@@ -12,6 +12,7 @@ struct DevArtifactResultsView: View {
     let onBack: () -> Void
     let onRescan: () -> Void
     let onResolveFilter: ((String) async -> ScanFilterSet?)?
+    let listState: ScanBucketListState
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,7 +47,8 @@ struct DevArtifactResultsView: View {
                 onClean: onClean,
                 onRescan: onRescan,
                 onAdvisoryForReview: onAdvisory,
-                onResolveNaturalLanguageFilter: onResolveFilter
+                onResolveNaturalLanguageFilter: onResolveFilter,
+                listState: listState
             )
         }
     }

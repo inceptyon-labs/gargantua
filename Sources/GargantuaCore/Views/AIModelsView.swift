@@ -239,7 +239,8 @@ public struct AIModelsView: View {
                 onClean: { session.showConfirmation = true },
                 onRescan: { startScan() },
                 onAdvisoryForReview: onAdvisory,
-                onResolveNaturalLanguageFilter: onResolveFilter
+                onResolveNaturalLanguageFilter: onResolveFilter,
+                listState: session.listState
             )
         }
     }

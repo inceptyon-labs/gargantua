@@ -20,9 +20,9 @@ extension ScanBucketListView {
 
             Spacer(minLength: GargantuaSpacing.space3)
 
-            ScanGroupingPicker(mode: $groupingMode)
+            ScanGroupingPicker(mode: Binding(get: { groupingMode }, set: { groupingMode = $0 }))
                 .onChange(of: groupingMode) { _, _ in
-                    expandedGroupIDs = Set(groups.map(\.id))
+                    expandAllGroups()
                     focusedItemID = nil
                 }
 

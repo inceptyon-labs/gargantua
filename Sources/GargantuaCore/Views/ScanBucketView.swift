@@ -39,19 +39,16 @@ public struct ScanBucketListView: View {
     public let onAdvisoryForReview: (([ScanResult]) -> Void)?
     public let onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)?
 
-    @State var groupingMode: ScanGroupingMode
-    @State var expandedGroupIDs: Set<String>
+    /// Grouping, collapsed groups and search live in the owning session's
+    /// `ScanBucketListState` when one is passed, so they survive navigation;
+    /// otherwise in `ownedListState`, which lasts as long as the view.
+    private let externalListState: ScanBucketListState?
+    @State private var ownedListState: ScanBucketListState
+    var listState: ScanBucketListState { externalListState ?? ownedListState }
+
     @State var focusedItemID: String?
-    @State var naturalLanguageQuery: String = ""
-    @State var activeFilter: ScanFilterSet?
-    @State var filterStatus: String?
     @State var isResolvingFilter = false
-    @State var showsRefineControls = false
     @State var showsHelpLegend = false
-    /// Selected items the current filter hides. Only visible items can be
-    /// cleaned while filtering; these come back when the filter changes or
-    /// clears.
-    @State var selectionHiddenByFilter: Set<String> = []
     /// Memoizes the expensive grouping/sort so unrelated body re-evals (a
     /// checkbox toggle, a focus move) on a large result set don't re-group.
     @State private var groupMemo = ScanGroupMemo()
@@ -71,7 +68,8 @@ public struct ScanBucketListView: View {
         onAddToExclusions: ((ScanResult) -> Void)? = nil,
         onViewRule: ((ScanResult) -> Void)? = nil,
         onAdvisoryForReview: (([ScanResult]) -> Void)? = nil,
-        onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)? = nil
+        onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)? = nil,
+        listState: ScanBucketListState? = nil
     ) {
         self.results = results
         self.scanDuration = scanDuration
@@ -86,11 +84,46 @@ public struct ScanBucketListView: View {
         self.onViewRule = onViewRule
         self.onAdvisoryForReview = onAdvisoryForReview
         self.onResolveNaturalLanguageFilter = onResolveNaturalLanguageFilter
-        self._groupingMode = State(initialValue: initialGroupingMode)
-        // Start with every group expanded so the list doesn't flash collapsed
-        // on mount.
-        let initialGroups = ScanGrouper.group(results, mode: initialGroupingMode)
-        self._expandedGroupIDs = State(initialValue: Set(initialGroups.map(\.id)))
+        self.externalListState = listState
+        self._ownedListState = State(initialValue: ScanBucketListState(defaultGrouping: initialGroupingMode))
+    }
+
+    var groupingMode: ScanGroupingMode {
+        get { listState.groupingMode }
+        nonmutating set { listState.groupingMode = newValue }
+    }
+
+    var naturalLanguageQuery: String {
+        get { listState.naturalLanguageQuery }
+        nonmutating set { listState.naturalLanguageQuery = newValue }
+    }
+
+    var activeFilter: ScanFilterSet? {
+        get { listState.activeFilter }
+        nonmutating set { listState.activeFilter = newValue }
+    }
+
+    var filterStatus: String? {
+        get { listState.filterStatus }
+        nonmutating set { listState.filterStatus = newValue }
+    }
+
+    var showsRefineControls: Bool {
+        get { listState.showsRefineControls }
+        nonmutating set { listState.showsRefineControls = newValue }
+    }
+
+    var selectionHiddenByFilter: Set<String> {
+        get { listState.selectionHiddenByFilter }
+        nonmutating set { listState.selectionHiddenByFilter = newValue }
+    }
+
+    func isGroupExpanded(_ id: String) -> Bool {
+        !listState.collapsedGroupIDs.contains(id)
+    }
+
+    func expandAllGroups() {
+        listState.collapsedGroupIDs = []
     }
 
     var displayedResults: [ScanResult] {
@@ -138,7 +171,7 @@ public struct ScanBucketListView: View {
     /// Flat list of all visible item IDs, respecting expanded/collapsed groups.
     var navigableItemIDs: [String] {
         groups.flatMap { group in
-            expandedGroupIDs.contains(group.id) ? group.items.map(\.id) : []
+            isGroupExpanded(group.id) ? group.items.map(\.id) : []
         }
     }
 
@@ -198,7 +231,7 @@ public struct ScanBucketListView: View {
         }
         .onChange(of: activeFilter) { _, _ in
             reconcileSelectionWithFilter()
-            expandedGroupIDs = Set(groups.map(\.id))
+            expandAllGroups()
             focusedItemID = nil
         }
         .focusedSceneValue(\.resultsActions, keyboardActions)

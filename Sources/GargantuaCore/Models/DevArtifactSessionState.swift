@@ -27,6 +27,8 @@ public final class DevArtifactSessionState {
     /// a total over several selected buckets counts a Gradle log (JVM, Build
     /// caches and Logs) once.
     public var bucketSetEstimates: [Set<String>: Int64] = [:]
+    /// The results list's grouping, collapsed groups and search.
+    public let listState = ScanBucketListState(groupingDefaultsKey: "results.grouping.devPurge")
     public var scanProgress = ScanProgress()
     public var scanResults: [ScanResult]?
     public var scanDuration: TimeInterval = 0
@@ -74,6 +76,7 @@ public final class DevArtifactSessionState {
         bucketSetEstimates: [Set<String>: Int64] = [:]
     ) {
         scanDuration = duration
+        listState.resetForNewResults()
         bucketEstimates = estimates
         self.bucketSetEstimates = bucketSetEstimates
         selectedResultIDs = Set(results.filter { $0.safety == .safe }.map(\.id))

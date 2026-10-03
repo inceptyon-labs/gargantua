@@ -41,7 +41,7 @@ extension ScanBucketListView {
     }
 
     func jumpToNextGroup() {
-        let expandedList = groups.filter { expandedGroupIDs.contains($0.id) && !$0.items.isEmpty }
+        let expandedList = groups.filter { isGroupExpanded($0.id) && !$0.items.isEmpty }
         guard !expandedList.isEmpty else { return }
 
         if let currentID = focusedItemID {
@@ -72,11 +72,11 @@ extension ScanBucketListView {
     }
 
     func expandAll() {
-        expandedGroupIDs = Set(groups.map(\.id))
+        expandAllGroups()
     }
 
     func collapseAll() {
-        expandedGroupIDs = []
+        listState.collapsedGroupIDs = Set(groups.map(\.id))
     }
 
     /// Reveal the focused item (or, failing that, the first selected item) in

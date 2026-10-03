@@ -15,7 +15,7 @@ extension ScanBucketListView {
                         .allowsHitTesting(false)
                 }
 
-                TextField("", text: $naturalLanguageQuery)
+                TextField("", text: Binding(get: { naturalLanguageQuery }, set: { naturalLanguageQuery = $0 }))
                     .font(GargantuaFonts.body)
                     .foregroundStyle(GargantuaColors.ink)
                     .textFieldStyle(.plain)
