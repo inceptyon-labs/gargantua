@@ -34,6 +34,8 @@ struct StaleVersionScanAdapterTests {
         #expect(StaleVersionIdentifier("15.4 (21E219)") > StaleVersionIdentifier("14.5"))
         #expect(StaleVersionIdentifier("2024.2.1") > StaleVersionIdentifier("2023.3.9"))
         #expect(StaleVersionIdentifier("android-35") > StaleVersionIdentifier("android-34"))
+        // Model-prefixed DeviceSupport folders rank by OS version, not model.
+        #expect(StaleVersionIdentifier("iPhone14,4 26.6 (23G5)") > StaleVersionIdentifier("iPhone17,2 26.5.2 (23F84)"))
         #expect(StaleVersionIdentifier("241.18034.62") > StaleVersionIdentifier("233.15026.9"))
     }
 

@@ -12,7 +12,17 @@ public struct StaleVersionIdentifier: Comparable, Hashable, Sendable, CustomStri
     public init(_ rawValue: String) {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         self.rawValue = trimmed
-        self.numericComponents = Self.extractNumericComponents(from: trimmed)
+        self.numericComponents = Self.extractNumericComponents(from: Self.droppingDeviceModel(trimmed))
+    }
+
+    /// Xcode now names DeviceSupport folders `iPhone14,4 26.5.2 (23F84)`. The
+    /// leading model identifier isn't part of the version: left in, the model
+    /// number would rank folders instead of the OS version.
+    private static func droppingDeviceModel(_ raw: String) -> String {
+        guard let range = raw.range(of: #"^[A-Za-z]+[0-9]+,[0-9]+\s+"#, options: .regularExpression) else {
+            return raw
+        }
+        return String(raw[range.upperBound...])
     }
 
     public var description: String { rawValue }
