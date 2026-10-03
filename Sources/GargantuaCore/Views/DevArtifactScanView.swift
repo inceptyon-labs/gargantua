@@ -113,7 +113,8 @@ public struct DevArtifactScanView: View {
                             onBack: { session.returnToIdle() },
                             onRescan: startScan,
                             onResolveFilter: onResolveFilter,
-                            listState: session.listState
+                            listState: session.listState,
+                            isSuspended: session.showConfirmation
                         )
                         .transition(phaseTransition)
                     }

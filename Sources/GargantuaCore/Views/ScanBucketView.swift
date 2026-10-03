@@ -43,6 +43,10 @@ public struct ScanBucketListView: View {
     /// `ScanBucketListState` when one is passed, so they survive navigation;
     /// otherwise in `ownedListState`, which lasts as long as the view.
     private let externalListState: ScanBucketListState?
+    /// True while the owner shows a modal over the list (the cleanup
+    /// confirmation): the selection shortcuts and arrow/space keys stand down,
+    /// so the selection the modal is confirming can't change underneath it.
+    let isSuspended: Bool
     @State private var ownedListState: ScanBucketListState
     var listState: ScanBucketListState { externalListState ?? ownedListState }
 
@@ -69,7 +73,8 @@ public struct ScanBucketListView: View {
         onViewRule: ((ScanResult) -> Void)? = nil,
         onAdvisoryForReview: (([ScanResult]) -> Void)? = nil,
         onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)? = nil,
-        listState: ScanBucketListState? = nil
+        listState: ScanBucketListState? = nil,
+        isSuspended: Bool = false
     ) {
         self.results = results
         self.scanDuration = scanDuration
@@ -85,6 +90,7 @@ public struct ScanBucketListView: View {
         self.onAdvisoryForReview = onAdvisoryForReview
         self.onResolveNaturalLanguageFilter = onResolveNaturalLanguageFilter
         self.externalListState = listState
+        self.isSuspended = isSuspended
         self._ownedListState = State(initialValue: ScanBucketListState(defaultGrouping: initialGroupingMode))
     }
 
@@ -209,11 +215,11 @@ public struct ScanBucketListView: View {
                         }
                     }
                 }
-                .focusable(!groups.isEmpty)
-                .onKeyPress(.upArrow) { moveFocus(direction: -1); return .handled }
-                .onKeyPress(.downArrow) { moveFocus(direction: 1); return .handled }
-                .onKeyPress(.space) { toggleFocusedSelection(); return .handled }
-                .onKeyPress(.escape) { handleEscape(); return .handled }
+                .focusable(!groups.isEmpty && !isSuspended)
+                .onKeyPress(.upArrow) { handleKey { moveFocus(direction: -1) } }
+                .onKeyPress(.downArrow) { handleKey { moveFocus(direction: 1) } }
+                .onKeyPress(.space) { handleKey { toggleFocusedSelection() } }
+                .onKeyPress(.escape) { handleKey { handleEscape() } }
                 .onChange(of: focusedItemID) { _, newID in
                     if let newID {
                         withAnimation(.easeInOut(duration: 0.15)) {

@@ -266,7 +266,8 @@ public struct DeepCleanView: View {
                 },
                 onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter,
-                listState: session.listState
+                listState: session.listState,
+                isSuspended: session.showConfirmation
             )
         }
     }

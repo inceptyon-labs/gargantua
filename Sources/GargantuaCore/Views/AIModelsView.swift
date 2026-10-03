@@ -240,7 +240,8 @@ public struct AIModelsView: View {
                 onRescan: { startScan() },
                 onAdvisoryForReview: onAdvisory,
                 onResolveNaturalLanguageFilter: onResolveFilter,
-                listState: session.listState
+                listState: session.listState,
+                isSuspended: session.showConfirmation
             )
         }
     }

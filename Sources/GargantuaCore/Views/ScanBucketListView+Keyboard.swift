@@ -94,11 +94,18 @@ extension ScanBucketListView {
         isSearchFocused = true
     }
 
+    func handleKey(_ action: () -> Void) -> KeyPress.Result {
+        guard !isSuspended else { return .ignored }
+        action()
+        return .handled
+    }
+
     /// The verbs this surface publishes to the menu bar. Closures are `nil`'d
     /// when they can't apply right now (empty selection, no filter tools) so the
     /// menu items disable themselves and the shortcuts reflect reality.
     var keyboardActions: ResultsKeyboardActions {
-        ResultsKeyboardActions(
+        if isSuspended { return ResultsKeyboardActions() }
+        return ResultsKeyboardActions(
             selectAll: { selectAllSafe() },
             deselectAll: selectedIDs.isEmpty ? nil : { deselectAll() },
             invertSelection: { invertSelection() },
