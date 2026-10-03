@@ -242,6 +242,11 @@ extension NativeScanAdapter {
         if let minSize = rule.minSize, size < minSize { return nil }
 
         let displayName = Self.displayName(forRule: rule, path: path)
+        // Age-based overrides judge a folder by its most recent activity, not
+        // only its own timestamps (see `newestActivity(inDirectory:since:)`).
+        let classifiedAccess = isDirectory && !(rule.safetyOverrides.isEmpty && profile.safetyOverrides.isEmpty)
+            ? Self.newestActivity(inDirectory: path, since: lastAccessed)
+            : lastAccessed
 
         let base = ScanResult(
             id: "\(rule.id)-\(counter)",
@@ -252,7 +257,7 @@ extension NativeScanAdapter {
             confidence: rule.confidence,
             explanation: rule.explanation,
             source: rule.source,
-            lastAccessed: lastAccessed,
+            lastAccessed: classifiedAccess,
             category: rule.category,
             tags: rule.tags,
             regenerates: rule.regenerates,
@@ -292,6 +297,29 @@ extension NativeScanAdapter {
     /// A directory is a mount point when it sits on a different device than its
     /// parent — true for mounted disk images, network shares, and external
     /// volumes. Comparing `st_dev` catches them all without parsing mount tables.
+    /// The most recent activity in a directory: `since` (its own access or
+    /// modification date) or any direct child's modification date, whichever
+    /// is newer. A directory's own timestamps move only when entries are added
+    /// or removed, so a folder whose contents are written in place (Chromium's
+    /// Local Storage holds one `leveldb/` folder) looks untouched for months
+    /// while the browser uses it daily.
+    static func newestActivity(inDirectory path: String, since: Date?) -> Date? {
+        let children = (try? FileManager.default.contentsOfDirectory(
+            at: URL(fileURLWithPath: path),
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: []
+        )) ?? []
+        var newest = since
+        for child in children {
+            guard let modified = try? child.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate else { continue }
+            if newest.map({ modified > $0 }) ?? true {
+                newest = modified
+            }
+        }
+        return newest
+    }
+
     static func isMountPoint(_ path: String) -> Bool {
         let parent = (path as NSString).deletingLastPathComponent
         guard !parent.isEmpty, parent != path else { return false }

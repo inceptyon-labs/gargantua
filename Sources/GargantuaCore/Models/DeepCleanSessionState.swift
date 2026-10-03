@@ -179,12 +179,12 @@ public final class DeepCleanSessionState {
             timeout: 10
         )
         guard exited else { return false }
-        let affected = (scanResults ?? [])
-            .filter { $0.blockedByApp?.bundleID == app.bundleID }
-            .map(\.id)
-        unblockedResultIDs.formUnion(affected)
-        for affectedID in affected where isSelectable(affectedID) {
-            selectedResultIDs.insert(affectedID)
+        let affectedResults = (scanResults ?? []).filter { $0.blockedByApp?.bundleID == app.bundleID }
+        unblockedResultIDs.formUnion(affectedResults.map(\.id))
+        // Pre-select only what a fresh scan would: safe items. Review items
+        // the app was holding unlock but stay unselected.
+        for result in affectedResults where result.safety == .safe && isSelectable(result.id) {
+            selectedResultIDs.insert(result.id)
         }
         return true
     }

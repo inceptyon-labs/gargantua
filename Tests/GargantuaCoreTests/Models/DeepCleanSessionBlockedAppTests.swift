@@ -16,13 +16,13 @@ private final class StubTerminator: RunningApplicationTerminating {
 @Suite("DeepCleanSessionState app-blocked items")
 @MainActor
 struct DeepCleanSessionBlockedAppTests {
-    private func blockedResult(id: String = "b") -> ScanResult {
+    private func blockedResult(id: String = "b", safety: SafetyLevel = .safe) -> ScanResult {
         ScanResult(
             id: id,
             name: "Brave Browser Cache",
             path: "/Users/x/Library/Caches/BraveSoftware/\(id)",
             size: 100,
-            safety: .safe,
+            safety: safety,
             confidence: 95,
             explanation: "cache",
             source: SourceAttribution(name: "Brave Browser"),
@@ -57,6 +57,17 @@ struct DeepCleanSessionBlockedAppTests {
         #expect(session.isSelectable("a"))
         #expect(session.selectedResultIDs.contains("a"))
         #expect(session.selectedResultIDs.contains("b"))
+    }
+
+    @Test("Quitting the app unlocks its review items without selecting them")
+    func quitLeavesReviewItemsUnselected() async {
+        let session = DeepCleanSessionState(appTerminator: StubTerminator(exits: true))
+        session.finishScan(results: [blockedResult(id: "cache"), blockedResult(id: "storage", safety: .review)], duration: 0)
+
+        _ = await session.quitBlockingApp(for: "cache")
+
+        #expect(session.selectedResultIDs == ["cache"])
+        #expect(session.isSelectable("storage"))
     }
 
     @Test("If the app refuses to quit, the item stays blocked and unselected")
