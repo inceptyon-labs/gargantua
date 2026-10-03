@@ -87,6 +87,7 @@ extension MainContentView {
         }
 
         persistence = controller
+        BundledRuleCache.prewarm()
 
         // Apply the "Audit retention" window once per launch; Settings → About
         // re-runs it when the user changes the window.

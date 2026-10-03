@@ -218,7 +218,7 @@ public struct RuleViewerView: View {
         }
 
         do {
-            let result = try loader.loadRules(from: rulesURL)
+            let result = try await Task.detached { try BundledRuleCache.load(from: rulesURL) }.value
             let grouped = Dictionary(grouping: result.rules) { rule -> String in
                 if rule.category.hasPrefix("browser") { return "browser" }
                 if rule.category.hasPrefix("app") || rule.tags.contains("app") {

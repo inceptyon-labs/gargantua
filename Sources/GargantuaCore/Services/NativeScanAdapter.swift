@@ -61,7 +61,7 @@ public struct NativeScanAdapter: ScanAdapter {
             throw ScanAdapterError.rulesDirectoryNotFound
         }
         let loader = RuleLoader()
-        let load = try loader.loadRules(from: dir)
+        let load = try BundledRuleCache.load(from: dir)
         for err in load.errors {
             logger.warning("Rule parse error: \(err.localizedDescription, privacy: .public)")
         }

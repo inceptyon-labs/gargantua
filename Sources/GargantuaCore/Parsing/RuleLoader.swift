@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Loads scan rules from a directory of YAML rule files.
 public struct RuleLoader: Sendable {
@@ -58,4 +59,30 @@ public struct RuleLoadResult: Sendable {
 
     /// Whether all files loaded without errors.
     public var isClean: Bool { errors.isEmpty }
+}
+
+/// Parsed bundled cleanup rules, keyed by directory path. The bundled rules
+/// ship inside the app and don't change while it runs, so every scan start
+/// and Rules visit reuses the first parse instead of re-reading ~50 YAML
+/// files. User rule directories are not cached; they're read each time.
+public enum BundledRuleCache {
+    private static let results = OSAllocatedUnfairLock(initialState: [String: RuleLoadResult]())
+
+    static func load(from directory: URL) throws -> RuleLoadResult {
+        if let cached = results.withLock({ $0[directory.path] }) {
+            return cached
+        }
+        let loaded = try RuleLoader().loadRules(from: directory)
+        results.withLock { $0[directory.path] = loaded }
+        return loaded
+    }
+
+    /// Parses the bundled rules in the background at launch, so the first
+    /// scan or Rules visit doesn't pay for it on the main thread.
+    public static func prewarm() {
+        guard let directory = RuleDirectoryResolver.resolve() else { return }
+        Task.detached(priority: .utility) {
+            _ = try? load(from: directory)
+        }
+    }
 }
