@@ -175,7 +175,13 @@ public struct CodexOneShotRunner: @unchecked Sendable {
     ) {
         let seconds = timeoutSeconds
         Task {
-            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            // Poll instead of one long sleep, so the watcher (and the Process
+            // and pipes it holds) goes away within a second of a normal exit
+            // rather than lingering for the whole timeout.
+            let deadline = Date().addingTimeInterval(TimeInterval(seconds))
+            while process.isRunning, Date() < deadline {
+                try? await Task.sleep(for: .seconds(1))
+            }
             if process.isRunning, resumed.takeIfFalse() {
                 codexOneShotLogger.error("codex CLI timed out after \(seconds)s — terminating subprocess")
                 process.terminate()
