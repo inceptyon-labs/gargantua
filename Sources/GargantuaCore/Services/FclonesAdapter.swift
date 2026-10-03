@@ -124,12 +124,14 @@ public struct FclonesAdapter: ScanAdapter {
 
         let output: ProcessOutput
         do {
-            output = try runner.run(
-                executable: binary,
-                arguments: arguments(),
-                timeout: timeout,
-                maxCapturedBytes: Self.scanCaptureLimit
-            )
+            output = try await ProcessCancellation.run {
+                try runner.run(
+                    executable: binary,
+                    arguments: arguments(),
+                    timeout: timeout,
+                    maxCapturedBytes: Self.scanCaptureLimit
+                )
+            }
         } catch {
             await progress?.recordError(
                 "fclones did not complete: \(error.localizedDescription)"

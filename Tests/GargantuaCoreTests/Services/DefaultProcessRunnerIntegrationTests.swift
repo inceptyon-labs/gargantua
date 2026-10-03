@@ -55,4 +55,22 @@ struct DefaultProcessRunnerIntegrationTests {
         #expect(output.exitCode == 0)
         #expect(output.stdout.utf8.count == byteCount)
     }
+
+    @Test("Cancelling the calling task kills a child the runner is waiting on")
+    func cancellationKillsChild() async throws {
+        let runner = DefaultProcessRunner()
+        let started = Date()
+        let task = Task {
+            try await ProcessCancellation.run {
+                try runner.run(executable: URL(fileURLWithPath: "/bin/sleep"), arguments: ["30"], timeout: nil)
+            }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        task.cancel()
+
+        let output = try await task.value
+
+        #expect(output.exitCode == SIGKILL)
+        #expect(Date().timeIntervalSince(started) < 10)
+    }
 }

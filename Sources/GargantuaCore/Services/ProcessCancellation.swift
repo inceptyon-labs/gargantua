@@ -1,0 +1,55 @@
+import Darwin
+import Foundation
+
+/// Lets an async caller kill a child process that a synchronous
+/// `DefaultProcessRunner.run` is blocked on when the calling task is
+/// cancelled. Without it a cancelled scan or a Rescan left fclones or
+/// czkawka running to completion beside the new one.
+///
+/// `run(_:)` binds a handle as a task-local for the duration of `body`; the
+/// runner registers each child's process group with it between spawn and
+/// reap, and task cancellation SIGKILLs that group. Outside `run(_:)` the
+/// runner behaves as before.
+public final class ProcessCancellation: @unchecked Sendable {
+    @TaskLocal static var current: ProcessCancellation?
+
+    private let lock = NSLock()
+    private var pid: pid_t?
+    private var cancelled = false
+
+    /// Runs `body`, killing any child it spawns through `DefaultProcessRunner`
+    /// if the current task is cancelled before that child exits.
+    public static func run<T>(_ body: () throws -> T) async rethrows -> T {
+        let handle = ProcessCancellation()
+        return try await withTaskCancellationHandler {
+            try $current.withValue(handle) { try body() }
+        } onCancel: {
+            handle.cancel()
+        }
+    }
+
+    /// Called by the runner right after spawning. Kills immediately if the
+    /// task was already cancelled.
+    func register(_ pid: pid_t) {
+        lock.lock(); defer { lock.unlock() }
+        self.pid = pid
+        if cancelled {
+            _ = killpg(pid, SIGKILL)
+        }
+    }
+
+    /// Called by the runner as soon as the child is reaped, so a late cancel
+    /// can't signal a process group ID that has since been reused.
+    func unregister() {
+        lock.lock(); defer { lock.unlock() }
+        pid = nil
+    }
+
+    private func cancel() {
+        lock.lock(); defer { lock.unlock() }
+        cancelled = true
+        if let pid {
+            _ = killpg(pid, SIGKILL)
+        }
+    }
+}

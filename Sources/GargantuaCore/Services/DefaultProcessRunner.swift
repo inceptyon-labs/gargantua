@@ -70,11 +70,15 @@ public struct DefaultProcessRunner: ProcessRunner {
 
         drain.startDraining()
         let watchdog = ProcessTimeoutWatchdog(pid: pid, timeout: timeout)
+        let cancellation = ProcessCancellation.current
+        cancellation?.register(pid)
 
         let status: Int32
         do {
             status = try Self.waitForExit(pid: pid)
+            cancellation?.unregister()
         } catch {
+            cancellation?.unregister()
             watchdog.markReaped()
             watchdog.cancel()
             throw error

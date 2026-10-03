@@ -112,6 +112,10 @@ public struct CzkawkaAdapter: ScanAdapter {
     /// told via `ProcessOutput.stdoutTruncated`.
     static let scanCaptureLimit: Int = 64 * 1024 * 1024
 
+    /// Wall-clock limit per czkawka_cli subcommand. Similar-image hashing over
+    /// a large photo library is the slow case; a hung run must still end.
+    static let scanTimeout: TimeInterval = 30 * 60
+
     private let binary: URL
     private let categories: [CzkawkaCategory]
     private let scanRoots: [URL]
@@ -184,12 +188,14 @@ public struct CzkawkaAdapter: ScanAdapter {
 
             let output: ProcessOutput
             do {
-                output = try runner.run(
-                    executable: binary,
-                    arguments: arguments(for: category),
-                    timeout: nil,
-                    maxCapturedBytes: Self.scanCaptureLimit
-                )
+                output = try await ProcessCancellation.run {
+                    try runner.run(
+                        executable: binary,
+                        arguments: arguments(for: category),
+                        timeout: Self.scanTimeout,
+                        maxCapturedBytes: Self.scanCaptureLimit
+                    )
+                }
             } catch {
                 await progress?.recordError(
                     "czkawka_cli \(category.subcommand) did not launch: \(error.localizedDescription)"
