@@ -115,3 +115,44 @@ extension CleanupResultTests {
         #expect(!error.isEmpty)
     }
 }
+
+/// Moves items into a fixture Trash so tests never touch the real one.
+@MainActor
+final class FixtureTrashMover: TrashMoving {
+    private let trash: URL
+
+    init(trash: URL) {
+        self.trash = trash
+    }
+
+    func moveToTrash(_ url: URL) async throws -> URL? {
+        let destination = trash.appendingPathComponent(url.lastPathComponent)
+        try FileManager.default.moveItem(at: url, to: destination)
+        return destination
+    }
+}
+
+extension CleanupResultTests {
+    @Test("Trash container is emptied before other items so this batch's trashed items survive")
+    @MainActor
+    func trashContainerRunsFirst() async throws {
+        let fixture = try makeFakeTrash(children: ["old.txt": Data("old".utf8)])
+        defer { try? FileManager.default.removeItem(at: fixture.home) }
+        let victim = fixture.home.appendingPathComponent("cache.bin")
+        try Data("keep me recoverable".utf8).write(to: victim)
+
+        let items = [
+            makeItem(id: "cache", path: victim.path, size: 19),
+            makeItem(id: "trash", path: fixture.trash.path, size: fixture.totalBytes),
+        ]
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: fixture.home,
+            trashMover: FixtureTrashMover(trash: fixture.trash)
+        )
+        let result = await engine.clean(items, method: .trash, authorization: .unchecked(.deepClean))
+
+        #expect(result.allSucceeded)
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: fixture.trash.path)
+        #expect(remaining == ["cache.bin"])
+    }
+}

@@ -190,7 +190,7 @@ public final class CleanupEngine: Sendable {
     ) async -> CleanupResult {
         var results: [CleanupItemResult] = []
 
-        for item in items {
+        for item in trashContainerFirst(items) {
             // Honor cooperative cancellation between items so the user's
             // "Sever Tether" abort actually stops the loop. Items already
             // deleted stay deleted; the partial CleanupResult flows through

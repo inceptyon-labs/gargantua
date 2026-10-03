@@ -17,6 +17,22 @@ extension CleanupEngine {
         return target == trash
     }
 
+    /// Moves any Trash-container item to the front of the batch. Emptying the
+    /// Trash removes everything in it permanently, so running it after other
+    /// items would destroy what this same batch just moved to the Trash.
+    func trashContainerFirst(_ items: [ScanResult]) -> [ScanResult] {
+        var containers: [ScanResult] = []
+        var others: [ScanResult] = []
+        for item in items {
+            if isTrashContainer(URL(fileURLWithPath: item.path)) {
+                containers.append(item)
+            } else {
+                others.append(item)
+            }
+        }
+        return containers + others
+    }
+
     private var trashURL: URL {
         homeDirectory.appendingPathComponent(".Trash", isDirectory: true)
     }
