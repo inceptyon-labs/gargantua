@@ -15,6 +15,11 @@ extension MCPCleanToolHandler {
         return nil
     }
 
+    static func isUserTrash(_ path: String) -> Bool {
+        let trash = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+        return URL(fileURLWithPath: path).standardizedFileURL.path == trash.standardizedFileURL.path
+    }
+
     static func resolveMethod(_ raw: String) -> CleanupMethod? {
         switch raw {
         case "trash": return .trash

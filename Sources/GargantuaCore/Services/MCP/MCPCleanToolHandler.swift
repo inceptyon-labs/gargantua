@@ -255,6 +255,16 @@ public struct MCPCleanToolHandler: Sendable {
             throw MCPToolError.invalidParams(Self.protectedRejectMessage(protected))
         }
 
+        // Cleaning the Trash itself empties it, which is permanent. Under
+        // "trash" the consent banner, the output and the audit would all
+        // describe a recoverable move, so require the caller to say "delete".
+        if method == .trash, let trash = found.first(where: { Self.isUserTrash($0.path) }) {
+            throw MCPToolError.invalidParams(
+                "'\(trash.id)' is the Trash itself; cleaning it permanently deletes its contents. "
+                    + "Pass method 'delete' to do that."
+            )
+        }
+
         return (method, found)
     }
 

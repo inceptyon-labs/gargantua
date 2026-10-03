@@ -48,6 +48,23 @@ struct MCPCleanToolHandlerValidationTests {
         }
     }
 
+    @Test("cleaning the Trash itself requires method delete")
+    func trashContainerRequiresDelete() throws {
+        let trashPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash").path
+        let cache = MCPCleanTestFixtures.cacheWith([MCPCleanTestFixtures.makeResult(id: "user_trash", path: trashPath)])
+        let subject = MCPCleanTestFixtures.handler(cache: cache)
+        do {
+            _ = try subject.handle(MCPCleanTestFixtures.arguments([
+                "item_ids": .array([.string("user_trash")]),
+                "confirm": .bool(true),
+                "dry_run": .bool(true),
+            ]))
+            Issue.record("handler should have thrown invalidParams")
+        } catch MCPToolError.invalidParams(let message) {
+            #expect(message.contains("permanently"))
+        }
+    }
+
     // MARK: Unknown IDs
 
     @Test("unknown item_ids reject the request as invalidParams")
