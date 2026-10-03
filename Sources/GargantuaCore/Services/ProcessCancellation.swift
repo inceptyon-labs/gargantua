@@ -23,10 +23,19 @@ public final class ProcessCancellation: Sendable {
 
     /// Runs `body`, killing any child it spawns through `DefaultProcessRunner`
     /// if the current task is cancelled before that child exits.
-    public static func run<T>(_ body: () throws -> T) async rethrows -> T {
+    ///
+    /// `body` blocks until its child exits, so it runs on a GCD thread rather
+    /// than holding a thread of the cooperative pool for the whole scan. On a
+    /// machine with few cores, blocked pool threads also starve the task that
+    /// would deliver the cancellation.
+    public static func run<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
         let handle = ProcessCancellation()
         return try await withTaskCancellationHandler {
-            try $current.withValue(handle) { try body() }
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(with: Result { try $current.withValue(handle) { try body() } })
+                }
+            }
         } onCancel: {
             handle.cancel()
         }
