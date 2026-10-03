@@ -262,7 +262,7 @@ struct DirectorySizeScannerTests {
 
     // MARK: - UF_HIDDEN system folders vs. dotfiles
 
-    @Test("scanChildren lists a UF_HIDDEN directory but not a dot-prefixed one")
+    @Test("scanChildren lists UF_HIDDEN and dot-prefixed directories")
     func scanChildrenListsHiddenSystemFolder() async throws {
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("dss-uf-\(UUID().uuidString)", isDirectory: true)
@@ -284,7 +284,7 @@ struct DirectorySizeScannerTests {
         let items = await DirectorySizeScanner.scanChildren(of: root.path)
         let names = items.map(\.name)
         #expect(names.contains("opt_like"))
-        #expect(!names.contains(".dotdir"))
+        #expect(names.contains(".dotdir"))
     }
 
     // MARK: - Mount roots

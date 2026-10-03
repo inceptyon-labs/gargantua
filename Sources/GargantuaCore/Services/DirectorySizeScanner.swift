@@ -13,16 +13,16 @@ enum ChildKind {
     case unreadableDirectory
 }
 
-/// Dot-prefixed names stay hidden; UF_HIDDEN system folders (e.g. /opt, /usr,
-/// /Volumes) are not filtered by name and are classified normally.
+/// Hidden folders are listed like any other: dot folders (`.git`, `~/.cache`,
+/// `~/.ollama`) and UF_HIDDEN system folders (/opt, /usr, /Volumes). Their
+/// bytes are part of the parent's size, so leaving them out made a folder's
+/// children add up to far less than the folder. Dot-prefixed *files* (.DS_Store)
+/// still fold into the "(Files)" row.
 func classifyChild(
     _ child: URL,
     fm: FileManager,
     mountRootCheck: @Sendable (URL) -> (isMountRoot: Bool, isNetwork: Bool)
 ) -> ChildKind {
-    if child.lastPathComponent.hasPrefix(".") {
-        return .skip
-    }
     if (try? child.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
         return .skip
     }
@@ -240,8 +240,8 @@ public enum DirectorySizeScanner: Sendable {
                 let fm = FileManager.default
                 let url = URL(fileURLWithPath: directoryPath)
 
-                // Dot-prefixed names stay hidden; UF_HIDDEN system folders (e.g. /opt,
-                // /usr, /Volumes) are not filtered by name and are listed.
+                // Hidden folders (dot-prefixed and UF_HIDDEN) are listed; see
+                // `classifyChild`.
                 guard let contents = try? fm.contentsOfDirectory(
                     at: url,
                     includingPropertiesForKeys: [
