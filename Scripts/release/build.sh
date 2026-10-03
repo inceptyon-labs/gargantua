@@ -41,6 +41,14 @@ run swift build \
     --arch arm64 \
     --product "GargantuaScheduler"
 
+# Bundled so Agent Run (which launches it --propose-only) and Settings' SSE
+# server find it next to the app instead of falling back to `swift run`.
+run swift build \
+    --package-path "$REPO_ROOT" \
+    -c release \
+    --arch arm64 \
+    --product "GargantuaMCP"
+
 # --show-bin-path is non-destructive, always safe to run even under --dry-run.
 SWIFT_BIN_DIR="$(swift build \
     --package-path "$REPO_ROOT" \
@@ -56,6 +64,8 @@ if [ "${DRY_RUN:-0}" != "1" ]; then
         || die "swift build did not produce $SWIFT_BIN_DIR/GargantuaPrivilegedHelper"
     [ -x "$SWIFT_BIN_DIR/GargantuaScheduler" ] \
         || die "swift build did not produce $SWIFT_BIN_DIR/GargantuaScheduler"
+    [ -x "$SWIFT_BIN_DIR/GargantuaMCP" ] \
+        || die "swift build did not produce $SWIFT_BIN_DIR/GargantuaMCP"
     [ -d "$SWIFT_BIN_DIR/Gargantua_GargantuaCore.bundle" ] \
         || die "missing GargantuaCore resource bundle at $SWIFT_BIN_DIR/Gargantua_GargantuaCore.bundle"
 fi

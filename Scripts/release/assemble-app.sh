@@ -8,6 +8,7 @@
 #       PkgInfo                 (APPL????)
 #       MacOS/Gargantua         (the executable)
 #       MacOS/GargantuaScheduler (LaunchAgent background scan entry point)
+#       MacOS/GargantuaMCP      (MCP server: Agent Run, Settings' SSE server)
 #       Frameworks/Sparkle.framework
 #       Library/LaunchAgents/   (SMAppService per-user LaunchAgent plist)
 #       Library/LaunchDaemons/  (SMAppService launch daemon plist)
@@ -88,6 +89,8 @@ run cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 run chmod 0755 "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 run cp "$SWIFT_BIN_DIR/GargantuaScheduler" "$APP_BUNDLE/Contents/MacOS/GargantuaScheduler"
 run chmod 0755 "$APP_BUNDLE/Contents/MacOS/GargantuaScheduler"
+run cp "$SWIFT_BIN_DIR/GargantuaMCP" "$APP_BUNDLE/Contents/MacOS/GargantuaMCP"
+run chmod 0755 "$APP_BUNDLE/Contents/MacOS/GargantuaMCP"
 
 # SwiftPM links Sparkle with @rpath/Sparkle.framework and gives the CLI
 # executable @loader_path as its only local rpath. App bundles conventionally
