@@ -385,11 +385,17 @@ public final class CleanupEngine: Sendable {
             )
         }
 
+        // A linked worktree's registration in .git/worktrees outlives its
+        // working tree, and the next scan would offer it again as prunable.
+        // Resolve it while the tree's `.git` file is still there.
+        let worktreeAdmin = item.isGitWorktree ? GitWorktreeScanAdapter.adminDirectory(forWorktree: url) : nil
+
+        let result: CleanupItemResult
         switch method {
         case .trash:
-            return await recycleSingle(url: url, item: item)
+            result = await recycleSingle(url: url, item: item)
         case .delete:
-            return await deleteSingle(url: url, item: item)
+            result = await deleteSingle(url: url, item: item)
         case .toolNative:
             return CleanupItemResult(
                 item: item,
@@ -397,6 +403,15 @@ public final class CleanupEngine: Sendable {
                 error: "Tool-native cleanup is not supported by CleanupEngine."
             )
         }
+
+        if result.succeeded, let worktreeAdmin {
+            // Best effort: if this fails the registration shows up as a
+            // prunable item on the next scan.
+            _ = method == .delete
+                ? await deleteSingle(url: worktreeAdmin, item: item)
+                : await recycleSingle(url: worktreeAdmin, item: item)
+        }
+        return result
     }
 
     /// Removal attempts and the delay between them for a *transient* failure —

@@ -24,6 +24,56 @@ struct GitWorktreeScanAdapterTests {
         #expect(result.tags.contains("git-worktree"))
         #expect(result.explanation.contains("git worktree prune"))
         #expect(result.name == "acme worktree — agent-feature")
+        // The directory is gone; the registration is what a clean removes.
+        let admin = repo.appendingPathComponent(".git/worktrees/agent-feature")
+        #expect(URL(fileURLWithPath: result.path).resolvingSymlinksInPath() == admin.resolvingSymlinksInPath())
+    }
+
+    @Test("a relative gitdir resolves against the admin dir, not the process cwd")
+    func relativeGitdirResolvesAgainstAdmin() async throws {
+        let fixture = try FixtureTree()
+        let repo = try fixture.makeRepo("acme")
+        let wt = fixture.root.appendingPathComponent("wt/old-feature")
+        try fixture.addWorktree(repo: repo, name: "old-feature", worktreePath: wt, createWorkingDir: true, headAge: 30 * Self.day)
+        let admin = repo.appendingPathComponent(".git/worktrees/old-feature")
+        try "../../../../wt/old-feature/.git\n".write(to: admin.appendingPathComponent("gitdir"), atomically: true, encoding: .utf8)
+
+        let results = try await Self.makeAdapter(fixture).scan(progress: nil)
+
+        #expect(results.map(\.path) == [wt.standardizedFileURL.path])
+    }
+
+    @Test("adminDirectory follows the worktree's .git file only when the registration points back")
+    func adminDirectoryRequiresBackPointer() throws {
+        let fixture = try FixtureTree()
+        let repo = try fixture.makeRepo("acme")
+        let wt = fixture.root.appendingPathComponent("wt/feature")
+        try fixture.addWorktree(repo: repo, name: "feature", worktreePath: wt, createWorkingDir: true, headAge: 30 * Self.day)
+        let admin = repo.appendingPathComponent(".git/worktrees/feature")
+
+        #expect(GitWorktreeScanAdapter.adminDirectory(forWorktree: wt)?.path == admin.standardizedFileURL.path)
+
+        let other = fixture.root.appendingPathComponent("wt/other")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try "gitdir: \(admin.path)\n".write(to: other.appendingPathComponent(".git"), atomically: true, encoding: .utf8)
+        #expect(GitWorktreeScanAdapter.adminDirectory(forWorktree: other) == nil)
+    }
+
+    @Test("cleaning an inactive worktree also removes its registration")
+    @MainActor
+    func cleaningWorktreeDropsRegistration() async throws {
+        let fixture = try FixtureTree()
+        let repo = try fixture.makeRepo("acme")
+        let wt = fixture.root.appendingPathComponent("wt/old-feature")
+        try fixture.addWorktree(repo: repo, name: "old-feature", worktreePath: wt, createWorkingDir: true, headAge: 30 * Self.day)
+        let item = try #require(try await Self.makeAdapter(fixture).scan(progress: nil).first)
+        let engine = CleanupEngine(homeDirectoryForTesting: fixture.root)
+
+        let result = await engine.clean([item], method: .delete, authorization: .unchecked(.deepClean))
+
+        #expect(result.allSucceeded)
+        #expect(!FileManager.default.fileExists(atPath: wt.path))
+        #expect(!FileManager.default.fileExists(atPath: repo.appendingPathComponent(".git/worktrees/old-feature").path))
     }
 
     @Test("inactive worktree past the staleness window surfaces as review")
@@ -164,6 +214,7 @@ struct GitWorktreeScanAdapterTests {
             if createWorkingDir {
                 try fm.createDirectory(at: worktreePath, withIntermediateDirectories: true)
                 try Data(repeating: 0x1, count: 64).write(to: worktreePath.appendingPathComponent("file.txt"))
+                try "gitdir: \(admin.path)\n".write(to: worktreePath.appendingPathComponent(".git"), atomically: true, encoding: .utf8)
             }
         }
     }

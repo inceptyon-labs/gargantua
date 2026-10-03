@@ -72,6 +72,8 @@ public struct GitWorktreeCandidate: Sendable, Equatable {
     public let worktreeName: String
     /// The on-disk worktree path (may no longer exist when `prunable`).
     public let path: String
+    /// The registration under `.git/worktrees/<name>`.
+    public let adminPath: String
     /// Bytes reclaimable: the worktree tree if present, else its admin dir.
     public let size: Int64
     /// Newest admin-metadata timestamp (proxy for last activity).
@@ -83,6 +85,7 @@ public struct GitWorktreeCandidate: Sendable, Equatable {
         repositoryName: String,
         worktreeName: String,
         path: String,
+        adminPath: String,
         size: Int64,
         lastActivity: Date?,
         reason: GitWorktreeStaleReason
@@ -90,6 +93,7 @@ public struct GitWorktreeCandidate: Sendable, Equatable {
         self.repositoryName = repositoryName
         self.worktreeName = worktreeName
         self.path = path
+        self.adminPath = adminPath
         self.size = size
         self.lastActivity = lastActivity
         self.reason = reason

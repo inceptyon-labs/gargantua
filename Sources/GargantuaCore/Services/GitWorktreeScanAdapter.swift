@@ -131,7 +131,7 @@ public struct GitWorktreeScanAdapter: ScanAdapter {
             return nil
         }
 
-        guard let worktreePath = worktreePath(fromAdmin: admin) else { return nil }
+        guard let worktreePath = Self.worktreePath(fromAdmin: admin) else { return nil }
         guard policy.protectionReason(for: worktreePath) == nil,
               !policy.isExcluded(path: worktreePath) else {
             return nil
@@ -160,6 +160,7 @@ public struct GitWorktreeScanAdapter: ScanAdapter {
             repositoryName: repository.lastPathComponent,
             worktreeName: admin.lastPathComponent,
             path: worktreePath,
+            adminPath: admin.path,
             size: size,
             lastActivity: lastActivity,
             reason: reason
@@ -167,13 +168,40 @@ public struct GitWorktreeScanAdapter: ScanAdapter {
     }
 
     /// The `gitdir` admin file points at the worktree's `.git` file; the
-    /// worktree directory is that file's parent.
-    private func worktreePath(fromAdmin admin: URL) -> String? {
-        let gitdirFile = admin.appendingPathComponent("gitdir")
-        guard let raw = try? String(contentsOf: gitdirFile, encoding: .utf8) else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return URL(fileURLWithPath: trimmed).deletingLastPathComponent().path
+    /// worktree directory is that file's parent. Git writes it relative to
+    /// the admin dir under `worktree.useRelativePaths`.
+    static func worktreePath(fromAdmin admin: URL) -> String? {
+        guard let gitFile = resolvedPointer(in: admin.appendingPathComponent("gitdir"), prefix: "", base: admin) else {
+            return nil
+        }
+        return gitFile.deletingLastPathComponent().path
+    }
+
+    /// The `.git/worktrees/<name>` registration of the linked worktree at
+    /// `worktree`, read from its `.git` file (`gitdir: <admin>`). Returns nil
+    /// unless that admin dir's own `gitdir` points back at this worktree, so a
+    /// crafted `.git` file can't steer removal at another directory.
+    public static func adminDirectory(forWorktree worktree: URL) -> URL? {
+        guard let admin = resolvedPointer(in: worktree.appendingPathComponent(".git"), prefix: "gitdir:", base: worktree),
+              admin.deletingLastPathComponent().lastPathComponent == "worktrees",
+              let backPointer = worktreePath(fromAdmin: admin) else {
+            return nil
+        }
+        let worktreePath = worktree.standardizedFileURL.resolvingSymlinksInPath().path
+        guard URL(fileURLWithPath: backPointer).resolvingSymlinksInPath().path == worktreePath else { return nil }
+        return admin
+    }
+
+    /// Reads a one-line path pointer file, strips `prefix`, and resolves a
+    /// relative path against `base`.
+    private static func resolvedPointer(in file: URL, prefix: String, base: URL) -> URL? {
+        guard let raw = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+        let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard line.hasPrefix(prefix) else { return nil }
+        let target = line.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+        guard !target.isEmpty else { return nil }
+        let url = target.hasPrefix("/") ? URL(fileURLWithPath: target) : base.appendingPathComponent(target)
+        return url.standardizedFileURL
     }
 
     private func newestAdminTimestamp(admin: URL) -> Date? {
@@ -192,18 +220,26 @@ public struct GitWorktreeScanAdapter: ScanAdapter {
     // MARK: - Result mapping
 
     private static func makeScanResult(_ candidate: GitWorktreeCandidate) -> ScanResult {
+        // A prunable worktree's directory is gone; what's left to remove is
+        // its registration, exactly what `git worktree prune` deletes. An
+        // inactive one is removed as its working tree, and the engine drops
+        // the registration with it (`adminDirectory(forWorktree:)`).
         let evidence: String
+        let path: String
         switch candidate.reason {
         case .prunable:
-            evidence = "Its working directory is gone, so `git worktree prune` would drop this stale registration."
+            evidence = "Its working directory (\(candidate.path)) is gone, so this removes the stale registration " +
+                "in .git/worktrees, as `git worktree prune` would."
+            path = candidate.adminPath
         case let .inactive(days):
             evidence = "No worktree activity in \(days) day\(days == 1 ? "" : "s")."
+            path = candidate.path
         }
 
         return ScanResult(
             id: resultIDPrefix + sanitizedID("\(candidate.repositoryName)-\(candidate.worktreeName)-\(candidate.path)"),
             name: "\(candidate.repositoryName) worktree — \(candidate.worktreeName)",
-            path: candidate.path,
+            path: path,
             size: candidate.size,
             safety: .review,
             confidence: 72,
@@ -228,5 +264,12 @@ public struct GitWorktreeScanAdapter: ScanAdapter {
             .split(separator: "-")
             .joined(separator: "-")
             .lowercased()
+    }
+}
+
+extension ScanResult {
+    /// Whether this result is a linked git worktree (or its stale registration).
+    public var isGitWorktree: Bool {
+        id.hasPrefix(GitWorktreeScanAdapter.resultIDPrefix)
     }
 }
