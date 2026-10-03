@@ -139,8 +139,13 @@ public final class DiskExplorerState {
         phase = .results
     }
 
+    /// Rescans the current folder. Every folder above it in the breadcrumb is
+    /// dropped from the cache too: their listings sized this folder, so after
+    /// a trash (or any change found here) going back up would show old sizes.
     public func refreshCurrent() {
-        pathCache.removeValue(forKey: currentPath)
+        for crumb in pathStack {
+            pathCache.removeValue(forKey: crumb.path)
+        }
         unreadablePaths.remove(currentPath)
         items = []
         clearExpansion()

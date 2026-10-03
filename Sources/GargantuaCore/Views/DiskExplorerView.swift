@@ -330,7 +330,9 @@ public struct DiskExplorerView: View {
             dominant: dominant,
             items: state.items,
             maxSize: state.maxSize,
-            onDrillDown: { open($0) }
+            onDrillDown: { open($0) },
+            onItemTrashed: { refreshCurrent() },
+            onLicenseBlocked: { blockedReason = $0 }
         )
     }
 

@@ -1,3 +1,4 @@
+import GargantuaLicensing
 import SwiftUI
 
 /// Alternate layout for folders where one child is so large the treemap
@@ -9,6 +10,8 @@ struct DiskExplorerDominantChildView: View {
     let items: [DirectoryItem]
     let maxSize: Int64
     let onDrillDown: (DirectoryItem) -> Void
+    let onItemTrashed: () -> Void
+    let onLicenseBlocked: (BlockReason) -> Void
 
     private var total: Int64 {
         items.reduce(0) { $0 + max($1.size, 0) }
@@ -128,6 +131,7 @@ struct DiskExplorerDominantChildView: View {
         }
         .buttonStyle(.plain)
         .disabled(!canDrillIn)
+        .modifier(DiskExplorerItemMenu(item: dominant, onItemTrashed: onItemTrashed, onLicenseBlocked: onLicenseBlocked))
     }
 
     @ViewBuilder
@@ -148,8 +152,8 @@ struct DiskExplorerDominantChildView: View {
                                 isExpanded: false,
                                 onExpand: nil,
                                 onDrillDown: { onDrillDown(item) },
-                                onItemTrashed: nil,
-                                onLicenseBlocked: { _ in }
+                                onItemTrashed: onItemTrashed,
+                                onLicenseBlocked: onLicenseBlocked
                             )
                         }
                     }

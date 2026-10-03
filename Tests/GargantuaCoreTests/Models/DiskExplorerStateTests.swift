@@ -280,6 +280,25 @@ struct DiskExplorerStateTests {
         #expect(state.pathStack.count == 1)
     }
 
+    @Test("refreshCurrent drops the cached listings above the current folder, not beside it")
+    @MainActor
+    func refreshCurrentEvictsAncestorListings() {
+        let state = DiskExplorerState()
+        state.startScan()
+        let home = state.currentPath
+        let child = makeItem(name: "Projects", size: 100)
+        state.drillDown(into: child)
+        state.pathCache[home] = [child]
+        state.pathCache[child.path] = [makeItem(name: "big", size: 90)]
+        state.pathCache["/elsewhere"] = [makeItem(name: "x", size: 1)]
+
+        state.refreshCurrent()
+
+        #expect(state.pathCache[home] == nil)
+        #expect(state.pathCache[child.path] == nil)
+        #expect(state.pathCache["/elsewhere"] != nil)
+    }
+
     @Test("refreshCurrent removes the current path from unreadablePaths; startScan clears it")
     @MainActor
     func unreadablePathsClearedByRefreshAndStartScan() {
