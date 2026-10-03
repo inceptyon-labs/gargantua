@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum SidebarServiceIndicatorTone: Equatable {
@@ -196,6 +197,9 @@ struct SystemInfoBar: View {
     private func refreshRuntimeStatusLoop() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
+            // Nothing to show while none of the app's windows is on screen;
+            // the next visible tick catches up.
+            guard NSApp.occlusionState.contains(.visible) else { continue }
             refreshRuntimeStatus()
         }
     }

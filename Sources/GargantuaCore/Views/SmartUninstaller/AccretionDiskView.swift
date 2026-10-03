@@ -13,6 +13,7 @@ public struct AccretionDiskView: View {
     let activityRate: Double
     let size: CGFloat
     let color: Color
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(
         activityRate: Double = 0,
@@ -25,7 +26,9 @@ public struct AccretionDiskView: View {
     }
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+        // 30 fps is smooth for a 14 pt spinner; stop drawing while the window
+        // is minimized or the app is hidden.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: scenePhase == .background)) { context in
             Canvas { ctx, canvasSize in
                 draw(into: &ctx, size: canvasSize, time: context.date.timeIntervalSinceReferenceDate)
             }
