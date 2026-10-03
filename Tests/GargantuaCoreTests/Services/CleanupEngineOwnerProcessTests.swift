@@ -58,34 +58,13 @@ struct CleanupEngineOwnerProcessTests {
     @Test("The terminator reports failure while a command-line owner runs, success once it exits")
     @MainActor
     func terminatorSeesCommandLineOwner() async throws {
-        let suffix = String(UUID().uuidString.lowercased().filter { $0.isHexDigit }.prefix(8))
-        let name = "gargantua-probe-\(suffix)"
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let binary = dir.appendingPathComponent(name)
-        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: binary)
-        let process = Process()
-        process.executableURL = binary
-        process.arguments = ["30"]
-        defer {
-            if process.isRunning { process.terminate() }
-            try? FileManager.default.removeItem(at: dir)
-        }
-        try process.run()
-
-        let checker = DefaultRunningProcessChecker()
-        let deadline = Date().addingTimeInterval(5)
-        while !checker.isRunning(identifier: name), Date() < deadline {
-            try await Task.sleep(nanoseconds: 50_000_000)
-        }
+        let probe = try ProbeProcess()
         let terminator = WorkspaceRunningApplicationTerminator()
 
-        #expect(await terminator.terminateRunningApplications(bundleIdentifier: name, timeout: 1) == false)
+        #expect(await terminator.terminateRunningApplications(bundleIdentifier: probe.name, timeout: 1) == false)
 
-        process.terminate()
-        process.waitUntilExit()
+        probe.stop()
 
-        #expect(await terminator.terminateRunningApplications(bundleIdentifier: name, timeout: 1) == true)
+        #expect(await terminator.terminateRunningApplications(bundleIdentifier: probe.name, timeout: 1) == true)
     }
 }
