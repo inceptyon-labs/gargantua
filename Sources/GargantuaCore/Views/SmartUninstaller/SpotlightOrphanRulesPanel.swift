@@ -28,9 +28,16 @@ final class SpotlightOrphanRulesPanelViewModel: ObservableObject {
         self.scanner = scanner
     }
 
-    func load() {
-        orphans = scanner.findOrphans()
+    /// Finding orphans can spawn `mdfind` per unresolved rule and read every
+    /// app's Info.plist, so it runs off the main actor.
+    func load() async {
+        orphans = await findOrphansDetached()
         hasLoaded = true
+    }
+
+    private func findOrphansDetached() async -> [SpotlightOrphanRule] {
+        let scanner = scanner
+        return await Task.detached(priority: .userInitiated) { scanner.findOrphans() }.value
     }
 
     func prune() async {
@@ -38,7 +45,7 @@ final class SpotlightOrphanRulesPanelViewModel: ObservableObject {
         defer { isPruning = false }
         do {
             let outcome = try await scanner.prune()
-            orphans = scanner.findOrphans()
+            orphans = await findOrphansDetached()
             notice = outcome.didWrite ? .removed(outcome.removed.count) : .alreadyClean
         } catch SpotlightOrphanRuleScanner.PruneError.destructiveActionBlocked {
             notice = .blocked
@@ -90,7 +97,7 @@ struct SpotlightOrphanRulesPanel: View {
                 .padding(.vertical, GargantuaSpacing.space3)
             }
         }
-        .task { model.load() }
+        .task { await model.load() }
         .sheet(isPresented: $showingConfirm) {
             DestructiveConfirmSheet(
                 title: "Remove these Spotlight rules?",

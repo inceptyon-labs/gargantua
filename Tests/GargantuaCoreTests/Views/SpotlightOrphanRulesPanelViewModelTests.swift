@@ -37,11 +37,11 @@ struct SpotlightOrphanRulesPanelViewModelTests {
     }
 
     @Test("load surfaces the orphans and flips hasLoaded")
-    func loadPopulatesOrphans() {
+    func loadPopulatesOrphans() async {
         let model = model(store: FakeStore(["com.gone.app", "com.apple.tips", "com.docker.docker"]), installed: ["com.docker.docker"])
 
         #expect(model.hasLoaded == false)
-        model.load()
+        await model.load()
 
         #expect(model.hasLoaded)
         #expect(model.orphans.map(\.identifier) == ["com.gone.app"])
@@ -51,7 +51,7 @@ struct SpotlightOrphanRulesPanelViewModelTests {
     func pruneRemovesAndRefreshes() async {
         let store = FakeStore(["com.gone.app", "com.apple.tips", "com.docker.docker"])
         let model = model(store: store, installed: ["com.docker.docker"])
-        model.load()
+        await model.load()
         #expect(model.orphans.map(\.identifier) == ["com.gone.app"])
 
         await model.prune()
@@ -66,7 +66,7 @@ struct SpotlightOrphanRulesPanelViewModelTests {
     func pruneBlocked() async {
         let store = FakeStore(["com.gone.app"])
         let model = model(store: store, installed: [], gate: { nil })
-        model.load()
+        await model.load()
 
         await model.prune()
 
@@ -79,7 +79,7 @@ struct SpotlightOrphanRulesPanelViewModelTests {
     func pruneAlreadyClean() async {
         let store = FakeStore(["com.apple.tips", "com.docker.docker"])
         let model = model(store: store, installed: ["com.docker.docker"])
-        model.load()
+        await model.load()
         #expect(model.orphans.isEmpty)
 
         await model.prune()
