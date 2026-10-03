@@ -71,6 +71,9 @@ extension SmartUninstallerViewModel {
         var results: [UninstallExecutionResult] = []
         let total = plans.count
         phase = .batchExecuting(completed: 0, total: total)
+        pathStream.beginProgress(total: plans.reduce(0) { count, plan in
+            count + plan.allItems.filter { selectedIDs.contains($0.id) }.count
+        })
 
         let exec = observing(executor)
         for (idx, plan) in plans.enumerated() {

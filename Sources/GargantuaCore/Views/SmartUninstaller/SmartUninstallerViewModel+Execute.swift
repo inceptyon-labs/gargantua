@@ -47,6 +47,7 @@ extension SmartUninstallerViewModel {
         )
 
         phase = .executing(prunedPlan)
+        pathStream.beginProgress(total: prunedPlan.allItems.count)
         let exec = observing(executor)
         do {
             let authorization = try await uninstallAuthorization()

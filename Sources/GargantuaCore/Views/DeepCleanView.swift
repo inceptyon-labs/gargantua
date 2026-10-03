@@ -299,6 +299,7 @@ public struct DeepCleanView: View {
 
     private func runCleanup(_ items: [ScanResult], method: CleanupMethod, authorization: DestructiveActionAuthorization) {
         session.beginCleanup(method: method)
+        session.pathStream.beginProgress(total: items.count)
         session.activeTask = Task {
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(

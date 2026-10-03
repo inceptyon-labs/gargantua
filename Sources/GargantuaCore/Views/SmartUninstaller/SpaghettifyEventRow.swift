@@ -7,6 +7,9 @@ struct SpaghettifyEventRow: View {
     let event: ScanProgressEvent
     let seq: Int
     let shouldSpaghettify: Bool
+    /// Already swallowed: a row scrolled back into view (LazyVStack rebuilds
+    /// it) shows the end state instead of replaying the animation.
+    let isSwallowed: Bool
     let reduceMotion: Bool
     let badge: String
     let badgeColor: Color
@@ -16,9 +19,11 @@ struct SpaghettifyEventRow: View {
 
     @State private var progress: Double = 0
 
+    private var shownProgress: Double { isSwallowed ? 1 : progress }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
-            Text(Spaghettify.text(displayPath, progress: progress))
+            Text(Spaghettify.text(displayPath, progress: shownProgress))
                 .font(GargantuaFonts.monoPath)
                 .foregroundStyle(rowColor)
                 .lineLimit(1)
@@ -30,9 +35,9 @@ struct SpaghettifyEventRow: View {
                 .foregroundStyle(badgeColor)
                 .frame(width: 72, alignment: .trailing)
         }
-        .spaghettify(progress: progress, reduceMotion: reduceMotion)
+        .spaghettify(progress: shownProgress, reduceMotion: reduceMotion)
         .task(id: seq) {
-            guard shouldSpaghettify else { return }
+            guard shouldSpaghettify, !isSwallowed else { return }
             // Respect cancellation: SwiftUI cancels `.task` when the view is
             // replaced (phase change, ring-buffer rollover, identity churn).
             // `try? await Task.sleep` swallows the cancellation error, so the

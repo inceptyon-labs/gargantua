@@ -52,6 +52,13 @@ public struct EventHorizonConsoleView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
             header
+            if context.isExecuting, let total = stream.expectedTotal {
+                CleanupProgressGauge(
+                    cleaned: stream.settledCount - stream.settledFailureCount,
+                    failed: stream.settledFailureCount,
+                    total: total
+                )
+            }
             subtitleLine
             rollingLog
             footer
@@ -296,5 +303,57 @@ public struct EventHorizonConsoleView: View {
     private func formattedBytes(_ bytes: Int64) -> String {
         if bytes == 0 { return "0 B" }
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+/// "37 / 223 cleaned" with a bar, so a long cleanup shows how much is left.
+/// The bar fills with every finished item, failures included; the count
+/// beside it is only what was actually removed.
+struct CleanupProgressGauge: View {
+    let cleaned: Int
+    let failed: Int
+    let total: Int
+
+    private var finished: Int { min(cleaned + failed, total) }
+
+    private var fraction: Double {
+        total > 0 ? Double(finished) / Double(total) : 0
+    }
+
+    var body: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            Text("\(min(cleaned, total)) / \(total) cleaned")
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink)
+                .monospacedDigit()
+                .fixedSize()
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(GargantuaColors.surface3)
+                    Capsule()
+                        .fill(GargantuaColors.accretion)
+                        .frame(width: max(geometry.size.width * fraction, fraction > 0 ? 6 : 0))
+                }
+            }
+            .frame(height: 6)
+            .animation(.easeOut(duration: 0.2), value: fraction)
+
+            Text("\(Int((fraction * 100).rounded(.down)))%")
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink3)
+                .monospacedDigit()
+                .frame(width: 44, alignment: .trailing)
+
+            if failed > 0 {
+                Text("\(failed) failed")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.protected_)
+                    .fixedSize()
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Cleaned \(min(cleaned, total)) of \(total)\(failed > 0 ? ", \(failed) failed" : "")")
+        .accessibilityValue("\(Int((fraction * 100).rounded(.down))) percent")
     }
 }

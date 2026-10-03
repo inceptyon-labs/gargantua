@@ -33,6 +33,20 @@ public final class PathStreamViewModel: ScanProgressObserving {
     /// Bytes counted per matched path, for `totalBytes`' nesting rule.
     private var countedBytesByPath: [String: Int64] = [:]
 
+    /// Items in the cleanup or uninstall being tracked, set by
+    /// `beginProgress(total:)`; `nil` for a scan, which has no known total.
+    public private(set) var expectedTotal: Int?
+
+    /// Distinct items finished (removed, failed or skipped) since
+    /// `beginProgress(total:)`. Distinct because a permission failure that
+    /// the privileged helper then recovers reports the same path twice.
+    public private(set) var settledCount = 0
+
+    /// Of the settled items, those whose latest outcome is a failure.
+    public private(set) var settledFailureCount = 0
+
+    private var settledFailed: [String: Bool] = [:]
+
     public let bufferCap: Int
 
     /// Sequence number the next appended event will get. Unlike `events.count`
@@ -105,6 +119,15 @@ public final class PathStreamViewModel: ScanProgressObserving {
         append(contentsOf: [event])
     }
 
+    /// Start counting a cleanup's items toward `total`. Earlier events (the
+    /// scan that found them) stay in the log but don't count.
+    public func beginProgress(total: Int) {
+        expectedTotal = total
+        settledFailed = [:]
+        settledCount = 0
+        settledFailureCount = 0
+    }
+
     /// Appends a drained batch with one write per property, so observers see a
     /// single change per batch instead of one per event.
     public func append(contentsOf batch: [ScanProgressEvent]) {
@@ -131,6 +154,7 @@ public final class PathStreamViewModel: ScanProgressObserving {
             }
         }
 
+        if expectedTotal != nil { settle(batch) }
         events = updated
         if dropped > 0 { firstSequence += dropped }
         if matches > 0 {
@@ -150,6 +174,30 @@ public final class PathStreamViewModel: ScanProgressObserving {
         failureCount = 0
         totalBytes = 0
         countedBytesByPath = [:]
+        expectedTotal = nil
+        settledFailed = [:]
+        settledCount = 0
+        settledFailureCount = 0
+    }
+
+    private func settle(_ batch: [ScanProgressEvent]) {
+        var settled = settledCount
+        var failures = settledFailureCount
+        for event in batch {
+            let failed: Bool
+            switch event.outcome {
+            case .match, .skipped: failed = false
+            case .failed: failed = true
+            case .checked: continue
+            }
+            // Count an item once; a later outcome for it (a recovered
+            // failure) only moves it between failed and not.
+            let previous = settledFailed.updateValue(failed, forKey: event.path)
+            if previous == nil { settled += 1 }
+            failures += (failed ? 1 : 0) - (previous == true ? 1 : 0)
+        }
+        if settled != settledCount { settledCount = settled }
+        if failures != settledFailureCount { settledFailureCount = failures }
     }
 
     private func distinctMatchBytes(path: String, bytes: Int64) -> Int64 {

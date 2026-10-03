@@ -293,6 +293,7 @@ extension AIModelsView {
 extension AIModelsView {
     fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         session.beginCleanup(method: method)
+        session.pathStream.beginProgress(total: items.count)
         Task {
             // License gate fronts every AI Models execute. On blocked, revert
             // the cleaning phase and present the Unlock sheet instead.

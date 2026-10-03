@@ -2,10 +2,11 @@ import SwiftUI
 
 /// Visual "swallowed by Gargantua" effect for deleted path rows.
 ///
-/// During the uninstall `executing` phase each successfully removed path is
-/// shown briefly, then the text's trailing characters dissolve into dots and
-/// the whole line stretches, fades, and collapses vertically — as if it's
-/// being spaghettified across the event horizon.
+/// During a cleanup or uninstall each successfully removed path is shown
+/// briefly, then the text's trailing characters dissolve into dots and the
+/// line stretches and dims — as if it's being spaghettified across the event
+/// horizon. The row keeps its height: collapsing hundreds of rows while the
+/// log scrolled made them overlap, and could empty the log entirely.
 ///
 /// Failed paths never spaghettify; they stay put with the `✗` badge so the
 /// user sees what didn't go.
@@ -25,14 +26,17 @@ public enum Spaghettify {
     static let maxTailStrip = 10
 
     /// Kerning (points) applied to each character at `progress == 1`.
-    static let maxTracking: CGFloat = 8
+    static let maxTracking: CGFloat = 2
+
+    /// Opacity a swallowed row settles at.
+    static let swallowedOpacity: Double = 0.35
 
     /// Compute the textual portion of the spaghettification.
     ///
     /// `progress == 0` returns `base` unchanged. Between 0.33 and 0.66 the
     /// trailing characters of `base` are progressively swapped for glyphs
     /// drawn from `dissolveGlyphs`. Beyond 0.66 the max-strip is held and
-    /// the rest of the animation is opacity + layout collapse.
+    /// the rest of the animation is the fade.
     public static func text(_ base: String, progress: Double) -> String {
         guard progress > 0 else { return base }
         let clamped = min(max(progress, 0), 1)
@@ -58,9 +62,8 @@ public enum Spaghettify {
 }
 
 /// View modifier that applies the visual portion of the spaghettification —
-/// tracking, opacity, and a vertical collapse — as `progress` moves from 0
-/// to 1. Honors `accessibilityReduceMotion` by collapsing the animation to
-/// an instant disappearance.
+/// tracking and a fade to `swallowedOpacity` — as `progress` moves from 0 to
+/// 1. Honors `accessibilityReduceMotion` with an instant dim instead.
 public struct SpaghettifyModifier: ViewModifier {
     let progress: Double
     let reduceMotion: Bool
@@ -72,19 +75,12 @@ public struct SpaghettifyModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         if reduceMotion {
-            // No kerning fan-out, no scale collapse — just a hard cut once
-            // progress crosses any threshold so the row still leaves the list.
             content
-                .opacity(progress >= 0.5 ? 0 : 1)
-                .frame(maxHeight: progress >= 0.5 ? 0 : nil)
-                .clipped()
+                .opacity(progress >= 0.5 ? Spaghettify.swallowedOpacity : 1)
         } else {
             content
                 .tracking(Spaghettify.maxTracking * CGFloat(progress))
-                .opacity(1 - progress)
-                .scaleEffect(x: 1, y: 1 - progress, anchor: .top)
-                .frame(maxHeight: progress >= 1 ? 0 : nil)
-                .clipped()
+                .opacity(1 - (1 - Spaghettify.swallowedOpacity) * progress)
         }
     }
 }

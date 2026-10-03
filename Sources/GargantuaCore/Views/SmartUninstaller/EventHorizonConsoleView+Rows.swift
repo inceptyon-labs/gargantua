@@ -42,20 +42,20 @@ extension EventHorizonConsoleView {
 
     func eventRow(_ event: ScanProgressEvent, seq: Int) -> some View {
         let postBaseline = seq >= executingBaselineSeq
+        let removed = context.isExecuting && postBaseline && isSuccessOutcome(event.outcome)
         return SpaghettifyEventRow(
             event: event,
             seq: seq,
-            shouldSpaghettify: context.isExecuting && postBaseline && isSuccessOutcome(event.outcome),
+            shouldSpaghettify: removed,
+            isSwallowed: swallowedSeqs.contains(seq),
             reduceMotion: reduceMotion,
-            badge: badge(for: event.outcome),
+            // A cleanup's successes are removals, not scan finds.
+            badge: removed ? "GONE" : badge(for: event.outcome),
             badgeColor: badgeColor(for: event.outcome),
             rowColor: rowColor(for: event.outcome),
             displayPath: displayPath(event.path),
             onSwallowed: { swallowedSeqs.insert($0) }
         )
-        .opacity(swallowedSeqs.contains(seq) ? 0 : 1)
-        .frame(maxHeight: swallowedSeqs.contains(seq) ? 0 : nil)
-        .clipped()
     }
 
     func isSuccessOutcome(_ outcome: ScanProgressEvent.Outcome) -> Bool {

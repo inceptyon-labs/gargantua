@@ -66,6 +66,31 @@ struct PathStreamViewModelTests {
         #expect(vm.totalBytes == 107)
     }
 
+    @Test("Cleanup progress counts each item once and tracks its latest outcome")
+    func cleanupProgressCountsDistinctItems() {
+        let vm = PathStreamViewModel()
+        vm.append(ScanProgressEvent(path: "/scan/found", outcome: .match, bytes: 1))
+        vm.beginProgress(total: 4)
+        vm.append(contentsOf: [
+            ScanProgressEvent(path: "/a", outcome: .failed(reason: "denied")),
+            ScanProgressEvent(path: "/b", outcome: .match, bytes: 1),
+            ScanProgressEvent(path: "/c", outcome: .failed(reason: "busy")),
+            ScanProgressEvent(path: "/d", outcome: .checked),
+        ])
+        #expect(vm.expectedTotal == 4)
+        #expect(vm.settledCount == 3)
+        #expect(vm.settledFailureCount == 2)
+
+        // The privileged helper recovers /a: same item, now removed.
+        vm.append(ScanProgressEvent(path: "/a", outcome: .match, bytes: 1))
+        #expect(vm.settledCount == 3)
+        #expect(vm.settledFailureCount == 1)
+
+        vm.clear()
+        #expect(vm.expectedTotal == nil)
+        #expect(vm.settledCount == 0)
+    }
+
     @Test("clear resets buffer and aggregates")
     func clearResets() {
         let vm = PathStreamViewModel()
