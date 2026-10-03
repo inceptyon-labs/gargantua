@@ -27,12 +27,16 @@ struct UninstallAppPickerView: View {
                 .fill(GargantuaColors.borderSoft)
                 .frame(height: 1)
 
-            if viewModel.visibleApps.isEmpty {
+            // `visibleApps` filters and sorts every installed app; read it once
+            // per render rather than once more per row.
+            let visibleApps = viewModel.visibleApps
+            let lastVisibleID = visibleApps.last?.id
+            if visibleApps.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(viewModel.visibleApps) { app in
+                        ForEach(visibleApps) { app in
                             UninstallPickerAppRow(
                                 app: app,
                                 isChecked: viewModel.multiSelected.contains(app.bundleID),
@@ -46,7 +50,7 @@ struct UninstallAppPickerView: View {
                                 categoryCount: viewModel.categoryCounts[app.bundleID]
                             )))
 
-                            if app.id != viewModel.visibleApps.last?.id {
+                            if app.id != lastVisibleID {
                                 Rectangle()
                                     .fill(GargantuaColors.borderSoft)
                                     .frame(height: 1)

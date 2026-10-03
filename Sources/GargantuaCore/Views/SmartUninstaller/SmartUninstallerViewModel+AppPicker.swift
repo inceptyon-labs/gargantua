@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Tiny Sendable holder so a closure can keep a weak reference to the view
 /// model without re-capturing `[weak self]` in nested Tasks (which trips a
@@ -153,17 +154,26 @@ extension SmartUninstallerViewModel {
         let snapshot = apps
         let planner = self.planner
         let weakSelf = WeakHolder(self)
+        // Counts arrive one per app; apply them in batches so the picker
+        // re-renders a few times a second instead of once per installed app.
+        let pending = PendingCategoryCounts()
         categoryCountTask = Task {
+            let flusher = Task { @MainActor in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    weakSelf.value?.applyCategoryCounts(pending.take())
+                }
+            }
             await Self.scanCategoryCounts(
                 apps: snapshot,
                 planner: planner,
                 concurrency: 4,
                 report: { @Sendable bundleID, count in
-                    Task { @MainActor in
-                        weakSelf.value?.categoryCounts[bundleID] = count
-                    }
+                    pending.add(bundleID, count)
                 }
             )
+            flusher.cancel()
+            await MainActor.run { weakSelf.value?.applyCategoryCounts(pending.take()) }
         }
     }
 
@@ -212,5 +222,28 @@ extension SmartUninstallerViewModel {
         apps.removeAll { removedBundleIDs.contains($0.bundleID) }
         multiSelected.subtract(removedBundleIDs)
         for id in removedBundleIDs { categoryCounts.removeValue(forKey: id) }
+    }
+}
+
+extension SmartUninstallerViewModel {
+    func applyCategoryCounts(_ counts: [String: Int]) {
+        guard !counts.isEmpty else { return }
+        categoryCounts.merge(counts) { _, new in new }
+    }
+}
+
+/// Category counts reported from the background scan, waiting to be applied.
+private final class PendingCategoryCounts: Sendable {
+    private let counts = OSAllocatedUnfairLock(initialState: [String: Int]())
+
+    func add(_ bundleID: String, _ count: Int) {
+        counts.withLock { $0[bundleID] = count }
+    }
+
+    func take() -> [String: Int] {
+        counts.withLock { current in
+            defer { current = [:] }
+            return current
+        }
     }
 }

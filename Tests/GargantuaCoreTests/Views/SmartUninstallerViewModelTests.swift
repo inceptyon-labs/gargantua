@@ -303,3 +303,24 @@ struct SmartUninstallerQuickUninstallTests {
         #expect(!vm.quickConfirmActive)
     }
 }
+
+@Suite("SmartUninstallerViewModel — leftover counts")
+@MainActor
+struct SmartUninstallerCategoryCountTests {
+    @Test("Every app's leftover-category count arrives after loading")
+    func countsArrive() async throws {
+        let apps = [makeApp(bundleID: "a", name: "Alpha"), makeApp(bundleID: "b", name: "Beta")]
+        let vm = SmartUninstallerViewModel(
+            appScanner: StubAppScanner(apps: apps),
+            planner: StubPlanner(build: { app, _ in makePlan(app: app) }),
+            executor: StubExecutor(result: .success(makeExecutionResult(plan: makePlan(app: apps[0]))))
+        )
+
+        await vm.loadApps()
+        for _ in 0 ..< 100 where vm.categoryCounts.count < apps.count {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(Set(vm.categoryCounts.keys) == ["a", "b"])
+    }
+}

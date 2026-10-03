@@ -249,10 +249,14 @@ struct UninstallPickerAppRow: View {
         return "Code signature missing or invalid"
     }
 
-    private func relativeDate(_ date: Date) -> String {
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return formatter
+    }()
+
+    private func relativeDate(_ date: Date) -> String {
+        Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
