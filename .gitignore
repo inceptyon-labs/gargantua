@@ -71,3 +71,6 @@ coverage.lcov
 /muter.report.html
 /muter.report.xml
 NOTES.md
+
+# Archify diagram output (local, regenerated on demand)
+.archify/

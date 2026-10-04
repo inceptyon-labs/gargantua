@@ -1,0 +1,517 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Gargantua System Overview",
+    "output": ".archify/architecture-gargantua-overview-20261003-200931/review-2/gargantua-overview.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:inceptyon-labs/gargantua.git",
+      "link_mode": "local-only",
+      "revision": "a451184bb515a82119105e5c5b40af03807aadc5"
+    }
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User",
+      "sublabel": "macOS developer",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "Gargantua App",
+      "sublabel": "SwiftUI, user session",
+      "pos": [
+        290,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/Gargantua/GargantuaApp.swift",
+          "line": 7,
+          "end_line": 8,
+          "label": "App entry"
+        },
+        {
+          "path": "Sources/GargantuaCore/Views/DashboardView.swift",
+          "line": 274,
+          "end_line": 278,
+          "label": "Starts a scan"
+        }
+      ]
+    },
+    {
+      "id": "scan",
+      "type": "backend",
+      "label": "Scan Pipeline",
+      "sublabel": "profile adapters",
+      "pos": [
+        540,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/ProfileScanAdapterFactory.swift",
+          "line": 8,
+          "end_line": 18,
+          "label": "Composite adapter"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/ScanEngine.swift",
+          "line": 35,
+          "end_line": 36,
+          "label": "ScanEngine"
+        }
+      ]
+    },
+    {
+      "id": "rules",
+      "type": "database",
+      "label": "Bundled Rules",
+      "sublabel": "YAML + safety policy",
+      "tag": "synced snapshot",
+      "pos": [
+        790,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/RuleDirectoryResolver.swift",
+          "line": 5,
+          "end_line": 9,
+          "label": "Release uses bundle"
+        },
+        {
+          "path": "Sources/GargantuaCore/Parsing/RuleLoader.swift",
+          "line": 5,
+          "end_line": 14,
+          "label": "Loads YAML"
+        }
+      ]
+    },
+    {
+      "id": "sched",
+      "type": "backend",
+      "label": "Scheduler",
+      "sublabel": "launchd runner",
+      "pos": [
+        290,
+        60
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaScheduler/main.swift",
+          "line": 5,
+          "end_line": 11,
+          "label": "runIfDue"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/ScheduledScanService+Scanning.swift",
+          "line": 15,
+          "end_line": 17,
+          "label": "Scan only"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "type": "backend",
+      "label": "MCP Server",
+      "sublabel": "GargantuaMCP",
+      "pos": [
+        790,
+        60
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaMCP/main.swift",
+          "line": 45,
+          "end_line": 48,
+          "label": "Transport mode"
+        },
+        {
+          "path": "Sources/GargantuaMCP/main.swift",
+          "line": 115,
+          "end_line": 123,
+          "label": "Scan runner"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
+          "line": 68,
+          "end_line": 78,
+          "label": "Bound listener"
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "external",
+      "label": "AI Agent",
+      "sublabel": "Claude, Cursor",
+      "pos": [
+        1040,
+        60
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "License Gate",
+      "sublabel": "destructive actions",
+      "pos": [
+        540,
+        400
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaLicensing/LicenseGate.swift",
+          "line": 28,
+          "end_line": 39,
+          "label": "Allow or block"
+        },
+        {
+          "path": "Sources/GargantuaCore/Views/DeepCleanView.swift",
+          "line": 288,
+          "end_line": 296,
+          "label": "authorize(.deepClean)"
+        }
+      ]
+    },
+    {
+      "id": "polar",
+      "type": "external",
+      "label": "Polar.sh",
+      "sublabel": "license API",
+      "pos": [
+        540,
+        560
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaLicensing/LicensePolarConfig.swift",
+          "line": 11,
+          "end_line": 13,
+          "label": "API base URL"
+        },
+        {
+          "path": "Sources/GargantuaLicensing/PolarLicenseClient.swift",
+          "line": 63,
+          "end_line": 63,
+          "label": "Activate key"
+        }
+      ]
+    },
+    {
+      "id": "cleanup",
+      "type": "backend",
+      "label": "Cleanup Engine",
+      "sublabel": "Trash-first removal",
+      "pos": [
+        790,
+        400
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/CleanupEngine.swift",
+          "line": 178,
+          "end_line": 182,
+          "label": "Needs authorization"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/CleanupEngine.swift",
+          "line": 243,
+          "end_line": 247,
+          "label": "Protected-root skip"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/CleanupEngine.swift",
+          "line": 445,
+          "end_line": 450,
+          "label": "Move to Trash"
+        }
+      ]
+    },
+    {
+      "id": "helper",
+      "type": "security",
+      "label": "Privileged Helper",
+      "sublabel": "root XPC service",
+      "pos": [
+        1040,
+        400
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaPrivilegedHelper/main.swift",
+          "line": 7,
+          "end_line": 21,
+          "label": "Signed peers only"
+        },
+        {
+          "path": "Sources/GargantuaPrivilegedHelper/main.swift",
+          "line": 381,
+          "end_line": 385,
+          "label": "Mach listener"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/CleanupEngine.swift",
+          "line": 274,
+          "end_line": 296,
+          "label": "Escalation retry"
+        }
+      ]
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "Local State",
+      "sublabel": "SwiftData + audit.json",
+      "pos": [
+        290,
+        400
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Persistence/PersistenceController.swift",
+          "line": 24,
+          "end_line": 27,
+          "label": "SwiftData store"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AuditWriter.swift",
+          "line": 182,
+          "end_line": 186,
+          "label": "audit.json path"
+        },
+        {
+          "path": "Sources/GargantuaCore/Views/DeepCleanView.swift",
+          "line": 304,
+          "end_line": 309,
+          "label": "Audit after clean"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "User session (unprivileged)",
+      "wraps": [
+        "app",
+        "scan",
+        "rules",
+        "sched",
+        "mcp",
+        "gate",
+        "cleanup",
+        "state"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Loopback + bearer token",
+      "wraps": [
+        "mcp"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Root, code-signed peers",
+      "wraps": [
+        "helper"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "user-to-app",
+      "from": "user",
+      "to": "app",
+      "label": "drives",
+      "variant": "emphasis"
+    },
+    {
+      "id": "app-to-scan",
+      "from": "app",
+      "to": "scan",
+      "label": "scan profile",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scan-to-rules",
+      "from": "scan",
+      "to": "rules",
+      "label": "load rules"
+    },
+    {
+      "id": "sched-to-scan",
+      "from": "sched",
+      "to": "scan",
+      "label": "due scans",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "mcp-to-scan",
+      "from": "mcp",
+      "to": "scan",
+      "label": "scan tool",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "id": "agent-to-mcp",
+      "from": "agent",
+      "to": "mcp",
+      "label": "MCP stdio/SSE",
+      "variant": "security"
+    },
+    {
+      "id": "app-to-gate",
+      "from": "app",
+      "to": "gate",
+      "label": "authorize",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          455,
+          272
+        ],
+        [
+          455,
+          350
+        ],
+        [
+          605,
+          350
+        ]
+      ]
+    },
+    {
+      "id": "gate-to-cleanup",
+      "from": "gate",
+      "to": "cleanup",
+      "label": "authorization",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gate-to-polar",
+      "from": "gate",
+      "to": "polar",
+      "label": "validate key",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "cleanup-to-helper",
+      "from": "cleanup",
+      "to": "helper",
+      "label": "XPC on denial",
+      "variant": "security"
+    },
+    {
+      "id": "app-to-state",
+      "from": "app",
+      "to": "state",
+      "label": "audit entry"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Primary path",
+      "items": [
+        "User picks a profile; the app builds a composite scan adapter",
+        "Findings are classified safe, review, or protected from bundled rules",
+        "Destructive actions need a LicenseGate authorization value",
+        "CleanupEngine skips protected roots and moves items to Trash"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundaries",
+      "items": [
+        "App, scheduler, MCP and cleanup run unprivileged as the user",
+        "Root helper accepts only XPC peers matching the app signing requirement",
+        "MCP SSE listens on a configured bind host and checks a bearer token",
+        "Release builds ignore GARGANTUA_RULES_DIR and use bundled rules"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "MCP and scheduler",
+      "items": [
+        "MCP clean runs the license gate, then a notification grace period",
+        "MCP clean is rate limited and writes audit entries",
+        "Scheduler runs scans only and never cleans"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Other externals",
+      "items": [
+        "Anthropic Messages API for opt-in cloud AI explanations",
+        "Hugging Face for the default local MLX model download",
+        "Sparkle appcast for updates; feedback Worker for reports",
+        "Vendored fclones and czkawka binaries for duplicates and file health"
+      ]
+    }
+  ]
+}
