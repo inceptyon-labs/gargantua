@@ -9,6 +9,9 @@ import Foundation
 /// so a stray sender can't end it; the record is printed on deinit and included
 /// in `diagnosis`.
 ///
+/// `init` waits until the probe has installed its handlers (it writes a `ready`
+/// line), and relaunches a probe that a stray signal killed during startup.
+///
 /// A copy of `/bin/sleep` doesn't work: it is an arm64e platform binary, so an
 /// untouched copy is intermittently SIGKILLed outside the system volume, and an
 /// ad hoc re-signed copy is a third-party arm64e binary, which macOS 15 (the
@@ -16,8 +19,8 @@ import Foundation
 final class ProbeProcess {
     let name: String
     private let directory: URL
-    private let process = Process()
-    private let stderrPipe = Pipe()
+    private var process = Process()
+    private var stderrPipe = Pipe()
     private var stderrData = Data()
 
     init() throws {
@@ -25,10 +28,6 @@ final class ProbeProcess {
         name = "gargantua-probe-\(suffix)"
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        // Reads never block: `diagnosis` may run while the probe is alive, and
-        // `deinit` may drain a pipe whose write end this process still holds.
-        let fd = stderrPipe.fileHandleForReading.fileDescriptor
-        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         guard let compiled = Self.compiledBinary else {
             throw CocoaError(.executableNotLoadable)
@@ -37,9 +36,51 @@ final class ProbeProcess {
         let binary = directory.appendingPathComponent(name)
         try FileManager.default.copyItem(at: compiled, to: binary)
 
+        // A stray signal between exec and the probe's `sigaction` calls kills
+        // it with the default action, so relaunch a probe that died before
+        // reporting ready.
+        let maxAttempts = 3
+        for attempt in 1 ... maxAttempts {
+            try launch(binary)
+            let outcome = awaitReady()
+            if outcome != .exited || attempt == maxAttempts { break }
+            process.waitUntilExit()
+            try? stderrPipe.fileHandleForReading.close()
+        }
+    }
+
+    private enum Readiness { case ready, exited, timedOut }
+
+    /// Starts a fresh process with fresh stderr data.
+    private func launch(_ binary: URL) throws {
+        process = Process()
+        stderrPipe = Pipe()
+        stderrData = Data()
+        // Reads never block: `diagnosis` may run while the probe is alive, and
+        // `deinit` may drain a pipe whose write end this process still holds.
+        let fd = stderrPipe.fileHandleForReading.fileDescriptor
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         process.executableURL = binary
         process.standardError = stderrPipe
         try process.run()
+    }
+
+    /// Polls up to 2 seconds for the probe's `ready` line or its exit.
+    private func awaitReady() -> Readiness {
+        for _ in 0 ..< 400 {
+            drainStderr()
+            if hasReadyLine { return .ready }
+            if !process.isRunning {
+                drainStderr()
+                return hasReadyLine ? .ready : .exited
+            }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
+        return .timedOut
+    }
+
+    private var hasReadyLine: Bool {
+        stderrText.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces) == "ready" }
     }
 
     /// Appends whatever stderr holds right now to `stderrData`; stops at EOF,
@@ -64,6 +105,13 @@ final class ProbeProcess {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Stderr without the `ready` line: the `signal ...` and `ignored signal ...` records.
+    private var reportText: String {
+        stderrText.split(separator: "\n")
+            .filter { $0.trimmingCharacters(in: .whitespaces) != "ready" }
+            .joined(separator: "\n")
+    }
+
     /// How the probe is doing, for assertion messages, including any stderr
     /// written so far (ignored stray signals while it runs).
     var diagnosis: String {
@@ -77,7 +125,7 @@ final class ProbeProcess {
             waited += 1
         }
         drainStderr()
-        let text = stderrText
+        let text = reportText
         if process.isRunning {
             return text.isEmpty
                 ? "probe pid \(pid) is still running"
@@ -85,7 +133,8 @@ final class ProbeProcess {
         }
         if !text.isEmpty { return "probe pid \(pid) \(text)" }
         if process.terminationReason == .uncaughtSignal {
-            return "probe pid \(pid) was killed by uncatchable signal \(process.terminationStatus)"
+            return "probe pid \(pid) was killed by signal \(process.terminationStatus) without reporting a sender "
+                + "(SIGKILL, or a signal that landed before its handlers were installed)"
         }
         return "probe pid \(pid) exited with status \(process.terminationStatus)"
     }
@@ -126,6 +175,7 @@ final class ProbeProcess {
         sa.sa_flags = SA_SIGINFO;
         int sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2, SIGALRM };
         for (unsigned i = 0; i < sizeof sigs / sizeof *sigs; i++) sigaction(sigs[i], &sa, 0);
+        put("ready\\n");
         unsigned left = 30;
         while (left > 0) left = sleep(left);
         return 0;
@@ -164,7 +214,7 @@ final class ProbeProcess {
         stop()
         if process.processIdentifier != 0 {
             drainStderr()
-            for line in stderrText.split(separator: "\n") where line.contains("ignored signal") {
+            for line in reportText.split(separator: "\n") where line.contains("ignored signal") {
                 print("probe \(name): \(line)")
             }
         }
