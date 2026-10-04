@@ -289,3 +289,35 @@ whole bundled rule set, that no rule enumerates a credential-bearing agent direc
 that the goose pattern cannot match `sessions.db`, that every `ai_history` rule is
 age-gated and classified `review`, and that no rule targets a SQLite database. Each was
 mutation-tested — all five fail when their invariant is violated.
+
+---
+
+# Re-evaluation on an installed machine (2026-10-03)
+
+Installed on this machine: Gemini CLI 0.46.0 (Homebrew), OpenCode 2.0.20 (Homebrew, with data left by a v1 install from November 2025), the GitHub Copilot Chat extension in VS Code, and the Cline 4.x CLI. Not installed: Kiro, Cody, Amazon Q, and Cline's VS Code extension.
+
+## Shipped
+
+| Rule | Path | Evidence |
+|---|---|---|
+| `gemini_cli_prompt_history` | `~/.gemini/tmp/*/logs.json` | `Logger.initialize()` in `packages/core/src/core/logger.ts` builds `path.join(storage.getProjectTempDir(), "logs.json")`. 17 populated files on disk; every entry is `{sessionId, messageId, timestamp, type: "user", message}`. |
+
+- The file is rewritten on every prompt, so its mtime measures the last prompt in that project. The 60-day gate is on the file that changes.
+- A missing file is read as empty history and recreated as `[]` on the next start. Removing it loses up-arrow recall for that project and nothing else.
+- The same `Logger` writes `checkpoint-<tag>.json` (saved `/chat` conversations) in the same directory. The rule names `logs.json` exactly, and `AIRuleSafetyContractTests` now lists a checkpoint file as protected. Mutating the rule's path to `~/.gemini/tmp/*` makes that test fail.
+- This corrects the earlier "Dropped" table: `logs.json` is absent from `storage.ts` because its writer is `logger.ts`, not because nothing writes it.
+
+## Dropped permanently
+
+- Copilot Chat `cache/`, `logs/`, `tmp/`: none of these directories exist in the current extension's `globalStorage/github.copilot-chat/`. That directory holds `commandEmbeddings.json`, `session-store.db` with its `-wal` and `-shm` sidecars, `copilotCli/`, `vscode-sessions-*/`, and per-agent folders (`ask-agent/`, `plan-agent/`, `explore-agent/`). There is nothing to write a rule against.
+
+## Still held, with new evidence
+
+| Candidate | What the inventory showed | What would unblock it |
+|---|---|---|
+| OpenCode `storage/*` | OpenCode 2.0.20 keeps sessions in SQLite (`opencode.db`, overridable by `OPENCODE_DB`), and its binary contains no reference to the v1 `storage/` tree or its `session_diff` subtree. The v1 JSON on disk is abandoned by v2 but was never migrated, so it is the only copy of those conversations. One session spans four subtrees (`session/`, `message/`, `part/`, `session_diff/`). | An adapter that groups a session's files across those subtrees and gates on the newest file, not a YAML rule. |
+| OpenCode `snapshot/` | v1 used `snapshot/<projectID>/` itself as a git directory. v2 creates its store at `snapshot/<projectID>/<worktreeHash>/`, which nests inside the v1 git directory. Removing a v1 snapshot directory can remove a live v2 store. | A rule or adapter that targets only v1 git directories that contain no v2 store, with proof that no v1 session still references them. |
+| Cline `puppeteer/.chromium-browser-snapshots`, `checkpoints/` | Only the Cline 4.x CLI is installed. `~/.cline/data` holds `settings/`, `workspace/`, `state/`, `globalState.json` and `locks.db`. There is no `sessions/`, no checkpoint repository, no downloaded Chromium, and no legacy `saoudrizwan.claude-dev` globalStorage. | Unchanged: a machine with the VS Code extension and a native macOS inventory. |
+| Kiro `kiro.kiroagent/` | Not installed. | Unchanged. |
+| Cody `symf/` | Not installed. | Unchanged. |
+| Amazon Q `~/.aws/amazonq/history` | Not installed. | Unchanged. |
