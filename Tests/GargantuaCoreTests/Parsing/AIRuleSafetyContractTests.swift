@@ -79,7 +79,7 @@ struct AIRuleSafetyContractTests {
                         let parent = Self.normalized((protectedFile as NSString).deletingLastPathComponent)
                         let name = (protectedFile as NSString).lastPathComponent
                         #expect(
-                            !(path == parent && Self.matches(pattern, name)),
+                            !(Self.resolvesTo(path, parent) && Self.matches(pattern, name)),
                             "Rule \(rule.id) enumerates \(declared) with pattern \(pattern), which selects \(protectedFile)"
                         )
                     } else {
@@ -295,6 +295,15 @@ struct AIRuleSafetyContractTests {
         let b = normalized(path).split(separator: "/").map(String.init)
         guard a.count <= b.count else { return false }
         return zip(a, b).allSatisfy { matches($0, $1) }
+    }
+
+    /// Whether the declared directory `pattern` resolves to `directory`: the same
+    /// number of segments, each glob segment matching, so `~/.gemini/tmp/*`
+    /// resolves to `~/.gemini/tmp/abc123`.
+    private static func resolvesTo(_ pattern: String, _ directory: String) -> Bool {
+        let a = normalized(pattern).split(separator: "/").map(String.init)
+        let b = normalized(directory).split(separator: "/").map(String.init)
+        return a.count == b.count && zip(a, b).allSatisfy { matches($0, $1) }
     }
 
     /// True for a filter that establishes a *minimum* age, e.g. "mtime > 30d".
