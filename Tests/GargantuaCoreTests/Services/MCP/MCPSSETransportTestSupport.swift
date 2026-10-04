@@ -372,7 +372,7 @@ enum MCPSSETransportTestSupport {
                 guard remaining > 0 else { return false }
                 var descriptor = pollfd(fd: fd, events: events, revents: 0)
                 let milliseconds = Int32(min(remaining * 1_000, 60_000).rounded(.up))
-                // Zero is a timeout; a negative result (EINTR) goes round again.
+                // Zero is a timeout; a failure (usually EINTR) goes round again until the deadline.
                 if poll(&descriptor, 1, milliseconds) > 0 {
                     return true
                 }
