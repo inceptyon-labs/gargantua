@@ -22,6 +22,7 @@ final class ProbeProcess {
     private var process = Process()
     private var stderrPipe = Pipe()
     private var stderrData = Data()
+    private var startupEvents: [String] = []
 
     init() throws {
         let suffix = String(UUID().uuidString.lowercased().filter(\.isHexDigit).prefix(8))
@@ -43,8 +44,14 @@ final class ProbeProcess {
         for attempt in 1 ... maxAttempts {
             try launch(binary)
             let outcome = awaitReady()
-            if outcome != .exited || attempt == maxAttempts { break }
+            if outcome == .timedOut { startupEvents.append("attempt \(attempt) not ready after 2s") }
+            if outcome != .exited { break }
             process.waitUntilExit()
+            drainStderr()
+            var event = "attempt \(attempt) died before ready: \(terminationDescription)"
+            if !reportText.isEmpty { event += " (\(reportText.replacingOccurrences(of: "\n", with: " | ")))" }
+            startupEvents.append(event)
+            if attempt == maxAttempts { break }
             try? stderrPipe.fileHandleForReading.close()
         }
     }
@@ -112,6 +119,11 @@ final class ProbeProcess {
             .joined(separator: "\n")
     }
 
+    private var terminationDescription: String {
+        process.terminationReason == .uncaughtSignal
+            ? "signal \(process.terminationStatus)" : "status \(process.terminationStatus)"
+    }
+
     /// How the probe is doing, for assertion messages, including any stderr
     /// written so far (ignored stray signals while it runs).
     var diagnosis: String {
@@ -126,56 +138,79 @@ final class ProbeProcess {
         }
         drainStderr()
         let text = reportText
+        let startup = startupEvents.isEmpty ? "" : "startup: \(startupEvents.joined(separator: "; ")); "
         if process.isRunning {
             return text.isEmpty
-                ? "probe pid \(pid) is still running"
-                : "probe pid \(pid) is still running; \(text)"
+                ? "\(startup)probe pid \(pid) is still running"
+                : "\(startup)probe pid \(pid) is still running; \(text)"
         }
-        if !text.isEmpty { return "probe pid \(pid) \(text)" }
+        // The probe reported its own end only if a line starts with `signal `.
+        if text.split(separator: "\n").contains(where: { $0.hasPrefix("signal ") }) {
+            return "\(startup)probe pid \(pid) \(text)"
+        }
+        let ended: String
         if process.terminationReason == .uncaughtSignal {
-            return "probe pid \(pid) was killed by signal \(process.terminationStatus) without reporting a sender "
+            ended = "was killed by signal \(process.terminationStatus) without reporting a sender "
                 + "(SIGKILL, or a signal that landed before its handlers were installed)"
+        } else {
+            ended = "exited with status \(process.terminationStatus)"
         }
-        return "probe pid \(pid) exited with status \(process.terminationStatus)"
+        return text.isEmpty ? "\(startup)probe pid \(pid) \(ended)" : "\(startup)probe pid \(pid) \(text); \(ended)"
     }
 
     private static let cSource = """
+    #include <errno.h>
     #include <libproc.h>
     #include <signal.h>
     #include <string.h>
     #include <unistd.h>
 
-    static void put(const char *s) { write(2, s, strlen(s)); }
+    static volatile pid_t parent = 0;
 
-    static void put_int(int v) {
-        char buf[16]; int i = sizeof buf; buf[--i] = 0;
+    static size_t append(char *dst, size_t at, size_t cap, const char *s) {
+        while (*s && at + 1 < cap) dst[at++] = *s++;
+        return at;
+    }
+
+    static size_t append_int(char *dst, size_t at, size_t cap, int v) {
+        char tmp[16]; int i = sizeof tmp; tmp[--i] = 0;
         unsigned u = v < 0 ? -(unsigned)v : (unsigned)v;
-        do { buf[--i] = '0' + u % 10; u /= 10; } while (u && i > 1);
-        if (v < 0) buf[--i] = '-';
-        put(buf + i);
+        do { tmp[--i] = '0' + u % 10; u /= 10; } while (u && i > 1);
+        if (v < 0) tmp[--i] = '-';
+        return append(dst, at, cap, tmp + i);
     }
 
     static void on_signal(int sig, siginfo_t *info, void *ctx) {
         (void)ctx;
+        int saved_errno = errno;
+        int ours = info->si_pid == parent;
         char path[PROC_PIDPATHINFO_MAXSIZE];
         path[0] = 0;
         if (proc_pidpath(info->si_pid, path, sizeof path) <= 0) strcpy(path, "?");
-        if (info->si_pid != getppid()) {
-            put("ignored signal "); put_int(sig); put(" from pid "); put_int(info->si_pid); put(" "); put(path); put("\\n");
-            return;
-        }
-        put("signal "); put_int(sig); put(" from pid "); put_int(info->si_pid); put(" "); put(path); put("\\n");
-        _exit(128 + sig);
+        char buf[PROC_PIDPATHINFO_MAXSIZE + 64];
+        size_t n = 0, cap = sizeof buf;
+        n = append(buf, n, cap, ours ? "signal " : "ignored signal ");
+        n = append_int(buf, n, cap, sig);
+        n = append(buf, n, cap, " from pid ");
+        n = append_int(buf, n, cap, info->si_pid);
+        n = append(buf, n, cap, " ");
+        n = append(buf, n, cap, path);
+        n = append(buf, n, cap, "\\n");
+        write(2, buf, n);
+        if (ours) _exit(128 + sig);
+        errno = saved_errno;
     }
 
     int main(void) {
+        parent = getppid();
         struct sigaction sa;
         memset(&sa, 0, sizeof sa);
         sa.sa_sigaction = on_signal;
         sa.sa_flags = SA_SIGINFO;
+        sigfillset(&sa.sa_mask);
         int sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2, SIGALRM };
         for (unsigned i = 0; i < sizeof sigs / sizeof *sigs; i++) sigaction(sigs[i], &sa, 0);
-        put("ready\\n");
+        write(2, "ready\\n", 6);
         unsigned left = 30;
         while (left > 0) left = sleep(left);
         return 0;
@@ -206,7 +241,12 @@ final class ProbeProcess {
     func stop() {
         // Never launched (init threw before `run()`): nothing to wait for.
         guard process.processIdentifier != 0 else { return }
-        if process.isRunning { process.terminate() }
+        if process.isRunning {
+            process.terminate()
+            // A stopped probe never acts on SIGTERM; SIGKILL works on it.
+            for _ in 0 ..< 200 where process.isRunning { Thread.sleep(forTimeInterval: 0.005) }
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        }
         process.waitUntilExit()
     }
 
@@ -214,6 +254,7 @@ final class ProbeProcess {
         stop()
         if process.processIdentifier != 0 {
             drainStderr()
+            for event in startupEvents { print("probe \(name): \(event)") }
             for line in reportText.split(separator: "\n") where line.contains("ignored signal") {
                 print("probe \(name): \(line)")
             }
