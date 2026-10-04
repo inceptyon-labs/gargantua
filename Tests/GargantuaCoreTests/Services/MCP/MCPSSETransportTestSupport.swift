@@ -219,15 +219,18 @@ enum MCPSSETransportTestSupport {
     /// test.
     ///
     /// Built on a plain non-blocking socket and `poll(2)` rather than a
-    /// `CFStream` pair, because under full-suite load `CFStream` broke both
-    /// guarantees this suite depends on (gargantua-ig6y). A write issued while
-    /// the stream was still opening waited in `CFWriteStreamWrite` for an open
-    /// event that never arrived, with no timeout. And closing the streams did
-    /// not reliably close the socket: the server saw the client's FIN only
-    /// when the stream objects were deallocated, so the session-close
-    /// assertions waited out their deadline. Owning the descriptor makes both
-    /// deterministic — `poll` bounds every wait, and `close(2)` tears the
-    /// connection down before it returns.
+    /// `CFStream` pair, because under full-suite load a write issued while the
+    /// stream was still opening waited in `CFWriteStreamWrite` for an open
+    /// event that never arrived, with no timeout, and hung the whole run
+    /// (gargantua-ig6y). `poll` bounds every wait instead.
+    ///
+    /// The descriptor is close-on-exec. Tests elsewhere in the suite spawn
+    /// long-lived children (`DefaultProcessRunnerTests` backgrounds a
+    /// `sleep 30`) through a spawner that passes on every descriptor that
+    /// isn't, and a child that inherited this socket kept the connection open
+    /// after `closeGracefully()` until it exited. The server saw no FIN, so
+    /// the session-close assertions in `MCPSSETransportLifecycleTests` waited
+    /// out their deadline — that was the other half of ig6y.
     final class TCPClient {
         private let fd: Int32
         private var isClosed = false
@@ -242,8 +245,10 @@ enum MCPSSETransportTestSupport {
             guard fd >= 0 else { throw SocketError.connectFailed(errno) }
             // A write to a peer that has reset the connection must fail with
             // EPIPE, not raise SIGPIPE and kill the whole test process.
+            // Close-on-exec: see the note on this class.
             var noSigPipe: Int32 = 1
             guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size)) == 0,
+                  fcntl(fd, F_SETFD, FD_CLOEXEC) == 0,
                   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == 0
             else {
                 let setupErrno = errno
