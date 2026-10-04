@@ -587,6 +587,24 @@ rules:
       - ai_history
       - review
 
+  - id: gemini_cli_prompt_history
+    name: Gemini CLI Prompt History
+    paths:
+      - "~/.gemini/tmp/*/logs.json"
+    match_filters:
+      - "mtime > 60d"
+    safety: review
+    confidence: 72
+    explanation: "Every prompt you typed into Gemini CLI for one project, kept for up-arrow recall. It is a record of your own input, so it is surfaced for review; Gemini starts a fresh empty history if it is removed. Saved /chat checkpoints in the same folder are not matched."
+    source:
+      name: Gemini CLI
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
   - id: goose_legacy_sessions
     name: Goose Legacy Session Records
     paths:

@@ -32,12 +32,16 @@ struct AIRuleSafetyContractTests {
     /// Sources: `oauth_creds.json` and `mcp-oauth-tokens.json` in both Qwen
     /// Code's and Gemini CLI's `config/storage.ts`; `providers.json` ("API keys
     /// and provider credentials") in Cline's config docs; `~/.aws/credentials`.
+    ///
+    /// `checkpoint-<tag>.json` are the saved `/chat` conversations Gemini CLI's
+    /// `core/logger.ts` writes beside `logs.json`.
     private static let protectedFiles = [
         "~/.qwen/oauth_creds.json",
         "~/.qwen/mcp-oauth-tokens.json",
         "~/.qwen/settings.json",
         "~/.gemini/oauth_creds.json",
         "~/.gemini/settings.json",
+        "~/.gemini/tmp/abc123/checkpoint-mytag.json",
         "~/.claude/settings.json",
         "~/.claude/.credentials.json",
         "~/.codex/auth.json",
