@@ -25,6 +25,10 @@ final class ProbeProcess {
         name = "gargantua-probe-\(suffix)"
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        // Reads never block: `diagnosis` may run while the probe is alive, and
+        // `deinit` may drain a pipe whose write end this process still holds.
+        let fd = stderrPipe.fileHandleForReading.fileDescriptor
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         guard let compiled = Self.compiledBinary else {
             throw CocoaError(.executableNotLoadable)
@@ -36,9 +40,6 @@ final class ProbeProcess {
         process.executableURL = binary
         process.standardError = stderrPipe
         try process.run()
-        // Reads never block: `diagnosis` may run while the probe is alive.
-        let fd = stderrPipe.fileHandleForReading.fileDescriptor
-        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
     }
 
     /// Appends whatever stderr holds right now to `stderrData`; stops at EOF,
@@ -161,9 +162,11 @@ final class ProbeProcess {
 
     deinit {
         stop()
-        drainStderr()
-        for line in stderrText.split(separator: "\n") where line.contains("ignored signal") {
-            print("probe \(name): \(line)")
+        if process.processIdentifier != 0 {
+            drainStderr()
+            for line in stderrText.split(separator: "\n") where line.contains("ignored signal") {
+                print("probe \(name): \(line)")
+            }
         }
         try? stderrPipe.fileHandleForReading.close()
         try? FileManager.default.removeItem(at: directory)
