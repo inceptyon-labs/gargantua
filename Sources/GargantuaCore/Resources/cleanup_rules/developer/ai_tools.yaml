@@ -120,6 +120,41 @@ rules:
       - ai
       - cache
 
+  - id: kilo_cache
+    name: Kilo Cache
+    paths:
+      - "~/.cache/kilo"
+    safety: safe
+    confidence: 92
+    explanation: "Kilo's cache: the downloaded model catalog and helper binaries. Kilo, which is built on OpenCode, recreates it when needed. Sessions, snapshots, and settings live under ~/.local/share/kilo and ~/.config/kilo and are not matched."
+    source:
+      name: Kilo Code
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
+  - id: roo_code_model_cache
+    name: Roo Code Model Catalog Cache
+    paths:
+      - "~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/cache"
+      - "~/Library/Application Support/Cursor/User/globalStorage/rooveterinaryinc.roo-cline/cache"
+      - "~/Library/Application Support/Windsurf/User/globalStorage/rooveterinaryinc.roo-cline/cache"
+      - "~/Library/Application Support/VSCodium/User/globalStorage/rooveterinaryinc.roo-cline/cache"
+    safety: safe
+    confidence: 90
+    explanation: "Model lists Roo Code downloads from providers such as OpenRouter. Fetched again the next time Roo Code needs them. Tasks and settings sit beside this folder and are not matched."
+    source:
+      name: Roo Code
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - cache
+
   # --- Agent session history, transcripts, and per-project state ---------------
   #
   # AI coding agents keep a per-project record of every conversation: JSONL
@@ -624,6 +659,25 @@ rules:
       - ai_history
       - review
 
+  - id: amazon_q_chat_history
+    name: Amazon Q Chat History
+    paths:
+      - "~/.aws/amazonq/history"
+    pattern: "chat-history-*.json"
+    match_filters:
+      - "mtime > 90d"
+    safety: review
+    confidence: 72
+    explanation: "Chat history the Amazon Q language server keeps, one file per workspace, so a file's age is the last time that workspace's chat was saved. Removing it permanently drops those conversations; Amazon Q starts a new empty one. Agents, MCP settings, and sign-in state elsewhere in ~/.aws/amazonq are not matched."
+    source:
+      name: Amazon Q
+    regenerates: false
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai_history
+      - review
+
   - id: continue_logs
     name: Continue Logs
     paths:
@@ -634,6 +688,25 @@ rules:
     explanation: "The two log files Continue writes. Recreated on the next run; sessions and configuration are not matched."
     source:
       name: Continue
+    regenerates: true
+    category: dev_artifacts
+    tags:
+      - developer
+      - ai
+      - logs
+
+  - id: cline_legacy_logs
+    name: Cline Legacy Logs
+    paths:
+      - "~/.cline/logs"
+    pattern: "cline-*.log"
+    match_filters:
+      - "mtime > 30d"
+    safety: safe
+    confidence: 90
+    explanation: "Per-run cline-core and cline-host logs written by earlier Cline releases. Current Cline writes its logs under ~/.cline/data/logs. Only files untouched for 30 days are matched; settings, sessions, and the session database under ~/.cline/data are not."
+    source:
+      name: Cline
     regenerates: true
     category: dev_artifacts
     tags:
