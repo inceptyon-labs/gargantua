@@ -35,6 +35,11 @@ struct AIRuleSafetyContractTests {
     ///
     /// `checkpoint-<tag>.json` are the saved `/chat` conversations Gemini CLI's
     /// `core/logger.ts` writes beside `logs.json`.
+    ///
+    /// Kilo, Amazon Q and Roo Code entries come from the 2026-10-04 inventory
+    /// (`docs/research/2026-09-18-ai-tool-leftovers.md`): Kilo's `auth.json` and
+    /// config, Amazon Q's sign-in state, agents and MCP state beside its chat
+    /// history, and Roo Code's MCP settings and task index beside its caches.
     private static let protectedFiles = [
         "~/.qwen/oauth_creds.json",
         "~/.qwen/mcp-oauth-tokens.json",
@@ -50,6 +55,13 @@ struct AIRuleSafetyContractTests {
         "~/.cline/data/settings/providers.json",
         "~/.continue/config.yaml",
         "~/.local/share/goose/sessions/sessions.db",
+        "~/.local/share/kilo/auth.json",
+        "~/.config/kilo/kilo.jsonc",
+        "~/.aws/amazonq/active-user-state.json",
+        "~/.aws/amazonq/agents/default.json",
+        "~/.aws/amazonq/mcpAdmin/mcp-state.json",
+        "~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
+        "~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks/_index.json",
     ]
 
     /// Live databases that sit in the same directories these rules work in.
@@ -62,6 +74,9 @@ struct AIRuleSafetyContractTests {
         "~/.local/share/goose/sessions/sessions.db-wal",
         "~/.local/share/goose/sessions/sessions.db-shm",
         "~/.cline/data/db/cron.db",
+        "~/.cline/data/db/sessions.db",
+        "~/.local/share/kilo/kilo.db",
+        "~/.local/share/kilo/kilo.db-wal",
         "~/Library/Application Support/Code/User/globalStorage/github.copilot-chat/session-store.db",
         "~/Library/Application Support/Code/User/workspaceStorage/abc123/state.vscdb",
     ]
