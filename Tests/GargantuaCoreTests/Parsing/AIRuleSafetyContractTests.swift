@@ -75,12 +75,15 @@ struct AIRuleSafetyContractTests {
                 let path = Self.normalized(declared)
                 for protectedFile in Self.protectedFiles + Self.protectedDatabases {
                     if let pattern = rule.pattern {
-                        // The rule enumerates this directory's children.
-                        let parent = Self.normalized((protectedFile as NSString).deletingLastPathComponent)
-                        let name = (protectedFile as NSString).lastPathComponent
+                        // The rule selects a child of a resolved directory: the file
+                        // itself, or a directory containing it.
+                        let reached = Self.selectedChild(declared: path, pattern: pattern, reaching: protectedFile)
                         #expect(
-                            !(Self.resolvesTo(path, parent) && Self.matches(pattern, name)),
-                            "Rule \(rule.id) enumerates \(declared) with pattern \(pattern), which selects \(protectedFile)"
+                            reached == nil,
+                            """
+                            Rule \(rule.id) enumerates \(declared) with pattern \(pattern), which selects \
+                            \(reached ?? "") and so reaches \(protectedFile)
+                            """
                         )
                     } else {
                         // The rule emits this path itself, taking everything under it.
@@ -287,23 +290,36 @@ struct AIRuleSafetyContractTests {
         return trimmed
     }
 
-    /// Whether `ancestor` is `path` or a directory containing it. Glob segments
-    /// are compared segment-wise so `~/.qwen/tmp/*` is recognised as covering
-    /// `~/.qwen/tmp/anything/file`.
+    /// Whether `ancestor` is `path` or a directory containing it. Globs follow
+    /// `PathExpander`: `*` is one segment, `**` is zero or more.
     private static func isAncestorOrSelf(_ ancestor: String, of path: String) -> Bool {
         let a = normalized(ancestor).split(separator: "/").map(String.init)
         let b = normalized(path).split(separator: "/").map(String.init)
-        guard a.count <= b.count else { return false }
-        return zip(a, b).allSatisfy { matches($0, $1) }
+        return (1 ... max(b.count, 1)).contains { globMatches(a, Array(b.prefix($0))) }
     }
 
-    /// Whether the declared directory `pattern` resolves to `directory`: the same
-    /// number of segments, each glob segment matching, so `~/.gemini/tmp/*`
-    /// resolves to `~/.gemini/tmp/abc123`.
-    private static func resolvesTo(_ pattern: String, _ directory: String) -> Bool {
-        let a = normalized(pattern).split(separator: "/").map(String.init)
-        let b = normalized(directory).split(separator: "/").map(String.init)
-        return a.count == b.count && zip(a, b).allSatisfy { matches($0, $1) }
+    /// The child a `pattern` rule selects on the way to `file`, or nil. `declared`
+    /// resolves to an ancestor directory of `file` and `pattern` matches the next
+    /// segment down: `file` itself, or a directory containing it.
+    private static func selectedChild(declared: String, pattern: String, reaching file: String) -> String? {
+        let d = normalized(declared).split(separator: "/").map(String.init)
+        let f = normalized(file).split(separator: "/").map(String.init)
+        guard f.count > 1 else { return nil }
+        for k in 1 ..< f.count where globMatches(d, Array(f[0 ..< k])) && matches(pattern, f[k]) {
+            return f[0 ... k].joined(separator: "/")
+        }
+        return nil
+    }
+
+    /// Full segment-wise glob match where `**` matches zero or more segments.
+    private static func globMatches(_ pattern: [String], _ path: [String]) -> Bool {
+        guard let head = pattern.first else { return path.isEmpty }
+        let rest = Array(pattern.dropFirst())
+        if head == "**" {
+            return (0 ... path.count).contains { globMatches(rest, Array(path.dropFirst($0))) }
+        }
+        guard let first = path.first, matches(head, first) else { return false }
+        return globMatches(rest, Array(path.dropFirst()))
     }
 
     /// True for a filter that establishes a *minimum* age, e.g. "mtime > 30d".
