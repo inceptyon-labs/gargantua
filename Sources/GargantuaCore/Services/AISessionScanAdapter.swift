@@ -72,6 +72,8 @@ public struct AISessionScanAdapter: ScanAdapter {
             return orphans(in: store)
         case .agentScratchpad:
             return staleScratchpads(in: store)
+        case .agentTaskStore:
+            return staleTasks(in: store)
         }
     }
 
@@ -123,8 +125,8 @@ public struct AISessionScanAdapter: ScanAdapter {
             return transcriptWorkingDirectories(in: entry)
         case .editorWorkspaceStorage:
             return workspaceFolderPath(in: entry).map { [$0] }
-        case .agentScratchpad:
-            // Scratchpads are judged by inactivity, never routed through here.
+        case .agentScratchpad, .agentTaskStore:
+            // Scratchpads and tasks are judged by inactivity, never routed through here.
             return nil
         }
     }

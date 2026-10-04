@@ -34,6 +34,20 @@ extension AISessionScanAdapter {
                 )
             }
 
+        // Roo Code keeps one directory per agent task under each editor's
+        // globalStorage; the editors are the same VS Code family as above.
+        stores += workspaceStorageTools
+            .sorted { $0.key < $1.key }
+            .map { directoryName, _ in
+                AISessionStore(
+                    toolName: "Roo Code",
+                    kind: .agentTaskStore,
+                    url: applicationSupport
+                        .appendingPathComponent(directoryName, isDirectory: true)
+                        .appendingPathComponent("User/globalStorage/rooveterinaryinc.roo-cline/tasks", isDirectory: true)
+                )
+            }
+
         // The scratchpad root is per-uid: /private/tmp/claude-<uid>. Only this
         // user's is ever scanned.
         stores.append(AISessionStore(

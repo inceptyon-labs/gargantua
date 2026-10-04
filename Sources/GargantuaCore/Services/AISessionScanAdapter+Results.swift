@@ -13,7 +13,9 @@ extension AISessionScanAdapter {
         case let .projectMissing(projectPath):
             return orphanResult(finding, projectPath: projectPath)
         case let .inactive(days):
-            return inactiveScratchpadResult(finding, days: days)
+            return finding.kind == .agentTaskStore
+                ? inactiveTaskResult(finding, days: days)
+                : inactiveScratchpadResult(finding, days: days)
         }
     }
 
@@ -26,6 +28,8 @@ extension AISessionScanAdapter {
             what = "Per-workspace editor and AI assistant state \(finding.toolName) kept for \(projectPath)."
         case .agentScratchpad:
             what = "Scratch files \(finding.toolName) kept for \(projectPath)."
+        case .agentTaskStore:
+            what = "Agent task history \(finding.toolName) kept for \(projectPath)."
         }
 
         return ScanResult(
@@ -71,6 +75,30 @@ extension AISessionScanAdapter {
             lastAccessed: finding.lastActivity,
             category: category,
             tags: ["ai_history", "developer", tag, "review", "temp"].sorted(),
+            regenerates: false
+        )
+    }
+
+    static func inactiveTaskResult(_ finding: AISessionFinding, days: Int) -> ScanResult {
+        ScanResult(
+            id: resultIDPrefix + sanitizedID(finding.path),
+            name: "\(finding.toolName) task — \(URL(fileURLWithPath: finding.path).lastPathComponent)",
+            path: finding.path,
+            size: finding.size,
+            safety: .review,
+            confidence: 72,
+            explanation: [
+                "One \(finding.toolName) agent task: its conversation, its message log, and the checkpoints it took.",
+                "Nothing anywhere inside it has been written for \(days) day\(days == 1 ? "" : "s"),",
+                "measured against its newest file rather than the folder's own timestamp.",
+                "\(finding.toolName) drops the task from its history once the folder is gone,",
+                "but the conversation cannot be reopened afterwards,",
+                "so Gargantua marks this review and keeps removal behind confirmation.",
+            ].joined(separator: " "),
+            source: SourceAttribution(name: finding.toolName),
+            lastAccessed: finding.lastActivity,
+            category: category,
+            tags: ["ai_history", "developer", tag, "review"].sorted(),
             regenerates: false
         )
     }

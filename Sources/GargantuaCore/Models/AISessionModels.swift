@@ -21,6 +21,24 @@ public enum AISessionStoreKind: String, Sendable, Equatable, Codable {
     /// missing project, since the slug cannot be decoded back to a path
     /// unambiguously.
     case agentScratchpad
+
+    /// `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/tasks/<task-id>/`
+    /// — one directory per Roo Code agent task, holding `history_item.json`,
+    /// `ui_messages.json`, `api_conversation_history.json` and a
+    /// `checkpoints/.git` shadow repo. Judged by inactivity, and the whole task
+    /// directory is the unit: Roo's `TaskHistoryStore.reconcile()` re-reads
+    /// `tasks/`, skips names starting with `_` or `.` (`_index.json` sits
+    /// beside the tasks), drops history entries whose directory is gone and
+    /// rewrites its index, so removing a whole task is clean and removing part
+    /// of one corrupts it.
+    ///
+    /// Only tools whose own history reconciles against the directory listing
+    /// are configured, which today is Roo Code (verified on 3.54.0). Cline 4.x
+    /// keeps its session list in SQLite (`~/.cline/data/db/sessions.db`) and
+    /// deletes the row with the files, so removing only a session directory
+    /// would leave a broken history entry; Kilo Code 7.x keeps sessions in
+    /// `kilo.db`. Don't add either without that evidence.
+    case agentTaskStore
 }
 
 /// Why a session store was surfaced.
@@ -63,6 +81,10 @@ public struct AISessionScanPolicy: Sendable {
     /// the directory's own timestamp — writing a file does not update its
     /// parent's mtime, and on a real machine that gap reached four days.
     public let scratchpadStaleAfter: TimeInterval
+    /// How long an agent task directory must go completely untouched before it
+    /// is surfaced, measured against the newest file anywhere inside it. 90
+    /// days matches the bundled rules' age gate for conversation history.
+    public let taskStaleAfter: TimeInterval
     /// Where removable volumes are mounted. A seam for tests; in production
     /// this is always `/Volumes`.
     public let volumesDirectory: URL
@@ -73,6 +95,7 @@ public struct AISessionScanPolicy: Sendable {
         protectedRoots: ProtectedRootPolicy = ProtectedRootPolicy(entries: []),
         transcriptProbeByteLimit: Int = 256 * 1024,
         scratchpadStaleAfter: TimeInterval = 7 * 24 * 60 * 60,
+        taskStaleAfter: TimeInterval = 90 * 24 * 60 * 60,
         volumesDirectory: URL = URL(fileURLWithPath: "/Volumes", isDirectory: true)
     ) {
         self.stores = stores
@@ -80,6 +103,7 @@ public struct AISessionScanPolicy: Sendable {
         self.protectedRoots = protectedRoots
         self.transcriptProbeByteLimit = transcriptProbeByteLimit
         self.scratchpadStaleAfter = scratchpadStaleAfter
+        self.taskStaleAfter = taskStaleAfter
         self.volumesDirectory = volumesDirectory
     }
 

@@ -18,6 +18,8 @@ final class AISessionFixtureTree {
     let volumes: URL
     /// Stands in for `/private/tmp/claude-<uid>`.
     let scratchpadRoot: URL
+    /// Stands in for Roo Code's `globalStorage/<id>/tasks`.
+    let taskStoreRoot: URL
     private let fm = FileManager.default
 
     init() throws {
@@ -31,6 +33,8 @@ final class AISessionFixtureTree {
         try fm.createDirectory(at: workspaceStorage, withIntermediateDirectories: true)
         try fm.createDirectory(at: volumes, withIntermediateDirectories: true)
         try fm.createDirectory(at: scratchpadRoot, withIntermediateDirectories: true)
+        taskStoreRoot = root.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks", isDirectory: true)
+        try fm.createDirectory(at: taskStoreRoot, withIntermediateDirectories: true)
     }
 
     deinit { try? fm.removeItem(at: root) }
@@ -104,6 +108,36 @@ final class AISessionFixtureTree {
         for dir in [scratch, sessionDir] {
             try fm.setAttributes([.modificationDate: folderDate], ofItemAtPath: dir.path)
         }
+    }
+
+    /// Builds `<taskStoreRoot>/<id>/` with `history_item.json` and
+    /// `ui_messages.json`, optionally a nested `checkpoints/.git/HEAD`, each
+    /// aged independently of the task folder itself.
+    func addTask(
+        id: String,
+        contentAge: TimeInterval,
+        nestedContentAge: TimeInterval? = nil,
+        folderAge: TimeInterval? = nil
+    ) throws {
+        let task = taskStoreRoot.appendingPathComponent(id, isDirectory: true)
+        try fm.createDirectory(at: task, withIntermediateDirectories: true)
+        var files = ["history_item.json", "ui_messages.json"].map { (task.appendingPathComponent($0), contentAge) }
+        if let nestedContentAge {
+            let git = task.appendingPathComponent("checkpoints/.git", isDirectory: true)
+            try fm.createDirectory(at: git, withIntermediateDirectories: true)
+            files.append((git.appendingPathComponent("HEAD"), nestedContentAge))
+        }
+        for (file, fileAge) in files {
+            try Data(repeating: 0x1, count: 128).write(to: file)
+            try fm.setAttributes(
+                [.modificationDate: AISessionFixtureTree.now.addingTimeInterval(-fileAge)],
+                ofItemAtPath: file.path
+            )
+        }
+        try fm.setAttributes(
+            [.modificationDate: AISessionFixtureTree.now.addingTimeInterval(-(folderAge ?? contentAge))],
+            ofItemAtPath: task.path
+        )
     }
 
     /// Writes a transcript for `session` under `project`, the way Claude Code
@@ -195,6 +229,7 @@ final class AISessionFixtureTree {
                     AISessionStore(toolName: "Claude Code", kind: .claudeCodeProject, url: claudeProjects),
                     AISessionStore(toolName: "VS Code", kind: .editorWorkspaceStorage, url: workspaceStorage),
                     AISessionStore(toolName: "Claude Code", kind: .agentScratchpad, url: scratchpadRoot),
+                    AISessionStore(toolName: "Roo Code", kind: .agentTaskStore, url: taskStoreRoot),
                 ],
                 excludedPaths: excludedPaths,
                 protectedRoots: protectedRoots,

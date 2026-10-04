@@ -148,7 +148,7 @@ extension AISessionScanAdapter {
         return (size, newest)
     }
 
-    private func childDirectories(of url: URL) -> [URL] {
+    func childDirectories(of url: URL) -> [URL] {
         let children = (try? fileManager.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey],
