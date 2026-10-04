@@ -9,8 +9,8 @@ struct RunningProcessCheckerTests {
         let probe = try ProbeProcess()
         let checker = DefaultRunningProcessChecker()
 
-        #expect(checker.isRunning(identifier: probe.name))
-        #expect(checker.isRunning(identifier: probe.name.uppercased()))
+        #expect(checker.isRunning(identifier: probe.name), "\(probe.diagnosis)")
+        #expect(checker.isRunning(identifier: probe.name.uppercased()), "\(probe.diagnosis)")
 
         probe.stop()
         #expect(!checker.isRunning(identifier: probe.name))
@@ -29,8 +29,8 @@ struct ProcessTableExecutablePathsTests {
         let probe = try ProbeProcess()
 
         let paths = ProcessTable.executablePaths(named: probe.name.uppercased())
-        #expect(paths.count == 1)
-        #expect(paths.first?.hasSuffix("/" + probe.name) == true)
+        #expect(paths.count == 1, "\(probe.diagnosis)")
+        #expect(paths.first?.hasSuffix("/" + probe.name) == true, "\(probe.diagnosis)")
 
         probe.stop()
         #expect(ProcessTable.executablePaths(named: probe.name).isEmpty)

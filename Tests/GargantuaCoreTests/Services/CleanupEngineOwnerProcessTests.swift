@@ -61,7 +61,7 @@ struct CleanupEngineOwnerProcessTests {
         let probe = try ProbeProcess()
         let terminator = WorkspaceRunningApplicationTerminator()
 
-        #expect(await terminator.terminateRunningApplications(bundleIdentifier: probe.name, timeout: 1) == false)
+        #expect(await terminator.terminateRunningApplications(bundleIdentifier: probe.name, timeout: 1) == false, "\(probe.diagnosis)")
 
         probe.stop()
 
@@ -79,8 +79,8 @@ struct CleanupEngineOwnerProcessTests {
         item.ownerProcesses = [probe.name]
 
         let skipped = await CleanupEngine().clean([item], method: .delete, authorization: .unchecked(.mcpClean))
-        #expect(skipped.itemResults.first?.succeeded == false)
-        #expect(FileManager.default.fileExists(atPath: file.path))
+        #expect(skipped.itemResults.first?.succeeded == false, "\(probe.diagnosis)")
+        #expect(FileManager.default.fileExists(atPath: file.path), "\(probe.diagnosis)")
 
         probe.stop()
 
