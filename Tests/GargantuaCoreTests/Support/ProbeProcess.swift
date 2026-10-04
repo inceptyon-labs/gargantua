@@ -4,8 +4,10 @@ import Foundation
 /// matching processes by executable name.
 ///
 /// The probe is a C `sleep` compiled for the host with `xcrun clang`. It catches
-/// terminating signals and reports which signal ended it and who sent it, so a
-/// failing test names the sender (see `diagnosis`).
+/// catchable signals. A signal from its parent (the test runner, via `stop()`)
+/// ends it. A signal from any other process is ignored and recorded on stderr,
+/// so a stray sender can't end it; the record is printed on deinit and included
+/// in `diagnosis`.
 ///
 /// A copy of `/bin/sleep` doesn't work: it is an arm64e platform binary, so an
 /// untouched copy is intermittently SIGKILLed outside the system volume, and an
@@ -16,7 +18,7 @@ final class ProbeProcess {
     private let directory: URL
     private let process = Process()
     private let stderrPipe = Pipe()
-    private var stderrText: String?
+    private var stderrData = Data()
 
     init() throws {
         let suffix = String(UUID().uuidString.lowercased().filter(\.isHexDigit).prefix(8))
@@ -34,10 +36,35 @@ final class ProbeProcess {
         process.executableURL = binary
         process.standardError = stderrPipe
         try process.run()
+        // Reads never block: `diagnosis` may run while the probe is alive.
+        let fd = stderrPipe.fileHandleForReading.fileDescriptor
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
     }
 
-    /// How the probe is doing, for assertion messages. While it runs this reads
-    /// nothing from the pipe (a read would block); after exit it reads stderr once.
+    /// Appends whatever stderr holds right now to `stderrData`; stops at EOF,
+    /// when no data is pending, or on any error.
+    private func drainStderr() {
+        let fd = stderrPipe.fileHandleForReading.fileDescriptor
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = read(fd, &buffer, buffer.count)
+            if count > 0 {
+                stderrData.append(contentsOf: buffer[0 ..< count])
+            } else if count < 0, errno == EINTR {
+                continue
+            } else {
+                return
+            }
+        }
+    }
+
+    private var stderrText: String {
+        (String(bytes: stderrData, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// How the probe is doing, for assertion messages, including any stderr
+    /// written so far (ignored stray signals while it runs).
     var diagnosis: String {
         let pid = process.processIdentifier
         // `isRunning` stays true until Foundation reaps the child, so give a probe
@@ -48,13 +75,14 @@ final class ProbeProcess {
             Thread.sleep(forTimeInterval: 0.05)
             waited += 1
         }
-        if process.isRunning { return "probe pid \(pid) is still running" }
-        if stderrText == nil {
-            let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            stderrText = (String(bytes: data, encoding: .utf8) ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+        drainStderr()
+        let text = stderrText
+        if process.isRunning {
+            return text.isEmpty
+                ? "probe pid \(pid) is still running"
+                : "probe pid \(pid) is still running; \(text)"
         }
-        if let text = stderrText, !text.isEmpty { return "probe pid \(pid) \(text)" }
+        if !text.isEmpty { return "probe pid \(pid) \(text)" }
         if process.terminationReason == .uncaughtSignal {
             return "probe pid \(pid) was killed by uncatchable signal \(process.terminationStatus)"
         }
@@ -82,6 +110,10 @@ final class ProbeProcess {
         char path[PROC_PIDPATHINFO_MAXSIZE];
         path[0] = 0;
         if (proc_pidpath(info->si_pid, path, sizeof path) <= 0) strcpy(path, "?");
+        if (info->si_pid != getppid()) {
+            put("ignored signal "); put_int(sig); put(" from pid "); put_int(info->si_pid); put(" "); put(path); put("\\n");
+            return;
+        }
         put("signal "); put_int(sig); put(" from pid "); put_int(info->si_pid); put(" "); put(path); put("\\n");
         _exit(128 + sig);
     }
@@ -93,7 +125,8 @@ final class ProbeProcess {
         sa.sa_flags = SA_SIGINFO;
         int sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2, SIGALRM };
         for (unsigned i = 0; i < sizeof sigs / sizeof *sigs; i++) sigaction(sigs[i], &sa, 0);
-        sleep(30);
+        unsigned left = 30;
+        while (left > 0) left = sleep(left);
         return 0;
     }
     """
@@ -128,6 +161,10 @@ final class ProbeProcess {
 
     deinit {
         stop()
+        drainStderr()
+        for line in stderrText.split(separator: "\n") where line.contains("ignored signal") {
+            print("probe \(name): \(line)")
+        }
         try? stderrPipe.fileHandleForReading.close()
         try? FileManager.default.removeItem(at: directory)
     }
