@@ -324,3 +324,28 @@ Installed on this machine: Gemini CLI 0.46.0 (Homebrew), OpenCode 2.0.20 (Homebr
 | Amazon Q `~/.aws/amazonq/history` | Not installed. | Unchanged. |
 | Cline / Roo / Kilo `tasks/` | None of these stores exist here: Cline's VS Code extension, Roo Code and Kilo Code are not installed. | Unchanged: the session-level last-activity adapter described in the earlier "Dropped" table. |
 | Cline `cache/` | Not present: there is no legacy `saoudrizwan.claude-dev` globalStorage. | Unchanged: current source identifying the writer and its recovery behaviour. |
+
+# Re-evaluation with the VS Code agents installed (2026-10-04)
+
+Installed on this machine: Roo Code 3.54.0, Cline 4.1.22, Kilo Code 7.8.3 (darwin-arm64, which installs the Kilo CLI at `~/.kilo/bin/kilo`) and Amazon Q 2.8.0, all as VS Code extensions. Also installed: the Cline CLI (npm `cline` 2.16.0) and Muse (`com.meta.endo` 4.1). Each extension was used once on the day of this inventory. Not installed: Kiro and Cody.
+
+## Shipped
+
+| Rule or store | Path | Evidence |
+|---|---|---|
+| `AISessionStoreKind.agentTaskStore` (Roo Code) | `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/tasks/<task-id>/` | Each task directory holds `history_item.json`, `ui_messages.json` and a `checkpoints/.git` shadow repository; `tasks/_index.json` sits beside them. In Roo 3.54, `TaskHistoryStore.reconcile()` re-reads `tasks/` on an `fs.watch` event and on a timer. It skips names starting with `_` or `.`, drops history entries whose directory is gone and rewrites `_index.json`. Removing a whole task directory therefore removes the task from Roo's history cleanly. The adapter surfaces a task once nothing inside it has been written for 90 days, and the whole directory is the unit. |
+| `roo_code_model_cache` | `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/cache` | Roo's `MODEL_CACHE` writes only `<provider>_models.json` and `<provider>_endpoints.json` here, and refetches them when they are missing. |
+| `kilo_cache` | `~/.cache/kilo` | Kilo 7.x is built on OpenCode and uses the same XDG layout. The cache holds `models.json` (5.1 MB) and `bin/`. Sessions are in `~/.local/share/kilo/kilo.db`, which is not matched. |
+| `amazon_q_chat_history` | `~/.aws/amazonq/history/chat-history-*.json` | The writer is the `aws-lsp-codewhisperer` language server bundled with the extension. It builds `.aws/amazonq/history/chat-history-${workspaceIdentifier}.json`, one database file per workspace. Review only, gated on 90 days. |
+| `cline_legacy_logs` | `~/.cline/logs/cline-*.log` | These per-run `cline-core`/`cline-host` logs date from November 2025. Cline 4.1.22 builds its log directory as `<CLINE_DATA_DIR>/logs`, which is `~/.cline/data/logs`, and neither it nor CLI 2.16.0 writes `cline-core-*` names. Gated on 30 days. |
+
+## Dropped
+
+- **Cline 4.x sessions** (`~/.cline/data/sessions/<id>/`): the session list is the `sessions` table in `~/.cline/data/db/sessions.db`. Cline's own delete removes that row together with the session's message, manifest and compaction files. Removing only the directory would leave a session in Cline's history that cannot be opened. An adapter would have to edit the database, which this project never does. The legacy `saoudrizwan.claude-dev` globalStorage does not exist under 4.x.
+- **Kilo Code 7.x tasks**: Kilo no longer uses the Roo-style `kilocode.kilo-code/tasks` folder. Sessions live in `kilo.db`. `snapshot/` has the same nesting hazard as OpenCode's. `log/` (100 KB) and `tool-output/` (160 KB) were not evaluated.
+- **Muse**: 8.8 MB in total: analytics plists, an `HTTPStorages` cookie database and WebKit website data that holds the sign-in. `~/Library/Caches/com.meta.endo` is 4 KB. There is nothing worth a rule.
+- **Cline `puppeteer/`, `checkpoints/`, `cache/`**: these were 3.x globalStorage paths, and none of them exists under 4.1.22.
+
+## Still held
+
+Kiro `kiro.kiroagent/`, Cody `symf/` and OpenCode `storage/*` and `snapshot/` are unchanged from the 2026-10-03 table: the first two are not installed, and the OpenCode items need an adapter.
