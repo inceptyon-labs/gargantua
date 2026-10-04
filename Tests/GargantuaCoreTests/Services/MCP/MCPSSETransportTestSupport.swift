@@ -1,7 +1,5 @@
 import Foundation
 import Darwin
-import CoreFoundation
-import Testing
 @testable import GargantuaCore
 
 // MARK: - Shared MCP SSE transport test networking helpers
@@ -21,6 +19,7 @@ enum MCPSSETransportTestSupport {
         case timedOut(String)
         case noFreePort
         case closeAbortivelyFailed(String)
+        case connectFailed(Int32)
     }
 
     /// Shared echo handler: replies to every non-notification JSON-RPC
@@ -105,11 +104,12 @@ enum MCPSSETransportTestSupport {
     /// doesn't send). Both strings are specific to
     /// `MCPSSERequestRouter`'s wire format; no squatter produces either one.
     ///
-    /// Uses `TCPClient`, whose connect is `CFStream`-backed and therefore
-    /// asynchronous: a connection that cannot succeed (nothing listening,
-    /// or a bind conflict) surfaces as a stream error within milliseconds
-    /// rather than blocking for the kernel's ~75s SYN timeout, so this
-    /// cannot overrun `timeout` the way a raw blocking `connect()` could.
+    /// Uses `TCPClient`, whose connect is non-blocking and whose write and read
+    /// are both bounded by the remaining `timeout`: a connection that cannot
+    /// succeed (nothing listening, or a bind conflict) surfaces as an error
+    /// within milliseconds rather than blocking for the kernel's ~75s SYN
+    /// timeout, so this cannot overrun `timeout` the way a raw blocking
+    /// `connect()` could.
     static func waitUntilAcceptingConnections(port: UInt16, timeout: TimeInterval = 5) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
@@ -141,9 +141,10 @@ enum MCPSSETransportTestSupport {
     /// found in the accumulated buffer it is already present too.
     private static func speaksSSEProtocol(port: UInt16, timeout: TimeInterval) -> Bool {
         guard let client = try? TCPClient(port: Int(port)) else { return false }
+        let deadline = Date().addingTimeInterval(timeout)
         do {
-            try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-            let response = try client.read(until: "\r\n\r\n", timeout: timeout)
+            try client.write("GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", timeout: timeout)
+            let response = try client.read(until: "\r\n\r\n", timeout: deadline.timeIntervalSinceNow)
             return response.contains("event: endpoint")
                 || response.contains("WWW-Authenticate: Bearer")
         } catch {
@@ -208,44 +209,76 @@ enum MCPSSETransportTestSupport {
     /// Deadline-bounded TCP client used to drive `MCPSSETransport`'s raw
     /// HTTP/SSE wire protocol from tests.
     ///
-    /// Every `read(until:)` call is bounded by `timeout` (default 2s) and
-    /// throws `SocketError.timedOut` instead of blocking forever. Without
-    /// this, a peer that never replies — or a port `findFreePort()` handed
-    /// back that another process grabbed in the gap before the listener
-    /// bound it — hangs the calling test in a raw `recv`/stream read
-    /// forever. swift-testing has no per-test timeout, so that hang runs
-    /// until the CI job's outer timeout kills the whole run instead of
-    /// failing just this test.
+    /// Every `write(_:timeout:)` and `read(until:timeout:)` call is bounded by
+    /// `timeout` (default 2s) and throws `SocketError.timedOut` instead of
+    /// blocking forever. Without this, a peer that never replies — or a port
+    /// `findFreePort()` handed back that another process grabbed in the gap
+    /// before the listener bound it — hangs the calling test forever.
+    /// swift-testing has no per-test timeout, so that hang runs until the CI
+    /// job's outer timeout kills the whole run instead of failing just this
+    /// test.
+    ///
+    /// Built on a plain non-blocking socket and `poll(2)` rather than a
+    /// `CFStream` pair, because under full-suite load `CFStream` broke both
+    /// guarantees this suite depends on (gargantua-ig6y). A write issued while
+    /// the stream was still opening waited in `CFWriteStreamWrite` for an open
+    /// event that never arrived, with no timeout. And closing the streams did
+    /// not reliably close the socket: the server saw the client's FIN only
+    /// when the stream objects were deallocated, so the session-close
+    /// assertions waited out their deadline. Owning the descriptor makes both
+    /// deterministic — `poll` bounds every wait, and `close(2)` tears the
+    /// connection down before it returns.
     final class TCPClient {
-        private let input: InputStream
-        private let output: OutputStream
+        private let fd: Int32
         private var isClosed = false
 
+        /// Starts a non-blocking connect to `127.0.0.1:port` and returns
+        /// without waiting for it. A connect that fails later (nothing
+        /// listening, or a bind conflict) surfaces from the first
+        /// `write(_:timeout:)` within milliseconds, rather than blocking for
+        /// the kernel's ~75s SYN timeout.
         init(port: Int) throws {
-            var readStream: Unmanaged<CFReadStream>?
-            var writeStream: Unmanaged<CFWriteStream>?
-            CFStreamCreatePairWithSocketToHost(
-                nil,
-                "127.0.0.1" as CFString,
-                UInt32(port),
-                &readStream,
-                &writeStream
-            )
-            self.input = try #require(readStream?.takeRetainedValue() as InputStream?)
-            self.output = try #require(writeStream?.takeRetainedValue() as OutputStream?)
-            input.open()
-            output.open()
+            let fd = socket(AF_INET, SOCK_STREAM, 0)
+            guard fd >= 0 else { throw SocketError.connectFailed(errno) }
+            // A write to a peer that has reset the connection must fail with
+            // EPIPE, not raise SIGPIPE and kill the whole test process.
+            var noSigPipe: Int32 = 1
+            guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size)) == 0,
+                  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == 0
+            else {
+                let setupErrno = errno
+                close(fd)
+                throw SocketError.connectFailed(setupErrno)
+            }
+
+            var address = sockaddr_in()
+            address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+            address.sin_family = sa_family_t(AF_INET)
+            address.sin_port = UInt16(port).bigEndian
+            address.sin_addr.s_addr = inet_addr("127.0.0.1")
+            let result = withUnsafePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+            guard result == 0 || errno == EINPROGRESS else {
+                let connectErrno = errno
+                close(fd)
+                throw SocketError.connectFailed(connectErrno)
+            }
+            self.fd = fd
         }
 
         deinit {
             closeGracefully()
         }
 
+        /// Closes the socket. `close(2)` sends the FIN before returning, which
+        /// is what lets the server observe the disconnect right away.
         func closeGracefully() {
             guard !isClosed else { return }
             isClosed = true
-            input.close()
-            output.close()
+            close(fd)
         }
 
         /// Forces the client's TCP connection closed with `SO_LINGER` set to
@@ -263,35 +296,18 @@ enum MCPSSETransportTestSupport {
         /// `closeGracefully()` directly when the close has to happen at a
         /// specific point rather than whenever the client leaves scope.
         ///
-        /// Throws rather than silently degrading to a graceful close if any
-        /// step fails (no `socketNativeHandle` property, a too-small handle,
-        /// a negative fd, or `setsockopt` itself failing). A determinism
-        /// helper that can silently stop providing determinism is worse than
-        /// one that fails loudly: a caller relying on the RST to make a
-        /// subsequent assertion deterministic would otherwise get a
+        /// Throws rather than silently degrading to a graceful close if
+        /// `setsockopt` fails, or if the client is already closed (its
+        /// descriptor number may by then belong to another socket). A
+        /// determinism helper that can silently stop providing determinism is
+        /// worse than one that fails loudly: a caller relying on the RST to make
+        /// a subsequent assertion deterministic would otherwise get a
         /// timing-dependent test with no signal that the guarantee was lost.
         func closeAbortively() throws {
+            guard !isClosed else {
+                throw SocketError.closeAbortivelyFailed("client is already closed")
+            }
             defer { closeGracefully() }
-            guard let handle = CFWriteStreamCopyProperty(
-                output as CFWriteStream,
-                .socketNativeHandle
-            ) as? Data else {
-                throw SocketError.closeAbortivelyFailed(
-                    "output stream has no socketNativeHandle property"
-                )
-            }
-            guard handle.count >= MemoryLayout<Int32>.size else {
-                throw SocketError.closeAbortivelyFailed(
-                    "socketNativeHandle property (\(handle.count) bytes) is too small for a file descriptor"
-                )
-            }
-            var fd: Int32 = -1
-            _ = withUnsafeMutableBytes(of: &fd) { destination in
-                handle.copyBytes(to: destination, count: MemoryLayout<Int32>.size)
-            }
-            guard fd >= 0 else {
-                throw SocketError.closeAbortivelyFailed("socketNativeHandle was negative (\(fd))")
-            }
             var lingerOption = linger(l_onoff: 1, l_linger: 0)
             let result = setsockopt(
                 fd, SOL_SOCKET, SO_LINGER, &lingerOption, socklen_t(MemoryLayout<linger>.size)
@@ -301,49 +317,66 @@ enum MCPSSETransportTestSupport {
             }
         }
 
-        func write(_ string: String) throws {
+        func write(_ string: String, timeout: TimeInterval = 2) throws {
+            guard !isClosed else { throw SocketError.writeFailed }
             let bytes = Array(string.utf8)
+            let deadline = Date().addingTimeInterval(timeout)
             var offset = 0
             while offset < bytes.count {
-                let written = bytes.withUnsafeBufferPointer { buffer in
-                    output.write(
-                        buffer.baseAddress!.advanced(by: offset),
-                        maxLength: bytes.count - offset
-                    )
+                // POLLOUT also fires when a pending connect finishes, whether
+                // it succeeded or not; a failed connect then fails the send.
+                guard waitFor(Int16(POLLOUT), until: deadline) else {
+                    throw SocketError.timedOut("socket never became writable")
                 }
-                guard written > 0 else {
+                let written = bytes.withUnsafeBufferPointer { buffer in
+                    send(fd, buffer.baseAddress!.advanced(by: offset), bytes.count - offset, 0)
+                }
+                if written > 0 {
+                    offset += written
+                } else if written < 0, errno == EAGAIN || errno == EINTR {
+                    continue
+                } else {
                     throw SocketError.writeFailed
                 }
-                offset += written
             }
         }
 
         func read(until marker: String, timeout: TimeInterval = 2) throws -> String {
+            guard !isClosed else { throw SocketError.readFailed }
             let markerData = Data(marker.utf8)
-            var data = Data()
             let deadline = Date().addingTimeInterval(timeout)
+            var data = Data()
             var buffer = [UInt8](repeating: 0, count: 4_096)
 
-            while Date() < deadline {
-                if input.hasBytesAvailable {
-                    let count = input.read(&buffer, maxLength: buffer.count)
-                    if count > 0 {
-                        data.append(buffer, count: count)
-                        if data.range(of: markerData) != nil {
-                            return String(bytes: data, encoding: .utf8) ?? ""
-                        }
-                    } else if count < 0 {
-                        throw SocketError.readFailed
+            while waitFor(Int16(POLLIN), until: deadline) {
+                let count = recv(fd, &buffer, buffer.count, 0)
+                if count > 0 {
+                    data.append(buffer, count: count)
+                    if data.range(of: markerData) != nil {
+                        return String(bytes: data, encoding: .utf8) ?? ""
                     }
-                } else {
-                    RunLoop.current.run(
-                        mode: .default,
-                        before: Date().addingTimeInterval(0.01)
-                    )
+                } else if count == 0 || (errno != EAGAIN && errno != EINTR) {
+                    // The peer closed before sending the marker, or the socket failed.
+                    throw SocketError.readFailed
                 }
             }
-
             throw SocketError.timedOut(String(bytes: data, encoding: .utf8) ?? "")
+        }
+
+        /// Blocks until the socket reports `events` — or an error or hangup,
+        /// which the `send`/`recv` that follows then reports — and returns
+        /// `true`, or returns `false` once `deadline` passes.
+        private func waitFor(_ events: Int16, until deadline: Date) -> Bool {
+            while true {
+                let remaining = deadline.timeIntervalSinceNow
+                guard remaining > 0 else { return false }
+                var descriptor = pollfd(fd: fd, events: events, revents: 0)
+                let milliseconds = Int32(min(remaining * 1_000, 60_000).rounded(.up))
+                // Zero is a timeout; a negative result (EINTR) goes round again.
+                if poll(&descriptor, 1, milliseconds) > 0 {
+                    return true
+                }
+            }
         }
     }
 }
