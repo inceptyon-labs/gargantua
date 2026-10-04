@@ -40,6 +40,14 @@ final class ProbeProcess {
     /// nothing from the pipe (a read would block); after exit it reads stderr once.
     var diagnosis: String {
         let pid = process.processIdentifier
+        // `isRunning` stays true until Foundation reaps the child, so give a probe
+        // that just died time to be reaped. Swift Testing evaluates the `#expect`
+        // comment only on failure, so this delay is only paid when a test fails.
+        var waited = 0
+        while process.isRunning, waited < 20 {
+            Thread.sleep(forTimeInterval: 0.05)
+            waited += 1
+        }
         if process.isRunning { return "probe pid \(pid) is still running" }
         if stderrText == nil {
             let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
@@ -120,6 +128,7 @@ final class ProbeProcess {
 
     deinit {
         stop()
+        try? stderrPipe.fileHandleForReading.close()
         try? FileManager.default.removeItem(at: directory)
     }
 }
