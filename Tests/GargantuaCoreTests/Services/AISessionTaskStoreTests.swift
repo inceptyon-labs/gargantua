@@ -30,6 +30,19 @@ struct AISessionTaskStoreTests {
         #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
     }
 
+    @Test("the default window is 90 days: a task idle 89 days stays, one just past 90 surfaces")
+    func defaultWindowIsNinetyDays() async throws {
+        let fixture = try AISessionFixtureTree()
+        // Just past rather than exactly at 90 days: the mtime round-trips
+        // through the file system, so an exact boundary would be flaky.
+        try fixture.addTask(id: "task-89", contentAge: 89 * AISessionFixtureTree.day)
+        try fixture.addTask(id: "task-90", contentAge: 90 * AISessionFixtureTree.day + 60 * 60)
+
+        let results = try await fixture.makeAdapter().scan(progress: nil)
+
+        #expect(results.map(\.name) == ["Roo Code task — task-90"])
+    }
+
     @Test("task age is the newest file anywhere inside, not the folder's own timestamp")
     func taskAgeIsDeepest() async throws {
         let fixture = try AISessionFixtureTree()
