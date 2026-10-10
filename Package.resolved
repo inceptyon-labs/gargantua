@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/huggingface/swift-jinja.git",
       "state" : {
-        "revision" : "0aeefadec459ce8e11a333769950fb86183aca43",
-        "version" : "2.3.5"
+        "revision" : "4588064a20f3fc093c95f2f7d3359999bf30cae5",
+        "version" : "2.5.1"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/huggingface/swift-transformers",
       "state" : {
-        "revision" : "b38443e44d93eca770f2eb68e2a4d0fa100f9aa2",
-        "version" : "1.3.0"
+        "revision" : "c21fdcde390313a6d98d8e33a346f2c3486c3ab0",
+        "version" : "1.3.4"
       }
     },
     {
