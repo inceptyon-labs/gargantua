@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Full history is required by _env.sh — `git rev-list --count`
           # produces CFBundleVersion, and `git describe` resolves the tag.
