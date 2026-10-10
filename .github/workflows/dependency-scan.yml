@@ -1,0 +1,39 @@
+name: Dependency Scan
+
+# Runs on every push and PR, and daily so a CVE published against an
+# already-pinned dependency surfaces even when the repo is idle.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 9 * * *" # daily 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deps:
+    name: Dependency scan
+    runs-on: ubuntu-latest
+    env:
+      # Bump both together; the checksum is the linux_amd64 line of the
+      # release's osv-scanner_SHA256SUMS.
+      OSV_SCANNER_VERSION: v2.6.0
+      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  /usr/local/bin/osv-scanner" | sha256sum --check -
+          chmod +x /usr/local/bin/osv-scanner
+
+      - name: Scan pinned SwiftPM dependencies for known CVEs
+        run: Scripts/osv-spm-scan.sh

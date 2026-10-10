@@ -291,7 +291,7 @@ Gargantua runs with elevated trust on a user's machine. Defenses are layered:
 - **Cloud AI redaction**: outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
 - **Hardened runtime + notarization**: release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.
 - **Pre-commit secret scanning**: versioned `.githooks/` with `gitleaks` blocks committed credentials. See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup).
-- **Dependency scanning**: an OSV wrapper runs in CI against `Package.resolved` to flag CVEs in pinned SwiftPM dependencies.
+- **Dependency scanning**: an OSV wrapper runs against `Package.resolved` on every push and pull request, and daily, to flag CVEs in pinned SwiftPM dependencies. Dependabot opens weekly update PRs for SwiftPM packages and GitHub Actions.
 
 If you discover a security issue, especially anything involving the privileged helper, MCP guardrails, audit trails, cloud-AI redaction, or a path that could remove a `protected` item, please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
 

@@ -287,7 +287,8 @@ fail on a coverage percentage yet. Once the team agrees on a baseline that the
 suite reliably exceeds, enable the same script as a gate with `--fail-under`.
 
 Dependency scanning uses an OSV wrapper against the pinned Git revisions in
-`Package.resolved`. CI runs it on every pull request; run it locally with:
+`Package.resolved`. CI runs it on every push and pull request, and daily on a
+schedule; run it locally with:
 
 ```bash
 Scripts/osv-spm-scan.sh -- --all-packages
