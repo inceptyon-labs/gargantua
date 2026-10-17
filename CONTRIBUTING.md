@@ -8,7 +8,7 @@ Thanks for helping improve Gargantua.
 
 Before your first `swift build`, make sure you have:
 
-- **macOS 15 + the latest stable Xcode** (needed to resolve `mlx-swift-lm`, which declares `swift-tools-version: 6.1`), on **Apple Silicon**.
+- **macOS 26.2 + Xcode 26.4 or newer (Swift 6.3+)** (needed to resolve `mlx-swift`, pulled in by `mlx-swift-lm`, which declares `swift-tools-version: 6.3`), on **Apple Silicon**.
 - **Xcode Command Line Tools** — `xcode-select --install`.
 - **The Metal Toolchain** — `xcodebuild -downloadComponent MetalToolchain`. This is a **hard build requirement, not just for local AI.** The `BuildMetallibPlugin` runs as a SwiftPM prebuild command on every `swift build`/`swift run`, compiling MLX's GPU shaders via `xcrun metal`. On recent Xcode the Metal Toolchain ships as a separate download; without it the prebuild step fails and the whole build fails. Once it's installed, the plugin produces and stages `mlx.metallib` automatically — no manual step.
 

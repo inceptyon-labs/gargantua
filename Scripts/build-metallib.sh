@@ -74,18 +74,20 @@ METAL_ROOT="$MLX_SWIFT_ROOT/Source/Cmlx/mlx-generated/metal"
     || die "unexpected mlx-swift layout: no $METAL_ROOT (did the SPM tree change?)"
 
 # ----- Shader list ----------------------------------------------------------
-# Mirrors mlx/mlx/backend/metal/kernels/CMakeLists.txt's `build_kernel(...)`
-# invocations. If mlx-swift adds/removes shaders on a version bump, update
-# this list and re-run the design doc's build-size measurement.
+# Mirrors KERNEL_LIST in mlx-swift's tools/fix-metal-includes.sh, which
+# decides which shaders land in mlx-generated/metal. If mlx-swift adds/removes
+# shaders on a version bump, update this list and re-run the design doc's
+# build-size measurement.
 
 SHADERS=(
     "$METAL_ROOT/arg_reduce.metal"
     "$METAL_ROOT/conv.metal"
-    "$METAL_ROOT/gemv.metal"
+    "$METAL_ROOT/dot.metal"
     "$METAL_ROOT/layer_norm.metal"
     "$METAL_ROOT/random.metal"
     "$METAL_ROOT/rms_norm.metal"
     "$METAL_ROOT/rope.metal"
+    "$METAL_ROOT/searchsorted.metal"
     "$METAL_ROOT/scaled_dot_product_attention.metal"
     "$METAL_ROOT/steel/attn/kernels/steel_attention.metal"
 )

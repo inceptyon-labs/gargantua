@@ -34,7 +34,7 @@ permissions:
 jobs:
   release:
     name: Build, sign, notarize, publish
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
 
     env:
@@ -49,7 +49,7 @@ jobs:
           # produces CFBundleVersion, and `git describe` resolves the tag.
           fetch-depth: 0
 
-      - name: Select latest stable Xcode (Swift 6.1+)
+      - name: Select latest stable Xcode (Swift 6.3+)
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
