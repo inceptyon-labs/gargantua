@@ -22,7 +22,7 @@ jobs:
 
   lint:
     name: SwiftLint & SwiftFormat
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -46,12 +46,12 @@ jobs:
 
   test:
     name: Swift Tests
-    # macos-15 with the latest stable Xcode is required: a transitive
-    # SwiftPM dependency (mlx-swift-lm) declares
-    # `// swift-tools-version: 6.1`, which needs Xcode 16.3+ /
-    # Swift 6.1+. The default macos-14 runner ships Xcode 15 / Swift
-    # 5.10 and fails dependency resolution.
-    runs-on: macos-15
+    # macos-26 with the latest stable Xcode is required: a transitive
+    # SwiftPM dependency (mlx-swift 0.32+, pulled in by mlx-swift-lm)
+    # declares `// swift-tools-version: 6.3`, which needs Xcode 26.4+ /
+    # Swift 6.3+. The macos-15 runner tops out at Xcode 26.3 / Swift 6.2
+    # and fails dependency resolution.
+    runs-on: macos-26
 
     # SwiftUI's View conformance implicitly infers @MainActor for the whole
     # conforming type, including its static helpers. View is
@@ -104,7 +104,7 @@ jobs:
         run: swift --version
 
       # mlx-swift's BuildMetallibPlugin shells out to `xcrun metal` to
-      # compile its shaders; the macos-15 runner doesn't ship the Metal
+      # compile its shaders; the runner image doesn't ship the Metal
       # Toolchain by default, so the prebuild step fails before any test
       # gets to run. Download the component once per job — output is a
       # silent install, exit-coded.
