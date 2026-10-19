@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.12] - 2026-10-19
+
+### Added
+
+- **Cancel for more scans.** Duplicate Finder and File Health get a Cancel Scan button (Esc), and AI Models gets Sever Tether; cancelling stops the work, kills fclones and czkawka, and returns to the start screen.
+- **Folder and file choice in File Organizer.** Each proposed folder and file has a checkbox, and Apply and Undo move only what you checked.
+- **Expandable (Files) row in Disk Explorer.** A folder's loose files show as individual rows, largest first, each with Reveal in Finder and Move to Trash.
+- **Search for Background Items and Rules.** Background Items filters by label, plist, executable path, bundle name, bundle ID and team ID; Rules searches id, name, category and paths.
+- **Update notice in the sidebar.** When Sparkle finds an update, an "Update to <version>" row appears in the sidebar footer and re-opens the install flow.
+- **Progress gauge for Duplicate Finder and File Health.** Cleanups show the same "N / total cleaned" gauge as Deep Clean, Dev Purge, AI Models and the uninstaller.
+- **Uninstaller conveniences.** Plan rows offer Reveal in Finder and Copy Path, and a note with an Open Login Items button appears when an app bundle goes to the Trash, since its Login Items stay listed.
+- **SQLite databases cleaned as one item.** A database's -wal, -shm and -journal files count toward its size and age and are removed first; if a sidecar can't be removed, the database is left alone.
+- **Command-line owner detection.** The running-process check now sees command-line tools such as codex, so their items are protected while they run.
+- **New AI tool rules.** Codex log and thread-history databases, Gemini CLI prompt history, and Roo Code tasks idle for 90 days are offered for review.
+- **Keyboard shortcut for Settings.** Cmd-comma opens Settings.
+
+### Changed
+
+- **Shortcuts reorganized.** Sidebar items past the tenth use Option-Cmd-1..6, Settings tabs use Control-Cmd-1..6, and the shortcut sheet lists them; Cmd-R reruns a scan.
+- **Single main window.** New Window is removed so two cleanups can't run from separate windows, and gargantua:// links use the open window.
+- **Release builds bundle the MCP server.** Agent Run and the Settings SSE server now work outside a source checkout.
+- **Clearer cleanup console.** Removed rows keep their height and read GONE, and a gauge shows "N / total cleaned".
+- **Lower memory and CPU use.** Deep Clean scans peak at about 85 MB instead of 826 MB, off-screen panes drop results under memory pressure, the UI no longer freezes when a scan finishes, idle CPU no longer climbs with Dashboard visits, and polling pauses when the app isn't visible. Rules parse once per launch, and large lists, results and the app picker render faster.
+- **Build requirements.** CI builds on macOS 26; dependencies updated (Sparkle 2.10.0, mlx-swift-lm 3.32.3, swift-transformers 1.3.5, Yams 6.2.2).
+
+### Fixed
+
+- **Strictest rule wins on overlaps.** Overlapping results keep the stricter safety and any running-app lock, but a generic review rule no longer demotes a folder a specific rule knows is safe.
+- **Totals count once.** A folder and the results inside it, a database and its sidecars, and items shared across Dev Purge buckets are no longer double-counted.
+- **Settings exclusions apply everywhere.** Every scan, scheduled scan, menu-bar quick scan and MCP request skips excluded paths, and "Add to Exclusions" now works in Deep Clean.
+- **Running-app locks enforced everywhere.** Items held by a running app or its owner process are skipped at clean time for MCP and Agent cleanups too, and "Quit" no longer closes an app whose items another process still holds.
+- **Trash emptied first.** Deep Clean empties the Trash before the rest of the batch, so it no longer deletes what the same run just moved there.
+- **Safer Deep Clean selection.** Age overrides judge folders by recent activity, Quit pre-selects only safe items, and scan results survive Esc, Cmd-. and a license-gate block.
+- **Reliable results lists.** Group checkboxes reflect selectable items, selections hidden by a search return when it clears, selection is frozen during confirmation, and grouping, collapsed groups and search persist across navigation.
+- **Disk Explorer fixes.** Dot folders are listed so children add up to the folder size, parent sizes refresh after a trash, Focus resets when navigating, and a Focus menu offers Reveal, Copy Path and Trash.
+- **Worktrees and Developer Tools.** Stale git worktrees are cleaned for real, the Homebrew preview no longer counts its own total, and Docker prunes record the space they report freeing.
+- **Stale Xcode DeviceSupport ranking.** Model-prefixed folders are ranked by OS version, so an older device's newest OS is no longer proposed for removal.
+- **Live System and menu bar.** Background item and process lists stay in place and keep their sort after actions, Quick Scan state survives popover reopens, and Dashboard links start their scan.
+- **Cleanup log readable.** Large cleanups no longer overlap or blank the log.
+- **AI and model reliability.** Multi-byte characters in agent output are no longer dropped, a swapped engine isn't reported ready, a cancelled model download no longer affects the next run, and MLX releases model weights from memory.
+- **Scheduling and rules.** Custom cron handles daylight saving transitions, nested excludes protect files inside rule folders, custom rules are no longer labeled as the bundled snapshot, and bundled rules are synced to upstream (Codex helper app, IDE locks, rollouts, Kilo, Amazon Q, Cline, Dropbox databases).
+- **AI session folders.** A project folder shared by two live paths is no longer offered as an orphan.
+- **Privileged helper.** A silent helper times out and reports items as failed instead of hanging the cleanup, and launchctl output no longer stalls on large listings.
+- **Audit reporting.** Audit-write failures are reported without marking a completed cleanup or uninstall as failed.
+- **Smaller fixes.** Failed-delete confirmations, Docker and Developer Tools size labels, profile deletion confirmation, the shortcut card's Esc, and the sidebar disk line refresh were corrected.
+
+### Security
+
+- **Agent sessions locked down.** Agent Run launches without Claude Code's built-in tools, with the MCP server in propose-only mode, so prompt-injected file names can't reach Bash or other tools or delete anything.
+- **Binary checks before launch.** The claude and codex binaries get the same trust check as other tools, and DYLD_* is stripped from the agent environment.
+- **MCP hardening.** The SSE listener caps connections at 32, closes idle ones after 10 s and rejects unauthorized requests at the headers; the clean rate limit is shared across SSE sessions; cleaning the Trash requires method "delete"; and consent fails closed when the notification can't be shown.
+- **Privacy in cloud AI.** Home folder paths become ~ and email addresses are masked in cloud requests, including File Organizer's.
+- **Credential folders protected.** Disk Explorer refuses to trash ~/.ssh, ~/.gnupg, ~/.aws, ~/.kube, Keychains and folders containing them.
+- **Helper hardening.** Privileged-helper smoke flags are excluded from release builds, and the helper allowlist rejects whole subtree roots except the installer payload and Rosetta update bundle.
+
 ## [0.4.11] - 2026-09-24
 
 ### Added
