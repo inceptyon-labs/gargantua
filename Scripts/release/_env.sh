@@ -53,6 +53,16 @@ run() {
     fi
 }
 
+# file_lock_free <path>: succeed when no process holds an exclusive flock on
+# <path>. A diskimages-helper left behind by `hdiutil create` can keep the
+# finished DMG attached under that lock, and notarytool waits on it forever
+# before uploading anything. That is how the 0.4.13 publish hung for hours.
+file_lock_free() {
+    perl -MFcntl=:flock -e \
+        'open(my $f, "<", $ARGV[0]) or exit 2; exit(flock($f, LOCK_SH | LOCK_NB) ? 0 : 1)' \
+        "$1"
+}
+
 # ----- Optional .env.release ------------------------------------------------
 # .env.release is gitignored; holds TEAM_ID / SIGNING_IDENTITY / NOTARY_PROFILE.
 # Real env vars take precedence, so CI can override without touching the file.

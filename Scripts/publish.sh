@@ -129,6 +129,24 @@ if [ "$SKIP_RELEASE" != 1 ] && [ "$DRY_RUN" != 1 ]; then
     fi
 fi
 
+# The GitHub release must sit on the commit we build. When the tag isn't on
+# GitHub yet, `gh release create` makes one at the default branch's tip
+# instead, which is how v0.4.12's GitHub tag ended up a commit short of its
+# DMG. Catch a conflicting remote tag here, before the long build; the tag
+# itself is pushed just before the release is created.
+remote_tag_commit() {
+    git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" \
+        | awk -v plain="refs/tags/$TAG" -v peeled="refs/tags/$TAG^{}" \
+            '$2 == plain { p = $1 } $2 == peeled { c = $1 } END { print (c != "" ? c : p) }'
+}
+if [ "$SKIP_RELEASE" != 1 ] && [ "$DRY_RUN" != 1 ]; then
+    TAG_COMMIT="$(git rev-parse "$TAG^{commit}")"
+    REMOTE_TAG_COMMIT="$(remote_tag_commit)" || die "could not reach origin to check tag $TAG"
+    if [ -n "$REMOTE_TAG_COMMIT" ] && [ "$REMOTE_TAG_COMMIT" != "$TAG_COMMIT" ]; then
+        die "origin's $TAG points at ${REMOTE_TAG_COMMIT:0:7} but the local $TAG is ${TAG_COMMIT:0:7}. Re-point one of them before publishing."
+    fi
+fi
+
 log "Publishing Gargantua $VERSION (tag $TAG)..."
 
 # Single cleanup hook for every temp dir we create below. Set before any of
@@ -211,9 +229,15 @@ RELEASE_ASSETS=("$DMG_PATH" "$APPCAST_PATH" "$NOTES_PATH")
 NOTES_HTML_PATH="$REPO_ROOT/dist/sparkle-updates/Gargantua-${VERSION}.html"
 [ -f "$NOTES_HTML_PATH" ] && RELEASE_ASSETS+=("$NOTES_HTML_PATH")
 
+if [ -z "$(remote_tag_commit)" ]; then
+    log "Pushing tag $TAG to origin..."
+    git push origin "refs/tags/$TAG"
+fi
+
 log "Creating GitHub Release $TAG on $REPO_SLUG..."
 gh release create "$TAG" \
     --repo "$REPO_SLUG" \
+    --verify-tag \
     --title "Gargantua $VERSION" \
     --notes-file "$NOTES_PATH" \
     "${RELEASE_ASSETS[@]}"
@@ -273,5 +297,5 @@ log "  Release: https://github.com/$REPO_SLUG/releases/tag/$TAG"
 log "  Tap:     https://github.com/$TAP_REPO/blob/HEAD/Casks/gargantua.rb"
 log ""
 log "Next:"
-log "  - git push origin main $TAG"
+log "  - git push origin main (the tag is already on GitHub)"
 log "  - On a clean machine: brew update && brew upgrade --cask gargantua"

@@ -272,7 +272,7 @@ printf '\n'
 
 if ! "$REPO_ROOT/Scripts/publish.sh"; then
     err "publish.sh failed."
-    err "The tag ${TAG_NAME} was created locally but nothing has been pushed."
+    err "The tag ${TAG_NAME} was created locally. publish.sh pushes it only right before creating the GitHub release."
     err "After fixing the cause, you can either:"
     err "  - re-run Scripts/publish.sh (tag is already in place), or"
     err "  - delete the tag (git tag -d ${TAG_NAME}) and re-run this script."
@@ -287,11 +287,11 @@ printf '\n'
 
 if ask_yn "Push '${CURRENT_BRANCH}' and '${TAG_NAME}' to origin?" default-y; then
     git push origin "$CURRENT_BRANCH"
-    # `gh release create` (run inside publish.sh) auto-pushes the tag, so
-    # by the time we get here it's usually already on the remote. Only
-    # push if it's missing, to avoid a misleading "tag already exists" error.
+    # publish.sh pushes the tag before creating the GitHub release, so by
+    # the time we get here it's usually already on the remote. Only push if
+    # it's missing, to avoid a misleading "tag already exists" error.
     if git ls-remote --tags --exit-code origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
-        log "tag ${TAG_NAME} already on remote (pushed by gh release create); skipping."
+        log "tag ${TAG_NAME} already on remote (pushed by publish.sh); skipping."
     else
         git push origin "$TAG_NAME"
     fi

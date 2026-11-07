@@ -73,7 +73,41 @@ else
         "$DMG_PATH"
 fi
 
+# hdiutil (and create-dmg, which wraps it) can leave the finished DMG attached
+# to a diskimages-helper that never exits and keeps an exclusive lock on the
+# file. notarytool then blocks on that lock forever, so detach anything still
+# attached from $DMG_PATH and confirm the lock is gone before signing.
+release_dmg_attachments() {
+    local dmg_real info count i image image_real dev
+    dmg_real="$(cd "$(dirname "$DMG_PATH")" && pwd -P)/$(basename "$DMG_PATH")"
+    info="$(mktemp -t gargantua-hdiutil-info)"
+    hdiutil info -plist > "$info"
+    count="$(plutil -extract images raw -o - "$info" 2>/dev/null || echo 0)"
+    for ((i = 0; i < count; i++)); do
+        image="$(plutil -extract "images.$i.image-path" raw -o - "$info" 2>/dev/null)" || continue
+        # hdiutil reports /var/... while DMG_PATH may be /private/var/...
+        image_real="$(cd "$(dirname "$image")" 2>/dev/null && pwd -P)/$(basename "$image")" || continue
+        [ "$image_real" = "$dmg_real" ] || continue
+        dev="$(plutil -extract "images.$i.system-entities.0.dev-entry" raw -o - "$info" 2>/dev/null)" || continue
+        warn "$(basename "$DMG_PATH") is still attached at $dev after creation; detaching."
+        hdiutil detach "$dev" -quiet 2>/dev/null \
+            || hdiutil detach "$dev" -force -quiet \
+            || warn "hdiutil detach $dev failed"
+    done
+    rm -f "$info"
+
+    local _
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        file_lock_free "$DMG_PATH" && return 0
+        sleep 1
+    done
+    lsof "$DMG_PATH" >&2 || true
+    die "$DMG_PATH is still locked by the process above. Detach it (hdiutil info lists the device) and re-run."
+}
+
 if [ "${DRY_RUN:-0}" != "1" ]; then
+    release_dmg_attachments
+
     [ -n "${SIGNING_IDENTITY:-}" ] || die "SIGNING_IDENTITY not set; cannot sign DMG"
     log "Signing DMG..."
     run codesign \

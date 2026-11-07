@@ -151,7 +151,7 @@ The interactive script does the whole flow:
    1. Runs `Scripts/release.sh --ci` → builds the DMG, signs, notarizes app + DMG, staples both, runs `spctl --assess`, and stages `dist/sparkle-updates/appcast.xml` plus `dist/Gargantua-X.Y.Z.dmg`.
    2. Computes the DMG SHA-256.
    3. Pulls the previous release's `appcast.xml` (so item entries stay cumulative) before regenerating.
-   4. `gh release create vX.Y.Z` with the DMG and the new `appcast.xml` attached, plus per-version markdown release notes.
+   4. Pushes the `vX.Y.Z` tag if GitHub doesn't have it yet, then runs `gh release create vX.Y.Z --verify-tag` with the DMG and the new `appcast.xml` attached, plus per-version markdown release notes. It stops before the build if GitHub already has `vX.Y.Z` on a different commit.
    5. Renders `Casks/gargantua.rb` via `Scripts/release/render-cask.sh`, clones `inceptyon-labs/homebrew-tap`, and commits + pushes the cask update.
 9. Prompts whether to push `main` and the new tag to `origin`. Decline and the tag stays local: you can re-cut without history rewriting.
 

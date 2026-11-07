@@ -14,7 +14,8 @@
 # ticket.
 #
 # Uses `--output-format json` so status / submission-ID parsing isn't
-# fragile against whitespace or Apple's log tweaks.
+# fragile against whitespace or Apple's log tweaks. The upload and the wait
+# run as separate notarytool calls, each bounded by a watchdog.
 #
 # Idempotent at Apple's side: re-submitting the same hash returns the
 # previous verdict, so release.sh can be safely re-run after a hiccup.
@@ -89,38 +90,77 @@ esac
 
 SUBMIT_LOG="$DIST_DIR/notarize-$(basename "$TARGET").json"
 
-log "Submitting $(basename "$TARGET") to notarytool ($NOTARY_AUTH_DESC, timeout: 30m)..."
-log "This typically takes 2-10 minutes but can be longer under load."
+# notarytool's --timeout only bounds the wait after the upload, so the upload
+# and the wait run as separate steps, each under its own watchdog. A ~70 MB
+# upload normally takes well under a minute.
+UPLOAD_LIMIT_SECS=900
+WAIT_TIMEOUT="30m"
+WAIT_LIMIT_SECS=2100
+
+# with_watchdog <seconds> <cmd...>: run <cmd>, killing it with SIGALRM after
+# <seconds>. A process killed this way exits with status 142.
+with_watchdog() {
+    local seconds="$1"
+    shift
+    perl -e 'alarm shift @ARGV; exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!\n"' \
+        "$seconds" "$@"
+}
+
+notary_failed() {
+    local sub_id="${1:-}"
+    if [ -n "$sub_id" ]; then
+        warn "Submission ID: $sub_id"
+        warn "Fetch detailed Apple log with:"
+        warn "  xcrun notarytool log \"$sub_id\" ${NOTARY_AUTH_FLAGS[*]}"
+    fi
+    warn "notarytool output saved at: $SUBMIT_LOG"
+    [ -n "$SUBMIT_CLEANUP" ] && warn "Submission artifact retained: $SUBMIT_CLEANUP"
+    die "${2:-notarization did not succeed}"
+}
+
+log "Submitting $(basename "$TARGET") to notarytool ($NOTARY_AUTH_DESC)..."
+log "Upload limit $((UPLOAD_LIMIT_SECS / 60))m, processing limit $WAIT_TIMEOUT. Processing typically takes 2-10 minutes."
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
-    log "DRY-RUN: xcrun notarytool submit \"$SUBMIT_PATH\" ${NOTARY_AUTH_FLAGS[*]} --wait --timeout 30m --output-format json"
+    log "DRY-RUN: xcrun notarytool submit \"$SUBMIT_PATH\" ${NOTARY_AUTH_FLAGS[*]} --no-wait --output-format json"
+    log "DRY-RUN: xcrun notarytool wait <submission-id> ${NOTARY_AUTH_FLAGS[*]} --timeout $WAIT_TIMEOUT --output-format json"
 else
-    if ! xcrun notarytool submit "$SUBMIT_PATH" \
-        "${NOTARY_AUTH_FLAGS[@]}" \
-        --wait \
-        --timeout 30m \
-        --output-format json \
-        > "$SUBMIT_LOG" 2>&1; then
-
-        # JSON output is strict; grep can extract "id" reliably.
-        SUB_ID="$(sed -nE 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$SUBMIT_LOG" | head -1)"
-        warn "notarization failed or timed out."
-        if [ -n "$SUB_ID" ]; then
-            warn "Submission ID: $SUB_ID"
-            warn "Fetch detailed Apple log with:"
-            warn "  xcrun notarytool log \"$SUB_ID\" ${NOTARY_AUTH_FLAGS[*]}"
-        fi
-        warn "Submission output saved at: $SUBMIT_LOG"
-        [ -n "$SUBMIT_CLEANUP" ] && warn "Submission artifact retained: $SUBMIT_CLEANUP"
-        die "notarization did not succeed"
+    if ! file_lock_free "$SUBMIT_PATH"; then
+        lsof "$SUBMIT_PATH" >&2 || true
+        die "$SUBMIT_PATH is locked by the process above, and notarytool would wait on it forever. For a disk image, detach it (hdiutil info lists the device) and re-run."
     fi
+
+    NOTARYTOOL="$(xcrun --find notarytool)"
+
+    rc=0
+    with_watchdog "$UPLOAD_LIMIT_SECS" "$NOTARYTOOL" submit "$SUBMIT_PATH" \
+        "${NOTARY_AUTH_FLAGS[@]}" \
+        --no-wait \
+        --output-format json \
+        > "$SUBMIT_LOG" 2>&1 || rc=$?
+
+    # JSON output is strict; sed can extract "id" reliably.
+    SUB_ID="$(sed -nE 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$SUBMIT_LOG" | head -1)"
+    if [ "$rc" = 142 ]; then
+        notary_failed "$SUB_ID" "notarytool upload did not finish within $((UPLOAD_LIMIT_SECS / 60)) minutes. Check the network and re-run; Apple dedupes submissions by hash."
+    elif [ "$rc" != 0 ] || [ -z "$SUB_ID" ]; then
+        notary_failed "$SUB_ID" "notarytool upload failed"
+    fi
+
+    log "Uploaded (submission $SUB_ID). Waiting for Apple to process it..."
+    rc=0
+    with_watchdog "$WAIT_LIMIT_SECS" "$NOTARYTOOL" wait "$SUB_ID" \
+        "${NOTARY_AUTH_FLAGS[@]}" \
+        --timeout "$WAIT_TIMEOUT" \
+        --output-format json \
+        > "$SUBMIT_LOG" 2>&1 || rc=$?
+    [ "$rc" = 0 ] || notary_failed "$SUB_ID" "notarization failed or timed out"
 
     # Status in JSON: "status": "Accepted" | "Invalid" | "Rejected".
     if ! grep -qE '"status"[[:space:]]*:[[:space:]]*"Accepted"' "$SUBMIT_LOG"; then
         STATUS="$(sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$SUBMIT_LOG" | head -1)"
-        warn "notarytool returned success but verdict was: ${STATUS:-unknown}"
-        warn "See $SUBMIT_LOG for details."
-        die "notarization completed but verdict was not Accepted"
+        warn "notarytool finished but the verdict was: ${STATUS:-unknown}"
+        notary_failed "$SUB_ID" "notarization completed but verdict was not Accepted"
     fi
 fi
 
