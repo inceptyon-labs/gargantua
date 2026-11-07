@@ -80,6 +80,10 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
     public let ownerProcesses: [String]?
     /// The running app that blocked the item at scan time, if any.
     public let blockedByApp: MCPBlockedApp?
+    /// Rule tags (`privileged`, `ai_history`, …). Carried so the host can run
+    /// the same removability decision Deep Clean makes on agent proposals.
+    /// `nil` when the producing scan predates the field.
+    public let tags: [String]?
 
     /// Creates a scan item row for MCP responses.
     public init(
@@ -95,7 +99,8 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
         category: String,
         scanTimeResolvedParent: String? = nil,
         ownerProcesses: [String]? = nil,
-        blockedByApp: MCPBlockedApp? = nil
+        blockedByApp: MCPBlockedApp? = nil,
+        tags: [String]? = nil
     ) {
         self.id = id
         self.name = name
@@ -110,10 +115,11 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
         self.scanTimeResolvedParent = scanTimeResolvedParent
         self.ownerProcesses = ownerProcesses
         self.blockedByApp = blockedByApp
+        self.tags = tags
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, path, size, safety, confidence, explanation, source, category
+        case id, name, path, size, safety, confidence, explanation, source, category, tags
         case lastAccessed = "last_accessed"
         case scanTimeResolvedParent = "scan_time_resolved_parent"
         case ownerProcesses = "owner_processes"

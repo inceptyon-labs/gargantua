@@ -27,6 +27,25 @@ struct ClaudeCodeAgentScanCacheFallbackTests {
         #expect(result?.scanTimeResolvedParent == "/mnt/real/dev")
     }
 
+    @Test("scanResult(from:) carries rule tags through so the removability check still sees `privileged`")
+    func tagsRoundTrip() throws {
+        let item = MCPScanItem(
+            id: "macos_installer_payloads-1",
+            name: "Install macOS Tahoe.app",
+            path: "/Applications/Install macOS Tahoe.app",
+            size: "12 GB",
+            safety: "review",
+            confidence: 90,
+            explanation: "installer",
+            source: "rules",
+            category: "system_cache",
+            tags: ["privileged"]
+        )
+        let result = try #require(ClaudeCodeAgentSessionController.scanResult(from: item))
+        #expect(result.tags == ["privileged"])
+        #expect(RemovabilityReconciler().removability(for: result).isRemovable == false)
+    }
+
     @Test("scanResult(from:) leaves scan_time_resolved_parent nil when the wire item didn't carry one")
     func nilParentStaysNil() {
         let item = MCPScanItem(

@@ -156,7 +156,37 @@ extension ClaudeCodeAgentSessionControllerTests {
         #expect(pending.items.map(\.id) == ["safe-1", "review-1"])
         #expect(pending.unresolvedItemIDs.isEmpty)
         #expect(controller.events.contains {
-            $0.stream == .system && $0.message.contains("Skipped protected agent cleanup item(s): protected-1")
+            $0.stream == .system && $0.message.contains("Skipped view-only agent cleanup item(s): protected-1")
+        })
+    }
+
+    @Test("approve() keeps system-owned items the root helper can't remove out of the modal")
+    func approveFiltersPrivilegedItemsOutsideHelperAllowlist() async throws {
+        // Deep Clean marks a `privileged`-tagged path the helper's allowlist
+        // doesn't cover as view-only. The agent path lost `tags` in the wire
+        // round trip and offered the same item as an ordinary review row.
+        let scanResultLine = #"""
+        {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_scan_priv","type":"tool_result","content":"summary"}]},"tool_use_result":{"content":"summary","structuredContent":{"items":[{"id":"safe-1","name":"Safe","path":"/tmp/safe-1","size":"1 KB","safety":"safe","confidence":90,"explanation":"cache","source":"Rules","category":"browser_cache"},{"id":"macos_installer_payloads-1","name":"Install macOS Tahoe.app","path":"/Applications/Install macOS Tahoe.app","size":"12 GB","safety":"review","confidence":90,"explanation":"installer","source":"Rules","category":"system_cache","tags":["privileged"]}],"summary":{"safe_count":1,"safe_size":"1 KB","review_count":1,"review_size":"12 GB","protected_count":0},"total_reclaimable":"12 GB"}}}
+        """#
+        let cleanCallLine = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_clean_priv","name":"mcp__gargantua__clean","input":{"item_ids":["safe-1","macos_installer_payloads-1"],"method":"trash","confirm":true,"dry_run":true}}]}}
+        """#
+        let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
+            .stdout(scanResultLine + "\n"),
+            .stdout(cleanCallLine + "\n"),
+        ]))
+        let controller = ClaudeCodeAgentSessionController(runner: runner)
+
+        controller.start(template: .investigateSpace, userContext: "audit")
+        _ = await waitForTerminalStatus(controller)
+
+        let gate = try #require(controller.approvalGates.first)
+        controller.approve(gate)
+
+        let pending = try #require(controller.pendingApproval)
+        #expect(pending.items.map(\.id) == ["safe-1"])
+        #expect(controller.events.contains {
+            $0.stream == .system && $0.message.contains("macos_installer_payloads-1 (System-owned")
         })
     }
 

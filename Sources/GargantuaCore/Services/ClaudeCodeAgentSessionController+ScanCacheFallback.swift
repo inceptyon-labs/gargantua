@@ -25,7 +25,9 @@ extension ClaudeCodeAgentSessionController {
         let agentAlreadyProposed = approvalGates.contains { !$0.proposedItemIDs.isEmpty }
         guard !agentAlreadyProposed else { return }
 
-        let actionable = scanCache.allEntries().filter(\.safety.isActionable)
+        let entries = scanCache.allEntries()
+        let removability = removabilityReconciler.map(for: entries)
+        let actionable = entries.filter { removability[$0.id]?.isRemovable == true }
         guard !actionable.isEmpty else { return }
 
         // Sort by size desc so the modal opens with the heaviest cleanup
@@ -103,8 +105,9 @@ extension ClaudeCodeAgentSessionController {
     /// Convert a wire-shape `MCPScanItem` (carried in the parser's payload)
     /// back to the `ScanResult` shape `CleanupEngine` and `DeepCleanView`
     /// consume. Lossy on `size` (round-trips through the formatted display
-    /// string), `tags` (not on wire), `regenerates` and `regenerateCommand`
-    /// (not on wire). `ownerProcesses` and `blockedByApp` round-trip so the
+    /// string), `regenerates` and `regenerateCommand` (not on wire). `tags`
+    /// round-trip so `RemovabilityReconciler` still sees `privileged`.
+    /// `ownerProcesses` and `blockedByApp` round-trip so the
     /// clean-time owner check still runs. `scanTimeResolvedParent` round-trips so
     /// `SymlinkSwapGuard` still recognizes a symlinked scan root under agent-proposed cleanup.
     /// Returns nil when the safety raw value is unknown.
@@ -121,6 +124,7 @@ extension ClaudeCodeAgentSessionController {
             source: SourceAttribution(name: item.source),
             lastAccessed: item.lastAccessed,
             category: item.category,
+            tags: item.tags ?? [],
             blockedByApp: item.blockedByApp.map { BlockedApp(bundleID: $0.bundleID, name: $0.name) },
             ownerProcesses: item.ownerProcesses,
             scanTimeResolvedParent: item.scanTimeResolvedParent

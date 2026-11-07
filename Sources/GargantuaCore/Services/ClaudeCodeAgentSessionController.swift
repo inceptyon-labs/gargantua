@@ -80,6 +80,10 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     /// matching the MCP server's own cache semantics — the agent's most
     /// recent scan is what the host can hydrate against.
     let scanCache = MCPScanSessionCache()
+    /// The scan-time decision Deep Clean makes before offering a row: protected
+    /// roots, the protected tier, and system-owned paths the root helper's
+    /// allowlist doesn't cover. Agent proposals get the same filter.
+    let removabilityReconciler = RemovabilityReconciler()
     /// Internal (not private) so tests can join the session deterministically
     /// via `await task?.value` instead of polling `status` on a wall-clock
     /// deadline — deadline polls flake under parallel test load.
@@ -221,8 +225,9 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             return
         }
         let (found, unknown) = scanCache.lookupAll(ids: gate.proposedItemIDs)
-        let actionable = found.filter(\.safety.isActionable)
-        let blocked = found.filter { !$0.safety.isActionable }
+        let removability = removabilityReconciler.map(for: found)
+        let actionable = found.filter { removability[$0.id]?.isRemovable == true }
+        let blocked = found.filter { removability[$0.id]?.isRemovable != true }
         guard !actionable.isEmpty || !unknown.isEmpty || !blocked.isEmpty else {
             // Defensive: lookupAll partitions every requested id into one
             // bucket, so this shouldn't fire — but if both come back empty
@@ -232,10 +237,12 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
             return
         }
         if !blocked.isEmpty {
-            let ids = blocked.map(\.id).joined(separator: ", ")
+            let detail = blocked
+                .map { "\($0.id) (\(removability[$0.id]?.viewOnlyReason ?? "not removable"))" }
+                .joined(separator: ", ")
             appendRawEvent(ClaudeCodeAgentTranscriptEvent(
                 stream: .system,
-                message: "Skipped protected agent cleanup item(s): \(ids). Safety comes from Gargantua scan rules."
+                message: "Skipped view-only agent cleanup item(s): \(detail). Safety comes from Gargantua scan rules."
             ))
         }
         pendingApproval = ClaudeCodeAgentPendingApproval(
@@ -263,7 +270,8 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
     public func confirmPendingApproval(method: CleanupMethod = .trash) async {
         guard let pending = pendingApproval else { return }
         pendingApproval = nil
-        let cleanupItems = pending.items.filter(\.safety.isActionable)
+        let removability = removabilityReconciler.map(for: pending.items)
+        let cleanupItems = pending.items.filter { removability[$0.id]?.isRemovable == true }
         if cleanupItems.count != pending.items.count {
             appendRawEvent(ClaudeCodeAgentTranscriptEvent(
                 stream: .system,
