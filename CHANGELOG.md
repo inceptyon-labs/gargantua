@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.13] - 2026-11-07
+
+### Added
+
+- **MCP token via environment.** The MCP server reads its SSE bearer token from `GARGANTUA_MCP_TOKEN` when `--token` isn't given, so the token no longer has to appear on the command line where any local user can see it in `ps`. Keychain remains the default.
+
+### Fixed
+
+- **Protected items stay protected.** The cleanup engine now refuses protected items unless the caller explicitly unlocks them, which closes a gap in File Health where a valid image with the wrong extension could be selected and sent to the Trash. File Health rows now lock like the rest of the app, and a refused item is never escalated to the root helper.
+- **Recoverable background-item removal.** Background-item plists are now moved into your own Trash instead of root's hidden Trash, so the "recoverable" promise in the confirmation is true. Audit entries record the Trash path for every trashed file.
+- **Safer MCP cleaning.** Review-tier items now require `include_review: true` and can't be permanently deleted over MCP, so review-class data can't be removed without explicit consent. Dry runs are unaffected.
+- **Agent proposals respect removability.** Rule tags now carry over MCP, and agent proposals go through the same removability check as Deep Clean, so privileged paths the root helper can't cover are no longer offered as ordinary review rows.
+- **Scan mirror no longer empties on odd file names.** Agent output is split on line feeds only, so a file name containing a Unicode line separator can't break a record and blank the host's scan mirror for that scan.
+
+### Security
+
+- **License keys are scoped to Gargantua.** Activation and validation refuse keys issued for another Inceptyon Labs product's benefit, which previously would have unlocked Gargantua. A mismatched activation releases the slot it allocated, and revalidation clears the cached license.
+
 ## [0.4.12] - 2026-10-19
 
 ### Added
