@@ -314,7 +314,7 @@ private final class GateAccumulator: @unchecked Sendable {
     }
 }
 
-private final class ClaudeCodeLineBuffer: @unchecked Sendable {
+final class ClaudeCodeLineBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var pending = ""
     private let onLine: @Sendable (String) -> Void
@@ -329,11 +329,15 @@ private final class ClaudeCodeLineBuffer: @unchecked Sendable {
         // Re-split only when a line ends. A large tool result arrives as many
         // chunks of one line; splitting the whole growing buffer on each one
         // copied it over and over (quadratic in the line's length).
-        guard text.contains(where: \.isNewline) else {
+        // stream-json records end in LF. `CharacterSet.newlines` also holds
+        // U+2028, U+2029 and U+0085, which JSON leaves unescaped inside
+        // strings, so a file name carrying one split its record in two and
+        // silently dropped that scan from the host's mirror.
+        guard text.contains("\n") else {
             lock.unlock()
             return
         }
-        let lines = pending.components(separatedBy: .newlines)
+        let lines = pending.components(separatedBy: "\n")
         pending = lines.last ?? ""
         let complete = lines.dropLast()
         lock.unlock()
