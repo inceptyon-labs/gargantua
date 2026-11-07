@@ -259,13 +259,14 @@ extension NativeScanAdapter {
             return nil
         }
 
-        guard NativeRuleGuardEvaluator.matchesRuleFilters(
+        let passesFilters = NativeRuleGuardEvaluator.matchesRuleFilters(
             rule: rule,
             lastAccessed: lastAccessed,
             modifiedAt: modifiedAt,
             now: now
-        ),
-            !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
+        )
+        guard passesFilters,
+              !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
             return nil
         }
 
