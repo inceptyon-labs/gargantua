@@ -49,6 +49,13 @@ func parseRuntimeOptions(log: (String) -> Void) -> MCPRuntimeOptions {
             applyValuelessArgument(argument, to: &options, log: log)
         }
     }
+    // `--token` is visible to every local user through `ps`; the environment
+    // is not. Keychain stays the default when neither is set.
+    if options.bearerToken == nil,
+       let fromEnvironment = ProcessInfo.processInfo.environment["GARGANTUA_MCP_TOKEN"],
+       !fromEnvironment.isEmpty {
+        options.bearerToken = parseTokenArgument(fromEnvironment, log: log)
+    }
     return options
 }
 
@@ -132,7 +139,8 @@ private func printRuntimeHelp() {
       --both                       Shortcut for --transport both.
       --port 7493                  Override the SSE port.
       --bind localhost|lan         Bind SSE to 127.0.0.1 or all interfaces.
-      --token TOKEN                Bearer token override for LAN SSE.
+      --token TOKEN                Bearer token override for LAN SSE. Prefer the GARGANTUA_MCP_TOKEN
+                                   environment variable: argv is visible to other local users.
       --allow-unattended-clean     Permit `clean` when the process cannot post the
                                    consent notification (an unbundled launch such as
                                    `swift run`). Off by default: without it, `clean`

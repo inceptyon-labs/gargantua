@@ -196,7 +196,7 @@ Run both transports:
 swift run GargantuaMCP -- --transport both
 ```
 
-SSE binds to `127.0.0.1` by default. Binding to LAN uses `--bind lan` or the app's Settings → Network pane and **requires** a bearer token stored in Keychain or supplied with `--token`. The SSE endpoint is:
+SSE binds to `127.0.0.1` by default. Binding to LAN uses `--bind lan` or the app's Settings → Network pane and **requires** a bearer token stored in Keychain or supplied with `--token` (or the `GARGANTUA_MCP_TOKEN` environment variable, which unlike a command-line argument is not visible to other local users through `ps`). The SSE endpoint is:
 
 ```text
 http://127.0.0.1:7493/sse
