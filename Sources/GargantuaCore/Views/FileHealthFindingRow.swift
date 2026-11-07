@@ -18,6 +18,11 @@ struct FileHealthFindingRow: View {
     @State private var isHovered: Bool = false
     @Environment(\.activeAIEngineKind) private var activeAIEngineKind
 
+    /// Protected findings (a valid image under the wrong extension) are a
+    /// rename affordance, never a deletion candidate. Lock the row the way
+    /// `ScanResultRowView` does; `CleanupEngine` refuses them regardless.
+    private var isLocked: Bool { result.safety == .protected_ }
+
     init(
         result: ScanResult,
         groupContext: FileHealthCategoryTab.GroupContext? = nil,
@@ -37,22 +42,33 @@ struct FileHealthFindingRow: View {
             // Checkbox mirrors DenseScanItemRow — 16×16 rounded rect, safety-
             // tinted fill when selected.
             ZStack {
-                RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                    .stroke(
-                        isSelected ? result.safety.tintColor : GargantuaColors.borderEm,
-                        lineWidth: 1.5
-                    )
-                    .frame(width: 16, height: 16)
-                    .background(isSelected ? result.safety.tintColor : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GargantuaColors.protected_)
+                        .frame(width: 16, height: 16)
+                } else {
+                    RoundedRectangle(cornerRadius: GargantuaRadius.small)
+                        .stroke(
+                            isSelected ? result.safety.tintColor : GargantuaColors.borderEm,
+                            lineWidth: 1.5
+                        )
+                        .frame(width: 16, height: 16)
+                        .background(isSelected ? result.safety.tintColor : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
 
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
-            .accessibilityLabel(isSelected ? "Deselect \(result.name)" : "Select \(result.name)")
+            .accessibilityLabel(
+                isLocked
+                    ? "\(result.name), protected"
+                    : (isSelected ? "Deselect \(result.name)" : "Select \(result.name)")
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.name)
@@ -136,13 +152,18 @@ struct FileHealthFindingRow: View {
         .contentShape(Rectangle())
         .focusable()
         .focused($isFocused)
-        .onTapGesture(perform: onToggleSelection)
+        .onTapGesture {
+            if !isLocked { onToggleSelection() }
+        }
         .onKeyPress(.space) {
+            guard !isLocked else { return .ignored }
             onToggleSelection()
             return .handled
         }
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: isSelected ? "Deselect" : "Select", onToggleSelection)
+        .accessibilityAction(named: isSelected ? "Deselect" : "Select") {
+            if !isLocked { onToggleSelection() }
+        }
         .contextMenu {
             Button {
                 NSWorkspace.shared.selectFile(result.path, inFileViewerRootedAtPath: "")

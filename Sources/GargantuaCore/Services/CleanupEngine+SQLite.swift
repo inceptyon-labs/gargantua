@@ -1,6 +1,13 @@
 import Foundation
 
 extension CleanupEngine {
+    /// The helper moves only `item.path`; a database moved without its sidecars
+    /// leaves a `-wal` that SQLite can replay into the next database.
+    static func hasRemainingSidecars(_ item: ScanResult) -> Bool {
+        SQLiteDatabaseFiles.isDatabase(item.path)
+            && !SQLiteDatabaseFiles.existingSidecars(of: item.path).isEmpty
+    }
+
     /// Removes the item at `url` with `method` (trash or delete), sidecars first
     /// when it is a SQLite database.
     @MainActor

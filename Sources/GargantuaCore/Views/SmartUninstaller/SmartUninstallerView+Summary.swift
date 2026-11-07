@@ -21,7 +21,11 @@ extension SmartUninstallerView {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: result.cleanupResult, outcomeAccent: accent) {
+            CleanupSummaryView(
+                result: result.cleanupResult,
+                outcomeAccent: accent,
+                includeProtectedItems: viewModel.includeProtected
+            ) {
                 viewModel.reset()
             }
             if let note = LoginItemsTrashNote.message(for: [result]) {
@@ -57,7 +61,11 @@ extension SmartUninstallerView {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: combined, outcomeAccent: accent) {
+            CleanupSummaryView(
+                result: combined,
+                outcomeAccent: accent,
+                includeProtectedItems: viewModel.includeProtected
+            ) {
                 viewModel.reset()
             }
             if let note = LoginItemsTrashNote.message(for: results) {

@@ -21,6 +21,9 @@ public struct CleanupSummaryView: View {
     /// disk has to say so — otherwise the product's traceability guarantee
     /// silently does not hold for exactly this operation.
     let auditWriteFailed: Bool
+    /// Carries the Smart Uninstaller's full-modal protected-item consent into
+    /// "Retry failed items"; the engine refuses protected items without it.
+    let includeProtectedItems: Bool
     /// Optional "Why?" handler for failed rows — routes the item into the same
     /// explanation sheet the scan lists use. Nil hides the affordance.
     let onExplain: ((ScanResult) -> Void)?
@@ -81,6 +84,7 @@ public struct CleanupSummaryView: View {
         result: CleanupResult,
         outcomeAccent: Color? = nil,
         auditWriteFailed: Bool = false,
+        includeProtectedItems: Bool = false,
         onExplain: ((ScanResult) -> Void)? = nil,
         onRetried: ((CleanupResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
@@ -88,6 +92,7 @@ public struct CleanupSummaryView: View {
         self.result = result
         self.outcomeAccent = outcomeAccent
         self.auditWriteFailed = auditWriteFailed
+        self.includeProtectedItems = includeProtectedItems
         self.onExplain = onExplain
         self.onRetried = onRetried
         self.onDismiss = onDismiss
@@ -132,7 +137,11 @@ public struct CleanupSummaryView: View {
 
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
         let retry = await engine.clean(
-            failed, method: shown.cleanupMethod, observer: nil, authorization: authorization
+            failed,
+            method: shown.cleanupMethod,
+            observer: nil,
+            includeProtectedItems: includeProtectedItems,
+            authorization: authorization
         )
 
         // Same audit trail as the original clean — every destructive attempt is

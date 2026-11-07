@@ -105,9 +105,12 @@ public protocol UninstallRemoving: AnyObject, Sendable {
     /// - Parameter authorization: Proof the license gate allowed this uninstall.
     ///   The caller of `UninstallExecutor.execute` mints it once and the
     ///   executor threads it through here.
+    /// - Parameter includeProtectedItems: `true` only on the full-modal unlock
+    ///   path, where `validateProtection` has already required the override.
     @MainActor
     func moveToTrash(
         _ item: ScanResult,
+        includeProtectedItems: Bool,
         authorization: DestructiveActionAuthorization
     ) async -> CleanupItemResult
 }
@@ -249,7 +252,11 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         var itemResults: [CleanupItemResult] = []
         for item in ordinary {
             if Task.isCancelled { break }
-            let result = await remover.moveToTrash(item, authorization: authorization)
+            let result = await remover.moveToTrash(
+                item,
+                includeProtectedItems: options.includeProtectedItems && options.confirmationMethod == .fullModal,
+                authorization: authorization
+            )
             emit(result: result, item: item)
             itemResults.append(result)
         }
@@ -264,10 +271,11 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
                 request,
                 authorization: authorizedHelper.authorization
             )
-            for (item, result) in zip(privileged, privilegedResults) {
+            let merged = Self.keepingOriginalItems(privilegedResults, originals: privileged)
+            for (item, result) in zip(privileged, merged) {
                 emit(result: result, item: item)
             }
-            itemResults.append(contentsOf: privilegedResults)
+            itemResults.append(contentsOf: merged)
         }
 
         let cleanupResult = CleanupResult(itemResults: itemResults, cleanupMethod: .trash)
@@ -302,6 +310,20 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
             throw UninstallExecutionError.authorizationRequired
         }
         return (privilegedHelper, authorization)
+    }
+
+    /// The helper client rebuilds items from the wire shape (always protected,
+    /// no explanation). Hand back the original scan items so the summary and
+    /// its retry see the tier the user actually confirmed.
+    private static func keepingOriginalItems(
+        _ results: [CleanupItemResult],
+        originals: [ScanResult]
+    ) -> [CleanupItemResult] {
+        let byID = Dictionary(originals.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return results.map { result in
+            guard let original = byID[result.item.id] else { return result }
+            return CleanupItemResult(item: original, succeeded: result.succeeded, trashURL: result.trashURL, error: result.error)
+        }
     }
 
     private func validateProtection(
@@ -396,9 +418,15 @@ public final class WorkspaceUninstallRemover: UninstallRemoving {
     @MainActor
     public func moveToTrash(
         _ item: ScanResult,
+        includeProtectedItems: Bool,
         authorization: DestructiveActionAuthorization
     ) async -> CleanupItemResult {
-        let result = await cleanupEngine.clean([item], method: .trash, authorization: authorization)
+        let result = await cleanupEngine.clean(
+            [item],
+            method: .trash,
+            includeProtectedItems: includeProtectedItems,
+            authorization: authorization
+        )
         return result.itemResults.first ?? CleanupItemResult(
             item: item,
             succeeded: false,

@@ -91,6 +91,27 @@ extension CleanupResultTests {
         #expect(result.itemResults.first?.trashURL != nil)
     }
 
+    @Test("A protected-tier refusal is never escalated, even when its path reads like a permission error")
+    @MainActor
+    func protectedRefusalIsNotEscalated() async {
+        // "Skipped protected item: …permission-denied…" matches the failure
+        // classifier's ownership signal; without the safety check the helper
+        // would be asked to move a protected item as root.
+        let item = makeItem(id: "prot", path: "/tmp/gargantua-permission-denied.png", size: 1, safety: .protected_)
+        let helper = StubPrivilegedHelper(mode: .succeedAll)
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
+            trashMover: RecordingTrashMover(outcome: .failure("unused")),
+            privilegedHelper: helper
+        )
+
+        let result = await engine.clean([item], method: .trash, authorization: .unchecked(.deepClean))
+
+        #expect(helper.received.isEmpty)
+        #expect(result.failedItems.count == 1)
+        #expect(result.itemResults.first?.error?.contains("protected") == true)
+    }
+
     @Test("Escalation that also fails keeps the original ownership error, not the helper's XPC noise")
     @MainActor
     func escalationFailurePreservesOriginalError() async {

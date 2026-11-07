@@ -61,6 +61,30 @@ extension UninstallExecutorTests {
         #expect(result.cleanupResult.allSucceeded)
     }
 
+    @Test("privileged outcomes keep the original item's tier, so an ordinary app's failure stays retryable")
+    @MainActor
+    func privilegedOutcomesKeepOriginalSafety() async throws {
+        let item = Self.makeRemnant(id: "helper", category: .helpers, path: "/Library/PrivilegedHelperTools/com.demo.helper", safety: .review)
+        let executor = UninstallExecutor(
+            remover: SpyUninstallRemover(),
+            privilegedHelper: ProtectedRebuildingHelper(),
+            processTerminator: SpyProcessTerminator(),
+            auditRecorder: SpyUninstallAuditRecorder()
+        )
+
+        let result = try await executor.execute(
+            Self.makePlan(remnants: [item]),
+            options: UninstallExecutionOptions(confirmationMethod: .summaryDialog, authorization: .authorizedForTesting),
+            authorization: .unchecked(.uninstaller)
+        )
+
+        let outcome = try #require(result.cleanupResult.itemResults.first)
+        #expect(outcome.succeeded == false)
+        #expect(outcome.error == "helper unavailable")
+        #expect(outcome.item.id == "helper")
+        #expect(outcome.item.safety == .review)
+    }
+
     @Test("non-writable Applications app bundles are routed through privileged helper")
     @MainActor
     func nonWritableApplicationsBundleUsesPrivilegedHelper() async throws {
@@ -99,6 +123,34 @@ extension UninstallExecutorTests {
     }
 }
 
+/// Mimics the real XPC client, which rebuilds every result as `.protected_`
+/// from the wire shape and reports a failure for each item.
+@MainActor
+private final class ProtectedRebuildingHelper: PrivilegedUninstallHelping {
+    func movePrivilegedItemsToTrash(
+        _ request: PrivilegedUninstallRequest,
+        authorization _: UninstallAuthorization
+    ) async -> [CleanupItemResult] {
+        request.items.map { item in
+            CleanupItemResult(
+                item: ScanResult(
+                    id: item.id,
+                    name: URL(fileURLWithPath: item.path).lastPathComponent,
+                    path: item.path,
+                    size: item.size,
+                    safety: .protected_,
+                    confidence: 100,
+                    explanation: "Privileged uninstall item",
+                    source: SourceAttribution(name: "Gargantua"),
+                    category: item.category
+                ),
+                succeeded: false,
+                error: "helper unavailable"
+            )
+        }
+    }
+}
+
 /// Cancels the running task while removing the first item, like Halt Cleanup.
 @MainActor
 final class CancellingUninstallRemover: UninstallRemoving {
@@ -106,6 +158,7 @@ final class CancellingUninstallRemover: UninstallRemoving {
 
     func moveToTrash(
         _ item: ScanResult,
+        includeProtectedItems _: Bool,
         authorization _: DestructiveActionAuthorization
     ) async -> CleanupItemResult {
         removedPaths.append(item.path)

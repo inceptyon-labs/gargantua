@@ -66,7 +66,8 @@ struct FileHealthClusterList: View {
     }
 
     private func tabHeader(filteredFindings: [ScanResult]) -> some View {
-        let visibleIDs = filteredFindings.map(\.id)
+        // Protected findings are view-only; Select all must not sweep them in.
+        let visibleIDs = filteredFindings.filter(\.safety.isActionable).map(\.id)
         let visibleCount = visibleIDs.count
         let selectedVisible = session.selectedResultIDs.intersection(visibleIDs).count
         let allVisibleSelected = !visibleIDs.isEmpty && selectedVisible == visibleCount

@@ -24,6 +24,37 @@ extension CleanupResultTests {
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
+    @Test("protected items are skipped by every caller unless it opts in")
+    @MainActor
+    func protectedItemsAreSkippedUnlessOptedIn() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gargantua-protected-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let file = dir.appendingPathComponent("photo.png")
+        try Data("jpeg".utf8).write(to: file)
+        let item = makeItem(id: "mislabeled", path: file.path, size: 4, safety: .protected_)
+
+        let refused = await CleanupEngine().clean(
+            [item],
+            method: .delete,
+            authorization: .unchecked(.fileHealthContainers)
+        )
+        #expect(refused.failedItems.count == 1)
+        #expect(refused.itemResults.first?.error?.contains("protected") == true)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+
+        let overridden = await CleanupEngine().clean(
+            [item],
+            method: .delete,
+            includeProtectedItems: true,
+            authorization: .unchecked(.uninstaller)
+        )
+        #expect(overridden.allSucceeded)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
     @Test("trash method uses injected mover")
     @MainActor
     func trashMethodUsesInjectedMover() async {

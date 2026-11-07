@@ -178,9 +178,10 @@ public final class CleanupEngine: Sendable {
     public func clean(
         _ items: [ScanResult],
         method: CleanupMethod = .trash,
+        includeProtectedItems: Bool = false,
         authorization: DestructiveActionAuthorization
     ) async -> CleanupResult {
-        await clean(items, method: method, observer: nil, authorization: authorization)
+        await clean(items, method: method, observer: nil, includeProtectedItems: includeProtectedItems, authorization: authorization)
     }
 
     /// Variant that emits a `ScanProgressEvent` per item to feed the
@@ -188,6 +189,8 @@ public final class CleanupEngine: Sendable {
     /// surface as `.match` (with bytes); failures surface as `.failed`.
     ///
     /// - Parameters:
+    ///   - includeProtectedItems: Opt-in for `.protected_` items; only the Smart Uninstaller's
+    ///     full-modal unlock passes `true`. The refusal lives here so no screen is the last line of defense.
     ///   - authorization: Proof the license gate allowed this operation. Obtained
     ///     from `LicenseGate.authorize(_:)`; unforgeable by construction, so a new
     ///     destructive surface cannot reach this method without being gated.
@@ -196,6 +199,7 @@ public final class CleanupEngine: Sendable {
         _ items: [ScanResult],
         method: CleanupMethod = .trash,
         observer: (any ScanProgressObserving)?,
+        includeProtectedItems: Bool = false,
         authorization: DestructiveActionAuthorization
     ) async -> CleanupResult {
         var results: [CleanupItemResult] = []
@@ -207,7 +211,12 @@ public final class CleanupEngine: Sendable {
             // to the summary so the user can see what got cleaned.
             if Task.isCancelled { break }
             let url = URL(fileURLWithPath: item.path)
-            let result = await cleanSingle(url: url, item: item, method: method)
+            let result: CleanupItemResult
+            if item.safety == .protected_, !includeProtectedItems {
+                result = CleanupItemResult(item: item, succeeded: false, error: "Skipped protected item: \(item.path)")
+            } else {
+                result = await cleanSingle(url: url, item: item, method: method)
+            }
             if let observer {
                 if result.succeeded {
                     observer.didEmit(ScanProgressEvent(
@@ -225,7 +234,7 @@ public final class CleanupEngine: Sendable {
             results.append(result)
         }
 
-        let recovered = await escalatePermissionFailures(results, observer: observer)
+        let recovered = await escalatePermissionFailures(results, observer: observer, includeProtectedItems: includeProtectedItems)
         return CleanupResult(itemResults: recovered, cleanupMethod: method)
     }
 
@@ -256,13 +265,6 @@ public final class CleanupEngine: Sendable {
         )
     }
 
-    /// The helper moves only `item.path`; a database moved without its sidecars
-    /// leaves a `-wal` that SQLite can replay into the next database.
-    private static func hasRemainingSidecars(_ item: ScanResult) -> Bool {
-        SQLiteDatabaseFiles.isDatabase(item.path)
-            && !SQLiteDatabaseFiles.existingSidecars(of: item.path).isEmpty
-    }
-
     /// Retry permission-class failures through the root-privileged helper.
     ///
     /// Full Disk Access lets us read root-owned paths but not delete them; the
@@ -273,7 +275,8 @@ public final class CleanupEngine: Sendable {
     @MainActor
     private func escalatePermissionFailures(
         _ results: [CleanupItemResult],
-        observer: (any ScanProgressObserving)?
+        observer: (any ScanProgressObserving)?,
+        includeProtectedItems: Bool
     ) async -> [CleanupItemResult] {
         guard let privilegedHelper else { return results }
 
@@ -283,6 +286,7 @@ public final class CleanupEngine: Sendable {
                 && !result.item.isOllamaModel
                 && !result.item.isHuggingFaceRevisionPrune
                 && CleanupFailureClassifier.isElevatable(result.error)
+                && (includeProtectedItems || result.item.safety != .protected_) // a tier refusal isn't EPERM
                 && !Self.hasRemainingSidecars(result.item)
         }
         guard !escalatable.isEmpty else { return results }

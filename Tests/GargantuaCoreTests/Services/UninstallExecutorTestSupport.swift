@@ -8,6 +8,7 @@ final class SpyUninstallRemover: UninstallRemoving {
 
     func moveToTrash(
         _ item: ScanResult,
+        includeProtectedItems _: Bool,
         authorization _: DestructiveActionAuthorization
     ) async -> CleanupItemResult {
         removedPaths.append(item.path)
