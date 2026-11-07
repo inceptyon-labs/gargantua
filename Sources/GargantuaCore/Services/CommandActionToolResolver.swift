@@ -74,6 +74,9 @@ public struct CommandActionToolResolver: Sendable {
             "/Applications/Docker.app/Contents/Resources/bin/docker",
             "/usr/bin/docker",
         ],
+        // tmutil can also delete backups and change destinations, so
+        // `validateArguments` pins it to the local-snapshot verbs.
+        "tmutil": ["/usr/bin/tmutil"],
     ]
 
     private let candidates: [String: [String]]
@@ -95,6 +98,10 @@ public struct CommandActionToolResolver: Sendable {
     /// `xcrun simctl delete unavailable`, so `simctl` is the sole entry.
     public static let xcrunAllowedSubcommands: Set<String> = ["simctl"]
 
+    /// Verbs a command rule may pass to `tmutil`: listing and deleting local
+    /// snapshots only, never backups on the Time Machine disk.
+    public static let tmutilAllowedVerbs: Set<String> = ["listlocalsnapshots", "deletelocalsnapshots"]
+
     /// Rejected when a command rule tries to turn an allowlisted general
     /// launcher into arbitrary execution.
     public enum ArgumentPolicyError: Error, Equatable, LocalizedError {
@@ -109,13 +116,24 @@ public struct CommandActionToolResolver: Sendable {
     }
 
     /// Constrains the arguments a rule may pass to launcher-class tools before
-    /// they run. Currently only `xcrun` is constrained; every other tool is a
-    /// no-op. Applies to both the dry-run and destructive argument vectors —
-    /// a tampered dry-run is just as dangerous as a tampered destructive run.
+    /// they run. Currently `xcrun` and `tmutil` are constrained; every other
+    /// tool is a no-op. Applies to both the dry-run and destructive argument
+    /// vectors — a tampered dry-run is just as dangerous as a tampered
+    /// destructive run.
     ///
     /// Not called for the resolver's own internal `--version` capture, which
     /// uses fixed, non-rule-controlled arguments.
     public static func validateArguments(tool: String, arguments: [String]) throws {
+        if tool == "tmutil" {
+            guard let verb = arguments.first, tmutilAllowedVerbs.contains(verb) else {
+                let allowed = tmutilAllowedVerbs.sorted().joined(separator: ", ")
+                throw ArgumentPolicyError.disallowedInvocation(
+                    tool: tool,
+                    reason: "verb `\(arguments.first ?? "")` is not allowlisted; expected one of \(allowed)"
+                )
+            }
+            return
+        }
         guard tool == "xcrun" else { return }
         guard let sub = arguments.first else {
             throw ArgumentPolicyError.disallowedInvocation(
@@ -216,7 +234,7 @@ public struct CommandActionToolResolver: Sendable {
             // `xcrun --version` returns the developer-tools front-end version,
             // which is sufficient identity for replay purposes.
             return ["--version"]
-        case "go":
+        case "go", "tmutil":
             return ["version"]
         default:
             return ["--version"]

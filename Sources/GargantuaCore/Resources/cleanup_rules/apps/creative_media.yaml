@@ -100,6 +100,59 @@ rules:
       - final_cut
       - cache
 
+  # Evidence (2026-11-07): ~/Movies/LUGaming2026.fcpbundle/1-18-26/Render Files/High Quality Media
+  # held 90 GB and .../Transcoded Media/High Quality Media held 68 GB in a 219 GB library.
+  - id: final_cut_render_files
+    name: Final Cut Pro Render Files
+    paths:
+      - "~/Movies/**/*.fcpbundle/*/Render Files/High Quality Media"
+    skip_if_process_running:
+      - com.apple.FinalCut
+      - Final Cut Pro
+    safety: review
+    confidence: 85
+    explanation: "Render files inside a Final Cut Pro library. Final Cut re-renders them from the timeline when needed. Review because re-rendering a long project takes time; original media and projects are untouched."
+    source:
+      name: Final Cut Pro
+      bundle_id: com.apple.FinalCut
+      verify_signature: true
+    regenerates: true
+    regenerate_command: "Final Cut Pro > Modify > Render All"
+    category: app_data
+    tags:
+      - app
+      - creative
+      - video
+      - final_cut
+      - render
+      - review
+
+  - id: final_cut_transcoded_media
+    name: Final Cut Pro Optimized and Proxy Media
+    paths:
+      - "~/Movies/**/*.fcpbundle/*/Transcoded Media/High Quality Media"
+      - "~/Movies/**/*.fcpbundle/*/Transcoded Media/Proxy Media"
+    skip_if_process_running:
+      - com.apple.FinalCut
+      - Final Cut Pro
+    safety: review
+    confidence: 75
+    explanation: "Optimized and proxy media Final Cut Pro transcoded from a library's original footage. Review because Final Cut needs the original media to rebuild it; if the originals are offline, this may be the only playable copy."
+    source:
+      name: Final Cut Pro
+      bundle_id: com.apple.FinalCut
+      verify_signature: true
+    regenerates: true
+    regenerate_command: "Final Cut Pro > File > Transcode Media"
+    category: app_data
+    tags:
+      - app
+      - creative
+      - video
+      - final_cut
+      - transcoded_media
+      - review
+
   - id: davinci_resolve_cache
     name: DaVinci Resolve Cache
     paths:

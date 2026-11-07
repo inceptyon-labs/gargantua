@@ -71,6 +71,21 @@ struct CommandActionToolResolverPolicyTests {
         }
     }
 
+    @Test("tmutil local-snapshot verbs are permitted")
+    func allowsTmutilSnapshotVerbs() throws {
+        try CommandActionToolResolver.validateArguments(tool: "tmutil", arguments: ["listlocalsnapshots", "/"])
+        try CommandActionToolResolver.validateArguments(tool: "tmutil", arguments: ["deletelocalsnapshots", "/"])
+    }
+
+    @Test("tmutil verbs that touch backups or settings are rejected")
+    func rejectsOtherTmutilVerbs() {
+        for arguments in [["delete", "-d", "/Volumes/Backup"], ["disable"], ["setdestination", "/Volumes/X"], []] {
+            #expect(throws: CommandActionToolResolver.ArgumentPolicyError.self) {
+                try CommandActionToolResolver.validateArguments(tool: "tmutil", arguments: arguments)
+            }
+        }
+    }
+
     @Test("non-launcher tools are unconstrained")
     func otherToolsUnconstrained() throws {
         // A path argument is perfectly normal for e.g. `docker`; the policy

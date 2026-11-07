@@ -106,6 +106,20 @@ struct PathExpanderTests {
         #expect(result.hitCap == false)
     }
 
+    @Test("Recursive pattern reaches render files inside nested Final Cut libraries")
+    func finalCutLibraryRenderFiles() throws {
+        let fixture = try Self.makeFixture()
+        let top = try fixture.makeDir("Movies/Show.fcpbundle/1-18-26/Render Files/High Quality Media")
+        let nested = try fixture.makeDir("Movies/Clients/Acme.fcpbundle/Event A/Render Files/High Quality Media")
+        try fixture.makeDir("Movies/Show.fcpbundle/1-18-26/Original Media")
+
+        let pattern = fixture.root
+            .appendingPathComponent("Movies/**/*.fcpbundle/*/Render Files/High Quality Media").path
+        let result = PathExpander().expand(pattern: pattern, roots: [])
+
+        #expect(result.paths == [nested.path, top.path].sorted())
+    }
+
     // MARK: - Single-segment wildcards
 
     @Test("Single-segment wildcard matches immediate children")

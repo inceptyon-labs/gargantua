@@ -1,0 +1,38 @@
+rules:
+  - id: time_machine_local_snapshots
+    name: Time Machine local snapshots
+    tool: tmutil
+    arguments:
+      - deletelocalsnapshots
+      - /
+    dry_run_arguments:
+      - listlocalsnapshots
+      - /
+    safety: review
+    confidence: 80
+    explanation: |
+      Deletes the local Time Machine snapshots macOS keeps on the startup
+      disk between backups. While a snapshot exists, files deleted after it
+      was taken still use disk space, so a large cleanup may not show up as
+      free space until the snapshots are gone. macOS also removes them on
+      its own after 24 hours or when the disk runs low.
+    consequence: |
+      You can no longer restore files from these local snapshots. Backups on
+      the Time Machine disk are not touched.
+    category: advanced_command_action
+    regenerates: true
+    regenerate_command: "Time Machine takes a new local snapshot with its next backup"
+    # Snapshots live inside the APFS data volume, which is a protected root.
+    # This is where Time Machine mounts them for browsing.
+    affected_roots:
+      - "/Volumes/com.apple.TimeMachine.localsnapshots"
+    preconditions:
+      timeout_seconds: 120
+    source:
+      name: Time Machine
+      bundle_id: com.apple.backup.launcher
+    tags:
+      - time-machine
+      - snapshots
+      - disk-space
+      - advanced-command
