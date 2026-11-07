@@ -179,9 +179,21 @@ public struct AuditFile: Codable, Sendable {
     /// Size in bytes.
     public let size: Int64
 
-    public init(path: String, size: Int64) {
+    /// Where the file landed when it was moved to the Trash. `nil` for
+    /// permanent deletes, command actions, and entries written before this
+    /// field existed.
+    public let trashPath: String?
+
+    public init(path: String, size: Int64, trashPath: String? = nil) {
         self.path = path
         self.size = size
+        self.trashPath = trashPath
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case size
+        case trashPath = "trash_path"
     }
 }
 

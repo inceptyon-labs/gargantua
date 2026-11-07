@@ -84,6 +84,33 @@ extension BackgroundItemActionExecutorTests {
         #expect(entries[0].command == "delete")
     }
 
+    @Test("Delete through the helper reports the user-Trash path on the outcome and in the audit entry")
+    func deleteThroughHelperRecordsTrashPath() async throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let helper = FakeHelper()
+        helper.setResponder { request in
+            PrivilegedBackgroundItemResponse(
+                id: request.id,
+                succeeded: true,
+                trashPath: "/Users/me/.Trash/com.acme.tool.plist"
+            )
+        }
+        let (executor, writer) = makeExecutor(helper: helper, auditDir: dir)
+        let item = makeItem(
+            source: .launchDaemon,
+            plistPath: "/Library/LaunchDaemons/com.acme.tool.plist",
+            reasons: [.disabledFlag]
+        )
+
+        let outcome = await executor.delete(item, confirmedAt: .summaryDialog)
+
+        #expect(outcome.succeeded)
+        #expect(outcome.trashPath == "/Users/me/.Trash/com.acme.tool.plist")
+        let entries = try writer.readEntries()
+        #expect(entries.first?.files.first?.trashPath == "/Users/me/.Trash/com.acme.tool.plist")
+    }
+
     @Test("Delete records audit failure when trasher throws")
     func deleteRecordsFailure() async throws {
         let dir = try tempDir()

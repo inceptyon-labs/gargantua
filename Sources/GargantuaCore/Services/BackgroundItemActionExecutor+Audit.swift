@@ -62,7 +62,7 @@ extension DefaultBackgroundItemActionExecutor {
             timestamp: now(),
             tool: "native",
             command: BackgroundItemAction.delete.verb,
-            files: [AuditFile(path: plistPath, size: 0)],
+            files: [AuditFile(path: plistPath, size: 0, trashPath: outcome.trashPath)],
             safetyLevel: item.safety,
             confirmationMethod: confirmation,
             cleanupMethod: .trash,
@@ -70,17 +70,13 @@ extension DefaultBackgroundItemActionExecutor {
             kind: .path
         )
         try? audit.write(entry)
-        // Annotate trash result onto the outcome via the auditID — callers
-        // can look the entry up from the JSONL log if they need the trash
-        // path (we don't expose it on the in-memory outcome to keep the API
-        // surface tight; trash recovery flows go through the audit reader).
-        _ = outcome.trashPath
         return BackgroundItemActionOutcome(
             itemID: item.id,
             action: .delete,
             succeeded: outcome.succeeded,
             error: outcome.error,
-            auditID: entry.id
+            auditID: entry.id,
+            trashPath: outcome.trashPath
         )
     }
 

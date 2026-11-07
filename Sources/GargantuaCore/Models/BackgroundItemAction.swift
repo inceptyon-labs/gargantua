@@ -33,19 +33,24 @@ public struct BackgroundItemActionOutcome: Sendable, Equatable {
     public let succeeded: Bool
     public let error: String?
     public let auditID: UUID?
+    /// Where a trashed plist landed (the invoking user's `~/.Trash`); nil for
+    /// every other action and for failures.
+    public let trashPath: String?
 
     public init(
         itemID: String,
         action: BackgroundItemAction,
         succeeded: Bool,
         error: String? = nil,
-        auditID: UUID? = nil
+        auditID: UUID? = nil,
+        trashPath: String? = nil
     ) {
         self.itemID = itemID
         self.action = action
         self.succeeded = succeeded
         self.error = error
         self.auditID = auditID
+        self.trashPath = trashPath
     }
 }
 

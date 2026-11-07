@@ -248,7 +248,7 @@ public final class AuditWriter: Sendable {
         let entry = AuditEntry(
             tool: tool,
             command: command,
-            files: succeeded.map { AuditFile(path: $0.item.path, size: $0.item.size) },
+            files: succeeded.map { AuditFile(path: $0.item.path, size: $0.item.size, trashPath: $0.trashURL?.path) },
             safetyLevel: highestSafety,
             confirmationMethod: tier,
             cleanupMethod: result.cleanupMethod,

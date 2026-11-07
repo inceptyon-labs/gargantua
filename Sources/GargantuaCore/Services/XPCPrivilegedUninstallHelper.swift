@@ -18,7 +18,9 @@ public enum PrivilegedHelperConfiguration {
     ///   user-Trash relocation, and this version handshake.
     /// - 3: bounded `deleteFromTrash` operation (empty root-owned items from the
     ///   invoking user's own Trash).
-    public static let helperVersion = 3
+    /// - 4: background-item plist trash moves into the invoking user's Trash
+    ///   through the pinned-descriptor path instead of root's Trash.
+    public static let helperVersion = 4
 
     /// Code signing requirement the privileged helper enforces on incoming XPC
     /// connections. `anchor apple generic` pins the chain to a Developer ID

@@ -66,7 +66,10 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
                 PrivilegedBackgroundItemRequest.self,
                 from: requestData
             )
-            response = handleBackgroundItem(request)
+            // Same audit-token uid as `moveItemsToTrash`: the plist lands in the
+            // invoking user's Trash, never root's.
+            let invokingUserID = NSXPCConnection.current()?.effectiveUserIdentifier
+            response = handleBackgroundItem(request, invokingUserID: invokingUserID)
         } catch {
             // Decode failures use the existing uninstall error envelope so
             // the client can render a generic helper failure with the same
@@ -81,7 +84,8 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
     }
 
     private func handleBackgroundItem(
-        _ request: PrivilegedBackgroundItemRequest
+        _ request: PrivilegedBackgroundItemRequest,
+        invokingUserID: UInt32?
     ) -> PrivilegedBackgroundItemResponse {
         do {
             try backgroundItemValidator.validate(request)
@@ -144,16 +148,16 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
                     "trashLaunchPlist pre-bootout system/\(request.label) exit=\(preBootout.exitCode)"
                 )
             }
+            // The same descriptor-pinned move the uninstall path uses, into the
+            // invoking user's `~/.Trash`. A plain `trashItem` here ran as uid 0
+            // and filed the plist in root's hidden Trash, where the user could
+            // neither see nor restore it although the UI said they could.
             do {
-                var trashURL: NSURL?
-                try FileManager.default.trashItem(
-                    at: URL(fileURLWithPath: path),
-                    resultingItemURL: &trashURL
-                )
+                let trashURL = try moveToTrash(URL(fileURLWithPath: path), invokingUserID: invokingUserID)
                 return PrivilegedBackgroundItemResponse(
                     id: request.id,
                     succeeded: true,
-                    trashPath: (trashURL as URL?)?.path
+                    trashPath: trashURL.path
                 )
             } catch {
                 HelperLog.write("trashLaunchPlist failed for \(path): \(error.localizedDescription)")
