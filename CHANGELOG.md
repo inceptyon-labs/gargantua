@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.14] - 2026-11-07
+
+### Added
+
+- **Final Cut Pro cleanup rules.** Deep Clean now offers review rules for Final Cut render files and optimized/proxy media, so you can reclaim space from generated media that Final Cut can recreate.
+- **Time Machine local snapshot cleanup.** A new advanced command rule deletes local Time Machine snapshots to free disk space. It can only list or delete local snapshots, and can't remove backups or change Time Machine settings.
+
+### Fixed
+
+- **Release publishing no longer hangs on DMG creation.** Release builds detach any leftover disk image and check the file is unlocked before signing, and notarization now runs upload and processing as separate steps with time limits.
+- **Release tags match the built commit.** Publishing stops if GitHub already has the tag on a different commit, and the tag is pushed before the release is created, so a release is always tagged at the commit its DMG was built from.
+
 ## [0.4.13] - 2026-11-07
 
 ### Added
