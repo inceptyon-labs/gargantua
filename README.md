@@ -270,6 +270,7 @@ Destructive:
 - `confirm: true` is required.
 - Unknown item IDs are rejected.
 - Any `protected` item aborts the whole request.
+- `review` items need `include_review: true` and only ever go to the Trash; a `delete` request that names one is rejected.
 - Each MCP connection gets one clean operation per 60 seconds. The budget is keyed on the connection rather than the client's self-declared name, which a client can change at will.
 - A valid license (or an unexpired trial) is required, the same gate the app's own destructive flows take. Scans and dry runs stay available either way.
 - Every non-dry-run attempt writes an audit entry with the client identifier to `~/Library/Logs/Gargantua/audit.json`.

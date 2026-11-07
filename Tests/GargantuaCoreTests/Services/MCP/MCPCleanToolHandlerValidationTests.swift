@@ -48,6 +48,89 @@ struct MCPCleanToolHandlerValidationTests {
         }
     }
 
+    // MARK: Review tier
+
+    @Test("review items are rejected unless include_review is true")
+    func reviewRequiresIncludeReview() throws {
+        let cache = MCPCleanTestFixtures.cacheWith([
+            MCPCleanTestFixtures.makeResult(id: "safe1"),
+            MCPCleanTestFixtures.makeResult(id: "rev", safety: .review),
+        ])
+        let cleanerCalled = MCPCleanTestFixtures.CapturedFlag()
+        let subject = MCPCleanTestFixtures.handler(cache: cache, cleaner: { _, _ in
+            cleanerCalled.value = true
+            return CleanupResult(itemResults: [], cleanupMethod: .trash)
+        })
+        do {
+            _ = try subject.handle(MCPCleanTestFixtures.arguments([
+                "item_ids": .array([.string("safe1"), .string("rev")]),
+                "confirm": .bool(true),
+            ]))
+            Issue.record("handler should have thrown invalidParams")
+        } catch MCPToolError.invalidParams(let message) {
+            #expect(message.contains("include_review"))
+            #expect(message.contains("rev"))
+        }
+        #expect(cleanerCalled.value == false, "cleaner must not run without include_review")
+    }
+
+    @Test("review items are never permanently deleted, even with include_review")
+    func reviewRefusesDelete() throws {
+        let cache = MCPCleanTestFixtures.cacheWith([MCPCleanTestFixtures.makeResult(id: "rev", safety: .review)])
+        let cleanerCalled = MCPCleanTestFixtures.CapturedFlag()
+        let subject = MCPCleanTestFixtures.handler(cache: cache, cleaner: { _, _ in
+            cleanerCalled.value = true
+            return CleanupResult(itemResults: [], cleanupMethod: .delete)
+        })
+        do {
+            _ = try subject.handle(MCPCleanTestFixtures.arguments([
+                "item_ids": .array([.string("rev")]),
+                "method": .string("delete"),
+                "confirm": .bool(true),
+                "include_review": .bool(true),
+            ]))
+            Issue.record("handler should have thrown invalidParams")
+        } catch MCPToolError.invalidParams(let message) {
+            #expect(message.contains("Trash"))
+            #expect(message.contains("rev"))
+        }
+        #expect(cleanerCalled.value == false, "cleaner must not run a delete that names a review item")
+    }
+
+    @Test("review items move to the Trash when include_review is true")
+    func reviewTrashesWithIncludeReview() throws {
+        let items = [MCPCleanTestFixtures.makeResult(id: "rev", safety: .review)]
+        let cache = MCPCleanTestFixtures.cacheWith(items)
+        let captured = MCPCleanTestFixtures.CapturedMethod()
+        let subject = MCPCleanTestFixtures.handler(cache: cache, cleaner: { cleaned, method in
+            captured.value = method
+            return CleanupResult(
+                itemResults: cleaned.map { CleanupItemResult(item: $0, succeeded: true) },
+                cleanupMethod: method
+            )
+        })
+        _ = try subject.handle(MCPCleanTestFixtures.arguments([
+            "item_ids": .array([.string("rev")]),
+            "confirm": .bool(true),
+            "include_review": .bool(true),
+        ]))
+        #expect(captured.value == .trash)
+    }
+
+    @Test("dry runs preview review items without include_review")
+    func dryRunPreviewsReviewWithoutIncludeReview() throws {
+        let cache = MCPCleanTestFixtures.cacheWith([MCPCleanTestFixtures.makeResult(id: "rev", safety: .review)])
+        let subject = MCPCleanTestFixtures.handler(cache: cache)
+        let result = try subject.handle(MCPCleanTestFixtures.arguments([
+            "item_ids": .array([.string("rev")]),
+            "method": .string("delete"),
+            "confirm": .bool(true),
+            "dry_run": .bool(true),
+        ]))
+        let output = try MCPCleanTestFixtures.decodeOutput(result)
+        #expect(output.perItem.map(\.id) == ["rev"])
+    }
+
     @Test("cleaning the Trash itself requires method delete")
     func trashContainerRequiresDelete() throws {
         let trashPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash").path

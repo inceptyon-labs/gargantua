@@ -87,6 +87,7 @@ struct MCPCleanToolHandlerAuditWriteTests {
         _ = try subject.handle(arguments([
             "item_ids": .array([.string("a"), .string("b")]),
             "confirm": .bool(true),
+            "include_review": .bool(true),
         ]))
 
         #expect(audit.entries.count == 2)

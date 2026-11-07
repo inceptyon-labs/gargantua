@@ -42,6 +42,21 @@ extension MCPCleanToolHandler {
             + "(\(preview)\(more))."
     }
 
+    static func reviewRequiresIncludeMessage(_ review: [ScanResult]) -> String {
+        let preview = review.prefix(3).map(\.id).joined(separator: ", ")
+        let more = review.count > 3 ? " and \(review.count - 3) more" : ""
+        return "Request rejected: \(review.count) review item(s) need include_review: true "
+            + "(\(preview)\(more)). Review items may hold user data; pass include_review only after "
+            + "reading each item's explanation."
+    }
+
+    static func reviewTrashOnlyMessage(_ review: [ScanResult]) -> String {
+        let preview = review.prefix(3).map(\.id).joined(separator: ", ")
+        let more = review.count > 3 ? " and \(review.count - 3) more" : ""
+        return "Request rejected: review items are only ever moved to the Trash, never deleted "
+            + "(\(preview)\(more)). Use method 'trash'."
+    }
+
     static func rateLimitMessage(
         window: TimeInterval,
         maxOps: Int,

@@ -14,28 +14,37 @@ import Foundation
 /// matches `MCPScanInput.profile`: the JSON Schema advertises the allowed
 /// values, but the handler is the one that maps the string to a concrete
 /// cleanup method and rejects anything outside `{"trash", "delete"}`.
+///
+/// `includeReview` is the review tier's own affirmative (PRD §7.4). `confirm`
+/// is required on every call, so it cannot double as that; without
+/// `include_review: true` the handler rejects any review item, and review
+/// items only ever go to the Trash.
 public struct MCPCleanInput: Codable, Sendable, Equatable {
     public let itemIDs: [String]
     public let method: String
     public let confirm: Bool
     public let dryRun: Bool
+    public let includeReview: Bool
 
     public init(
         itemIDs: [String],
         method: String = "trash",
         confirm: Bool = true,
-        dryRun: Bool = false
+        dryRun: Bool = false,
+        includeReview: Bool = false
     ) {
         self.itemIDs = itemIDs
         self.method = method
         self.confirm = confirm
         self.dryRun = dryRun
+        self.includeReview = includeReview
     }
 
     enum CodingKeys: String, CodingKey {
         case method, confirm
         case itemIDs = "item_ids"
         case dryRun = "dry_run"
+        case includeReview = "include_review"
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +73,7 @@ public struct MCPCleanInput: Codable, Sendable, Equatable {
         self.confirm = true
 
         self.dryRun = try c.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
+        self.includeReview = try c.decodeIfPresent(Bool.self, forKey: .includeReview) ?? false
     }
 }
 

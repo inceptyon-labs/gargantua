@@ -88,7 +88,7 @@ struct MCPCleanToolHandlerTests {
         #expect(output.method == "delete")
     }
 
-    @Test("review-tier items are cleaned like safe items when confirm is true")
+    @Test("review-tier items are cleaned alongside safe items when include_review is true")
     func reviewItemsAccepted() throws {
         let items = [
             MCPCleanTestFixtures.makeResult(id: "s", size: 1_000, safety: .safe),
@@ -104,6 +104,7 @@ struct MCPCleanToolHandlerTests {
         let result = try subject.handle(MCPCleanTestFixtures.arguments([
             "item_ids": .array([.string("s"), .string("r")]),
             "confirm": .bool(true),
+            "include_review": .bool(true),
         ]))
         let output = try MCPCleanTestFixtures.decodeOutput(result)
         #expect(output.cleaned == 2)

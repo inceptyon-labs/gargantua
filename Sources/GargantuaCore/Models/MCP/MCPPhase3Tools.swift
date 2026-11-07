@@ -36,10 +36,13 @@ public enum MCPPhase3Tools {
     ///   by `MCPCleanInput`'s custom decoder.
     /// - `dry_run` is optional; when `true`, the handler returns the plan
     ///   without touching the filesystem.
+    /// - `include_review` is optional and defaults to `false`; the handler
+    ///   rejects a non-dry-run that names a review item without it, and
+    ///   rejects `method: "delete"` whenever a review item is present.
     public static let clean = MCPToolDescriptor(
         name: .clean,
         description: "Clean specified items. Only accepts item IDs from a prior scan; moves to Trash by default. "
-            + "Server rejects protected items and requires confirm:true for review items.",
+            + "Server rejects protected items; review items need include_review:true and only ever go to the Trash.",
         inputSchema: MCPJSONSchema(
             type: .object,
             description: "Inputs for the clean tool. confirm must be literal true; MCP cannot bypass confirmation.",
@@ -62,6 +65,11 @@ public enum MCPPhase3Tools {
                 "dry_run": MCPJSONSchema(
                     type: .boolean,
                     description: "If true, return the cleanup plan without touching the filesystem."
+                ),
+                "include_review": MCPJSONSchema(
+                    type: .boolean,
+                    description: "Must be true to clean review-tier items. Review items are only moved to the Trash, "
+                        + "never deleted; a delete request that includes one is rejected."
                 ),
             ],
             required: ["item_ids", "confirm"]

@@ -161,4 +161,20 @@ struct MCPCleanSchemasTests {
         #expect(!s.contains("\"reason\""))
         #expect(!s.contains("\"bytes_freed\""))
     }
+
+    @Test("include_review defaults to false and decodes when present")
+    func includeReviewDecoding() throws {
+        let absent = Data(#"{"item_ids":["a"],"confirm":true}"#.utf8)
+        #expect(try JSONDecoder().decode(MCPCleanInput.self, from: absent).includeReview == false)
+
+        let present = Data(#"{"item_ids":["a"],"confirm":true,"include_review":true}"#.utf8)
+        #expect(try JSONDecoder().decode(MCPCleanInput.self, from: present).includeReview == true)
+    }
+
+    @Test("clean schema advertises include_review as an optional boolean")
+    func cleanSchemaAdvertisesIncludeReview() {
+        let schema = MCPPhase3Tools.clean.inputSchema
+        #expect(schema.properties?["include_review"]?.type == .boolean)
+        #expect(schema.required?.contains("include_review") == false)
+    }
 }

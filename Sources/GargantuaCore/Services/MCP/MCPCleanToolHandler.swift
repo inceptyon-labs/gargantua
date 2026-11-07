@@ -14,9 +14,12 @@ import Foundation
 //   item even if the caller asked nicely and set `confirm: true`.
 // - `confirm: true` is enforced at the type boundary by `MCPCleanInput`. Any
 //   payload missing it or with `confirm: false` is rejected during decode,
-//   which the dispatcher surfaces as `-32602 invalidParams`. That gives the
-//   PRD's "review items require confirm" guardrail for free — reviews can
-//   never reach this handler without an explicit affirmative.
+//   which the dispatcher surfaces as `-32602 invalidParams`.
+// - Review items need their own affirmative, `include_review: true`, because
+//   `confirm` is required for safe items too and so can't be it. Review items
+//   only ever go to the Trash: a `delete` that names one is rejected, so
+//   review-class data (conversation history, databases) cannot be permanently
+//   removed over MCP. Dry runs skip both checks; they are previews.
 // - `dry_run: true` short-circuits before `Cleaner` runs, returning a plan
 //   shaped like a successful run so agents can preview impact. Dry runs are
 //   deliberately exempt from the rate limiter and do not write audit entries
@@ -253,6 +256,21 @@ public struct MCPCleanToolHandler: Sendable {
         let protected = found.filter { $0.safety == .protected_ }
         if !protected.isEmpty {
             throw MCPToolError.invalidParams(Self.protectedRejectMessage(protected))
+        }
+
+        // The review tier's own consent step (PRD §7.4). `confirm` is required
+        // on every call, so it cannot be that step; `include_review` is, and
+        // review items only ever go to the Trash. Dry runs are previews.
+        if !input.dryRun {
+            let review = found.filter { $0.safety == .review }
+            if !review.isEmpty {
+                guard input.includeReview else {
+                    throw MCPToolError.invalidParams(Self.reviewRequiresIncludeMessage(review))
+                }
+                guard method == .trash else {
+                    throw MCPToolError.invalidParams(Self.reviewTrashOnlyMessage(review))
+                }
+            }
         }
 
         // Cleaning the Trash itself empties it, which is permanent. Under
