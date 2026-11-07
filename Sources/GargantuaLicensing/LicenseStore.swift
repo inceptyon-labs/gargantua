@@ -146,8 +146,9 @@ public final class LicenseStore: @unchecked Sendable {
     }
 
     /// Re-checks the cached license against the server. On `granted`, refreshes
-    /// the validation timestamp (extending offline grace). On revoked/disabled
-    /// or 404 (key gone, stale activation), clears the cache. Network errors
+    /// the validation timestamp (extending offline grace). On revoked/disabled,
+    /// 404 (key gone, stale activation) or a key for another product, clears
+    /// the cache. Network errors
     /// propagate without touching the cache so offline grace still applies.
     @discardableResult
     public func revalidate() async throws -> LicenseReceipt? {
@@ -167,6 +168,9 @@ public final class LicenseStore: @unchecked Sendable {
             try clear()
             return nil
         } catch PolarLicenseError.notFound {
+            try clear()
+            return nil
+        } catch PolarLicenseError.wrongProduct {
             try clear()
             return nil
         }

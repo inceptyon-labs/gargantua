@@ -5,12 +5,37 @@ public struct PolarActivation: Sendable, Equatable {
     public let status: LicenseKeyStatus
     public let email: String?
     public let name: String?
+    /// The benefit the key was issued for; `nil` when the API omitted it.
+    public let benefitID: String?
+
+    public init(
+        activationId: String,
+        status: LicenseKeyStatus,
+        email: String?,
+        name: String?,
+        benefitID: String? = nil
+    ) {
+        self.activationId = activationId
+        self.status = status
+        self.email = email
+        self.name = name
+        self.benefitID = benefitID
+    }
 }
 
 public struct PolarValidation: Sendable, Equatable {
     public let status: LicenseKeyStatus
     public let email: String?
     public let name: String?
+    /// The benefit the key was issued for; `nil` when the API omitted it.
+    public let benefitID: String?
+
+    public init(status: LicenseKeyStatus, email: String?, name: String?, benefitID: String? = nil) {
+        self.status = status
+        self.email = email
+        self.name = name
+        self.benefitID = benefitID
+    }
 }
 
 public enum PolarLicenseError: Error, Sendable, Equatable {
@@ -24,6 +49,8 @@ public enum PolarLicenseError: Error, Sendable, Equatable {
     case network(String)
     /// Response body didn't decode.
     case decoding(String)
+    /// The key is valid, but was issued for a different product's benefit.
+    case wrongProduct
     /// Server-side activation succeeded but the receipt couldn't be stored
     /// locally. The activation slot was released, so retrying is safe.
     case receiptSaveFailed(String)
@@ -39,18 +66,29 @@ public struct PolarLicenseClient: PolarLicenseValidating {
     private let baseURL: URL
     private let organizationID: String
     private let apiVersion: String
+    private let expectedBenefitID: String?
     private let session: URLSession
 
     public init(
         baseURL: URL = LicensePolarConfig.apiBaseURL,
         organizationID: String = LicensePolarConfig.organizationID,
         apiVersion: String = LicensePolarConfig.apiVersion,
+        expectedBenefitID: String? = LicensePolarConfig.licenseBenefitID,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
         self.organizationID = organizationID
         self.apiVersion = apiVersion
+        self.expectedBenefitID = expectedBenefitID
         self.session = session
+    }
+
+    /// True when the key was issued for another benefit. A mismatch only:
+    /// Polar omits the field just on an API contract change, and a shipped
+    /// build must keep working through one.
+    private func isWrongProduct(_ benefitID: String?) -> Bool {
+        if let expectedBenefitID, let benefitID { return benefitID != expectedBenefitID }
+        return false
     }
 
     public func activate(key: String, label: String, meta: [String: String]) async throws -> PolarActivation {
@@ -61,11 +99,18 @@ public struct PolarLicenseClient: PolarLicenseValidating {
             "meta": meta,
         ]
         let dto: ActivateDTO = try await post("customer-portal/license-keys/activate", body: body)
+        if isWrongProduct(dto.licenseKey.benefitId) {
+            // Polar has already allocated a device slot to this activation;
+            // free it so the wrong product's key doesn't orphan one.
+            try? await deactivate(key: key, activationId: dto.id)
+            throw PolarLicenseError.wrongProduct
+        }
         return PolarActivation(
             activationId: dto.id,
             status: dto.licenseKey.status,
             email: dto.licenseKey.customer?.email ?? dto.licenseKey.user?.email,
-            name: dto.licenseKey.customer?.name ?? dto.licenseKey.user?.publicName
+            name: dto.licenseKey.customer?.name ?? dto.licenseKey.user?.publicName,
+            benefitID: dto.licenseKey.benefitId
         )
     }
 
@@ -78,10 +123,12 @@ public struct PolarLicenseClient: PolarLicenseValidating {
             body["activation_id"] = activationId
         }
         let dto: ValidateDTO = try await post("customer-portal/license-keys/validate", body: body)
+        if isWrongProduct(dto.benefitId) { throw PolarLicenseError.wrongProduct }
         return PolarValidation(
             status: dto.status,
             email: dto.customer?.email ?? dto.user?.email,
-            name: dto.customer?.name ?? dto.user?.publicName
+            name: dto.customer?.name ?? dto.user?.publicName,
+            benefitID: dto.benefitId
         )
     }
 
@@ -173,6 +220,12 @@ private struct KeyInfoDTO: Decodable {
     let status: LicenseKeyStatus
     let customer: CustomerDTO?
     let user: UserDTO?
+    let benefitId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case status, customer, user
+        case benefitId = "benefit_id"
+    }
 }
 
 private struct ActivateDTO: Decodable {
@@ -189,6 +242,12 @@ private struct ValidateDTO: Decodable {
     let status: LicenseKeyStatus
     let customer: CustomerDTO?
     let user: UserDTO?
+    let benefitId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case status, customer, user
+        case benefitId = "benefit_id"
+    }
 }
 
 private struct ErrorDTO: Decodable {

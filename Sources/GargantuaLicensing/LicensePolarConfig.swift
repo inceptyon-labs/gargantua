@@ -12,6 +12,11 @@ public enum LicensePolarConfig {
     /// against Polar's isolated sandbox environment.
     public static let apiBaseURL = URL(string: "https://api.polar.sh/v1")!
 
+    /// The `license_keys` benefit on the Gargantua product. Polar scopes keys
+    /// to the organization, so without this pin a key sold for any other
+    /// product under Inceptyon Labs would unlock this app.
+    public static let licenseBenefitID = "0afeb9d1-5b62-43cc-b1f8-59c7c30618d7"
+
     /// Pinned Polar API version, sent as `Polar-Version` on every request.
     /// Unpinned requests follow whichever version Polar currently calls
     /// "Current", which rolls over each quarter — a shipped build would then

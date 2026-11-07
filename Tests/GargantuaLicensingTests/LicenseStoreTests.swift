@@ -173,6 +173,19 @@ struct LicenseStoreTests {
         #expect(store.loadCachedReceipt() == nil)
     }
 
+    @Test("Revalidate clears the cache when the key turns out to belong to another product")
+    func revalidateClearsOnWrongProduct() async throws {
+        let client = MockPolarClient()
+        let store = makeStore(client: client)
+        try await store.activate(key: "GARG-1")
+
+        client.validateResult = .failure(.wrongProduct)
+        let result = try await store.revalidate()
+
+        #expect(result == nil)
+        #expect(store.loadCachedReceipt() == nil)
+    }
+
     @Test("Revalidate keeps the cache when the network is down (offline grace)")
     func revalidateKeepsCacheOffline() async throws {
         let client = MockPolarClient()
