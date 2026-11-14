@@ -72,6 +72,12 @@ public final class AppReleasesSession {
     /// started. That check may have read their old version, so its rows for
     /// them are discarded.
     @ObservationIgnored private var installedDuringCheck: Set<String> = []
+    /// Numbers each app's single-app re-checks, so an older one can't land
+    /// after a newer one.
+    @ObservationIgnored private var refreshGenerations: [String: Int] = [:]
+    /// Bumped when the list is released or replaced by a full check, which
+    /// drops every re-check that started before.
+    @ObservationIgnored private var resultsEpoch = 0
 
     public init(
         inventory: any AppReleaseInventoryProviding,
@@ -192,6 +198,7 @@ public final class AppReleasesSession {
         let protected = installedDuringCheck
         let current = preferences
         let existing = rows
+        resultsEpoch += 1
         rows = result.compactMap { row in
             let old = existing.first { $0.id == row.id }
             if protected.contains(row.id) { return old }
@@ -211,7 +218,7 @@ public final class AppReleasesSession {
             .filter { !protected.contains($0.id) && Self.isStale($0, under: preferences) }
             .map(\.app)
         for app in staleApps {
-            await refresh(app)
+            await refresh(app, checkGeneration: generation)
             guard isCurrent(generation) else { return }
         }
         lastChecked = now()
@@ -278,6 +285,7 @@ public final class AppReleasesSession {
     /// Drops the list; used under memory pressure.
     public func releaseResults() {
         guard phase != .checking, installPhases.isEmpty else { return }
+        resultsEpoch += 1
         rows = []
         rowMessages = [:]
         recentlyInstalled = []
@@ -347,19 +355,30 @@ public final class AppReleasesSession {
         }
     }
 
-    /// Re-reads one app from disk and checks just that app again.
-    private func refresh(_ app: InstalledApp) async {
-        guard let installed = await inventory.installedApp(at: app.url) else {
-            rows.removeAll { $0.id == app.bundleID }
-            recentlyInstalled.remove(app.bundleID)
-            storeAvailableCount()
-            return
+    /// Re-reads one app from disk and checks just that app again. Drops its
+    /// result when a newer re-check of the app started, the results were
+    /// released or replaced, or the check it belongs to was superseded.
+    private func refresh(_ app: InstalledApp, checkGeneration: Int? = nil) async {
+        let id = app.bundleID
+        let number = (refreshGenerations[id] ?? 0) + 1
+        refreshGenerations[id] = number
+        let epoch = resultsEpoch
+        func isCurrentRefresh() -> Bool {
+            refreshGenerations[id] == number && epoch == resultsEpoch && (checkGeneration.map(isCurrent) ?? true)
         }
-        guard var fresh = await checker.check([installed], preferences: preferences).first else { return }
-        fresh = Self.applying(preferences, to: fresh)
+
+        let found = await inventory.installedApp(at: app.url)
+        guard isCurrentRefresh() else { return }
+        guard let installed = found else {
+            rows.removeAll { $0.id == id }
+            recentlyInstalled.remove(id)
+            return storeAvailableCount()
+        }
+        guard let first = await checker.check([installed], preferences: preferences).first, isCurrentRefresh() else { return }
+        var fresh = Self.applying(preferences, to: first)
         if Self.isStale(fresh, under: preferences) {
             // A relaxation landed while the check ran; resolve once more.
-            guard let again = await checker.check([installed], preferences: preferences).first else { return }
+            guard let again = await checker.check([installed], preferences: preferences).first, isCurrentRefresh() else { return }
             fresh = Self.applying(preferences, to: again)
         }
         replace(fresh)
