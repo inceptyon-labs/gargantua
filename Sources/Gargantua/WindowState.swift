@@ -37,7 +37,7 @@ final class WindowState: ObservableObject {
     let devPurgeSession = DevArtifactSessionState()
     let backgroundItemsSession = BackgroundItemsSession()
     let processInventorySession = ProcessInventorySession()
-    let appReleasesSession = AppReleasesView.makeDefaultSession()
+    let appReleasesSession = AppReleasesSession()
     let agentRunControllers = AgentRunControllers()
 
     /// The sidebar pane on screen; memory-pressure relief leaves it alone.

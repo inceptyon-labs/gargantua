@@ -47,6 +47,12 @@ struct SidebarSectionTests {
         #expect(tools.items.map(\.id).prefix(2) == ["devTools", "devPurge"])
     }
 
+    @Test("App Updates is the last Tools item, so Configure items keep their positions")
+    func appUpdatesEndsTools() throws {
+        let tools = try #require(SidebarSection.defaultSections.first { $0.id == "tools" })
+        #expect(tools.items.last?.id == "appUpdates")
+    }
+
     @Test("All item IDs are unique across sections")
     func itemIDsUnique() {
         let allIDs = SidebarSection.defaultSections.flatMap { $0.items.map(\.id) }

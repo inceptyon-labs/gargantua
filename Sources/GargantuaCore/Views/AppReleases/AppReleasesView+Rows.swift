@@ -5,6 +5,8 @@ import SwiftUI
 struct AppReleaseRowView: View {
     let row: AppReleaseRow
     let installPhase: AppReleaseInstallPhase?
+    /// A check is running; updating waits so the two can't overwrite each other.
+    let isChecking: Bool
     let message: AppReleaseRowMessage?
     let onUpdate: () -> Void
     let onIgnore: () -> Void
@@ -18,6 +20,7 @@ struct AppReleaseRowView: View {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: row.app.url.path))
                     .resizable()
                     .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.app.name)
@@ -33,14 +36,22 @@ struct AppReleaseRowView: View {
 
                 Spacer(minLength: GargantuaSpacing.space3)
 
-                versionColumn
+                HStack(spacing: GargantuaSpacing.space3) {
+                    versionColumn
+                        .frame(width: Self.versionWidth, alignment: .trailing)
 
-                ForEach(row.sources, id: \.self) { source in
-                    pill(source.label, color: GargantuaColors.ink3)
+                    HStack(spacing: GargantuaSpacing.space1) {
+                        ForEach(row.sources, id: \.self) { source in
+                            pill(source.label, color: GargantuaColors.ink3)
+                        }
+                    }
+                    .frame(width: Self.sourceWidth, alignment: .trailing)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(versionAccessibilityLabel)
 
                 action
-                    .frame(minWidth: 96, alignment: .trailing)
+                    .frame(width: Self.actionWidth, alignment: .trailing)
             }
 
             detailLine
@@ -59,10 +70,22 @@ struct AppReleaseRowView: View {
 
     // MARK: - Pieces
 
+    private static let versionWidth: CGFloat = 150
+    private static let sourceWidth: CGFloat = 124
+    private static let actionWidth: CGFloat = 112
+
+    private var versionAccessibilityLabel: String {
+        var label = row.app.version.description
+        if let candidate = row.availableCandidate { label += " to \(candidate.displayVersion)" }
+        if !row.sources.isEmpty { label += ", from " + row.sources.map(\.label).joined(separator: ", ") }
+        return label
+    }
+
     private var isDimmed: Bool {
+        guard message == nil else { return false }
         switch row.status {
-        case .upToDate, .untracked, .ignored, .skippedVersion: true
-        case .available, .failed: false
+        case .upToDate, .untracked, .ignored, .skippedVersion: return true
+        case .available, .failed: return false
         }
     }
 
@@ -90,7 +113,10 @@ struct AppReleaseRowView: View {
                 Text(installPhase.label)
                     .font(GargantuaFonts.caption)
                     .foregroundStyle(GargantuaColors.ink2)
+                    .lineLimit(1)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Installing \(row.app.name)")
         } else {
             switch row.status {
             case .available(_, let strategy):
@@ -99,13 +125,15 @@ struct AppReleaseRowView: View {
                 statusText("Up to date")
             case .ignored:
                 GargantuaButton("Stop ignoring", action: onStopIgnoring)
+                    .accessibilityLabel("Stop ignoring \(row.app.name)")
             case .skippedVersion(let version):
                 GargantuaButton("Stop skipping", action: onStopSkipping)
                     .help("Skipping \(version)")
+                    .accessibilityLabel("Stop skipping \(version) of \(row.app.name)")
             case .untracked:
                 statusText("Not tracked")
-            case .failed(let reason):
-                statusText("Couldn't check").help(reason)
+            case .failed:
+                statusText("Couldn't check")
             }
         }
     }
@@ -114,13 +142,16 @@ struct AppReleaseRowView: View {
     private func availableAction(_ strategy: AppReleaseInstallStrategy) -> some View {
         switch strategy {
         case .inPlace, .brewUpgrade:
-            GargantuaButton("Update", tone: .ghost(GargantuaColors.accent), action: onUpdate)
+            GargantuaButton("Update", tone: .ghost(GargantuaColors.accent), isDisabled: isChecking, action: onUpdate)
+                .accessibilityLabel("Update \(row.app.name)")
         case .openAppStore(let url):
             GargantuaButton("App Store") { NSWorkspace.shared.open(url) }
+                .accessibilityLabel("Open \(row.app.name) in the App Store")
         case .linkOnly(let url, let reason):
             if let url {
                 GargantuaButton("Download") { NSWorkspace.shared.open(url) }
                     .help(reason.explanation)
+                    .accessibilityLabel("Download \(row.app.name)")
             } else {
                 statusText("Manual").help(reason.explanation)
             }
@@ -129,11 +160,21 @@ struct AppReleaseRowView: View {
 
     @ViewBuilder
     private var detailLine: some View {
-        if case .available(_, .linkOnly(_, let reason)) = row.status {
-            Text(reason.explanation)
+        if let text = detailText {
+            Text(text)
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.leading, 28 + GargantuaSpacing.space3)
+        }
+    }
+
+    private var detailText: String? {
+        switch row.status {
+        case .available(_, .linkOnly(_, let reason)): reason.explanation
+        case .failed(let reason): reason
+        case .skippedVersion(let version): "Skipped version \(version)"
+        default: nil
         }
     }
 
@@ -198,7 +239,7 @@ extension AppReleaseInstallPhase {
         case .quitting: "Quitting…"
         case .installing: "Installing…"
         case .relaunching: "Relaunching…"
-        case .upgradingWithHomebrew: "Upgrading with Homebrew…"
+        case .upgradingWithHomebrew: "Upgrading…"
         }
     }
 }

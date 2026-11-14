@@ -12,6 +12,8 @@ public struct SettingsView: View {
     @AppStorage(MenuBarPreferences.widgetEnabledKey) var menuBarWidgetEnabled = MenuBarPreferences.defaultWidgetEnabled
     @AppStorage(MenuBarPreferences.launchAtLoginEnabledKey) var launchAtLoginEnabled = MenuBarPreferences.defaultLaunchAtLoginEnabled
     @AppStorage(AppAppearance.userDefaultsKey) var appearanceRawValue = AppAppearance.defaultValue.rawValue
+    /// Observed so the App Updates toggle redraws when its stored preferences change.
+    @AppStorage(AppReleasePreferences.userDefaultsKey) var appReleasePreferencesData = Data()
 
     /// App-shared download manager. When `init(persistence:)` is used without
     /// an explicit manager, the view owns its own `@StateObject` so standalone

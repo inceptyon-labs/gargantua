@@ -28,6 +28,7 @@ public struct AppReleasesView: View {
         }
         .background(GargantuaColors.void_)
         .destructiveActionGate(reason: $session.blockedReason)
+        .onDisappear { session.paneDidDisappear() }
         .alert(
             pendingQuit.map { "\($0.app.name) is open" } ?? "App is open",
             isPresented: Binding(
@@ -62,12 +63,14 @@ public struct AppReleasesView: View {
     // MARK: - Header
 
     private var header: some View {
-        PageHeaderView(
-            title: "App Updates",
-            subtitle: subtitle,
-            subtitleStyle: session.phase == .idle ? .voice : .status
-        ) {
-            if session.phase != .idle {
+        PageHeaderView(title: "App Updates", subtitle: subtitle) {
+            switch session.phase {
+            case .idle, .failed:
+                EmptyView()
+            case .checking, .ready:
+                if session.isChecking, !session.rows.isEmpty {
+                    GargantuaButton("Cancel") { session.cancelCheck() }
+                }
                 GargantuaButton("Check", icon: "arrow.clockwise", isDisabled: session.isChecking) {
                     session.startCheck()
                 }
@@ -77,20 +80,27 @@ public struct AppReleasesView: View {
         }
     }
 
-    private var subtitle: String {
+    private var subtitle: String? {
         switch session.phase {
-        case .idle:
-            return "See which of your apps have a newer version."
-        case .checking:
-            return "Asking each app's update source."
+        case .idle, .checking:
+            return nil
         case .failed:
             return "The check didn't finish."
         case .ready:
             let count = session.availableCount
-            let updates = count == 0 ? "Everything is up to date" : "\(count) update\(count == 1 ? "" : "s") available"
-            guard let lastChecked = session.lastChecked else { return updates }
-            return updates + " · checked " + Self.relativeFormatter.localizedString(for: lastChecked, relativeTo: Date())
+            var parts: [String] = []
+            if count > 0 { parts.append("\(count) update\(count == 1 ? "" : "s") available") }
+            if session.failedCount > 0 { parts.append(Self.couldntCheck(session.failedCount)) }
+            if let lastChecked = session.lastChecked {
+                let ago = Self.relativeFormatter.localizedString(for: lastChecked, relativeTo: Date())
+                parts.append(parts.isEmpty ? "Checked " + ago : "checked " + ago)
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
         }
+    }
+
+    static func couldntCheck(_ count: Int) -> String {
+        "\(count) couldn't be checked"
     }
 
     static let relativeFormatter: RelativeDateTimeFormatter = {
@@ -148,6 +158,7 @@ public struct AppReleasesView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 390)
             GargantuaButton("Try again", tone: .primary) { session.startCheck() }
+                .keyboardShortcut("r", modifiers: .command)
                 .padding(.top, GargantuaSpacing.space2)
         }
     }
@@ -186,6 +197,7 @@ public struct AppReleasesView: View {
                             AppReleaseRowView(
                                 row: row,
                                 installPhase: session.installPhases[row.id],
+                                isChecking: session.isChecking,
                                 message: session.rowMessages[row.id],
                                 onUpdate: { requestUpdate(row) },
                                 onIgnore: { session.ignore(row.id) },
@@ -211,7 +223,7 @@ public struct AppReleasesView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .fixedSize()
+            .frame(width: 260)
 
             Spacer()
 
@@ -234,13 +246,27 @@ public struct AppReleasesView: View {
             Text(emptyMessage)
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 390)
+            if showsAllShortcut {
+                GargantuaButton("Show all apps") { session.filter = .all }
+            }
         }
+    }
+
+    private var showsAllShortcut: Bool {
+        session.query.isEmpty && session.filter == .updates && session.failedCount > 0
     }
 
     private var emptyMessage: String {
         if !session.query.isEmpty { return "No apps match the search." }
         switch session.filter {
-        case .updates: return "Every app Gargantua can check is up to date."
+        case .updates:
+            let failed = session.failedCount
+            if failed > 0 {
+                return "Nothing to update · " + Self.couldntCheck(failed)
+            }
+            return "Every app Gargantua can check is up to date."
         case .all: return "No apps to show."
         case .ignored: return "You haven't ignored any apps or versions."
         }

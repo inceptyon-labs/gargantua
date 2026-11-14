@@ -60,6 +60,7 @@ public struct SidebarView: View {
         // Not ⇧⌘: ⇧⌘3/4/5 are macOS screenshot shortcuts.
         ("1", [.command, .option]), ("2", [.command, .option]), ("3", [.command, .option]),
         ("4", [.command, .option]), ("5", [.command, .option]), ("6", [.command, .option]),
+        ("7", [.command, .option]),
     ]
 
     private static func shortcut(

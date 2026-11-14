@@ -44,6 +44,9 @@ public final class AppReleasesSession {
     /// Bundle IDs with an install running, and where each one is.
     public private(set) var installPhases: [String: AppReleaseInstallPhase] = [:]
     public private(set) var rowMessages: [String: AppReleaseRowMessage] = [:]
+    /// Rows updated this visit. They stay in the Updates filter, with their
+    /// message, until the next check or until the user leaves the pane.
+    public private(set) var recentlyInstalled: Set<String> = []
     public private(set) var preferences: AppReleasePreferences
     public var filter: AppReleasesFilter = .updates
     public var query = ""
@@ -56,10 +59,17 @@ public final class AppReleasesSession {
     @ObservationIgnored private let checker: any AppReleaseChecking
     @ObservationIgnored private let installer: any AppReleaseInstalling
     @ObservationIgnored private let authorize: @Sendable (DestructiveSurface) async -> DestructiveAuthorizationResult
-    @ObservationIgnored private let isAppRunning: @MainActor (String) -> Bool
+    @ObservationIgnored private let quitter: any AppReleaseAppQuitting
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var activeTask: Task<Void, Never>?
+    /// Bumped by every check and by Cancel, so a superseded run drops its result.
+    @ObservationIgnored private var checkGeneration = 0
+    @ObservationIgnored private var phaseBeforeCheck: AppReleasesPhase = .idle
+    /// Apps with an install that began or was running since the current check
+    /// started. That check may have read their old version, so its rows for
+    /// them are discarded.
+    @ObservationIgnored private var installedDuringCheck: Set<String> = []
 
     public init(
         inventory: any AppReleaseInventoryProviding,
@@ -68,9 +78,7 @@ public final class AppReleasesSession {
         authorize: @escaping @Sendable (DestructiveSurface) async -> DestructiveAuthorizationResult = {
             await LicenseGate.shared.authorize($0)
         },
-        isAppRunning: @escaping @MainActor (String) -> Bool = {
-            WorkspaceAppReleaseQuitter().isRunning(bundleID: $0)
-        },
+        quitter: any AppReleaseAppQuitting = WorkspaceAppReleaseQuitter(),
         now: @escaping () -> Date = Date.init,
         defaults: UserDefaults = .standard
     ) {
@@ -78,10 +86,19 @@ public final class AppReleasesSession {
         self.checker = checker
         self.installer = installer
         self.authorize = authorize
-        self.isAppRunning = isAppRunning
+        self.quitter = quitter
         self.now = now
         self.defaults = defaults
         self.preferences = AppReleasePreferences.stored(in: defaults)
+    }
+
+    /// The production session: real inventory, sources and installer.
+    public convenience init() {
+        self.init(
+            inventory: DefaultAppReleaseInventory(),
+            checker: AppReleaseCheckService.makeDefault(),
+            installer: AppReleaseInstaller()
+        )
     }
 
     // MARK: - Derived
@@ -92,6 +109,11 @@ public final class AppReleasesSession {
 
     public var isChecking: Bool { phase == .checking }
 
+    /// Apps the last check could not reach any source for.
+    public var failedCount: Int {
+        rows.filter { if case .failed = $0.status { true } else { false } }.count
+    }
+
     /// Rows for the current filter and search, updates first, then by name.
     public var visibleRows: [AppReleaseRow] {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
@@ -99,7 +121,7 @@ public final class AppReleasesSession {
             .filter { matches($0, filter: filter) }
             .filter { needle.isEmpty || $0.app.name.lowercased().contains(needle) || $0.app.bundleID.lowercased().contains(needle) }
             .sorted { lhs, rhs in
-                let (l, r) = (lhs.availableCandidate != nil, rhs.availableCandidate != nil)
+                let (l, r) = (isPinned(lhs), isPinned(rhs))
                 if l != r { return l }
                 return lhs.app.name.localizedCaseInsensitiveCompare(rhs.app.name) == .orderedAscending
             }
@@ -109,10 +131,14 @@ public final class AppReleasesSession {
         rows.filter { matches($0, filter: filter) }.count
     }
 
+    private func isPinned(_ row: AppReleaseRow) -> Bool {
+        row.availableCandidate != nil || recentlyInstalled.contains(row.id)
+    }
+
     private func matches(_ row: AppReleaseRow, filter: AppReleasesFilter) -> Bool {
         switch (filter, row.status) {
         case (.updates, .available): true
-        case (.updates, _): false
+        case (.updates, _): recentlyInstalled.contains(row.id)
         case (.ignored, .ignored), (.ignored, .skippedVersion): true
         case (.ignored, _): false
         case (.all, .ignored), (.all, .skippedVersion): false
@@ -122,31 +148,51 @@ public final class AppReleasesSession {
 
     // MARK: - Checking
 
-    /// Starts a check, replacing one already running.
-    public func startCheck() {
-        activeTask?.cancel()
-        activeTask = Task { await check() }
+    /// Starts a check. One already running is joined, not replaced: the call
+    /// is ignored, and Cancel is what stops it.
+    public func startCheck(isAutomatic: Bool = false) {
+        guard activeTask == nil else { return }
+        activeTask = Task { [weak self] in
+            await self?.check(isAutomatic: isAutomatic)
+            if let self, !Task.isCancelled { activeTask = nil }
+        }
     }
 
     public func cancelCheck() {
-        activeTask?.cancel()
+        guard let task = activeTask else { return }
+        task.cancel()
         activeTask = nil
+        checkGeneration += 1
+        restorePhaseBeforeCheck()
     }
 
     /// Reads the installed apps, then asks every source about them. A
     /// cancelled run leaves the list as it was.
     public func check(isAutomatic: Bool = false) async {
-        let previous = phase
+        checkGeneration += 1
+        let generation = checkGeneration
+        phaseBeforeCheck = isChecking ? phaseBeforeCheck : phase
         phase = .checking
+        installedDuringCheck = Set(installPhases.keys)
+
         let apps = await inventory.installedApps()
-        guard !Task.isCancelled else { return restore(previous) }
+        guard isCurrent(generation) else { return }
         guard !apps.isEmpty else {
             phase = .failed("Gargantua couldn't find any installed apps to check.")
             return
         }
         let result = await checker.check(apps, preferences: preferences)
-        guard !Task.isCancelled else { return restore(previous) }
-        rows = result
+        guard isCurrent(generation) else { return }
+
+        let protected = installedDuringCheck
+        rows = result.compactMap { row in
+            protected.contains(row.id) ? rows.first { $0.id == row.id } : row
+        }
+        recentlyInstalled.formIntersection(protected)
+        rowMessages = rowMessages.filter { id, message in
+            if case .installed = message { return protected.contains(id) }
+            return true
+        }
         lastChecked = now()
         phase = .ready
         if isAutomatic {
@@ -154,16 +200,36 @@ public final class AppReleasesSession {
         }
     }
 
-    private func restore(_ previous: AppReleasesPhase) {
-        phase = previous == .checking ? .idle : previous
+    /// False once a newer check or Cancel superseded this one; a cancelled
+    /// run that nothing else replaced puts the phase back.
+    private func isCurrent(_ generation: Int) -> Bool {
+        guard generation == checkGeneration else { return false }
+        if Task.isCancelled {
+            restorePhaseBeforeCheck()
+            return false
+        }
+        return true
+    }
+
+    private func restorePhaseBeforeCheck() {
+        guard phase == .checking else { return }
+        phase = phaseBeforeCheck == .checking ? .idle : phaseBeforeCheck
     }
 
     /// The opt-in daily check. Does nothing unless the Settings toggle is on
-    /// and a day has passed since the last automatic run.
+    /// and a day has passed since the last automatic run. It runs on the same
+    /// cancellable path as a manual check.
     public func checkIfAutoDue() async {
-        guard phase != .checking, installPhases.isEmpty else { return }
+        guard activeTask == nil, phase != .checking, installPhases.isEmpty else { return }
         guard AppReleasePreferences.stored(in: defaults).isAutoCheckDue(now: now()) else { return }
-        await check(isAutomatic: true)
+        startCheck(isAutomatic: true)
+        await activeTask?.value
+    }
+
+    /// Forgets this visit's finished installs once the user leaves the pane.
+    public func paneDidDisappear() {
+        recentlyInstalled = []
+        rowMessages = rowMessages.filter { if case .installed = $0.value { false } else { true } }
     }
 
     /// Drops the list; used under memory pressure.
@@ -171,6 +237,7 @@ public final class AppReleasesSession {
         guard phase != .checking, installPhases.isEmpty else { return }
         rows = []
         rowMessages = [:]
+        recentlyInstalled = []
         if phase == .ready { phase = .idle }
     }
 
@@ -178,7 +245,7 @@ public final class AppReleasesSession {
 
     /// Whether updating this row first needs the user's consent to quit the app.
     public func requiresQuitConsent(_ row: AppReleaseRow) -> Bool {
-        row.app.isRunning || isAppRunning(row.app.bundleID)
+        row.app.isRunning || quitter.isRunning(bundleID: row.app.bundleID)
     }
 
     /// Installs the row's update. The license gate runs first. A running app
@@ -187,6 +254,15 @@ public final class AppReleasesSession {
         guard case .available(let candidate, let strategy) = row.status, strategy.isDestructive else { return }
         let id = row.app.bundleID
         guard installPhases[id] == nil else { return }
+
+        // Claimed before the first await so a second tap can't start another.
+        if case .brewUpgrade = strategy {
+            installPhases[id] = .upgradingWithHomebrew
+        } else {
+            installPhases[id] = .downloading
+        }
+        installedDuringCheck.insert(id)
+        defer { installPhases[id] = nil }
 
         let authorization: DestructiveActionAuthorization
         switch await authorize(.appUpdater) {
@@ -203,39 +279,37 @@ public final class AppReleasesSession {
         }
 
         rowMessages[id] = nil
-        if case .brewUpgrade = strategy {
-            installPhases[id] = .upgradingWithHomebrew
-        } else {
-            installPhases[id] = .downloading
-        }
         let result = await installer.install(
             app: row.app,
             candidate: candidate,
             strategy: strategy,
             quitIfRunning: quitIfRunning,
             authorization: authorization,
-            progress: { [weak self] phase in self?.installPhases[id] = phase }
+            progress: { [weak self] phase in
+                guard self?.installPhases[id] != nil else { return }
+                self?.installPhases[id] = phase
+            }
         )
-        installPhases[id] = nil
 
         switch result {
         case .success(let installed):
             rowMessages[id] = .installed("Updated to \(installed.installedVersion.description).")
-            await refresh(bundleID: id)
+            recentlyInstalled.insert(id)
+            await refresh(row.app)
         case .failure(let error):
             rowMessages[id] = .failed(error.localizedDescription)
             if error == .appManagementDenied { showsAppManagementHelp = true }
         }
     }
 
-    /// Re-reads one app from disk and checks it again.
-    private func refresh(bundleID: String) async {
-        let apps = await inventory.installedApps()
-        guard let app = apps.first(where: { $0.bundleID == bundleID }) else {
-            rows.removeAll { $0.id == bundleID }
+    /// Re-reads one app from disk and checks just that app again.
+    private func refresh(_ app: InstalledApp) async {
+        guard let installed = await inventory.installedApp(at: app.url) else {
+            rows.removeAll { $0.id == app.bundleID }
+            recentlyInstalled.remove(app.bundleID)
             return
         }
-        guard let fresh = await checker.check([app], preferences: preferences).first else { return }
+        guard let fresh = await checker.check([installed], preferences: preferences).first else { return }
         replace(fresh)
     }
 
@@ -256,7 +330,7 @@ public final class AppReleasesSession {
 
     public func unignore(_ bundleID: String) async {
         updatePreferences { $0.ignoredBundleIDs.remove(bundleID) }
-        await refresh(bundleID: bundleID)
+        if let app = rows.first(where: { $0.id == bundleID })?.app { await refresh(app) }
     }
 
     /// Hides this exact version; a newer release shows again.
@@ -267,7 +341,7 @@ public final class AppReleasesSession {
 
     public func unskip(_ bundleID: String) async {
         updatePreferences { $0.skippedVersions[bundleID] = nil }
-        await refresh(bundleID: bundleID)
+        if let app = rows.first(where: { $0.id == bundleID })?.app { await refresh(app) }
     }
 
     private func setStatus(_ status: AppReleaseStatus, for bundleID: String) {
