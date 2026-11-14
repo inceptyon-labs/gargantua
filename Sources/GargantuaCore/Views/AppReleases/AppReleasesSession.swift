@@ -198,6 +198,7 @@ public final class AppReleasesSession {
         }
         lastChecked = now()
         phase = .ready
+        storeAvailableCount()
         if isAutomatic {
             updatePreferences { $0.lastAutoCheck = lastChecked }
         }
@@ -324,6 +325,7 @@ public final class AppReleasesSession {
         guard let installed = await inventory.installedApp(at: app.url) else {
             rows.removeAll { $0.id == app.bundleID }
             recentlyInstalled.remove(app.bundleID)
+            storeAvailableCount()
             return
         }
         guard let fresh = await checker.check([installed], preferences: preferences).first else { return }
@@ -336,6 +338,15 @@ public final class AppReleasesSession {
         } else {
             rows.append(row)
         }
+        storeAvailableCount()
+    }
+
+    /// Keeps the count the sidebar badge and the background check read current.
+    private func storeAvailableCount() {
+        guard lastChecked != nil else { return }
+        var state = AppReleaseBackgroundState.stored(in: defaults)
+        state.availableCount = availableCount
+        state.store(in: defaults)
     }
 
     // MARK: - Ignore and skip

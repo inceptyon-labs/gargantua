@@ -191,6 +191,18 @@ struct AppReleasesSessionTests {
         #expect(fixture.installer.calls.first?.quitIfRunning == true)
     }
 
+    @Test("A completed check stores the available count for the background state")
+    func checkStoresAvailableCount() async {
+        let fixture = Self.makeFixture()
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults).availableCount == 0)
+
+        await fixture.session.check()
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults).availableCount == 1)
+
+        fixture.session.ignore(Self.app.bundleID)
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults).availableCount == 0)
+    }
+
     @Test("The automatic check runs only when enabled and due")
     func autoCheckGating() async {
         let start = Date(timeIntervalSince1970: 1_000_000)

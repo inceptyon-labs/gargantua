@@ -12,5 +12,16 @@ struct GargantuaSchedulerMain {
         } catch {
             FileHandle.standardError.write(Data("GargantuaScheduler failed: \(error.localizedDescription)\n".utf8))
         }
+
+        // Only inside the app bundle: outside it `.standard` would be this agent's own domain.
+        if let suite = AppReleaseBackgroundCheck.containingAppSuiteName() {
+            let check = AppReleaseBackgroundCheck(
+                suiteName: suite,
+                inventory: DefaultAppReleaseInventory(),
+                checker: AppReleaseCheckService.makeDefault(),
+                notifier: UserNotificationAppReleaseUpdateNotifier()
+            )
+            _ = await check.runIfDue()
+        }
     }
 }

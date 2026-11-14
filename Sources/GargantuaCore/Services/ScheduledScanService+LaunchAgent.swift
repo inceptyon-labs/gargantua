@@ -114,9 +114,13 @@ public final class ScheduledScanController: @unchecked Sendable {
 
     @discardableResult
     /// Registers or unregisters the launch agent to match the supplied configuration.
-    public func synchronize(configuration: ScheduledScanConfiguration) throws -> ScheduledScanAgentStatus {
+    /// The agent stays registered while either background scans or background app-update checks are on.
+    public func synchronize(
+        configuration: ScheduledScanConfiguration,
+        appUpdateChecks: Bool = false
+    ) throws -> ScheduledScanAgentStatus {
         let current = installer.status()
-        if configuration.isEnabled {
+        if configuration.isEnabled || appUpdateChecks {
             switch current {
             case .enabled, .requiresApproval:
                 return current

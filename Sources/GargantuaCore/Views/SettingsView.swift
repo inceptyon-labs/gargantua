@@ -110,12 +110,16 @@ public struct SettingsView: View {
             // never registered (older builds bailed on `.notFound`), register it
             // now so the status reflects reality instead of a stale pre-register state.
             let scheduledScanController = ScheduledScanController()
-            if let fetched = settings, fetched.autoScanEnabled {
+            let appUpdateChecks = AppReleasePreferences.stored().backgroundCheckEnabled
+            if let fetched = settings, fetched.autoScanEnabled || appUpdateChecks {
                 let configuration = ScheduledScanConfiguration(settings: fetched)
                 if configuration.canSynchronizeLaunchAgent {
                     scheduledScanAgentStatus =
-                        (try? scheduledScanController.synchronize(configuration: configuration))
-                            ?? scheduledScanController.status()
+                        (try? scheduledScanController.synchronize(
+                            configuration: configuration,
+                            appUpdateChecks: appUpdateChecks
+                        ))
+                        ?? scheduledScanController.status()
                 } else {
                     scheduledScanAgentStatus = scheduledScanController.status()
                 }

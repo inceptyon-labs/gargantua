@@ -207,6 +207,14 @@ extension SettingsView {
                     + "Off by default; nothing about your Mac is uploaded.",
                 isOn: appUpdatesAutoCheckBinding
             )
+
+            updateToggleRow(
+                icon: "bell.badge",
+                label: "Check in the background and notify me",
+                detail: "About once a day, even when Gargantua is closed. "
+                    + "Uses the same sources as a manual check and uploads nothing about your Mac.",
+                isOn: appUpdatesBackgroundCheckBinding
+            )
         }
     }
 
@@ -219,6 +227,31 @@ extension SettingsView {
                 var preferences = AppReleasePreferences.stored()
                 preferences.autoCheckEnabled = enabled
                 preferences.store()
+            }
+        )
+    }
+
+    private var appUpdatesBackgroundCheckBinding: Binding<Bool> {
+        Binding(
+            get: { _ = appReleasePreferencesData; return AppReleasePreferences.stored().backgroundCheckEnabled },
+            set: { enabled in
+                var preferences = AppReleasePreferences.stored()
+                preferences.backgroundCheckEnabled = enabled
+                preferences.store()
+                do {
+                    let configuration = settings.map(ScheduledScanConfiguration.init(settings:))
+                        ?? ScheduledScanConfiguration(isEnabled: false)
+                    let status = try ScheduledScanController().synchronize(
+                        configuration: configuration,
+                        appUpdateChecks: enabled
+                    )
+                    scheduledScanAgentStatus = status
+                    scheduledScanError = enabled && status == .requiresApproval
+                        ? "Allow Gargantua in System Settings > General > Login Items to run background checks."
+                        : nil
+                } catch {
+                    scheduledScanError = error.localizedDescription
+                }
             }
         )
     }
@@ -365,7 +398,10 @@ extension SettingsView {
             settings = fetched
             let configuration = ScheduledScanConfiguration(settings: fetched)
             if configuration.canSynchronizeLaunchAgent {
-                scheduledScanAgentStatus = try ScheduledScanController().synchronize(configuration: configuration)
+                scheduledScanAgentStatus = try ScheduledScanController().synchronize(
+                    configuration: configuration,
+                    appUpdateChecks: AppReleasePreferences.stored().backgroundCheckEnabled
+                )
                 scheduledScanError = nil
             } else {
                 scheduledScanError = "Custom schedule is not valid."
