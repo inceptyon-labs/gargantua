@@ -98,7 +98,8 @@ struct AppReleaseCheckServiceTests {
     @Test("a cask installed from another tap doesn't take its version from the public cask of the same name")
     func thirdPartyTapIgnoresPublicCask() async throws {
         let status = try await fooStatus(tap: "acme/tap")
-        if case .available(let candidate, _) = status { #expect(candidate.displayVersion != "3.0") }
+        // The public cask is dropped and no other source knows the app.
+        #expect(status == .untracked)
     }
 
     @Test("a cask installed from homebrew/cask still offers the public version, brew-managed")

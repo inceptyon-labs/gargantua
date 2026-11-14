@@ -467,11 +467,13 @@ public struct HomebrewCaskOwnership: Sendable {
     }
 
     /// Whether the public index's entry describes the owning cask: it must be
-    /// the index's match and installed from the public tap (or an unknown one).
+    /// the index's match and installed from the public tap (or an unknown one) in every copy.
     public func publicIndexDescribes(owner: String, indexToken: String?) -> Bool {
         guard owner == indexToken else { return false }
-        let tap = casks.first { $0.token == owner }?.tap?.lowercased()
-        return tap == nil || tap == "homebrew/cask"
+        return casks.filter { $0.token == owner }.allSatisfy { cask in
+            let tap = cask.tap?.lowercased()
+            return tap == nil || tap == "homebrew/cask"
+        }
     }
 
     /// A quit list naming only same-vendor helpers doesn't contradict the app

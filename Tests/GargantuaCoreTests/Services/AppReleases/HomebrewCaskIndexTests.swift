@@ -91,6 +91,17 @@ struct HomebrewCaskIndexTests {
         #expect(!ownership.publicIndexDescribes(owner: "third", indexToken: "third"))
         #expect(!ownership.publicIndexDescribes(owner: "pub", indexToken: "other"))
         #expect(!ownership.publicIndexDescribes(owner: "pub", indexToken: nil))
+
+        let publicFirst = HomebrewCaskOwnership(casks: [
+            HomebrewInstalledCask(token: "foo", tap: "homebrew/cask"),
+            HomebrewInstalledCask(token: "foo", tap: "acme/tap"),
+        ])
+        let thirdFirst = HomebrewCaskOwnership(casks: [
+            HomebrewInstalledCask(token: "foo", tap: "acme/tap"),
+            HomebrewInstalledCask(token: "foo", tap: "homebrew/cask"),
+        ])
+        #expect(!publicFirst.publicIndexDescribes(owner: "foo", indexToken: "foo"))
+        #expect(!thirdFirst.publicIndexDescribes(owner: "foo", indexToken: "foo"))
     }
 
     @Test("an installed cask owns the app it names, a quit list must include the app or its vendor, and unknown casks match by token")
