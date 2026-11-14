@@ -316,12 +316,14 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     }
 
     /// The UDIF trailer is checked first: a bzip2-compressed disk image also
-    /// starts with `BZh`. An encrypted image has no readable trailer; its
-    /// `encrcdsa` header is passed on to `hdiutil` to refuse.
+    /// starts with `BZh`. An encrypted image has no readable trailer and is
+    /// refused from its `encrcdsa` header: its key-derivation cost is set by
+    /// whoever built it, so attaching one can keep `diskimages-helper` busy
+    /// past any timeout.
     static func sniff(head: [UInt8], tail: [UInt8]?) throws(AppReleaseVerificationFailure) -> AppReleasePayloadKind {
         if head.starts(with: Array("xar!".utf8)) { throw .installerPackage }
+        if head.starts(with: Array("encrcdsa".utf8)) { throw .encryptedDiskImage }
         if let tail, tail.count == 512, tail.starts(with: Array("koly".utf8)) { return .dmg }
-        if head.starts(with: Array("encrcdsa".utf8)) { return .dmg }
         if head.starts(with: [0x50, 0x4B, 0x03, 0x04]) { return .zip }
         if head.starts(with: [0x1F, 0x8B])
             || head.starts(with: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])

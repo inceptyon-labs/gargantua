@@ -111,13 +111,14 @@ enum ProcessSpawner {
         _ fileActions: inout posix_spawn_file_actions_t?,
         pipes: SpawnPipes
     ) throws {
-        try check(posix_spawn_file_actions_addopen(&fileActions, STDIN_FILENO, "/dev/null", O_RDONLY, 0))
         try check(posix_spawn_file_actions_adddup2(&fileActions, pipes.outWrite, 1))
         try check(posix_spawn_file_actions_adddup2(&fileActions, pipes.errWrite, 2))
 
         for fd in [pipes.outWrite, pipes.errWrite, pipes.outRead, pipes.errRead] where fd != 1 && fd != 2 {
             try check(posix_spawn_file_actions_addclose(&fileActions, fd))
         }
+        // Last, so a pipe end that landed on fd 0 can't be closed over it.
+        try check(posix_spawn_file_actions_addopen(&fileActions, STDIN_FILENO, "/dev/null", O_RDONLY, 0))
     }
 
     /// Give the child an explicitly writable working directory instead of

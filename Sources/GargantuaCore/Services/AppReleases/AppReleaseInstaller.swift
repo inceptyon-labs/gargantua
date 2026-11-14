@@ -24,6 +24,7 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
     case installedAppChanged
     case download(String)
     case licenseAgreementRequired
+    case encryptedDiskImage
     case stillRunning
     case appManagementDenied
     case differentVolume
@@ -47,6 +48,9 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
         case .licenseAgreementRequired:
             "This update's disk image asks you to accept a license agreement. "
                 + "Download it from the developer and install it by hand."
+        case .encryptedDiskImage:
+            "This update comes as a password-protected disk image, so Gargantua can't install it. "
+                + "Get it from the vendor instead."
         case .stillRunning:
             "The app is still running. Quit it, then try again."
         case .appManagementDenied:
@@ -421,7 +425,11 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
     }
 
     static func installError(for failure: AppReleaseVerificationFailure) -> AppReleaseInstallError {
-        failure == .licenseAgreementRequired ? .licenseAgreementRequired : .verification(failure)
+        switch failure {
+        case .licenseAgreementRequired: .licenseAgreementRequired
+        case .encryptedDiskImage: .encryptedDiskImage
+        default: .verification(failure)
+        }
     }
 
     static func installError(for error: AppReleaseHTTPError) -> AppReleaseInstallError {
