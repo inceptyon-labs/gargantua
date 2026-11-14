@@ -6,7 +6,6 @@ private let caskLogger = Logger(subsystem: "com.gargantua.core", category: "Home
 /// The slice of a Homebrew cask the updater uses.
 public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
     public let token: String
-    public let name: String?
     public let version: String
     public let url: String?
     /// Nil when the cask declares `no_check`.
@@ -17,14 +16,11 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
     /// Bundle IDs from `uninstall: quit:`; a trailing `.*` is a prefix wildcard.
     public let quitBundleIDs: [String]
     public let hasPkg: Bool
-    public let autoUpdates: Bool
-    public let deprecated: Bool
     public let disabled: Bool
     public let hasVariations: Bool
 
     public init(
         token: String,
-        name: String? = nil,
         version: String,
         url: String? = nil,
         sha256: String? = nil,
@@ -32,13 +28,10 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         appNames: [String] = [],
         quitBundleIDs: [String] = [],
         hasPkg: Bool = false,
-        autoUpdates: Bool = false,
-        deprecated: Bool = false,
         disabled: Bool = false,
         hasVariations: Bool = false
     ) {
         self.token = token
-        self.name = name
         self.version = version
         self.url = url
         self.sha256 = sha256
@@ -46,8 +39,6 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         self.appNames = appNames
         self.quitBundleIDs = quitBundleIDs
         self.hasPkg = hasPkg
-        self.autoUpdates = autoUpdates
-        self.deprecated = deprecated
         self.disabled = disabled
         self.hasVariations = hasVariations
     }
@@ -86,7 +77,6 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         let sha = json["sha256"] as? String
         self.init(
             token: token,
-            name: (json["name"] as? [Any])?.compactMap { $0 as? String }.first,
             version: version,
             url: json["url"] as? String,
             sha256: sha == nil || sha == "no_check" || sha?.isEmpty == true ? nil : sha,
@@ -94,8 +84,6 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
             appNames: appNames,
             quitBundleIDs: quitIDs,
             hasPkg: hasPkg,
-            autoUpdates: json["auto_updates"] as? Bool ?? false,
-            deprecated: json["deprecated"] as? Bool ?? false,
             disabled: json["disabled"] as? Bool ?? false,
             hasVariations: !((json["variations"] as? [String: Any])?.isEmpty ?? true)
         )
@@ -130,7 +118,9 @@ public enum HomebrewCaskIndexError: Error, LocalizedError, Equatable {
     }
 }
 
-/// Homebrew's cask index with an on-disk cache of the slim entries.
+/// Homebrew's cask index with an on-disk cache of the slim entries. A cache
+/// written with fields this version no longer keeps still decodes, since
+/// `JSONDecoder` ignores unknown keys.
 public actor HomebrewCaskIndex {
     public static let indexURL = URL(string: "https://formulae.brew.sh/api/cask.json")!
 
@@ -251,11 +241,27 @@ public struct HomebrewCaskMatcher: Sendable {
     }
 }
 
+/// What the Homebrew source learned about the apps it matched to a cask.
+public struct HomebrewCaskLookup: Sendable, Equatable {
+    /// The release each matched cask offers, by bundle ID.
+    public var outcomes: [String: AppReleaseSourceOutcome] = [:]
+    /// The matched cask token for every matched app, whatever the cask's
+    /// version says, so a brew-installed app is recognized even when its
+    /// cask offers nothing usable (`version :latest`, a beta).
+    public var tokens: [String: String] = [:]
+
+    public init(outcomes: [String: AppReleaseSourceOutcome] = [:], tokens: [String: String] = [:]) {
+        self.outcomes = outcomes
+        self.tokens = tokens
+    }
+}
+
 /// Release lookups from Homebrew casks. Best effort: if the index can't load,
 /// every app is simply unknown to this source.
-public struct HomebrewCaskSource: AppReleaseSourcing {
-    public let kind = AppReleaseSourceKind.homebrewCask
-
+///
+/// Not an `AppReleaseSourcing`: the check service also needs the matched
+/// tokens to tell which apps brew manages, so it takes this source directly.
+public struct HomebrewCaskSource: Sendable {
     private let index: HomebrewCaskIndex
     private let hostIsArm64: Bool
 
@@ -270,21 +276,22 @@ public struct HomebrewCaskSource: AppReleaseSourcing {
     public static let currentHostIsArm64 = false
     #endif
 
-    public func lookUp(_ apps: [InstalledApp]) async -> [String: AppReleaseSourceOutcome] {
+    public func lookUp(_ apps: [InstalledApp]) async -> HomebrewCaskLookup {
         let entries: [HomebrewCaskEntry]
         do {
             entries = try await index.entries()
         } catch {
             caskLogger.notice("Homebrew cask source unavailable: \(error.localizedDescription, privacy: .public)")
-            return [:]
+            return HomebrewCaskLookup()
         }
         let matcher = HomebrewCaskMatcher(entries: entries)
-        var outcomes: [String: AppReleaseSourceOutcome] = [:]
+        var lookup = HomebrewCaskLookup()
         for app in apps {
             guard let entry = matcher.match(app) else { continue }
-            outcomes[app.bundleID] = outcome(for: entry)
+            lookup.outcomes[app.bundleID] = outcome(for: entry)
+            lookup.tokens[app.bundleID] = entry.token
         }
-        return outcomes
+        return lookup
     }
 
     private func outcome(for entry: HomebrewCaskEntry) -> AppReleaseSourceOutcome {
@@ -294,13 +301,11 @@ public struct HomebrewCaskSource: AppReleaseSourcing {
         // The part after a cask's comma is the vendor's build or a hash, not
         // the app's CFBundleVersion, so only the marketing version is compared.
         let version = AppReleaseVersion(short: parsed.short, build: nil)
-        let url = entry.url.flatMap(URL.init(string:))
         // Variations may swap the download per architecture; the top-level URL
         // is the arm64 one, so don't hand it to an Intel host.
-        let safe = url?.scheme?.lowercased() == "https" && !(entry.hasVariations && !hostIsArm64)
-        let downloadURL = safe ? url : nil
+        let downloadURL = entry.hasVariations && !hostIsArm64 ? nil : entry.url.flatMap(URL.init(string:))?.httpsOnly
         return .found(AppReleaseCandidate(
-            source: kind,
+            source: .homebrewCask,
             version: version,
             displayVersion: parsed.short,
             downloadURL: downloadURL,
@@ -309,5 +314,30 @@ public struct HomebrewCaskSource: AppReleaseSourcing {
             vendorURL: entry.homepage.flatMap(URL.init(string:)),
             caskToken: entry.token
         ))
+    }
+}
+
+/// Tokens of casks Homebrew has installed, from the Caskroom directories.
+public struct HomebrewCaskroomProbe: Sendable {
+    private let prefixes: [String]
+
+    public init(prefixes: [String] = ["/opt/homebrew", "/usr/local"]) {
+        self.prefixes = prefixes
+    }
+
+    public func installedTokens() -> Set<String> {
+        var tokens = Set<String>()
+        for prefix in prefixes {
+            let root = URL(fileURLWithPath: prefix).appendingPathComponent("Caskroom", isDirectory: true)
+            let entries = (try? FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            for entry in entries where (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+                tokens.insert(entry.lastPathComponent)
+            }
+        }
+        return tokens
     }
 }

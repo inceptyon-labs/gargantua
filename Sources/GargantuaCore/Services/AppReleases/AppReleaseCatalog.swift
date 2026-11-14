@@ -68,12 +68,12 @@ public struct AppReleaseCatalogEntry: Sendable, Equatable, Decodable {
         guard teamID.range(of: "^[A-Z0-9]{10}$", options: .regularExpression) != nil else {
             return "\(id): team_id must be a 10-character Team ID"
         }
-        if let homepage, homepage.scheme != "https" {
+        if let homepage, !homepage.isHTTPS {
             return "\(id): homepage must be https"
         }
         switch source.type {
         case .sparkle:
-            guard source.feedURL?.scheme == "https" else { return "\(id): feed_url must be https" }
+            guard source.feedURL?.isHTTPS == true else { return "\(id): feed_url must be https" }
         case .github:
             guard let repo = source.repo,
                   repo.range(of: "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", options: .regularExpression) != nil
@@ -167,18 +167,15 @@ public struct AppReleaseCatalogSource: AppReleaseSourcing {
     private let catalog: AppReleaseCatalog
     private let http: any AppReleaseHTTPFetching
     private let sparkle: SparkleAppcastSource
-    private let maxConcurrent: Int
 
     public init(
         catalog: AppReleaseCatalog = .bundled,
         http: any AppReleaseHTTPFetching,
-        sparkle: SparkleAppcastSource,
-        maxConcurrent: Int = 6
+        sparkle: SparkleAppcastSource
     ) {
         self.catalog = catalog
         self.http = http
         self.sparkle = sparkle
-        self.maxConcurrent = maxConcurrent
     }
 
     /// Bundle IDs the catalog covers, so the check service can keep the
@@ -187,26 +184,10 @@ public struct AppReleaseCatalogSource: AppReleaseSourcing {
 
     public func lookUp(_ apps: [InstalledApp]) async -> [String: AppReleaseSourceOutcome] {
         let work = apps.compactMap { app in catalog.entry(for: app.bundleID).map { (app.bundleID, $0) } }
-        guard !work.isEmpty else { return [:] }
-
-        return await withTaskGroup(of: (String, AppReleaseSourceOutcome).self) { group in
-            var results: [String: AppReleaseSourceOutcome] = [:]
-            var next = 0
-            while next < min(maxConcurrent, work.count) {
-                let (bundleID, entry) = work[next]
-                group.addTask { (bundleID, await self.outcome(for: entry)) }
-                next += 1
-            }
-            while let (bundleID, outcome) = await group.next() {
-                results[bundleID] = outcome
-                if next < work.count {
-                    let (nextID, entry) = work[next]
-                    group.addTask { (nextID, await self.outcome(for: entry)) }
-                    next += 1
-                }
-            }
-            return results
+        let outcomes = await boundedMap(work) { bundleID, entry in
+            (bundleID, await outcome(for: entry))
         }
+        return Dictionary(outcomes) { first, _ in first }
     }
 
     func outcome(for entry: AppReleaseCatalogEntry) async -> AppReleaseSourceOutcome {
@@ -220,25 +201,16 @@ public struct AppReleaseCatalogSource: AppReleaseSourcing {
     }
 
     /// Re-labels a feed result as a catalog candidate with the entry's Team
-    /// ID pin and install policy.
+    /// ID pin and install policy. The homepage fallback is https because
+    /// `validationError()` dropped any entry whose homepage isn't.
     static func pinned(_ outcome: AppReleaseSourceOutcome, to entry: AppReleaseCatalogEntry) -> AppReleaseSourceOutcome {
-        guard case .found(let candidate) = outcome else { return outcome }
-        return .found(AppReleaseCandidate(
-            source: .catalog,
-            version: candidate.version,
-            displayVersion: candidate.displayVersion,
-            downloadURL: candidate.downloadURL,
-            expectedLength: candidate.expectedLength,
-            edSignature: candidate.edSignature,
-            sha256: candidate.sha256,
-            minimumSystemVersion: candidate.minimumSystemVersion,
-            payloadKind: candidate.payloadKind,
-            releaseNotesURL: candidate.releaseNotesURL,
-            vendorURL: candidate.vendorURL ?? entry.homepage,
-            pinnedTeamID: entry.teamID,
-            allowsInPlaceInstall: entry.install == .auto,
-            isSparkleFeed: candidate.isSparkleFeed || entry.source.type == .sparkle
-        ))
+        guard case .found(var candidate) = outcome else { return outcome }
+        candidate.source = .catalog
+        candidate.vendorURL = candidate.vendorURL ?? entry.homepage
+        candidate.pinnedTeamID = entry.teamID
+        candidate.allowsInPlaceInstall = entry.install == .auto
+        candidate.isSparkleFeed = candidate.isSparkleFeed || entry.source.type == .sparkle
+        return .found(candidate)
     }
 
     // MARK: - GitHub Releases
@@ -278,7 +250,7 @@ public struct AppReleaseCatalogSource: AppReleaseSourcing {
             }
         }()
         let asset = matches.count == 1 ? matches.first : nil
-        let downloadURL = asset.flatMap { $0.browserDownloadURL.scheme == "https" ? $0.browserDownloadURL : nil }
+        let downloadURL = asset?.browserDownloadURL.httpsOnly
         let sha256 = asset?.digest.flatMap { digest -> String? in
             guard digest.hasPrefix("sha256:") else { return nil }
             return String(digest.dropFirst("sha256:".count))
@@ -291,7 +263,7 @@ public struct AppReleaseCatalogSource: AppReleaseSourcing {
             expectedLength: asset?.size,
             sha256: sha256,
             releaseNotesURL: release.htmlURL,
-            vendorURL: release.htmlURL ?? entry.homepage,
+            vendorURL: release.htmlURL?.httpsOnly ?? entry.homepage,
             pinnedTeamID: entry.teamID,
             allowsInPlaceInstall: entry.install == .auto,
             isSparkleFeed: false

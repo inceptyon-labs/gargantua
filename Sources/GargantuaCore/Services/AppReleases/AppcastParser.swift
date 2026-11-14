@@ -2,7 +2,6 @@ import Foundation
 
 /// One `<item>` of a Sparkle appcast.
 public struct AppcastItem: Sendable, Equatable {
-    public var title: String?
     /// `sparkle:shortVersionString`.
     public var shortVersion: String?
     /// `sparkle:version`.
@@ -11,7 +10,6 @@ public struct AppcastItem: Sendable, Equatable {
     public var maximumSystemVersion: String?
     /// `sparkle:channel`; stable items have none.
     public var channel: String?
-    public var isCriticalUpdate = false
     /// `sparkle:informationalUpdate` is present: nothing to download.
     public var isInformationalUpdate = false
     public var enclosureURL: String?
@@ -20,7 +18,6 @@ public struct AppcastItem: Sendable, Equatable {
     public var edSignature: String?
     public var releaseNotesURL: String?
     public var link: String?
-    public var pubDate: String?
 
     public init() {}
 }
@@ -85,17 +82,13 @@ public enum AppcastParser {
                 enclosureBuild = attrs["sparkle:version"]
             case "sparkle:informationalUpdate":
                 current?.isInformationalUpdate = true
-            case "sparkle:criticalUpdate":
-                current?.isCriticalUpdate = true
             default:
                 break
             }
         }
 
         let textFields: [String: WritableKeyPath<AppcastItem, String?>] = [
-            "title": \.title,
             "link": \.link,
-            "pubDate": \.pubDate,
             "sparkle:minimumSystemVersion": \.minimumSystemVersion,
             "sparkle:maximumSystemVersion": \.maximumSystemVersion,
             "sparkle:channel": \.channel,
@@ -115,8 +108,7 @@ public enum AppcastParser {
                 return
             }
             guard depthInDeltas == 0 else { return }
-            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let present: String? = value.isEmpty ? nil : value
+            let present = text.trimmedNonEmpty
             if name == "item" {
                 current?.shortVersion = childShort ?? enclosureShort
                 current?.version = childBuild ?? enclosureBuild

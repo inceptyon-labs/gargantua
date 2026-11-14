@@ -27,7 +27,7 @@ struct AppReleaseInstallerTests {
 
         var app: InstalledApp { Fixtures.installedApp(at: appURL) }
 
-        var installedVersion: AppReleaseVersion? { AppReleaseVerifier.bundleVersion(at: appURL) }
+        var installedVersion: AppReleaseVersion? { AppBundleFiles.bundleVersion(at: appURL) }
 
         var stagingLeftovers: [String] {
             (try? FileManager.default.contentsOfDirectory(atPath: stagingRoot.path)) ?? []
@@ -62,12 +62,13 @@ struct AppReleaseInstallerTests {
     private func install(
         _ installer: AppReleaseInstaller,
         sandbox: Sandbox,
+        app: InstalledApp? = nil,
         strategy: AppReleaseInstallStrategy = .inPlace,
         quitIfRunning: Bool = true,
         authorization: DestructiveActionAuthorization = .unchecked(.appUpdater)
     ) async -> Result<AppReleaseInstallResult, AppReleaseInstallError> {
         await installer.install(
-            app: sandbox.app,
+            app: app ?? sandbox.app,
             candidate: Fixtures.candidate(caskToken: "foo"),
             strategy: strategy,
             quitIfRunning: quitIfRunning,
@@ -107,7 +108,7 @@ struct AppReleaseInstallerTests {
             relaunched: false
         )))
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "2.0", build: "200"))
-        #expect(AppReleaseVerifier.bundleVersion(at: trashed) == AppReleaseVersion(short: "1.0", build: "100"))
+        #expect(AppBundleFiles.bundleVersion(at: trashed) == AppReleaseVersion(short: "1.0", build: "100"))
         #expect(audit.entries.map(\.status) == [.attempted, .completed])
         #expect(audit.entries.last?.files.first?.trashPath == trashed.path)
         #expect(sandbox.stagingLeftovers.isEmpty)
@@ -144,6 +145,66 @@ struct AppReleaseInstallerTests {
         #expect(trash.movedItems == [sandbox.appURL])
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
         #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.trashDirectory.path).isEmpty)
+    }
+
+    @Test("the download must be newer than the copy on disk now, not the one the check saw")
+    func staleSnapshotRefusesDowngrade() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        try Fixtures.writeBundle(at: sandbox.appURL, short: "2.2", build: "220")
+        let snapshot = Fixtures.installedApp(at: sandbox.appURL, short: "2.0", build: "200")
+        let audit = SpyUninstallAuditRecorder()
+        let trash = FakeTrashMover(trashDirectory: sandbox.trashDirectory)
+
+        let result = await install(
+            makeInstaller(
+                sandbox: sandbox,
+                verifier: StubAppReleaseVerifier.staging(short: "2.1", build: "210"),
+                audit: audit,
+                trash: trash
+            ),
+            sandbox: sandbox,
+            app: snapshot
+        )
+
+        #expect(result == .failure(.verification(.notNewer(staged: "2.1 (210)", installed: "2.2 (220)"))))
+        #expect(sandbox.installedVersion == AppReleaseVersion(short: "2.2", build: "220"))
+        #expect(trash.movedItems.isEmpty)
+        #expect(audit.entries.isEmpty)
+    }
+
+    @Test("a different bundle at the app's path stops the install before anything downloads")
+    func bundleIDChangedOnDisk() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        try Fixtures.writeBundle(at: sandbox.appURL, bundleID: "com.example.Other", short: "1.0", build: "100")
+        let http = RecordingPayloadHTTP()
+
+        let result = await install(makeInstaller(sandbox: sandbox, http: http), sandbox: sandbox)
+
+        #expect(result == .failure(.installedAppChanged))
+        #expect(http.downloadCount == 0)
+    }
+
+    @Test("a stale staging folder is swept; a fresh one and a non-UUID entry stay")
+    func sweepsStaleStaging() throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let old = sandbox.stagingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fresh = sandbox.stagingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let other = sandbox.stagingRoot.appendingPathComponent("keep-me", isDirectory: true)
+        for directory in [old, fresh, other] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("payload".utf8).write(to: directory.appendingPathComponent("payload"))
+        }
+        let dayAndAHourAgo = Date().addingTimeInterval(-25 * 60 * 60)
+        for directory in [old, other] {
+            try FileManager.default.setAttributes([.modificationDate: dayAndAHourAgo], ofItemAtPath: directory.path)
+        }
+
+        AppReleaseInstaller.sweepStaleStaging(in: sandbox.stagingRoot)
+
+        #expect(sandbox.stagingLeftovers.sorted() == [fresh.lastPathComponent, "keep-me"].sorted())
     }
 
     @Test("a running app is not quit without consent, and nothing changes")

@@ -6,43 +6,28 @@ public struct SparkleAppcastSource: AppReleaseSourcing {
 
     private let http: any AppReleaseHTTPFetching
     private let osVersion: OperatingSystemVersion
-    private let maxConcurrent: Int
 
     public init(
         http: any AppReleaseHTTPFetching,
-        osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
-        maxConcurrent: Int = 8
+        osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
     ) {
         self.http = http
         self.osVersion = osVersion
-        self.maxConcurrent = max(1, maxConcurrent)
     }
 
     public func lookUp(_ apps: [InstalledApp]) async -> [String: AppReleaseSourceOutcome] {
         let targets = apps.compactMap { app in app.sparkleFeedURL.map { (app.bundleID, $0) } }
-        var results: [String: AppReleaseSourceOutcome] = [:]
-        await withTaskGroup(of: (String, AppReleaseSourceOutcome).self) { group in
-            var next = 0
-            func enqueue() {
-                guard next < targets.count else { return }
-                let (bundleID, feed) = targets[next]
-                next += 1
-                group.addTask { (bundleID, await latestRelease(feedURL: feed)) }
-            }
-            for _ in 0..<maxConcurrent { enqueue() }
-            while let (bundleID, outcome) = await group.next() {
-                results[bundleID] = outcome
-                enqueue()
-            }
+        let outcomes = await boundedMap(targets) { bundleID, feed in
+            (bundleID, await latestRelease(feedURL: feed))
         }
-        return results
+        return Dictionary(outcomes) { first, _ in first }
     }
 
     public func latestRelease(feedURL: URL) async -> AppReleaseSourceOutcome {
         do {
             let response = try await http.get(feedURL, etag: nil)
             let items = try AppcastParser.parse(response.data)
-            return Self.bestCandidate(from: items, osVersion: osVersion, source: kind, baseURL: feedURL)
+            return Self.bestCandidate(from: items, osVersion: osVersion, baseURL: feedURL)
         } catch {
             return .failed(error.localizedDescription)
         }
@@ -52,7 +37,6 @@ public struct SparkleAppcastSource: AppReleaseSourcing {
     static func bestCandidate(
         from items: [AppcastItem],
         osVersion: OperatingSystemVersion,
-        source: AppReleaseSourceKind,
         baseURL: URL? = nil
     ) -> AppReleaseSourceOutcome {
         func resolve(_ raw: String?) -> URL? {
@@ -63,8 +47,10 @@ public struct SparkleAppcastSource: AppReleaseSourcing {
             guard item.channel == nil else { return nil }
             let version = AppReleaseVersion(short: item.shortVersion, build: item.version)
             guard version.short != nil || version.build != nil, !version.isPrerelease else { return nil }
-            if let minimum = item.minimumSystemVersion, osVersion.isOlder(than: minimum) { return nil }
-            if let maximum = item.maximumSystemVersion, osVersion.isNewer(than: maximum) { return nil }
+            // An unparsable bound doesn't exclude the item; install
+            // verification checks the bundle's own LSMinimumSystemVersion.
+            if let minimum = item.minimumSystemVersion, osVersion.meets(minimum: minimum) == false { return nil }
+            if let maximum = item.maximumSystemVersion, osVersion.meets(maximum: maximum) == false { return nil }
             return (item, version)
         }
         guard var best = eligible.first else { return .noEligibleRelease }
@@ -74,10 +60,9 @@ public struct SparkleAppcastSource: AppReleaseSourcing {
         let (item, version) = best
 
         let enclosure = resolve(item.enclosureURL)
-        let secure = enclosure?.scheme?.lowercased() == "https" ? enclosure : nil
-        let downloadURL = item.isInformationalUpdate ? nil : secure
+        let downloadURL = item.isInformationalUpdate ? nil : enclosure?.httpsOnly
         return .found(AppReleaseCandidate(
-            source: source,
+            source: .sparkle,
             version: version,
             downloadURL: downloadURL,
             expectedLength: item.enclosureLength,
@@ -88,16 +73,4 @@ public struct SparkleAppcastSource: AppReleaseSourcing {
             vendorURL: resolve(item.link)
         ))
     }
-}
-
-private extension OperatingSystemVersion {
-    var components: [Int] { [majorVersion, minorVersion, patchVersion] }
-
-    static func parse(_ string: String) -> [Int] {
-        let parts = string.split(separator: ".").prefix(3).map { Int($0) ?? 0 }
-        return parts + Array(repeating: 0, count: 3 - parts.count)
-    }
-
-    func isOlder(than string: String) -> Bool { components.lexicographicallyPrecedes(Self.parse(string)) }
-    func isNewer(than string: String) -> Bool { Self.parse(string).lexicographicallyPrecedes(components) }
 }

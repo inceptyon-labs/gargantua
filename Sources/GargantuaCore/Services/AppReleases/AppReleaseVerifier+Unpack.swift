@@ -3,7 +3,7 @@ import Foundation
 
 extension AppReleaseVerifier {
 
-    // MARK: - 6. Archive entries and extraction
+    // MARK: - Archive entries and extraction
 
     /// Rejects absolute paths, any `..` component, and empty names.
     static func validateArchiveEntries(_ paths: [String]) throws(AppReleaseVerificationFailure) {
@@ -66,15 +66,15 @@ extension AppReleaseVerifier {
             if Self.isLicenseAgreementRefusal(output) { throw .licenseAgreementRequired }
             throw .extractionFailed(Self.describeFailure("hdiutil", output))
         }
-        let mounted = Set(Self.mountedVolumes(under: mountRoot).compactMap(Self.realPath))
+        let mounted = Set(Self.mountedVolumes(under: mountRoot).compactMap(AppBundleFiles.realPath))
         let volumes = Self.mountPoints(fromAttachPlist: output.stdout).filter { mountPoint in
-            Self.realPath(mountPoint).map(mounted.contains) ?? false
+            AppBundleFiles.realPath(mountPoint).map(mounted.contains) ?? false
         }
         guard !volumes.isEmpty else { throw .extractionFailed("hdiutil reported no volume in the staging folder") }
 
-        let matches = volumes.flatMap { Self.matchingApps(in: URL(fileURLWithPath: $0), bundleID: bundleID) }
-        guard let source = matches.first else { throw .appNotFound }
-        guard matches.count == 1 else { throw .multipleMatchingApps }
+        let source = try Self.uniqueMatch(volumes.flatMap {
+            Self.matchingApps(in: URL(fileURLWithPath: $0), bundleID: bundleID)
+        })
         let target = destination.appendingPathComponent(source.lastPathComponent, isDirectory: true)
         try runChecked("/usr/bin/ditto", [source.path, target.path], timeout: 900)
     }

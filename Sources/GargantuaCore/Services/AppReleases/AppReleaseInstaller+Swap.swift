@@ -6,74 +6,44 @@ extension AppReleaseInstaller {
     /// rename, and the old bundle back if that rename fails. Returns where the
     /// old bundle landed in the Trash.
     @MainActor
-    func swapBundle(at target: URL, with staged: URL) async -> Result<URL?, AppReleaseInstallError> {
+    func swapBundle(at target: URL, with staged: URL) async throws(AppReleaseInstallError) -> URL? {
         let trashURL: URL?
         do {
             trashURL = try await trash.moveToTrash(target)
         } catch {
-            guard AppReleaseVerifier.fileType(atPath: target.path) != nil else {
-                return .failure(.restoreFailed(trashPath: "the Trash"))
+            guard AppBundleFiles.fileType(atPath: target.path) != nil else {
+                throw .restoreFailed(trashPath: "the Trash")
             }
-            return .failure(Self.isPermissionDenied(error) ? .appManagementDenied : .swapFailed(error.localizedDescription))
+            throw Self.isPermissionDenied(error) ? .appManagementDenied : .swapFailed(error.localizedDescription)
         }
 
         do {
             try FileManager.default.moveItem(at: staged, to: target)
-            return .success(trashURL)
+            return trashURL
         } catch {
             let moveError = error.localizedDescription
-            guard let trashURL else { return .failure(.restoreFailed(trashPath: "the Trash")) }
+            guard let trashURL else { throw .restoreFailed(trashPath: "the Trash") }
             do {
                 try FileManager.default.moveItem(at: trashURL, to: target)
             } catch {
                 appReleaseInstallLogger.error(
                     "Restoring \(target.path, privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
                 )
-                return .failure(.restoreFailed(trashPath: trashURL.path))
+                throw .restoreFailed(trashPath: trashURL.path)
             }
-            return .failure(.swapFailed(moveError))
+            throw .swapFailed(moveError)
         }
     }
 
-    /// Best-effort outcome line for a swap that failed, naming only what
-    /// actually moved, so a surviving `.attempted` line keeps meaning the
-    /// process died mid-operation.
-    @MainActor
-    func recordFailedSwap(id: UUID, appURL: URL, summary: String, error: AppReleaseInstallError) {
-        let files: [AuditFile]
-        let outcome: String
+    /// Outcome line for a swap that failed, naming only what actually moved.
+    static func failedSwapLine(summary: String, appURL: URL, error: AppReleaseInstallError) -> AppReleaseAuditLine {
         if case .restoreFailed(let trashPath) = error {
-            files = [AuditFile(path: appURL.path, size: 0, trashPath: trashPath)]
-            outcome = "failed; previous copy left in the Trash"
-        } else {
-            files = []
-            outcome = "failed; nothing changed"
+            return AppReleaseAuditLine(
+                command: "\(summary) (failed; previous copy left in the Trash)",
+                files: [AuditFile(path: appURL.path, size: 0, trashPath: trashPath)]
+            )
         }
-        try? auditRecorder.write(Self.pathAuditEntry(
-            id: id,
-            command: "\(summary) (\(outcome))",
-            files: files,
-            status: .completed
-        ))
-    }
-
-    static func pathAuditEntry(
-        id: UUID,
-        command: String,
-        files: [AuditFile],
-        status: AuditEntryStatus
-    ) -> AuditEntry {
-        AuditEntry(
-            id: id,
-            tool: auditTool,
-            command: command,
-            files: files,
-            safetyLevel: .review,
-            confirmationMethod: .summaryDialog,
-            cleanupMethod: .trash,
-            bytesFreed: 0,
-            status: status
-        )
+        return AppReleaseAuditLine(command: "\(summary) (failed; nothing changed)", files: [])
     }
 
     /// A refused Trash move is App Management (or plain file permissions)
@@ -132,5 +102,50 @@ extension AppReleaseInstaller {
                 )
             }
         }.value
+    }
+
+    /// Removes `root/<UUID>` staging folders older than `staleStagingAge`,
+    /// which a crash left behind. Entries whose names aren't UUIDs are never
+    /// touched, and a folder holding a mount point (a crash can leave a disk
+    /// image attached) is skipped: removing it would reach into the volume.
+    static func sweepStaleStaging(in root: URL, now: Date = Date()) {
+        var rootInfo = stat()
+        guard lstat(root.path, &rootInfo) == 0, rootInfo.st_mode & S_IFMT == S_IFDIR else { return }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        for name in names where UUID(uuidString: name) != nil {
+            let path = root.appendingPathComponent(name).path
+            var info = stat()
+            guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else { continue }
+            let modified = Date(timeIntervalSince1970: TimeInterval(info.st_mtimespec.tv_sec))
+            guard now.timeIntervalSince(modified) > staleStagingAge else { continue }
+            guard !containsMountPoint(path, device: rootInfo.st_dev) else {
+                appReleaseInstallLogger.notice("Left a stale staging folder with a mounted volume: \(name, privacy: .public)")
+                continue
+            }
+            do {
+                try FileManager.default.removeItem(atPath: path)
+            } catch {
+                appReleaseInstallLogger.error(
+                    "Couldn't remove stale staging folder: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
+    }
+
+    /// Whether `path` or any directory under it sits on a device other than
+    /// `device`. Symlinks aren't followed. Anything unreadable counts as a
+    /// mount point, so the tree is left alone.
+    static func containsMountPoint(_ path: String, device: dev_t) -> Bool {
+        var pending = [path]
+        while let directory = pending.popLast() {
+            var info = stat()
+            guard lstat(directory, &info) == 0, info.st_dev == device,
+                  let names = try? FileManager.default.contentsOfDirectory(atPath: directory)
+            else { return true }
+            for name in names where AppBundleFiles.fileType(atPath: directory + "/" + name) == S_IFDIR {
+                pending.append(directory + "/" + name)
+            }
+        }
+        return false
     }
 }

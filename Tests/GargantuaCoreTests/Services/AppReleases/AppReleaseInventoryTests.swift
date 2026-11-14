@@ -63,6 +63,21 @@ struct AppReleaseInventoryTests {
         #expect(!barApp.isMAS)
     }
 
+    @Test("one bundle is re-read on its own, with the same exclusions as a full scan")
+    func installedAppAtURL() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("inv-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo", "CFBundleShortVersionString": "3.1"])
+        let skipped = try makeApp(in: root, "Skip", plist: ["CFBundleIdentifier": "com.test.skip"])
+        let inventory = DefaultAppReleaseInventory(
+            enumerator: StubEnumerator(urls: []), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.skip"]
+        )
+
+        #expect(await inventory.installedApp(at: foo)?.shortVersion == "3.1")
+        #expect(await inventory.installedApp(at: skipped) == nil)
+        #expect(await inventory.installedApp(at: root.appendingPathComponent("Gone.app")) == nil)
+    }
+
     @Test func excludedBundleIDsAreDropped() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("inv-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }

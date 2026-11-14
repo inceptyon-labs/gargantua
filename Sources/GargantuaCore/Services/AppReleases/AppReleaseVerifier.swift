@@ -5,47 +5,47 @@ import Foundation
 /// Why a downloaded update was refused. Cases are grouped by the verification
 /// step that raises them, in pipeline order.
 public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
-    // 1. Source policy
+    // Source policy
     case missingDownloadURL
     case insecureDownloadURL(String)
     case installerPackage
     case notInPlaceStrategy
-    // 2. Length
+    // Length
     case unreadablePayload(String)
     case downloadTooLarge(limit: Int64)
     case lengthMismatch(expected: Int64, actual: Int64)
-    // 3. SHA-256
+    // SHA-256
     case checksumMismatch
-    // 4. EdDSA
+    // EdDSA
     case feedSignatureMissing
     case publicKeyMissing
     case malformedPublicKey
     case malformedSignature
     case signatureInvalid
-    // 5. Payload sniff
+    // Payload sniff
     case unrecognizedPayload
     case payloadKindMismatch(declared: AppReleasePayloadKind, actual: AppReleasePayloadKind)
-    // 6. Archive entries and extraction
+    // Archive entries and extraction
     case unsafeArchiveEntry(String)
     case extractionFailed(String)
     case licenseAgreementRequired
-    // 7. Locate the app
+    // Locating the app
     case appNotFound
     case multipleMatchingApps
-    // 8. Tree walk
+    // Tree walk
     case symlinkEscapesBundle(String)
     case specialFile(String)
     case missingInfoPlist
-    // 9. Code signature
+    // Code signature
     case invalidCodeSignature(String)
     case notDeveloperID
-    // 10. Team ID
+    // Team ID
     case installedTeamIDMissing
     case teamIDMismatch(expected: String, actual: String?)
     case pinnedTeamIDMismatch(expected: String, actual: String?)
-    // 11. Gatekeeper
+    // Gatekeeper
     case gatekeeperRejected(String)
-    // 12. Version
+    // Version
     case notNewer(staged: String, installed: String)
     case requiresNewerMacOS(String)
 
@@ -108,14 +108,16 @@ public struct AppReleaseStagedBundle: Sendable, Equatable {
 
 /// Verification seam for `AppReleaseInstaller`.
 public protocol AppReleaseVerifying: Sendable {
-    /// Step 1 alone, so nothing is downloaded for a candidate that can't pass.
+    /// The source-policy check alone, so nothing is downloaded for a
+    /// candidate that can't pass.
     func checkSourcePolicy(
         _ candidate: AppReleaseCandidate,
         strategy: AppReleaseInstallStrategy
     ) throws(AppReleaseVerificationFailure)
 
-    /// Steps 1–12 on a downloaded payload. Unpacks into `workDirectory` and
-    /// returns the staged bundle that passed every check.
+    /// Every check on a downloaded payload. Unpacks into `workDirectory` and
+    /// returns the staged bundle that passed them all. `app` carries the
+    /// version on disk now, which the staged bundle must be newer than.
     func verify(
         payload: URL,
         app: InstalledApp,
@@ -135,7 +137,6 @@ public protocol AppReleaseVerifying: Sendable {
 public struct AppReleaseVerifier: AppReleaseVerifying {
     public static let maxPayloadBytes: Int64 = 4 * 1_073_741_824
     static let maxListingBytes = 64 * 1_048_576
-    static let maxInfoPlistBytes = 4 * 1_048_576
 
     private let signer: any AppReleaseCodeSigning
     private let gatekeeper: any AppReleaseGatekeeperAssessing
@@ -186,19 +187,19 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         return AppReleaseStagedBundle(url: bundle, version: version)
     }
 
-    // MARK: - 1. Source policy
+    // MARK: - Source policy
 
     public func checkSourcePolicy(
         _ candidate: AppReleaseCandidate,
         strategy: AppReleaseInstallStrategy
     ) throws(AppReleaseVerificationFailure) {
         guard let url = candidate.downloadURL else { throw .missingDownloadURL }
-        guard url.scheme?.lowercased() == "https" else { throw .insecureDownloadURL(url.absoluteString) }
+        guard url.isHTTPS else { throw .insecureDownloadURL(url.absoluteString) }
         guard candidate.payloadKind.isInstallable else { throw .installerPackage }
         guard strategy == .inPlace, candidate.allowsInPlaceInstall else { throw .notInPlaceStrategy }
     }
 
-    // MARK: - 2. Length
+    // MARK: - Length
 
     /// A declared length of zero or less is treated as undeclared: appcasts
     /// often publish `length="0"`, and no real payload is empty.
@@ -215,7 +216,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         return size
     }
 
-    // MARK: - 3. SHA-256
+    // MARK: - SHA-256
 
     static func checkSHA256(of payload: URL, expected: String?) throws(AppReleaseVerificationFailure) {
         guard let expected else { return }
@@ -245,7 +246,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - 4. EdDSA
+    // MARK: - EdDSA
 
     /// Required when the item carries a signature, or when it comes from a
     /// Sparkle feed and the installed app publishes a key; skipped only when
@@ -255,8 +256,8 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         app: InstalledApp,
         candidate: AppReleaseCandidate
     ) throws(AppReleaseVerificationFailure) {
-        let key = nonEmpty(app.sparklePublicEDKey)
-        let signature = nonEmpty(candidate.edSignature)
+        let key = app.sparklePublicEDKey?.trimmedNonEmpty
+        let signature = candidate.edSignature?.trimmedNonEmpty
         guard signature != nil || (candidate.isSparkleFeed && key != nil) else { return }
         guard let key else { throw .publicKeyMissing }
         guard let signature else { throw .feedSignatureMissing }
@@ -277,7 +278,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         guard publicKey.isValidSignature(signatureData, for: bytes) else { throw .signatureInvalid }
     }
 
-    // MARK: - 5. Payload sniff
+    // MARK: - Payload sniff
 
     static func sniffPayload(
         _ payload: URL,
@@ -323,7 +324,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         return (head, tail)
     }
 
-    // MARK: - 9. Code signature
+    // MARK: - Code signature
 
     private func checkCodeSignature(_ bundle: URL) throws(AppReleaseVerificationFailure) -> AppReleaseSignatureReport {
         let report = signer.assess(bundleURL: bundle)
@@ -332,68 +333,48 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         return report
     }
 
-    // MARK: - 10. Team ID
+    // MARK: - Team ID
 
     static func checkTeamID(
         _ stagedTeamID: String?,
         app: InstalledApp,
         candidate: AppReleaseCandidate
     ) throws(AppReleaseVerificationFailure) {
-        guard let installed = nonEmpty(app.teamID) else { throw .installedTeamIDMissing }
+        guard let installed = app.teamID?.trimmedNonEmpty else { throw .installedTeamIDMissing }
         guard stagedTeamID == installed else { throw .teamIDMismatch(expected: installed, actual: stagedTeamID) }
         if let pinned = candidate.pinnedTeamID, pinned != stagedTeamID {
             throw .pinnedTeamIDMismatch(expected: pinned, actual: stagedTeamID)
         }
     }
 
-    // MARK: - 11. Gatekeeper
+    // MARK: - Gatekeeper
 
     private func checkGatekeeper(_ bundle: URL) throws(AppReleaseVerificationFailure) {
         let verdict = gatekeeper.assess(bundleURL: bundle)
         guard verdict.accepted else { throw .gatekeeperRejected(verdict.detail) }
     }
 
-    // MARK: - 12. Version
+    // MARK: - Version
 
     static func checkVersion(
         of bundle: URL,
         installed: InstalledApp,
         hostOSVersion: OperatingSystemVersion
     ) throws(AppReleaseVerificationFailure) -> AppReleaseVersion {
-        guard let plist = infoPlist(ofBundle: bundle) else { throw .missingInfoPlist }
-        let staged = AppReleaseVersion(
-            short: plist["CFBundleShortVersionString"] as? String,
-            build: plist["CFBundleVersion"] as? String
-        )
+        guard let plist = AppBundleFiles.infoPlist(ofBundle: bundle) else { throw .missingInfoPlist }
+        let staged = AppReleaseVersion(plist: plist)
         guard staged.isNewer(than: installed.version) else {
             throw .notNewer(staged: staged.description, installed: installed.version.description)
         }
         if let minimum = plist["LSMinimumSystemVersion"] {
             let text = (minimum as? String) ?? String(describing: minimum)
-            guard let required = osVersionComponents(text) else { throw .requiresNewerMacOS(text) }
-            let host = [hostOSVersion.majorVersion, hostOSVersion.minorVersion, hostOSVersion.patchVersion]
-            if host.lexicographicallyPrecedes(required) { throw .requiresNewerMacOS(text) }
+            // Unparsable fails closed, like an unmet minimum.
+            guard hostOSVersion.meets(minimum: text) == true else { throw .requiresNewerMacOS(text) }
         }
         return staged
     }
 
-    /// `10.13` → `[10, 13, 0]`; nil for anything that isn't 1–3 numeric parts.
-    static func osVersionComponents(_ text: String) -> [Int]? {
-        let parts = text.trimmingCharacters(in: .whitespaces).split(separator: ".", omittingEmptySubsequences: false)
-        guard (1 ... 3).contains(parts.count) else { return nil }
-        let numbers = parts.compactMap { Int($0) }
-        guard numbers.count == parts.count else { return nil }
-        return numbers + Array(repeating: 0, count: 3 - numbers.count)
-    }
-
     // MARK: - Helpers
-
-    private static func nonEmpty(_ value: String?) -> String? {
-        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-            return nil
-        }
-        return trimmed
-    }
 
     private static func errnoMessage() -> String {
         String(cString: strerror(errno))

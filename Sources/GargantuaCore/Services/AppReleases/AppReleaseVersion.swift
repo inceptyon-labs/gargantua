@@ -11,8 +11,16 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
     public let build: String?
 
     public init(short: String?, build: String?) {
-        self.short = Self.clean(short)
-        self.build = Self.clean(build)
+        self.short = short?.trimmedNonEmpty
+        self.build = build?.trimmedNonEmpty
+    }
+
+    /// `CFBundleShortVersionString` and `CFBundleVersion` from an Info.plist.
+    init(plist: [String: Any]) {
+        self.init(
+            short: plist["CFBundleShortVersionString"] as? String,
+            build: plist["CFBundleVersion"] as? String
+        )
     }
 
     public var description: String {
@@ -152,12 +160,5 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
             let order = leftTag.compare(rightTag, options: .numeric)
             return order
         }
-    }
-
-    private static func clean(_ value: String?) -> String? {
-        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-            return nil
-        }
-        return trimmed
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 import GargantuaLicensing
 import os
@@ -17,6 +18,9 @@ public enum AppReleaseInstallPhase: Sendable, Equatable {
 
 public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
     case verification(AppReleaseVerificationFailure)
+    /// The bundle at the app's path is gone, unreadable, or now carries a
+    /// different bundle ID than the one checked.
+    case installedAppChanged
     case download(String)
     case licenseAgreementRequired
     case stillRunning
@@ -35,6 +39,8 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
         case .verification(let failure):
             "The update didn't pass verification, so nothing was changed. "
                 + (failure.errorDescription ?? "")
+        case .installedAppChanged:
+            "The app changed on disk since Gargantua checked it, so nothing was changed. Check for updates again."
         case .download(let message):
             "The update couldn't be downloaded: \(message)"
         case .licenseAgreementRequired:
@@ -152,6 +158,8 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
     static let brewTimeout: TimeInterval = 900
     static let brewCaptureBytes = 1_048_576
     static let auditTool = "app-updater"
+    /// A staging folder this old was left by a crash, not an install in flight.
+    static let staleStagingAge: TimeInterval = 24 * 60 * 60
 
     let http: any AppReleaseHTTPFetching
     let verifier: any AppReleaseVerifying
@@ -162,41 +170,15 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
     let brewLocator: @Sendable () -> URL?
     let trash: any TrashMoving
 
-    public convenience init(
+    /// Also starts a background sweep of staging folders a crash left behind.
+    init(
         http: any AppReleaseHTTPFetching = DefaultAppReleaseHTTPClient(),
-        signer: any AppReleaseCodeSigning = StrictAppReleaseCodeSigner(),
-        gatekeeper: any AppReleaseGatekeeperAssessing = SpctlAppReleaseGatekeeper(),
+        verifier: any AppReleaseVerifying = AppReleaseVerifier(),
         runner: any ProcessRunner = DefaultProcessRunner(),
         quitter: any AppReleaseAppQuitting = WorkspaceAppReleaseQuitter(),
         auditRecorder: any UninstallAuditRecording = AuditWriter(),
         stagingRoot: URL = AppReleaseInstaller.defaultStagingRoot(),
-        hostOSVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
-        brewLocator: @escaping @Sendable () -> URL? = { DeveloperToolBinaryResolver().resolve(.homebrew) }
-    ) {
-        self.init(
-            http: http,
-            verifier: AppReleaseVerifier(
-                signer: signer,
-                gatekeeper: gatekeeper,
-                runner: runner,
-                hostOSVersion: hostOSVersion
-            ),
-            runner: runner,
-            quitter: quitter,
-            auditRecorder: auditRecorder,
-            stagingRoot: stagingRoot,
-            brewLocator: brewLocator
-        )
-    }
-
-    init(
-        http: any AppReleaseHTTPFetching,
-        verifier: any AppReleaseVerifying,
-        runner: any ProcessRunner,
-        quitter: any AppReleaseAppQuitting,
-        auditRecorder: any UninstallAuditRecording,
-        stagingRoot: URL,
-        brewLocator: @escaping @Sendable () -> URL?,
+        brewLocator: @escaping @Sendable () -> URL? = { DeveloperToolBinaryResolver().resolve(.homebrew) },
         trash: any TrashMoving = FallbackTrashMover()
     ) {
         self.http = http
@@ -207,17 +189,13 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         self.stagingRoot = stagingRoot
         self.brewLocator = brewLocator
         self.trash = trash
+        Task.detached(priority: .utility) { Self.sweepStaleStaging(in: stagingRoot) }
     }
 
-    /// `~/Library/Caches/com.gargantua.core/AppReleases/staging`.
+    /// `~/Library/Caches/com.gargantua.core/AppReleases/staging`, beside the
+    /// Homebrew cask cache.
     public static func defaultStagingRoot() -> URL {
-        let caches = (try? FileManager.default.url(
-            for: .cachesDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: false
-        )) ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches", isDirectory: true)
-        return caches.appendingPathComponent("com.gargantua.core/AppReleases/staging", isDirectory: true)
+        HomebrewCaskIndex.defaultCacheDirectory().appendingPathComponent("staging", isDirectory: true)
     }
 
     @MainActor
@@ -234,116 +212,130 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         // the surface can be asserted, as `UninstallExecutor` does.
         guard authorization.surface == .appUpdater else { return .failure(.wrongAuthorization) }
 
-        switch strategy {
-        case .openAppStore, .linkOnly:
-            return .failure(.notInstallable)
-        case .brewUpgrade(let token):
-            return await upgradeWithHomebrew(
-                app: app,
-                candidate: candidate,
-                token: token,
-                quitIfRunning: quitIfRunning,
-                progress: progress
-            )
-        case .inPlace:
-            do throws(AppReleaseVerificationFailure) {
-                try verifier.checkSourcePolicy(candidate, strategy: strategy)
-            } catch {
-                return .failure(Self.installError(for: error))
+        do throws(AppReleaseInstallError) {
+            switch strategy {
+            case .openAppStore, .linkOnly:
+                throw .notInstallable
+            case .brewUpgrade(let token):
+                return try await .success(upgradeWithHomebrew(
+                    app: app,
+                    candidate: candidate,
+                    token: token,
+                    quitIfRunning: quitIfRunning,
+                    progress: progress
+                ))
+            case .inPlace:
+                return try await .success(installInPlace(
+                    app: app,
+                    candidate: candidate,
+                    quitIfRunning: quitIfRunning,
+                    progress: progress
+                ))
             }
-            // Replacing a symlink would leave its target behind and put a
-            // second copy at the link's path.
-            guard AppReleaseVerifier.fileType(atPath: app.url.path) == S_IFDIR else { return .failure(.notInstallable) }
-            // Checked again after verification; this one only saves a download
-            // that couldn't be installed.
-            if !quitIfRunning, quitter.isRunning(bundleID: app.bundleID) { return .failure(.stillRunning) }
-            let workDirectory: URL
-            do {
-                workDirectory = try Self.makeStagingDirectory(in: stagingRoot)
-            } catch {
-                return .failure(.download("Couldn't create a download folder: \(error.localizedDescription)"))
-            }
-            let result = await installInPlace(
-                app: app,
-                candidate: candidate,
-                quitIfRunning: quitIfRunning,
-                workDirectory: workDirectory,
-                progress: progress
-            )
-            await Self.removeStagingDirectory(workDirectory)
-            return result
+        } catch {
+            return .failure(error)
         }
     }
 
     // MARK: - In-place install
 
+    /// Checks that cost nothing run first; the staging folder is removed
+    /// however the install ends.
     @MainActor
     private func installInPlace(
+        app snapshot: InstalledApp,
+        candidate: AppReleaseCandidate,
+        quitIfRunning: Bool,
+        progress: @escaping @MainActor @Sendable (AppReleaseInstallPhase) -> Void
+    ) async throws(AppReleaseInstallError) -> AppReleaseInstallResult {
+        do throws(AppReleaseVerificationFailure) {
+            try verifier.checkSourcePolicy(candidate, strategy: .inPlace)
+        } catch {
+            throw Self.installError(for: error)
+        }
+        // Replacing a symlink would leave its target behind and put a
+        // second copy at the link's path.
+        guard AppBundleFiles.fileType(atPath: snapshot.url.path) == S_IFDIR else { throw .notInstallable }
+        let app = try Self.onDisk(snapshot)
+        // Checked again after verification; this one only saves a download
+        // that couldn't be installed.
+        if !quitIfRunning, quitter.isRunning(bundleID: app.bundleID) { throw .stillRunning }
+
+        let workDirectory: URL
+        do {
+            workDirectory = try Self.makeStagingDirectory(in: stagingRoot)
+        } catch {
+            throw .download("Couldn't create a download folder: \(error.localizedDescription)")
+        }
+        let result: Result<AppReleaseInstallResult, AppReleaseInstallError>
+        do throws(AppReleaseInstallError) {
+            result = try await .success(stageAndSwap(
+                app: app,
+                candidate: candidate,
+                quitIfRunning: quitIfRunning,
+                workDirectory: workDirectory,
+                progress: progress
+            ))
+        } catch {
+            result = .failure(error)
+        }
+        await Self.removeStagingDirectory(workDirectory)
+        return try result.get()
+    }
+
+    /// The installed bundle as it is on disk now. The check's snapshot can be
+    /// stale (the app may have updated itself since), and verifying against
+    /// it would let an older download replace a newer install.
+    static func onDisk(_ app: InstalledApp) throws(AppReleaseInstallError) -> InstalledApp {
+        guard let plist = AppBundleFiles.infoPlist(ofBundle: app.url),
+              plist["CFBundleIdentifier"] as? String == app.bundleID
+        else { throw .installedAppChanged }
+        let version = AppReleaseVersion(plist: plist)
+        var current = app
+        current.shortVersion = version.short
+        current.buildVersion = version.build
+        return current
+    }
+
+    /// Every check runs before the running app is touched.
+    @MainActor
+    private func stageAndSwap(
         app: InstalledApp,
         candidate: AppReleaseCandidate,
         quitIfRunning: Bool,
         workDirectory: URL,
         progress: @escaping @MainActor @Sendable (AppReleaseInstallPhase) -> Void
-    ) async -> Result<AppReleaseInstallResult, AppReleaseInstallError> {
-        guard Self.onSameVolume(workDirectory, app.url) else { return .failure(.differentVolume) }
+    ) async throws(AppReleaseInstallError) -> AppReleaseInstallResult {
+        guard Self.onSameVolume(workDirectory, app.url) else { throw .differentVolume }
+        let staged = try await downloadAndVerify(app: app, candidate: candidate, workDirectory: workDirectory, progress: progress)
 
-        // Every check runs before the running app is touched.
-        let staged: AppReleaseStagedBundle
-        switch await downloadAndVerify(app: app, candidate: candidate, workDirectory: workDirectory, progress: progress) {
-        case .success(let bundle): staged = bundle
-        case .failure(let error): return .failure(error)
-        }
-
-        let wasRunning: Bool
-        switch await quitIfNeeded(bundleID: app.bundleID, consent: quitIfRunning, progress: progress) {
-        case .success(let quit): wasRunning = quit
-        case .failure(let error): return .failure(error)
-        }
-
-        let auditID = UUID()
         let summary = "update \(app.bundleID) \(app.version) → \(staged.version)"
-        do {
-            try auditRecorder.write(Self.pathAuditEntry(
-                id: auditID,
-                command: summary,
-                files: [AuditFile(path: app.url.path, size: 0)],
-                status: .attempted
-            ))
-        } catch {
-            appReleaseInstallLogger.error("App update intent audit failed: \(error.localizedDescription, privacy: .public)")
-            await relaunchIfNeeded(app.url, wasRunning: wasRunning)
-            return .failure(.swapFailed("The audit log couldn't record the update, so nothing was changed."))
+        let plan = AppReleaseAuditPlan(
+            summary: summary,
+            brewArguments: nil,
+            unrecorded: .swapFailed("The audit log couldn't record the update, so nothing was changed."),
+            phase: .installing
+        )
+        let (trashURL, relaunched) = try await runAudited(
+            app: app,
+            quitIfRunning: quitIfRunning,
+            plan: plan,
+            progress: progress
+        ) { () async throws(AppReleaseStepFailure) -> (URL?, AppReleaseAuditLine) in
+            do throws(AppReleaseInstallError) {
+                let trashURL = try await swapBundle(at: app.url, with: staged.url)
+                let files = [AuditFile(path: app.url.path, size: 0, trashPath: trashURL?.path)]
+                return (trashURL, AppReleaseAuditLine(command: summary, files: files))
+            } catch {
+                throw AppReleaseStepFailure(error: error, line: Self.failedSwapLine(summary: summary, appURL: app.url, error: error))
+            }
         }
 
-        progress(.installing)
-        let trashURL: URL?
-        switch await swapBundle(at: app.url, with: staged.url) {
-        case .success(let url):
-            trashURL = url
-        case .failure(let error):
-            recordFailedSwap(id: auditID, appURL: app.url, summary: summary, error: error)
-            await relaunchIfNeeded(app.url, wasRunning: wasRunning)
-            return .failure(error)
-        }
-
-        do {
-            try auditRecorder.write(Self.pathAuditEntry(
-                id: auditID,
-                command: summary,
-                files: [AuditFile(path: app.url.path, size: 0, trashPath: trashURL?.path)],
-                status: .completed
-            ))
-        } catch {
-            appReleaseInstallLogger.error("App update audit failed after swap: \(error.localizedDescription, privacy: .public)")
-        }
-
-        let installedVersion = AppReleaseVerifier.bundleVersion(at: app.url) ?? staged.version
-        let relaunched = await relaunchAfterSuccess(app.url, wasRunning: wasRunning, progress: progress)
-        return .success(AppReleaseInstallResult(
-            installedVersion: installedVersion,
+        return AppReleaseInstallResult(
+            installedVersion: AppBundleFiles.bundleVersion(at: app.url) ?? staged.version,
             previousCopyInTrash: trashURL,
             relaunched: relaunched
-        ))
+        )
     }
 
     @MainActor
@@ -352,72 +344,32 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         candidate: AppReleaseCandidate,
         workDirectory: URL,
         progress: @escaping @MainActor @Sendable (AppReleaseInstallPhase) -> Void
-    ) async -> Result<AppReleaseStagedBundle, AppReleaseInstallError> {
-        guard let downloadURL = candidate.downloadURL else { return .failure(.verification(.missingDownloadURL)) }
+    ) async throws(AppReleaseInstallError) -> AppReleaseStagedBundle {
+        guard let downloadURL = candidate.downloadURL else { throw .verification(.missingDownloadURL) }
 
         progress(.downloading)
         let payload = workDirectory.appendingPathComponent("payload")
         do {
             _ = try await http.download(downloadURL, to: payload, maxBytes: AppReleaseVerifier.maxPayloadBytes)
         } catch let error as AppReleaseHTTPError {
-            return .failure(Self.installError(for: error))
+            throw Self.installError(for: error)
         } catch {
-            return .failure(.download(error.localizedDescription))
+            throw .download(error.localizedDescription)
         }
 
         progress(.verifying)
         let verifier = verifier
-        return await Task.detached(priority: .userInitiated) {
-            () -> Result<AppReleaseStagedBundle, AppReleaseInstallError> in
-            do throws(AppReleaseVerificationFailure) {
-                return try .success(verifier.verify(
+        return try await Task.detached(priority: .userInitiated) {
+            Result { () throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle in
+                try verifier.verify(
                     payload: payload,
                     app: app,
                     candidate: candidate,
                     strategy: .inPlace,
                     workDirectory: workDirectory
-                ))
-            } catch {
-                return .failure(Self.installError(for: error))
+                )
             }
-        }.value
-    }
-
-    // MARK: - Shared steps
-
-    /// Returns whether the app was running and has now quit.
-    @MainActor
-    func quitIfNeeded(
-        bundleID: String,
-        consent: Bool,
-        progress: @escaping @MainActor @Sendable (AppReleaseInstallPhase) -> Void
-    ) async -> Result<Bool, AppReleaseInstallError> {
-        guard quitter.isRunning(bundleID: bundleID) else { return .success(false) }
-        guard consent else { return .failure(.stillRunning) }
-        progress(.quitting)
-        guard await quitter.quitGracefully(bundleID: bundleID, timeout: Self.quitTimeout) else {
-            return .failure(.stillRunning)
-        }
-        return .success(true)
-    }
-
-    @MainActor
-    func relaunchAfterSuccess(
-        _ url: URL,
-        wasRunning: Bool,
-        progress: @escaping @MainActor @Sendable (AppReleaseInstallPhase) -> Void
-    ) async -> Bool {
-        guard wasRunning else { return false }
-        progress(.relaunching)
-        return await quitter.relaunch(at: url)
-    }
-
-    /// Reopens an app this flow quit when the install stopped short, as long
-    /// as a bundle is still at its path.
-    @MainActor
-    func relaunchIfNeeded(_ url: URL, wasRunning: Bool) async {
-        guard wasRunning, AppReleaseVerifier.fileType(atPath: url.path) != nil else { return }
-        _ = await quitter.relaunch(at: url)
+        }.value.mapError(Self.installError(for:)).get()
     }
 
     static func installError(for failure: AppReleaseVerificationFailure) -> AppReleaseInstallError {

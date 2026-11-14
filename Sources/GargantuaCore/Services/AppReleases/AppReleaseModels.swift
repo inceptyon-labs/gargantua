@@ -11,10 +11,11 @@ public struct InstalledApp: Sendable, Equatable, Identifiable {
     public let bundleID: String
     public let name: String
     public let url: URL
-    /// `CFBundleShortVersionString`.
-    public let shortVersion: String?
+    /// `CFBundleShortVersionString`. Settable so the installer can carry the
+    /// version on disk now instead of the one seen at check time.
+    public internal(set) var shortVersion: String?
     /// `CFBundleVersion`.
-    public let buildVersion: String?
+    public internal(set) var buildVersion: String?
     /// Developer ID team from the code signature, read without validation.
     public let teamID: String?
     /// `SUFeedURL`, only when it is an https URL.
@@ -67,7 +68,9 @@ public struct InstalledApp: Sendable, Equatable, Identifiable {
     }
 }
 
-/// Where a release candidate came from.
+/// Where a release candidate came from. Declaration order is the tie-break
+/// order when two sources offer the same version: curated catalog first, then
+/// the vendor's own signed feed, then Homebrew.
 public enum AppReleaseSourceKind: String, Sendable, Equatable, Codable, CaseIterable {
     case catalog
     case sparkle
@@ -83,15 +86,8 @@ public enum AppReleaseSourceKind: String, Sendable, Equatable, Codable, CaseIter
         }
     }
 
-    /// Tie-break order when two sources offer the same version: curated
-    /// catalog first, then the vendor's own signed feed, then Homebrew.
     var tieBreakRank: Int {
-        switch self {
-        case .catalog: 0
-        case .sparkle: 1
-        case .homebrewCask: 2
-        case .appStore: 3
-        }
+        Self.allCases.firstIndex(of: self) ?? Self.allCases.count
     }
 }
 
@@ -135,8 +131,11 @@ public enum AppReleasePayloadKind: String, Sendable, Equatable {
 }
 
 /// One newer-or-equal release offered by a source for an installed app.
+///
+/// The fields a curated catalog entry overrides are settable inside the
+/// module, so pinning edits a copy instead of rebuilding every field.
 public struct AppReleaseCandidate: Sendable, Equatable {
-    public let source: AppReleaseSourceKind
+    public internal(set) var source: AppReleaseSourceKind
     public let version: AppReleaseVersion
     /// Human-facing version string, e.g. `2.4.1 (812)`.
     public let displayVersion: String
@@ -150,18 +149,20 @@ public struct AppReleaseCandidate: Sendable, Equatable {
     public let sha256: String?
     public let minimumSystemVersion: String?
     public let payloadKind: AppReleasePayloadKind
+    /// https only; `init` drops any other scheme, since feeds control it.
     public let releaseNotesURL: URL?
     /// Vendor homepage, App Store page, or release page for link-only rows.
-    public let vendorURL: URL?
+    /// https only, like `releaseNotesURL`.
+    public internal(set) var vendorURL: URL?
     /// Homebrew cask token, set when `source == .homebrewCask`.
     public let caskToken: String?
     /// Team ID the new bundle must carry, pinned by a catalog entry.
-    public let pinnedTeamID: String?
+    public internal(set) var pinnedTeamID: String?
     /// False when a catalog entry marks the app link-only.
-    public let allowsInPlaceInstall: Bool
+    public internal(set) var allowsInPlaceInstall: Bool
     /// The release came from a Sparkle appcast (the app's own or a catalog
     /// feed), so an installed `SUPublicEDKey` requires an EdDSA signature.
-    public let isSparkleFeed: Bool
+    public internal(set) var isSparkleFeed: Bool
 
     public var isPrerelease: Bool { version.isPrerelease }
 
@@ -191,8 +192,8 @@ public struct AppReleaseCandidate: Sendable, Equatable {
         self.sha256 = sha256?.lowercased()
         self.minimumSystemVersion = minimumSystemVersion
         self.payloadKind = payloadKind ?? AppReleasePayloadKind.infer(url: downloadURL)
-        self.releaseNotesURL = releaseNotesURL
-        self.vendorURL = vendorURL
+        self.releaseNotesURL = releaseNotesURL?.httpsOnly
+        self.vendorURL = vendorURL?.httpsOnly
         self.caskToken = caskToken
         self.pinnedTeamID = pinnedTeamID
         self.allowsInPlaceInstall = allowsInPlaceInstall

@@ -13,7 +13,7 @@ struct AppcastParserTests {
 
     private func best(_ xml: String, base: URL? = nil) throws -> AppReleaseSourceOutcome {
         SparkleAppcastSource.bestCandidate(
-            from: try AppcastParser.parse(feed(xml)), osVersion: host, source: .sparkle, baseURL: base
+            from: try AppcastParser.parse(feed(xml)), osVersion: host, baseURL: base
         )
     }
 

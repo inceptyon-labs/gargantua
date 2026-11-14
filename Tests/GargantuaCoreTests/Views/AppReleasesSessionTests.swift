@@ -12,6 +12,7 @@ struct AppReleasesSessionTests {
     struct StubInventory: AppReleaseInventoryProviding {
         let apps: [InstalledApp]
         func installedApps() async -> [InstalledApp] { apps }
+        func installedApp(at url: URL) async -> InstalledApp? { apps.first { $0.url == url } }
     }
 
     struct StubChecker: AppReleaseChecking {

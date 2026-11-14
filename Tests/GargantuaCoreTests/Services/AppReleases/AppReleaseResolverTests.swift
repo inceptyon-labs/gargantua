@@ -151,12 +151,4 @@ struct AppReleaseResolverTests {
         #expect(resolve(app(), [.sparkle: .failed("offline")]) == .failed("offline"))
         #expect(resolve(app(), [.sparkle: .failed("offline"), .homebrewCask: .noEligibleRelease]) == .upToDate(latest: nil))
     }
-
-    @Test("brew-managed token requires a Caskroom install of the matched cask")
-    func brewManagedToken() {
-        let found = AppReleaseSourceOutcome.found(candidate(.homebrewCask, "2.0", token: "example"))
-        #expect(AppReleaseCheckService.brewManagedToken(found, caskroom: ["example"]) == "example")
-        #expect(AppReleaseCheckService.brewManagedToken(found, caskroom: ["other"]) == nil)
-        #expect(AppReleaseCheckService.brewManagedToken(.noEligibleRelease, caskroom: ["example"]) == nil)
-    }
 }

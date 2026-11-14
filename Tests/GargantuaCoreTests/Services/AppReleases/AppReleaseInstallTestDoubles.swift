@@ -97,9 +97,9 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
 }
 
 /// Skips real verification and stages whatever `stage` builds in the work
-/// directory.
+/// directory for the app it was handed.
 struct StubAppReleaseVerifier: AppReleaseVerifying {
-    let stage: @Sendable (URL) -> Result<AppReleaseStagedBundle, AppReleaseVerificationFailure>
+    let stage: @Sendable (URL, InstalledApp) -> Result<AppReleaseStagedBundle, AppReleaseVerificationFailure>
 
     func checkSourcePolicy(
         _: AppReleaseCandidate,
@@ -108,30 +108,39 @@ struct StubAppReleaseVerifier: AppReleaseVerifying {
 
     func verify(
         payload _: URL,
-        app _: InstalledApp,
+        app: InstalledApp,
         candidate _: AppReleaseCandidate,
         strategy _: AppReleaseInstallStrategy,
         workDirectory: URL
     ) throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle {
-        try stage(workDirectory).get()
+        try stage(workDirectory, app).get()
     }
 
-    /// Stages a real bundle at `<work>/extracted/Foo.app` with the given version.
+    /// Stages a real bundle at `<work>/extracted/Foo.app` with the given
+    /// version, then applies the real version check against the app it was
+    /// handed.
     static func staging(short: String, build: String) -> StubAppReleaseVerifier {
-        StubAppReleaseVerifier { workDirectory in
+        StubAppReleaseVerifier { workDirectory, app in
             let url = workDirectory.appendingPathComponent("extracted/Foo.app", isDirectory: true)
             do {
                 try AppReleaseInstallFixtures.writeBundle(at: url, short: short, build: build)
             } catch {
                 return .failure(.extractionFailed(error.localizedDescription))
             }
-            return .success(AppReleaseStagedBundle(url: url, version: AppReleaseVersion(short: short, build: build)))
+            return Result { () throws(AppReleaseVerificationFailure) in
+                let version = try AppReleaseVerifier.checkVersion(
+                    of: url,
+                    installed: app,
+                    hostOSVersion: ProcessInfo.processInfo.operatingSystemVersion
+                )
+                return AppReleaseStagedBundle(url: url, version: version)
+            }
         }
     }
 
     /// Reports a staged bundle that doesn't exist, so the swap's move fails.
     static func stagingMissingBundle() -> StubAppReleaseVerifier {
-        StubAppReleaseVerifier { workDirectory in
+        StubAppReleaseVerifier { workDirectory, _ in
             .success(AppReleaseStagedBundle(
                 url: workDirectory.appendingPathComponent("extracted/Missing.app", isDirectory: true),
                 version: AppReleaseVersion(short: "2.0", build: "200")

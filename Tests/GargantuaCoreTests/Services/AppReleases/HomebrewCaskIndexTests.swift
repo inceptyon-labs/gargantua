@@ -22,7 +22,6 @@ struct HomebrewCaskIndexTests {
         #expect(all.map(\.token) == ["plain", "renamed", "multi"])
         #expect(all[0].appNames == ["Plain.app"])
         #expect(all[0].sha256 == "abc")
-        #expect(all[0].autoUpdates)
         #expect(all[1].appNames == ["Renamed.app"])
         #expect(all[1].quitBundleIDs == ["com.test.renamed"])
         #expect(all[1].sha256 == nil)
@@ -105,7 +104,7 @@ struct HomebrewCaskIndexTests {
             shortVersion: "2.0",
             buildVersion: "1"
         )
-        guard case .found(let candidate) = await source.lookUp([app])[app.bundleID] else {
+        guard case .found(let candidate) = await source.lookUp([app]).outcomes[app.bundleID] else {
             Issue.record("expected the renamed cask to match")
             return
         }
