@@ -37,6 +37,7 @@ final class WindowState: ObservableObject {
     let devPurgeSession = DevArtifactSessionState()
     let backgroundItemsSession = BackgroundItemsSession()
     let processInventorySession = ProcessInventorySession()
+    let appReleasesSession = AppReleasesView.makeDefaultSession()
     let agentRunControllers = AgentRunControllers()
 
     /// The sidebar pane on screen; memory-pressure relief leaves it alone.
@@ -123,6 +124,9 @@ final class WindowState: ObservableObject {
         }
         if visiblePane != "diskExplorer", diskExplorerState.phase == .results {
             diskExplorerState.exitToIdle()
+        }
+        if visiblePane != "appUpdates" {
+            appReleasesSession.releaseResults()
         }
     }
 }

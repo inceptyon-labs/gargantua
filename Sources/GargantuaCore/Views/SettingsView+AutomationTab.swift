@@ -193,6 +193,17 @@ extension SettingsView {
         }
     }
 
+    // MARK: - App Updates Section
+
+    var appUpdatesSection: some View {
+        SettingsSectionContainer(
+            "App updates",
+            subtitle: "Find newer versions of the apps you have installed."
+        ) {
+            AppUpdatesAutoCheckRow()
+        }
+    }
+
     // MARK: - Helpers
 
     private func schedulingPickerRow<Control: View>(
@@ -355,6 +366,37 @@ extension SettingsView {
         } catch {
             launchAtLoginEnabled = previous
             launchAtLoginError = error.localizedDescription
+        }
+    }
+}
+
+/// The daily-check toggle. Reads and writes the App Updater's stored
+/// preferences directly; the update page's session re-reads them each time.
+private struct AppUpdatesAutoCheckRow: View {
+    @State private var isOn = AppReleasePreferences.stored().autoCheckEnabled
+
+    var body: some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "arrow.down.app", size: 16)
+
+            SettingsRowText(
+                title: "Check for app updates daily",
+                detail: "Contacts each app's update feed, Homebrew and the App Store. "
+                    + "Off by default; nothing about your Mac is uploaded."
+            )
+
+            Spacer()
+
+            Toggle("Check for app updates daily", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help(isOn ? "Disable daily app update checks" : "Enable daily app update checks")
+        }
+        .padding(.vertical, GargantuaSpacing.space1)
+        .onChange(of: isOn) { _, enabled in
+            var preferences = AppReleasePreferences.stored()
+            preferences.autoCheckEnabled = enabled
+            preferences.store()
         }
     }
 }

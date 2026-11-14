@@ -25,7 +25,21 @@ extension MainContentView {
     var devPurgeSession: DevArtifactSessionState { window.devPurgeSession }
     var backgroundItemsSession: BackgroundItemsSession { window.backgroundItemsSession }
     var processInventorySession: ProcessInventorySession { window.processInventorySession }
+    var appReleasesSession: AppReleasesSession { window.appReleasesSession }
     var agentRunControllers: AgentRunControllers { window.agentRunControllers }
+
+    /// The opt-in daily app-update check: once at launch, then hourly while the
+    /// window is open. A no-op unless the Settings toggle is on and a day has
+    /// passed. Runs from the root view so it doesn't depend on the App Updates
+    /// pane being visible.
+    func runAutoUpdateCheckLoop() async {
+        while !Task.isCancelled {
+            if hasCompletedOnboarding {
+                await appReleasesSession.checkIfAutoDue()
+            }
+            try? await Task.sleep(for: .seconds(3600))
+        }
+    }
 
     /// Closure handed to scan views so their per-row Explain button can kick
     /// off an explanation without knowing about the controller.

@@ -73,6 +73,7 @@ extension SidebarSection {
                 SidebarItem(id: "profiles", label: "Profiles", icon: "person.2"),
                 SidebarItem(id: "rules", label: "Rules", icon: "doc.text"),
                 SidebarItem(id: "settings", label: "Settings", icon: "gearshape"),
+                SidebarItem(id: "appUpdates", label: "App Updates", icon: "arrow.down.app"),
             ]
         ),
     ]

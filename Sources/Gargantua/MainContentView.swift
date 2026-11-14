@@ -128,6 +128,8 @@ struct MainContentView: View {
                                     onTriage: triageHandler,
                                     preSelectedPlistPath: $pendingBackgroundItemPlistPath
                                 )
+                            case "appUpdates":
+                                AppReleasesView(session: appReleasesSession)
                             case "processInventory":
                                 ProcessInventoryView(
                                     session: processInventorySession,
@@ -239,6 +241,7 @@ struct MainContentView: View {
             )
         }
         .focusedSceneValue(\.keyboardCheatSheet, $showKeyboardCheatSheet)
+        .task { await runAutoUpdateCheckLoop() }
     }
 
     private var activationOutcome: LicenseActivationLinkModel.Outcome? {

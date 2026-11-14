@@ -176,6 +176,7 @@ public struct SettingsView: View {
             appearanceSection
             schedulingSection
             menuBarSection
+            appUpdatesSection
         case .network:
             MCPTransportSettingsSection()
         case .storage:
