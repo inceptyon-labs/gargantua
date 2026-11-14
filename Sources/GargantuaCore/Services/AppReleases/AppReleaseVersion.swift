@@ -108,7 +108,7 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
         var index = text.startIndex
         while index < text.endIndex {
             let digitsEnd = text[index...].firstIndex { !$0.isNumber } ?? text.endIndex
-            guard digitsEnd > index, let value = Int(text[index..<digitsEnd]) else { break }
+            guard digitsEnd > index, let value = Int(text[index ..< digitsEnd]) else { break }
             numeric.append(value)
             index = digitsEnd
             guard index < text.endIndex, text[index] == ".",
@@ -141,7 +141,7 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
         guard !left.numeric.isEmpty, !right.numeric.isEmpty else { return .orderedSame }
 
         let count = max(left.numeric.count, right.numeric.count)
-        for position in 0..<count {
+        for position in 0 ..< count {
             let leftValue = position < left.numeric.count ? left.numeric[position] : 0
             let rightValue = position < right.numeric.count ? right.numeric[position] : 0
             if leftValue != rightValue {

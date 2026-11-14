@@ -13,7 +13,7 @@ struct MASLookupSourceTests {
             }
             return AppReleaseHTTPResponse(statusCode: 200, data: Data("{\"results\":[\(results.joined(separator: ","))]}".utf8))
         }
-        var apps = (0..<5).map { InstalledApp(bundleID: "com.test.a\($0)", name: "A\($0)", url: URL(fileURLWithPath: "/A\($0).app"), isMAS: true) }
+        var apps = (0 ..< 5).map { InstalledApp(bundleID: "com.test.a\($0)", name: "A\($0)", url: URL(fileURLWithPath: "/A\($0).app"), isMAS: true) }
         apps.append(InstalledApp(bundleID: "com.test.missing", name: "M", url: URL(fileURLWithPath: "/M.app"), isMAS: true))
         apps.append(InstalledApp(bundleID: "com.test.notmas", name: "N", url: URL(fileURLWithPath: "/N.app")))
 

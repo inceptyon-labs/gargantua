@@ -284,9 +284,9 @@ public struct HomebrewCaskSource: Sendable {
     }
 
     #if arch(arm64)
-    public static let currentHostIsArm64 = true
+        public static let currentHostIsArm64 = true
     #else
-    public static let currentHostIsArm64 = false
+        public static let currentHostIsArm64 = false
     #endif
 
     public func lookUp(_ apps: [InstalledApp]) async -> HomebrewCaskLookup {

@@ -279,6 +279,7 @@ struct AppReleaseInstallerTests {
 }
 
 extension AppReleaseInstallerTests {
+
     // MARK: - Homebrew
 
     @Test("brew upgrade that leaves a newer bundle on disk succeeds and is audited as a command")

@@ -117,7 +117,7 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
     /// into the requirement language.
     static func teamRequirement(for teamID: String) -> String? {
         let isWellFormed = teamID.utf8.count == 10
-            && teamID.utf8.allSatisfy { (0x41...0x5A).contains($0) || (0x30...0x39).contains($0) }
+            && teamID.utf8.allSatisfy { (0x41 ... 0x5A).contains($0) || (0x30 ... 0x39).contains($0) }
         guard isWellFormed else { return nil }
         return "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
     }

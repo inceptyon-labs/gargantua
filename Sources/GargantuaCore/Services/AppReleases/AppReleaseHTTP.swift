@@ -127,7 +127,7 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
         let notModified = request.value(forHTTPHeaderField: "If-None-Match") != nil && head.isNotModified
         // A refused redirect surfaces as its 3xx response; report it as the
         // insecure hop it was.
-        if (300...399).contains(http.statusCode), !notModified {
+        if (300 ... 399).contains(http.statusCode), !notModified {
             throw .insecureURL(http.value(forHTTPHeaderField: "Location") ?? requested)
         }
         // The task delegate already refuses every non-https hop, but `session`
@@ -136,7 +136,7 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
         if let final = http.url, !final.isHTTPS {
             throw .insecureURL(final.absoluteString)
         }
-        guard notModified || (200...299).contains(http.statusCode) else { throw .status(http.statusCode) }
+        guard notModified || (200 ... 299).contains(http.statusCode) else { throw .status(http.statusCode) }
         return head
     }
 }

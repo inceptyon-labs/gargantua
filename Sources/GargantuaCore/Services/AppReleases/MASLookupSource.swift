@@ -33,7 +33,7 @@ public struct MASLookupSource: AppReleaseSourcing {
     public func lookUp(_ apps: [InstalledApp]) async -> [String: AppReleaseSourceOutcome] {
         var seen = Set<String>()
         let ids = apps.filter(\.isMAS).map(\.bundleID).filter { seen.insert($0).inserted }
-        let batches = stride(from: 0, to: ids.count, by: batchSize).map { Array(ids[$0..<min($0 + batchSize, ids.count)]) }
+        let batches = stride(from: 0, to: ids.count, by: batchSize).map { Array(ids[$0 ..< min($0 + batchSize, ids.count)]) }
         var outcomes: [String: AppReleaseSourceOutcome] = [:]
         await withTaskGroup(of: [String: AppReleaseSourceOutcome].self) { group in
             for batch in batches {

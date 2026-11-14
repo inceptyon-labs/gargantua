@@ -19,7 +19,7 @@ func boundedMap<Item: Sendable, Output: Sendable>(
             next += 1
             group.addTask { (index, await transform(item)) }
         }
-        for _ in 0..<max(1, limit) { enqueue() }
+        for _ in 0 ..< max(1, limit) { enqueue() }
         while let (index, output) = await group.next() {
             results[index] = output
             enqueue()
@@ -32,7 +32,7 @@ extension OperatingSystemVersion {
     /// `10.13` → `[10, 13, 0]`; nil for anything that isn't 1–3 numeric parts.
     static func components(_ text: String) -> [Int]? {
         let parts = text.trimmingCharacters(in: .whitespaces).split(separator: ".", omittingEmptySubsequences: false)
-        guard (1...3).contains(parts.count) else { return nil }
+        guard (1 ... 3).contains(parts.count) else { return nil }
         let numbers = parts.compactMap { Int($0) }
         guard numbers.count == parts.count else { return nil }
         return numbers + Array(repeating: 0, count: 3 - numbers.count)

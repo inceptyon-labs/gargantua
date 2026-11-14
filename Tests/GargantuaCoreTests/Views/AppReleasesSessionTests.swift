@@ -219,7 +219,7 @@ struct AppReleasesSessionTests {
 
     /// Polls until the condition holds; the session's tasks are private.
     static func waitUntil(_ condition: () async -> Bool) async {
-        for _ in 0..<500 where !(await condition()) {
+        for _ in 0 ..< 500 where !(await condition()) {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }

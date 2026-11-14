@@ -258,6 +258,7 @@ struct AppReleaseVerifierTests {
 }
 
 extension AppReleaseVerifierTests {
+
     // MARK: - Disk space
 
     @Test("unpacking needs four times the payload free, and at least 1 GiB")
