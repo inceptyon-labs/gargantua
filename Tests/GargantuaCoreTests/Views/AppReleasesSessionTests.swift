@@ -60,6 +60,52 @@ struct AppReleasesSessionTests {
         }
     }
 
+    /// Resolves ignored and skipped like the real checker, and holds only the
+    /// numbered calls in `gatedCalls`.
+    actor PreferenceChecker: AppReleaseChecking {
+        private(set) var calls = 0
+        private let gatedCalls: Set<Int>
+        private let gate = CheckGate()
+
+        private let candidate: AppReleaseCandidate
+
+        init(gatedCalls: Set<Int>, candidate: AppReleaseCandidate) {
+            self.gatedCalls = gatedCalls
+            self.candidate = candidate
+        }
+
+        func open() async { await gate.open() }
+
+        func check(_ apps: [InstalledApp], preferences: AppReleasePreferences) async -> [AppReleaseRow] {
+            calls += 1
+            let call = calls
+            if gatedCalls.contains(call) { await gate.wait() }
+            return apps.map { app in
+                if preferences.ignoredBundleIDs.contains(app.bundleID) {
+                    return AppReleaseRow(app: app, status: .ignored)
+                }
+                if let skipped = preferences.skippedVersions[app.bundleID] {
+                    return AppReleaseRow(app: app, status: .skippedVersion(skipped))
+                }
+                return AppReleaseRow(app: app, status: .available(candidate, .inPlace))
+            }
+        }
+    }
+
+    static func makePreferenceSession(gatedCalls: Set<Int>) -> (AppReleasesSession, PreferenceChecker) {
+        let checker = PreferenceChecker(gatedCalls: gatedCalls, candidate: candidate)
+        let session = AppReleasesSession(
+            inventory: StubInventory(apps: [app]),
+            checker: checker,
+            installer: StubInstaller(),
+            authorize: { .success(.unchecked($0)) },
+            quitter: StubQuitter(running: false),
+            now: Date.init,
+            defaults: makeDefaults()
+        )
+        return (session, checker)
+    }
+
     struct StubQuitter: AppReleaseAppQuitting {
         let running: Bool
         func isRunning(bundleID: String) -> Bool { running }
@@ -368,6 +414,67 @@ struct AppReleasesSessionTests {
         await Self.waitUntil { !fixture.session.isChecking }
 
         #expect(fixture.session.rows.first?.status == .skippedVersion("2.0"))
+    }
+
+    @Test("An app un-ignored while a check runs is resolved again when the check finishes")
+    func unignoreDuringCheckSurvives() async {
+        let (session, checker) = Self.makePreferenceSession(gatedCalls: [2])
+        await session.check()
+        session.ignore(Self.app.bundleID)
+
+        session.startCheck()
+        await Self.waitUntil { await checker.calls == 2 }
+        await session.unignore(Self.app.bundleID)
+        await checker.open()
+        await Self.waitUntil { !session.isChecking }
+
+        #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
+    }
+
+    @Test("A version un-skipped while a check runs is resolved again when the check finishes")
+    func unskipDuringCheckSurvives() async {
+        let (session, checker) = Self.makePreferenceSession(gatedCalls: [2])
+        await session.check()
+        session.skip(version: Self.candidate.displayVersion, for: Self.app.bundleID)
+
+        session.startCheck()
+        await Self.waitUntil { await checker.calls == 2 }
+        await session.unskip(Self.app.bundleID)
+        await checker.open()
+        await Self.waitUntil { !session.isChecking }
+
+        #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
+    }
+
+    @Test("An app ignored while its re-check runs stays ignored")
+    func ignoreDuringRefreshSurvives() async {
+        let (session, checker) = Self.makePreferenceSession(gatedCalls: [2])
+        await session.check()
+        session.skip(version: Self.candidate.displayVersion, for: Self.app.bundleID)
+
+        let unskip = Task { await session.unskip(Self.app.bundleID) }
+        await Self.waitUntil { await checker.calls == 2 }
+        session.ignore(Self.app.bundleID)
+        await checker.open()
+        await unskip.value
+
+        #expect(session.rows.first?.status == .ignored)
+    }
+
+    @Test("An app un-ignored while its re-check runs is not left ignored")
+    func unignoreDuringRefreshSurvives() async {
+        let (session, checker) = Self.makePreferenceSession(gatedCalls: [2])
+        await session.check()
+        session.ignore(Self.app.bundleID)
+
+        // Unskipping an ignored app re-checks it while it is still ignored.
+        let unskip = Task { await session.unskip(Self.app.bundleID) }
+        await Self.waitUntil { await checker.calls == 2 }
+        await session.unignore(Self.app.bundleID)
+        await checker.open()
+        await unskip.value
+
+        #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
     }
 
     @Test("An install that comes back with a warning shows it on the row")

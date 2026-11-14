@@ -205,6 +205,20 @@ public final class AppReleasesSession {
         if isAutomatic {
             updatePreferences { $0.lastAutoCheck = lastChecked }
         }
+        // An ignore or skip lifted while the check ran left stale rows.
+        let staleApps = rows
+            .filter { !protected.contains($0.id) && Self.isStale($0, under: preferences) }
+            .map(\.app)
+        for app in staleApps { await refresh(app) }
+    }
+
+    /// True when the row shows an ignore or skip the preferences no longer hold.
+    static func isStale(_ row: AppReleaseRow, under preferences: AppReleasePreferences) -> Bool {
+        switch row.status {
+        case .ignored: return !preferences.ignoredBundleIDs.contains(row.id)
+        case .skippedVersion(let version): return preferences.skippedVersions[row.id] != version
+        default: return false
+        }
     }
 
     /// The checker saw the preferences from when the check started; an app
@@ -331,7 +345,13 @@ public final class AppReleasesSession {
             storeAvailableCount()
             return
         }
-        guard let fresh = await checker.check([installed], preferences: preferences).first else { return }
+        guard var fresh = await checker.check([installed], preferences: preferences).first else { return }
+        fresh = Self.applying(preferences, to: fresh)
+        if Self.isStale(fresh, under: preferences) {
+            // A relaxation landed while the check ran; resolve once more.
+            guard let again = await checker.check([installed], preferences: preferences).first else { return }
+            fresh = Self.applying(preferences, to: again)
+        }
         replace(fresh)
     }
 
