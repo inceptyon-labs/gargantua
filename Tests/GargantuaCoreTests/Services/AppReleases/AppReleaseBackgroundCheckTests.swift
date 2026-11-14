@@ -13,6 +13,7 @@ struct AppReleaseBackgroundCheckTests {
 
     /// Reports the given versions as available; counts calls.
     final class StubChecker: AppReleaseChecking {
+        // swiftlint:disable:next nesting
         private struct State { var calls = 0; var versions: [String: String] }
         private let state: OSAllocatedUnfairLock<State>
         var calls: Int { state.withLock { $0.calls } }
@@ -59,7 +60,6 @@ struct AppReleaseBackgroundCheckTests {
         InstalledApp(bundleID: id, name: name, url: URL(fileURLWithPath: "/Applications/\(name).app"), shortVersion: "1.0")
     }
 
-    // swiftlint:disable:next nesting
     struct Harness {
         let suite = "test-\(UUID().uuidString)"
         let defaults: UserDefaults
