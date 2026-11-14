@@ -71,7 +71,7 @@ struct AppReleaseRowView: View {
     // MARK: - Pieces
 
     private static let versionWidth: CGFloat = 150
-    private static let sourceWidth: CGFloat = 170
+    private static let sourceWidth: CGFloat = 144
     private static let actionWidth: CGFloat = 112
     private static let barHeight: CGFloat = 3
     private static let spinnerSize: CGFloat = 16
