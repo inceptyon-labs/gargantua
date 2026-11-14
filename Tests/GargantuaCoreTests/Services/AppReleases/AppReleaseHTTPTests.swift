@@ -27,7 +27,9 @@ struct AppReleaseHTTPTests {
 
     @Test("a body that passes the limit stops the transfer instead of finishing it")
     func streamingStopsAtLimit() async throws {
-        let script = ChunkedURLProtocol.Script(headers: [:], chunkSize: 400, chunkCount: 50)
+        // 2000 chunks at 5 ms is ten seconds of body: finishing it would take
+        // a cancel delayed far past any loaded CI machine's scheduling jitter.
+        let script = ChunkedURLProtocol.Script(headers: [:], chunkSize: 400, chunkCount: 2000)
         let (session, key) = ChunkedURLProtocol.makeSession(script)
         defer { ChunkedURLProtocol.remove(key) }
         let file = destination()

@@ -253,7 +253,9 @@ struct AppReleasesSessionTests {
         let defaults = Self.makeDefaults()
         AppReleasePreferences(autoCheckEnabled: true).store(in: defaults)
         let fixture = Self.makeFixture(
-            steps: [(0.3, .available(Self.candidate, .inPlace))],
+            // Long enough that the manual Check lands while the automatic
+            // one is still running, even on a loaded machine.
+            steps: [(2, .available(Self.candidate, .inPlace))],
             defaults: defaults
         )
 
@@ -272,7 +274,9 @@ struct AppReleasesSessionTests {
         let defaults = Self.makeDefaults()
         AppReleasePreferences(autoCheckEnabled: true).store(in: defaults)
         let fixture = Self.makeFixture(
-            steps: [(0.3, .available(Self.candidate, .inPlace))],
+            // Long enough that only Cancel can end it; cancellation wakes the
+            // sleep early, so a passing run stays fast.
+            steps: [(30, .available(Self.candidate, .inPlace))],
             defaults: defaults
         )
 
