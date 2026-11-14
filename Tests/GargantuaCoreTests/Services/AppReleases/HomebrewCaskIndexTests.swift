@@ -93,6 +93,7 @@ struct HomebrewCaskIndexTests {
         #expect(ownership.owner(of: app("Qux.app", "com.example.Qux"), indexToken: nil) == "qux")
         #expect(ownership.owner(of: app("Qux.app", "org.other.Qux"), indexToken: nil) == nil)
         #expect(ownership.owner(of: app("Qux.app", "qux"), indexToken: nil) == nil)
+        #expect(ownership.owner(of: app("Qux.app", "com.example"), indexToken: nil) == nil)
         #expect(ownership.owner(of: app("Wild.app", "com.example.Anything"), indexToken: nil) == "wild")
         #expect(ownership.owner(of: app("bar.app", "any.id"), indexToken: nil) == "bar")
         #expect(ownership.owner(of: app("Baz App.app", "any.id"), indexToken: nil) == "baz-app")
