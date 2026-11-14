@@ -246,16 +246,22 @@ extension SettingsView {
                 var preferences = AppReleasePreferences.stored()
                 preferences.backgroundCheckEnabled = enabled
                 preferences.store()
+                if settings == nil { settings = try? persistence.fetchSettings() }
+                // Without settings the scan configuration is unknown; only
+                // register, so a failed load can't switch off scheduled scans.
+                guard let settings else {
+                    if enabled { registerWithoutSettings(preferences: &preferences) }
+                    return
+                }
                 do {
-                    let configuration = settings.map(ScheduledScanConfiguration.init(settings:))
-                        ?? ScheduledScanConfiguration(isEnabled: false)
+                    let configuration = ScheduledScanConfiguration(settings: settings)
                     let status = try ScheduledScanController().synchronize(
                         configuration: configuration,
                         appUpdateChecks: enabled
                     )
                     scheduledScanAgentStatus = status
                     appUpdatesBackgroundNotice = enabled && status == .requiresApproval
-                        ? "Allow Gargantua in System Settings > General > Login Items to run background checks."
+                        ? Self.loginItemsApprovalNote
                         : nil
                 } catch {
                     preferences.backgroundCheckEnabled = false
@@ -265,6 +271,24 @@ extension SettingsView {
             }
         )
     }
+
+    private func registerWithoutSettings(preferences: inout AppReleasePreferences) {
+        do {
+            let status = try ScheduledScanController().synchronize(
+                configuration: ScheduledScanConfiguration(isEnabled: false),
+                appUpdateChecks: true
+            )
+            scheduledScanAgentStatus = status
+            appUpdatesBackgroundNotice = status == .requiresApproval ? Self.loginItemsApprovalNote : nil
+        } catch {
+            preferences.backgroundCheckEnabled = false
+            preferences.store()
+            appUpdatesBackgroundNotice = error.localizedDescription
+        }
+    }
+
+    static let loginItemsApprovalNote =
+        "Allow Gargantua in System Settings > General > Login Items to run background checks."
 
     // MARK: - Helpers
 

@@ -12,22 +12,37 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
     public static let availableCountKey = "appReleases.availableUpdateCount"
 
     public var lastCheck: Date?
-    /// "<bundleID>@<displayVersion>" for updates already announced.
-    public var notifiedUpdateKeys: Set<String>
+    /// Bundle ID to the highest version already announced for that app.
+    public var announcedVersions: [String: AppReleaseVersion]
 
-    public init(lastCheck: Date? = nil, notifiedUpdateKeys: Set<String> = []) {
+    public init(lastCheck: Date? = nil, announcedVersions: [String: AppReleaseVersion] = [:]) {
         self.lastCheck = lastCheck
-        self.notifiedUpdateKeys = notifiedUpdateKeys
+        self.announcedVersions = announcedVersions
+    }
+
+    private struct StoredVersion: Codable {
+        let short: String?
+        let build: String?
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         lastCheck = try container.decodeIfPresent(Date.self, forKey: .lastCheck)
-        notifiedUpdateKeys = try container.decodeIfPresent(Set<String>.self, forKey: .notifiedUpdateKeys) ?? []
+        let stored = try container.decodeIfPresent([String: StoredVersion].self, forKey: .announcedVersions) ?? [:]
+        announcedVersions = stored.mapValues { AppReleaseVersion(short: $0.short, build: $0.build) }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(lastCheck, forKey: .lastCheck)
+        try container.encode(
+            announcedVersions.mapValues { StoredVersion(short: $0.short, build: $0.build) },
+            forKey: .announcedVersions
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
-        case lastCheck, notifiedUpdateKeys
+        case lastCheck, announcedVersions
     }
 
     public static func stored(in defaults: UserDefaults = .standard) -> AppReleaseBackgroundState {
@@ -102,7 +117,7 @@ public protocol AppReleaseUpdateNotifying: Sendable {
 public enum AppReleaseBackgroundCheckResult: Sendable, Equatable {
     case disabled
     case notDue
-    /// Every source failed (offline, rate limited); nothing was stored or announced.
+    /// Most queried sources failed (offline, rate limited); nothing was stored or announced.
     case failed
     case checked(availableCount: Int, notified: Bool)
 }
@@ -154,43 +169,49 @@ public struct AppReleaseBackgroundCheck: Sendable {
         guard AppReleasePreferences.stored(in: defaults).backgroundCheckEnabled else { return .disabled }
         let rows = await checker.check(apps, preferences: preferences)
         guard AppReleasePreferences.stored(in: defaults).backgroundCheckEnabled else { return .disabled }
-        let failedIDs = Set(rows.compactMap { row -> String? in
-            if case .failed = row.status { return row.app.bundleID }
-            return nil
-        })
-        if !rows.isEmpty, failedIDs.count == rows.count { return .failed }
+        if Self.mostQueriedFailed(rows) { return .failed }
 
-        let available = rows.compactMap { row in row.availableCandidate.map { (row.app, $0) } }
-        let current = Set(available.map { "\($0.0.bundleID)@\($0.1.displayVersion)" })
-        // An app keeps its last announced key until a different version is
-        // available or it is uninstalled, so a feed outage that resolves the
-        // row up-to-date or failed doesn't re-announce the update on recovery.
-        let inventoryIDs = Set(apps.map(\.bundleID))
-        let currentIDs = Set(current.map(Self.bundleID(ofKey:)))
-        let retained = state.notifiedUpdateKeys.filter { key in
-            let id = Self.bundleID(ofKey: key)
-            return inventoryIDs.contains(id) && !currentIDs.contains(id)
+        let available = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
+        var announced = state.announcedVersions.filter { Set(apps.map(\.bundleID)).contains($0.key) }
+        let hasNew = available.contains { entry in
+            guard let prior = announced[entry.app.bundleID] else { return true }
+            return entry.version.isNewer(than: prior)
         }
-        let keys = current.union(retained)
-        // Only keys of failed rows count as available; the rest are history.
-        let count = current.union(retained.filter { failedIDs.contains(Self.bundleID(ofKey: $0)) }).count
-
-        let newKeys = current.subtracting(state.notifiedUpdateKeys)
         var delivered = false
-        if !newKeys.isEmpty {
-            delivered = await notifier.deliver(count: count, appNames: available.map(\.0.name).sorted())
+        if hasNew {
+            delivered = await notifier.deliver(count: available.count, appNames: available.map(\.app.name).sorted())
         }
         // An undelivered notification leaves its updates unannounced so a later
         // run (e.g. once permission is granted) announces them.
-        let stored = delivered ? keys : keys.subtracting(newKeys)
-        AppReleaseBackgroundState(lastCheck: now(), notifiedUpdateKeys: stored).store(in: defaults)
-        AppReleaseBackgroundState.storeAvailableCount(count, in: defaults)
-        return .checked(availableCount: count, notified: delivered)
+        if delivered || !hasNew { Self.raise(&announced, to: available) }
+        AppReleaseBackgroundState(lastCheck: now(), announcedVersions: announced).store(in: defaults)
+        AppReleaseBackgroundState.storeAvailableCount(available.count, in: defaults)
+        return .checked(availableCount: available.count, notified: delivered)
     }
 
-    private static func bundleID(ofKey key: String) -> String {
-        guard let at = key.lastIndex(of: "@") else { return key }
-        return String(key[..<at])
+    private static func raise(
+        _ announced: inout [String: AppReleaseVersion],
+        to available: [(app: InstalledApp, version: AppReleaseVersion)]
+    ) {
+        for entry in available {
+            let id = entry.app.bundleID
+            if let prior = announced[id], !entry.version.isNewer(than: prior) { continue }
+            announced[id] = entry.version
+        }
+    }
+
+    /// Rows the user opted out of or no source knows say nothing about the
+    /// network. When most of the rest failed (e.g. waking before Wi-Fi), the
+    /// run is retried on the agent's next wake instead of a day later.
+    private static func mostQueriedFailed(_ rows: [AppReleaseRow]) -> Bool {
+        let queried = rows.filter { row in
+            switch row.status {
+            case .ignored, .untracked, .skippedVersion: false
+            default: true
+            }
+        }
+        let failed = queried.filter { if case .failed = $0.status { true } else { false } }.count
+        return !queried.isEmpty && failed * 2 > queried.count
     }
 
     /// The containing app's bundle ID, which is its defaults suite, for the

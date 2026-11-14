@@ -115,12 +115,19 @@ public struct SettingsView: View {
             if let fetched = settings, fetched.autoScanEnabled || appUpdateChecks {
                 let configuration = ScheduledScanConfiguration(settings: fetched)
                 if configuration.canSynchronizeLaunchAgent {
-                    scheduledScanAgentStatus =
-                        (try? scheduledScanController.synchronize(
+                    do {
+                        scheduledScanAgentStatus = try scheduledScanController.synchronize(
                             configuration: configuration,
                             appUpdateChecks: appUpdateChecks
-                        ))
-                        ?? scheduledScanController.status()
+                        )
+                        if appUpdateChecks {
+                            appUpdatesBackgroundNotice = scheduledScanAgentStatus == .requiresApproval
+                                ? Self.loginItemsApprovalNote : nil
+                        }
+                    } catch {
+                        scheduledScanAgentStatus = scheduledScanController.status()
+                        if appUpdateChecks { appUpdatesBackgroundNotice = error.localizedDescription }
+                    }
                 } else {
                     scheduledScanAgentStatus = scheduledScanController.status()
                 }
