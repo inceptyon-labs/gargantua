@@ -435,10 +435,26 @@ public struct HomebrewCaskOwnership: Sendable {
                 return cask.token.lowercased() == Self.tokenGuess(forAppNamed: filename)
             }
             return appNames.contains { $0.lowercased() == filename }
-                && (cask.quitBundleIDs.isEmpty || HomebrewCaskMatcher.quits(cask.quitBundleIDs, bundleID: app.bundleID))
+                && (cask.quitBundleIDs.isEmpty || Self.quitListAdmits(cask.quitBundleIDs, bundleID: app.bundleID))
         }
         .map(\.token)
         .min()
+    }
+
+    /// A quit list naming only same-vendor helpers doesn't contradict the app
+    /// being the cask's; only a list made entirely of other vendors' IDs does.
+    static func quitListAdmits(_ quitIDs: [String], bundleID: String) -> Bool {
+        if HomebrewCaskMatcher.quits(quitIDs, bundleID: bundleID) { return true }
+        guard let vendor = vendorPrefix(of: bundleID) else { return false }
+        return quitIDs.contains { vendorPrefix(of: $0) == vendor }
+    }
+
+    /// The first two components of a bundle ID, lowercased (`org.pqrs`); nil
+    /// below three components, where the vendor can't be told from the app.
+    static func vendorPrefix(of bundleID: String) -> String? {
+        let parts = bundleID.lowercased().split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 3, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
+        return "\(parts[0]).\(parts[1])"
     }
 
     /// `foo bar.app` → `foo-bar`, Homebrew's usual token for an app.

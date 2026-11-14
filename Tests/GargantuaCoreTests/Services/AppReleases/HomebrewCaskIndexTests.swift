@@ -79,15 +79,21 @@ struct HomebrewCaskIndexTests {
         ])
     }
 
-    @Test("an installed cask owns the app it names, a quit list must include the app, and unknown casks match by token")
+    @Test("an installed cask owns the app it names, a quit list must include the app or its vendor, and unknown casks match by token")
     func caskOwnershipRules() {
         let ownership = HomebrewCaskOwnership(casks: [
             HomebrewInstalledCask(token: "foo", appNames: ["Foo.app"], quitBundleIDs: ["com.example.Foo"]),
             HomebrewInstalledCask(token: "bar", appNames: ["Bar.app"]),
             HomebrewInstalledCask(token: "baz-app", appNames: nil),
+            HomebrewInstalledCask(token: "qux", appNames: ["Qux.app"], quitBundleIDs: ["com.example.QuxHelper"]),
+            HomebrewInstalledCask(token: "wild", appNames: ["Wild.app"], quitBundleIDs: ["com.example.*"]),
         ])
         #expect(ownership.owner(of: app("Foo.app", "com.example.Foo"), indexToken: nil) == "foo")
         #expect(ownership.owner(of: app("Foo.app", "com.other.Foo"), indexToken: nil) == nil)
+        #expect(ownership.owner(of: app("Qux.app", "com.example.Qux"), indexToken: nil) == "qux")
+        #expect(ownership.owner(of: app("Qux.app", "org.other.Qux"), indexToken: nil) == nil)
+        #expect(ownership.owner(of: app("Qux.app", "qux"), indexToken: nil) == nil)
+        #expect(ownership.owner(of: app("Wild.app", "com.example.Anything"), indexToken: nil) == "wild")
         #expect(ownership.owner(of: app("bar.app", "any.id"), indexToken: nil) == "bar")
         #expect(ownership.owner(of: app("Baz App.app", "any.id"), indexToken: nil) == "baz-app")
         #expect(ownership.owner(of: app("Other.app", "any.id"), indexToken: nil) == nil)
