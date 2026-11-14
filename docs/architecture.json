@@ -8,7 +8,7 @@
     "repository": {
       "url": "git@github.com:inceptyon-labs/gargantua.git",
       "link_mode": "local-only",
-      "revision": "b6f7124cf5bb574f4b2db60a82f71555e3ea395d"
+      "revision": "ed63bae708fe11efb4d6492a69ad5517e4a5ecc9"
     }
   },
   "components": [
@@ -132,10 +132,16 @@
           "label": "runIfDue"
         },
         {
-          "path": "Sources/GargantuaCore/Services/ScheduledScanService+Scanning.swift",
-          "line": 15,
-          "end_line": 17,
-          "label": "Scan only"
+          "path": "Sources/GargantuaScheduler/main.swift",
+          "line": 17,
+          "end_line": 25,
+          "label": "Background update check"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseBackgroundCheck.swift",
+          "line": 163,
+          "end_line": 163,
+          "label": "runIfDue"
         }
       ]
     },
@@ -166,10 +172,10 @@
           "label": "Scan runner"
         },
         {
-          "path": "Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
-          "line": 68,
-          "end_line": 78,
-          "label": "Bound listener"
+          "path": "Sources/GargantuaMCP/main.swift",
+          "line": 240,
+          "end_line": 252,
+          "label": "list_app_updates tool"
         }
       ]
     },
@@ -546,6 +552,35 @@
       "from": "app",
       "to": "updater",
       "label": "check, update"
+    },
+    {
+      "id": "sched-to-updater",
+      "from": "sched",
+      "to": "updater",
+      "label": "background check (opt-in)",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "left",
+      "via": [
+        [
+          355,
+          20
+        ],
+        [
+          10,
+          20
+        ],
+        [
+          10,
+          592
+        ]
+      ]
+    },
+    {
+      "id": "mcp-to-updater",
+      "from": "mcp",
+      "to": "updater",
+      "label": "list_app_updates (read-only)"
     },
     {
       "id": "gate-to-updater",
