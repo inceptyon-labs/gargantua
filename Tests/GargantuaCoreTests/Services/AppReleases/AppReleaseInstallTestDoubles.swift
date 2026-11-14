@@ -62,12 +62,13 @@ enum AppReleaseInstallFixtures {
         sha256: String? = nil,
         pinnedTeamID: String? = nil,
         isSparkleFeed: Bool? = nil,
-        caskToken: String? = nil
+        caskToken: String? = nil,
+        downloadURL: String = "https://example.com/Foo.zip"
     ) -> AppReleaseCandidate {
         AppReleaseCandidate(
             source: source,
             version: AppReleaseVersion(short: short, build: build),
-            downloadURL: URL(string: "https://example.com/Foo.zip"),
+            downloadURL: URL(string: downloadURL),
             expectedLength: expectedLength,
             edSignature: edSignature,
             sha256: sha256,

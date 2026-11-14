@@ -136,11 +136,17 @@ extension AppReleaseVerifier {
 
         let output = try run(
             "/usr/bin/hdiutil",
-            ["attach", "-readonly", "-nobrowse", "-noautoopen", "-mountrandom", mountRoot.path, "-plist", image.path],
+            [
+                "attach", "-readonly", "-nobrowse", "-noautoopen", "-stdinpass",
+                "-mountrandom", mountRoot.path, "-plist", image.path,
+            ],
             timeout: 120
         )
         guard output.exitCode == 0 else {
             if Self.isLicenseAgreementRefusal(output) { throw .licenseAgreementRequired }
+            if (output.stdout + "\n" + output.stderr).lowercased().contains("authentication error") {
+                throw .encryptedDiskImage
+            }
             throw .extractionFailed(Self.describeFailure("hdiutil", output))
         }
         let mounted = Set(Self.mountedVolumes(under: mountRoot).compactMap(AppBundleFiles.realPath))

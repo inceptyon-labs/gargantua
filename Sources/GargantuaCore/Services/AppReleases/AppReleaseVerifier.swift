@@ -31,6 +31,7 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
     case extractionFailed(String)
     case extractedTooLarge(limit: Int64)
     case licenseAgreementRequired
+    case encryptedDiskImage
     // Locating the app
     case appNotFound
     case multipleMatchingApps
@@ -85,6 +86,8 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
         case .extractedTooLarge(let limit): "The unpacked update is larger than the \(Self.bytes(limit)) limit."
         case .licenseAgreementRequired:
             "The disk image asks you to accept a license agreement. Download and install this update by hand."
+        case .encryptedDiskImage:
+            "The disk image is password-protected, so Gargantua can't open it. Get the update from the vendor instead."
         case .appNotFound: "The download doesn't contain this app."
         case .multipleMatchingApps: "The download contains more than one copy of this app."
         case .symlinkEscapesBundle(let path): "The new app contains a link that points outside itself: \(path)"
@@ -313,10 +316,12 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     }
 
     /// The UDIF trailer is checked first: a bzip2-compressed disk image also
-    /// starts with `BZh`.
+    /// starts with `BZh`. An encrypted image has no readable trailer; its
+    /// `encrcdsa` header is passed on to `hdiutil` to refuse.
     static func sniff(head: [UInt8], tail: [UInt8]?) throws(AppReleaseVerificationFailure) -> AppReleasePayloadKind {
         if head.starts(with: Array("xar!".utf8)) { throw .installerPackage }
         if let tail, tail.count == 512, tail.starts(with: Array("koly".utf8)) { return .dmg }
+        if head.starts(with: Array("encrcdsa".utf8)) { return .dmg }
         if head.starts(with: [0x50, 0x4B, 0x03, 0x04]) { return .zip }
         if head.starts(with: [0x1F, 0x8B])
             || head.starts(with: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])
