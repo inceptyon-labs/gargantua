@@ -92,11 +92,17 @@ public struct AppReleasesView: View {
             if count > 0 { parts.append("\(count) update\(count == 1 ? "" : "s") available") }
             if session.failedCount > 0 { parts.append(Self.couldntCheck(session.failedCount)) }
             if let lastChecked = session.lastChecked {
-                let ago = Self.relativeFormatter.localizedString(for: lastChecked, relativeTo: Date())
-                parts.append(parts.isEmpty ? "Checked " + ago : "checked " + ago)
+                parts.append(Self.checkedText(lastChecked: lastChecked, now: Date(), capitalized: parts.isEmpty))
             }
             return parts.isEmpty ? nil : parts.joined(separator: " · ")
         }
+    }
+
+    static func checkedText(lastChecked: Date, now: Date, capitalized: Bool) -> String {
+        let ago = now.timeIntervalSince(lastChecked) < 60
+            ? "just now"
+            : relativeFormatter.localizedString(for: lastChecked, relativeTo: now)
+        return (capitalized ? "Checked " : "checked ") + ago
     }
 
     static func couldntCheck(_ count: Int) -> String {

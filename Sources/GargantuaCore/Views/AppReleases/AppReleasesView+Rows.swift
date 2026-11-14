@@ -71,7 +71,7 @@ struct AppReleaseRowView: View {
     // MARK: - Pieces
 
     private static let versionWidth: CGFloat = 150
-    private static let sourceWidth: CGFloat = 124
+    private static let sourceWidth: CGFloat = 170
     private static let actionWidth: CGFloat = 112
     private static let barHeight: CGFloat = 3
     private static let spinnerSize: CGFloat = 16
@@ -133,6 +133,12 @@ struct AppReleaseRowView: View {
         }
         .font(GargantuaFonts.monoData)
         .lineLimit(1)
+        .help(versionHelp)
+    }
+
+    private var versionHelp: String {
+        guard let candidate = row.availableCandidate else { return row.app.version.description }
+        return "\(row.app.version.description) → \(candidate.displayVersion)"
     }
 
     @ViewBuilder
@@ -238,6 +244,8 @@ struct AppReleaseRowView: View {
     private func pill(_ label: String, color: Color) -> some View {
         Text(label)
             .font(GargantuaFonts.caption)
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(color)
             .padding(.vertical, 1)
             .padding(.horizontal, 6)
