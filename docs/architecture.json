@@ -3,12 +3,12 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Gargantua System Overview",
-    "output": ".archify/architecture-gargantua-overview-20261003-200931/review-2/gargantua-overview.html",
+    "output": ".archify/architecture-gargantua-overview-20261114-113228/gargantua-overview.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "git@github.com:inceptyon-labs/gargantua.git",
       "link_mode": "local-only",
-      "revision": "a451184bb515a82119105e5c5b40af03807aadc5"
+      "revision": "b6f7124cf5bb574f4b2db60a82f71555e3ea395d"
     }
   },
   "components": [
@@ -221,8 +221,8 @@
       "label": "Polar.sh",
       "sublabel": "license API",
       "pos": [
-        540,
-        560
+        790,
+        720
       ],
       "size": [
         130,
@@ -344,6 +344,74 @@
           "label": "Audit after clean"
         }
       ]
+    },
+    {
+      "id": "updater",
+      "type": "backend",
+      "label": "App Updater",
+      "sublabel": "check + verified install",
+      "pos": [
+        540,
+        560
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseCheckService.swift",
+          "line": 46,
+          "end_line": 81,
+          "label": "Check every source"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseInstaller.swift",
+          "line": 203,
+          "end_line": 211,
+          "label": "Install entry point"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseVerifier.swift",
+          "line": 338,
+          "end_line": 350,
+          "label": "Team ID must match"
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "Update Sources",
+      "sublabel": "feeds, Homebrew, App Store",
+      "pos": [
+        540,
+        720
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/SparkleAppcastSource.swift",
+          "line": 26,
+          "end_line": 26,
+          "label": "Vendor Sparkle feeds"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/HomebrewCaskIndex.swift",
+          "line": 125,
+          "end_line": 125,
+          "label": "Homebrew cask API"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/MASLookupSource.swift",
+          "line": 48,
+          "end_line": 48,
+          "label": "App Store lookup"
+        }
+      ]
     }
   ],
   "boundaries": [
@@ -358,7 +426,8 @@
         "mcp",
         "gate",
         "cleanup",
-        "state"
+        "state",
+        "updater"
       ]
     },
     {
@@ -471,6 +540,38 @@
       "from": "app",
       "to": "state",
       "label": "audit entry"
+    },
+    {
+      "id": "app-to-updater",
+      "from": "app",
+      "to": "updater",
+      "label": "check, update"
+    },
+    {
+      "id": "gate-to-updater",
+      "from": "gate",
+      "to": "updater",
+      "label": "authorization",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rules-to-updater",
+      "from": "rules",
+      "to": "updater",
+      "label": "update catalog"
+    },
+    {
+      "id": "updater-to-sources",
+      "from": "updater",
+      "to": "sources",
+      "label": "HTTPS only",
+      "variant": "dashed"
+    },
+    {
+      "id": "updater-to-state",
+      "from": "updater",
+      "to": "state",
+      "label": "audit entry"
     }
   ],
   "cards": [
@@ -511,6 +612,17 @@
         "Hugging Face for the default local MLX model download",
         "Sparkle appcast for updates; feedback Worker for reports",
         "Vendored fclones and czkawka binaries for duplicates and file health"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "App Updates",
+      "items": [
+        "Checks run on demand or opt-in daily; no app list is uploaded",
+        "Vendor feed or catalog caps the version other sources may offer",
+        "Install needs a LicenseGate authorization and fails closed",
+        "Same Team ID, notarized, newer; old copy goes to Trash",
+        "Brew-managed apps update through brew upgrade --cask"
       ]
     }
   ]
