@@ -310,7 +310,7 @@ public final class AppReleasesSession {
         if case .brewUpgrade = strategy {
             installPhases[id] = .upgradingWithHomebrew
         } else {
-            installPhases[id] = .downloading
+            installPhases[id] = .downloading(received: 0, expected: nil)
         }
         installedDuringCheck.insert(id)
         defer { installPhases[id] = nil }

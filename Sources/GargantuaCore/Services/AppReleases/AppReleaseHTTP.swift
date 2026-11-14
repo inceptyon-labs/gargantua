@@ -42,7 +42,40 @@ public protocol AppReleaseHTTPFetching: Sendable {
 
     /// Downloads `url` to `destination` (which must not exist) and returns the
     /// byte count. Throws `.tooLarge` once the body passes `maxBytes`.
-    func download(_ url: URL, to destination: URL, maxBytes: Int64) async throws -> Int64
+    /// `progress` gets the bytes received and the expected total (nil when the
+    /// server didn't declare one), throttled, off the main actor, with a last
+    /// call at completion.
+    func download(
+        _ url: URL,
+        to destination: URL,
+        maxBytes: Int64,
+        progress: @escaping @Sendable (Int64, Int64?) -> Void
+    ) async throws -> Int64
+}
+
+extension AppReleaseHTTPFetching {
+    func download(_ url: URL, to destination: URL, maxBytes: Int64) async throws -> Int64 {
+        try await download(url, to: destination, maxBytes: maxBytes) { _, _ in }
+    }
+}
+
+/// Decides when a streaming download reports: after the body has grown by 1%
+/// of the expected length or 256 KiB, whichever is smaller (256 KiB when the
+/// length is unknown).
+struct DownloadProgressThrottle {
+    static let maxStep: Int64 = 256 * 1024
+    private let step: Int64
+    private var lastReported: Int64 = 0
+
+    init(expected: Int64?) {
+        step = expected.map { min(max($0 / 100, 1), Self.maxStep) } ?? Self.maxStep
+    }
+
+    mutating func shouldReport(received: Int64) -> Bool {
+        guard received - lastReported >= step else { return false }
+        lastReported = received
+        return true
+    }
 }
 
 public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
@@ -84,7 +117,12 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
         return response
     }
 
-    public func download(_ url: URL, to destination: URL, maxBytes: Int64) async throws -> Int64 {
+    public func download(
+        _ url: URL,
+        to destination: URL,
+        maxBytes: Int64,
+        progress: @escaping @Sendable (Int64, Int64?) -> Void
+    ) async throws -> Int64 {
         let request = try Self.request(url, timeout: 60)
         let descriptor = open(destination.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0o600)
         guard descriptor >= 0 else {
@@ -92,7 +130,7 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
         }
         let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         do {
-            let (_, byteCount) = try await BoundedTransfer(request: request, limit: maxBytes, file: file).run(on: session)
+            let (_, byteCount) = try await BoundedTransfer(request: request, limit: maxBytes, file: file, progress: progress).run(on: session)
             try file.close()
             return byteCount
         } catch {
@@ -157,17 +195,26 @@ private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
         var body = Data()
         var received: Int64 = 0
         var failure: AppReleaseHTTPError?
+        var expected: Int64?
+        var throttle = DownloadProgressThrottle(expected: nil)
     }
 
     private let request: URLRequest
     private let limit: Int64
     private let file: FileHandle?
+    private let progress: @Sendable (Int64, Int64?) -> Void
     private let state = OSAllocatedUnfairLock(initialState: State())
 
-    init(request: URLRequest, limit: Int64, file: FileHandle?) {
+    init(
+        request: URLRequest,
+        limit: Int64,
+        file: FileHandle?,
+        progress: @escaping @Sendable (Int64, Int64?) -> Void = { _, _ in }
+    ) {
         self.request = request
         self.limit = limit
         self.file = file
+        self.progress = progress
     }
 
     /// The response (with the body when it went to memory) and the body's
@@ -209,7 +256,12 @@ private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
         do throws(AppReleaseHTTPError) {
             let head = try DefaultAppReleaseHTTPClient.head(of: response, for: request)
             if response.expectedContentLength > limit { throw .tooLarge(limit: limit) }
-            state.withLock { $0.head = head }
+            let expected: Int64? = response.expectedContentLength >= 0 ? response.expectedContentLength : nil
+            state.withLock {
+                $0.head = head
+                $0.expected = expected
+                $0.throttle = DownloadProgressThrottle(expected: expected)
+            }
             return .allow
         } catch {
             state.withLock { $0.failure = error }
@@ -218,26 +270,31 @@ private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
     }
 
     func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        let failed = state.withLock { state -> Bool in
-            guard state.failure == nil else { return true }
+        let (failed, report) = state.withLock { state -> (Bool, (Int64, Int64?)?) in
+            guard state.failure == nil else { return (true, nil) }
             state.received += Int64(data.count)
             guard state.received <= limit else {
                 state.failure = .tooLarge(limit: limit)
-                return true
+                return (true, nil)
             }
+            let report = state.throttle.shouldReport(received: state.received) ? (state.received, state.expected) : nil
             guard let file else {
                 state.body.append(data)
-                return false
+                return (false, report)
             }
             do {
                 try file.write(contentsOf: data)
-                return false
+                return (false, report)
             } catch {
                 state.failure = .network("Couldn't write the download: \(error.localizedDescription)")
-                return true
+                return (true, nil)
             }
         }
-        if failed { dataTask.cancel() }
+        if failed {
+            dataTask.cancel()
+        } else if let report {
+            progress(report.0, report.1)
+        }
     }
 
     func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
@@ -257,6 +314,9 @@ private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
             state.continuation = nil
             if continuation == nil { state.outcome = result }
             return (continuation, result)
+        }
+        if case .success((_, let received)) = result {
+            progress(received, state.withLock { $0.expected })
         }
         continuation?.resume(with: result)
     }

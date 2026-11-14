@@ -8,7 +8,8 @@ let appReleaseInstallLogger = Logger(subsystem: "com.gargantua.core", category: 
 
 /// Where an install is, for the row's progress label.
 public enum AppReleaseInstallPhase: Sendable, Equatable {
-    case downloading
+    /// `expected` is nil when the server didn't declare a length.
+    case downloading(received: Int64, expected: Int64?)
     case verifying
     case quitting
     case installing
@@ -375,13 +376,29 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
     ) async throws(AppReleaseInstallError) -> AppReleaseStagedBundle {
         guard let downloadURL = candidate.downloadURL else { throw .verification(.missingDownloadURL) }
 
-        progress(.downloading)
+        progress(.downloading(received: 0, expected: nil))
         let payload = workDirectory.appendingPathComponent("payload")
+        // The stream keeps reports in order and lets every one land before
+        // `.verifying`: it is drained once the download call returns.
+        let (reports, report) = AsyncStream.makeStream(of: (Int64, Int64?).self)
+        let forwarder = Task { @MainActor in
+            for await (received, expected) in reports {
+                progress(.downloading(received: received, expected: expected))
+            }
+        }
         do {
-            _ = try await http.download(downloadURL, to: payload, maxBytes: AppReleaseVerifier.maxPayloadBytes)
+            _ = try await http.download(downloadURL, to: payload, maxBytes: AppReleaseVerifier.maxPayloadBytes) {
+                report.yield(($0, $1))
+            }
+            report.finish()
+            await forwarder.value
         } catch let error as AppReleaseHTTPError {
+            report.finish()
+            await forwarder.value
             throw Self.installError(for: error)
         } catch {
+            report.finish()
+            await forwarder.value
             throw .download(error.localizedDescription)
         }
 

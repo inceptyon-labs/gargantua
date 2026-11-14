@@ -1,4 +1,5 @@
 import Foundation
+import os
 import GargantuaLicensing
 import Testing
 @testable import GargantuaCore
@@ -328,6 +329,41 @@ struct AppReleaseInstallerTests {
         #expect(trash.movedItems.isEmpty)
         #expect(audit.entries.isEmpty)
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
+    }
+}
+
+extension AppReleaseInstallerTests {
+    @Test("download progress reaches the callback in order, before verifying and never after")
+    func forwardsDownloadProgress() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let http = RecordingPayloadHTTP(reports: [(0, 100), (50, 100), (100, 100)])
+        let phases = OSAllocatedUnfairLock<[AppReleaseInstallPhase]>(initialState: [])
+
+        _ = await makeInstaller(sandbox: sandbox, http: http).install(
+            app: sandbox.app,
+            candidate: Fixtures.candidate(caskToken: "foo"),
+            strategy: .inPlace,
+            quitIfRunning: true,
+            authorization: .unchecked(.appUpdater),
+            progress: { phase in phases.withLock { $0.append(phase) } }
+        )
+
+        let seen = phases.withLock { $0 }
+        let expected: [AppReleaseInstallPhase] = [
+            .downloading(received: 0, expected: nil),
+            .downloading(received: 0, expected: 100),
+            .downloading(received: 50, expected: 100),
+            .downloading(received: 100, expected: 100),
+            .verifying,
+        ]
+        #expect(Array(seen.prefix(5)) == expected)
+        let verifying = try #require(seen.firstIndex(of: .verifying))
+        let downloadsAfter = seen[verifying...].filter { phase in
+            if case .downloading = phase { return true }
+            return false
+        }
+        #expect(downloadsAfter.isEmpty)
     }
 }
 

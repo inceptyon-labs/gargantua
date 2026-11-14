@@ -54,6 +54,66 @@ struct AppReleaseHTTPTests {
                 .get(URL(string: "https://example.com/feed.xml")!, etag: nil)
         }
     }
+
+    @Test("download reports growing byte counts against the declared length, ending on the full body")
+    func downloadReportsProgress() async throws {
+        let script = ChunkedURLProtocol.Script(headers: ["Content-Length": "2000"], chunkSize: 400, chunkCount: 5)
+        let (session, key) = ChunkedURLProtocol.makeSession(script)
+        defer { ChunkedURLProtocol.remove(key) }
+        let file = destination()
+        defer { try? FileManager.default.removeItem(at: file) }
+        let reports = OSAllocatedUnfairLock<[Int64]>(initialState: [])
+        let expecteds = OSAllocatedUnfairLock<Set<Int64?>>(initialState: [])
+
+        let count = try await DefaultAppReleaseHTTPClient(session: session)
+            .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 10000) { received, expected in
+                reports.withLock { $0.append(received) }
+                expecteds.withLock { $0.insert(expected) }
+            }
+
+        let received = reports.withLock { $0 }
+        let declared = expecteds.withLock { $0 }
+        #expect(count == 2000)
+        #expect(received.last == 2000)
+        #expect(received == received.sorted())
+        #expect(declared == [2000])
+    }
+}
+
+@Suite("DownloadProgressThrottle")
+struct DownloadProgressThrottleTests {
+    private func reports(expected: Int64?, total: Int64, chunk: Int64) -> Int {
+        var throttle = DownloadProgressThrottle(expected: expected)
+        var count = 0
+        var received: Int64 = 0
+        while received < total {
+            received += chunk
+            if throttle.shouldReport(received: received) { count += 1 }
+        }
+        return count
+    }
+
+    @Test("a known length reports at about 1% steps, not per chunk")
+    func knownLength() {
+        // 10 MB in 1 KB chunks: 1% is about 100 KB, so about 100 reports.
+        let count = reports(expected: 10_000_000, total: 10_000_000, chunk: 1000)
+        #expect((95 ... 101).contains(count))
+    }
+
+    @Test("an unknown length reports every 256 KiB")
+    func unknownLength() {
+        let count = reports(expected: nil, total: 2 * 1024 * 1024, chunk: 1024)
+        #expect(count == 8)
+    }
+
+    @Test("a huge body is capped at 256 KiB steps")
+    func hugeLengthCap() {
+        var throttle = DownloadProgressThrottle(expected: 10_000_000_000)
+        let early = throttle.shouldReport(received: 256 * 1024 - 1)
+        let atStep = throttle.shouldReport(received: 256 * 1024)
+        #expect(!early)
+        #expect(atStep)
+    }
 }
 
 /// Answers every request with a 200 and then `chunkCount` chunks, one every

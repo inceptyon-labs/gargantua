@@ -29,7 +29,12 @@ final class StubAppReleaseHTTP: AppReleaseHTTPFetching {
         return try handler(url, etag)
     }
 
-    func download(_ url: URL, to destination: URL, maxBytes: Int64) async throws -> Int64 { 0 }
+    func download(
+        _: URL,
+        to _: URL,
+        maxBytes _: Int64,
+        progress _: @escaping @Sendable (Int64, Int64?) -> Void
+    ) async throws -> Int64 { 0 }
 }
 
 /// Writes files into a temporary Homebrew prefix, e.g.

@@ -110,13 +110,23 @@ struct AppReleaseRowView: View {
         if let installPhase {
             HStack(spacing: GargantuaSpacing.space2) {
                 AccretionDiskView(activityRate: 18, size: 16, color: GargantuaColors.accretion)
-                Text(installPhase.label)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink2)
-                    .lineLimit(1)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(installPhase.label)
+                        .font(GargantuaFonts.caption.monospacedDigit())
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .lineLimit(1)
+                        .frame(width: 150, alignment: .trailing)
+                    if let fraction = installPhase.downloadFraction {
+                        ProgressView(value: fraction)
+                            .progressViewStyle(.linear)
+                            .tint(GargantuaColors.accretion)
+                            .frame(width: 150)
+                    }
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Installing \(row.app.name)")
+            .accessibilityValue(installPhase.accessibilityValue)
         } else {
             switch row.status {
             case .available(_, let strategy):
@@ -235,12 +245,32 @@ struct AppReleaseRowView: View {
 extension AppReleaseInstallPhase {
     var label: String {
         switch self {
-        case .downloading: "Downloading…"
+        case .downloading(let received, let expected): Self.downloadLabel(received: received, expected: expected)
         case .verifying: "Verifying…"
         case .quitting: "Quitting…"
         case .installing: "Installing…"
         case .relaunching: "Relaunching…"
         case .upgradingWithHomebrew: "Upgrading…"
         }
+    }
+}
+
+extension AppReleaseInstallPhase {
+    /// 0...1 while a download of known length is running.
+    var downloadFraction: Double? {
+        guard case .downloading(let received, let expected) = self, let expected, expected > 0 else { return nil }
+        return min(1, max(0, Double(received) / Double(expected)))
+    }
+
+    var accessibilityValue: String {
+        guard let fraction = downloadFraction else { return label }
+        return "Downloading, \(Int(fraction * 100)) percent"
+    }
+
+    static func downloadLabel(received: Int64, expected: Int64?) -> String {
+        guard received > 0 else { return "Downloading…" }
+        let got = ByteCountFormatter.string(fromByteCount: received, countStyle: .file)
+        guard let expected, expected > 0 else { return got }
+        return "\(got) of \(ByteCountFormatter.string(fromByteCount: expected, countStyle: .file))"
     }
 }

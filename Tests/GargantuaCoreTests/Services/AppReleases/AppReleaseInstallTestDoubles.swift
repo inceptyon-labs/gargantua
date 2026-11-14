@@ -81,6 +81,10 @@ enum AppReleaseInstallFixtures {
 /// Writes a fixed payload and counts downloads.
 final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
     private let downloads = OSAllocatedUnfairLock(initialState: 0)
+    /// (received, expected) pairs reported to the progress callback.
+    let reports: [(Int64, Int64?)]
+
+    init(reports: [(Int64, Int64?)] = []) { self.reports = reports }
 
     var downloadCount: Int { downloads.withLock { $0 } }
 
@@ -88,8 +92,14 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
         throw AppReleaseHTTPError.network("get is not stubbed: \(url)")
     }
 
-    func download(_: URL, to destination: URL, maxBytes _: Int64) async throws -> Int64 {
+    func download(
+        _: URL,
+        to destination: URL,
+        maxBytes _: Int64,
+        progress: @escaping @Sendable (Int64, Int64?) -> Void
+    ) async throws -> Int64 {
         downloads.withLock { $0 += 1 }
+        for (received, expected) in reports { progress(received, expected) }
         let data = Data("payload".utf8)
         try data.write(to: destination)
         return Int64(data.count)
