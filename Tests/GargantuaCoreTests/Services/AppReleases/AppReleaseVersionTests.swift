@@ -42,6 +42,12 @@ struct AppReleaseVersionTests {
         #expect(!version("2.4", "999").isNewer(than: version("2.5", "100")))
     }
 
+    @Test("builds that aren't plain numbers never decide the order")
+    func nonNumericBuilds() {
+        #expect(!version("5.11492.5", "1403e2cf44abfb23809c8ae11238d5e9704a41c2").isNewer(than: version("5.11492.5", "5.11492.5")))
+        #expect(!version("2025.3", "AI-253.40000").isNewer(than: version("2025.3", "AI-253.32098")))
+    }
+
     @Test("build-only feed compares against the installed build, never the marketing version")
     func buildOnlyComparison() {
         #expect(version(nil, "1500").isNewer(than: version("3.0", "1400")))

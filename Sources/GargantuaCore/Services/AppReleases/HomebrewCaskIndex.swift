@@ -288,9 +288,12 @@ public struct HomebrewCaskSource: AppReleaseSourcing {
     }
 
     private func outcome(for entry: HomebrewCaskEntry) -> AppReleaseSourceOutcome {
-        guard let version = AppReleaseVersion.cask(entry.version), !version.isPrerelease else {
+        guard let parsed = AppReleaseVersion.cask(entry.version), !parsed.isPrerelease else {
             return .noEligibleRelease
         }
+        // The part after a cask's comma is the vendor's build or a hash, not
+        // the app's CFBundleVersion, so only the marketing version is compared.
+        let version = AppReleaseVersion(short: parsed.short, build: nil)
         let url = entry.url.flatMap(URL.init(string:))
         // Variations may swap the download per architecture; the top-level URL
         // is the arm64 one, so don't hand it to an Intel host.
@@ -299,6 +302,7 @@ public struct HomebrewCaskSource: AppReleaseSourcing {
         return .found(AppReleaseCandidate(
             source: kind,
             version: version,
+            displayVersion: parsed.short,
             downloadURL: downloadURL,
             sha256: entry.sha256,
             payloadKind: entry.hasPkg ? .pkg : .infer(url: downloadURL),

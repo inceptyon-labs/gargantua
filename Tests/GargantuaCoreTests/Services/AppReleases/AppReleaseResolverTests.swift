@@ -74,6 +74,21 @@ struct AppReleaseResolverTests {
             == .available(catalog, .inPlace))
     }
 
+    @Test("the app's own feed caps the version other sources may offer")
+    func vendorFeedCeiling() {
+        let feedCurrent = candidate(.sparkle, "1.0")
+        let caskMajor = candidate(.homebrewCask, "2.0")
+        #expect(resolve(app(), [.sparkle: .found(feedCurrent), .homebrewCask: .found(caskMajor)])
+            == .upToDate(latest: feedCurrent))
+        #expect(resolve(app(), [.sparkle: .noEligibleRelease, .homebrewCask: .found(caskMajor)]) == .upToDate(latest: nil))
+        // A failed feed sets no ceiling, and brew-managed apps follow the cask.
+        #expect(resolve(app(), [.sparkle: .failed("offline"), .homebrewCask: .found(caskMajor)])
+            == .available(caskMajor, .inPlace))
+        let brewCask = candidate(.homebrewCask, "2.0", token: "example")
+        #expect(resolve(app(), [.sparkle: .found(feedCurrent), .homebrewCask: .found(brewCask)], brewToken: "example")
+            == .available(brewCask, .brewUpgrade(token: "example")))
+    }
+
     @Test("App Store apps consult only the App Store and open the store page")
     func appStoreOnly() {
         let store = candidate(.appStore, "3.0", download: nil)

@@ -92,4 +92,24 @@ struct HomebrewCaskIndexTests {
         let stale = try await HomebrewCaskIndex(http: failing, cacheDirectory: dir, freshFor: 0).entries()
         #expect(stale.count == 3)
     }
+
+    @Test("a cask's build component is not compared with the app's CFBundleVersion")
+    func caskBuildIgnored() async throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(Self.sample.utf8)) }
+        let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir), hostIsArm64: true)
+        let app = InstalledApp(
+            bundleID: "com.test.renamed",
+            name: "Renamed",
+            url: URL(fileURLWithPath: "/Applications/Renamed.app"),
+            shortVersion: "2.0",
+            buildVersion: "1"
+        )
+        guard case .found(let candidate) = await source.lookUp([app])[app.bundleID] else {
+            Issue.record("expected the renamed cask to match")
+            return
+        }
+        #expect(candidate.version.build == nil)
+        #expect(!candidate.version.isNewer(than: app.version))
+    }
 }

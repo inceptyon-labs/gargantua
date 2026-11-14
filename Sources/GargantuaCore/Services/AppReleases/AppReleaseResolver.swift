@@ -29,7 +29,10 @@ public enum AppReleaseResolver {
             if case .found(let candidate) = outcome { return candidate }
             return nil
         }
-        let eligible = found.filter { !$0.isPrerelease && runs(on: osVersion, minimum: $0.minimumSystemVersion) }
+        var eligible = found.filter { !$0.isPrerelease && runs(on: osVersion, minimum: $0.minimumSystemVersion) }
+        if brewManagedToken == nil, let ceiling = vendorCeiling(considered, installed: app.version) {
+            eligible = eligible.filter { $0.version.compare(to: ceiling) != .orderedDescending }
+        }
         let newer = eligible.filter { $0.version.isNewer(than: app.version) }
 
         guard let chosen = preferred(among: newer) else {
@@ -57,6 +60,35 @@ public enum AppReleaseResolver {
             return row(brewStatus(chosen: chosen, token: token, outcomes: considered))
         }
         return row(.available(chosen, inPlaceStrategy(for: chosen, app: app)))
+    }
+
+    /// The highest version the vendor's own feed (or a curated catalog
+    /// entry) offers this copy. Another source may supply the download for
+    /// that version but never a higher one: a vendor feed that stops at 15.x
+    /// while Homebrew lists 16.0 usually means 16 is a paid upgrade.
+    /// Nil when neither answered.
+    static func vendorCeiling(
+        _ outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome],
+        installed: AppReleaseVersion
+    ) -> AppReleaseVersion? {
+        var answered = false
+        var best: AppReleaseVersion?
+        for kind in [AppReleaseSourceKind.catalog, .sparkle] {
+            switch outcomes[kind] {
+            case .found(let candidate):
+                answered = true
+                if best.map({ candidate.version.compare(to: $0) == .orderedDescending }) ?? true {
+                    best = candidate.version
+                }
+            case .noEligibleRelease:
+                answered = true
+            case .failed, nil:
+                continue
+            }
+        }
+        guard answered else { return nil }
+        guard let best else { return installed }
+        return best.compare(to: installed) == .orderedAscending ? installed : best
     }
 
     /// Highest version wins. On a tie, a release we can install beats one we

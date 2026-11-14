@@ -60,15 +60,21 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
         if let lhs = short, let rhs = other.short {
             let shortOrder = Self.compareComponent(lhs, rhs)
             if shortOrder != .orderedSame { return shortOrder }
-            if let lhsBuild = build, let rhsBuild = other.build {
-                return Self.compareComponent(lhsBuild, rhsBuild)
-            }
-            return .orderedSame
+            return Self.compareBuilds(build, other.build)
         }
-        if let lhsBuild = build, let rhsBuild = other.build {
-            return Self.compareComponent(lhsBuild, rhsBuild)
-        }
-        return .orderedSame
+        return Self.compareBuilds(build, other.build)
+    }
+
+    /// Build numbers are compared only when both are plain dotted numbers.
+    /// Builds like `AI-253.3209` or a git hash share no scheme with anything
+    /// else, and a digit run pulled out of them would invent an ordering.
+    private static func compareBuilds(_ lhs: String?, _ rhs: String?) -> ComparisonResult {
+        guard let lhs, let rhs, isPlainNumber(lhs), isPlainNumber(rhs) else { return .orderedSame }
+        return compareComponent(lhs, rhs)
+    }
+
+    private static func isPlainNumber(_ value: String) -> Bool {
+        value.first?.isNumber == true && value.allSatisfy { $0.isNumber || $0 == "." }
     }
 
     // MARK: - Parsing
