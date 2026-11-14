@@ -166,6 +166,22 @@ struct AppReleaseInstallerTests {
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
     }
 
+    @Test("a fallback Trash failure is App Management when only the fallback mover was refused")
+    func fallbackTrashFailureDeniedByFallback() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let other = NSError(domain: "Test", code: 2, userInfo: [NSLocalizedDescriptionKey: "Etwas ist schiefgelaufen."])
+        let trash = FallbackTrashMover(
+            primary: FakeTrashMover(trashDirectory: sandbox.trashDirectory, error: other),
+            fallback: FakeTrashMover(trashDirectory: sandbox.trashDirectory, error: POSIXError(.EPERM))
+        )
+
+        let result = await install(makeInstaller(sandbox: sandbox, trash: trash), sandbox: sandbox)
+
+        #expect(result == .failure(.appManagementDenied))
+        #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
+    }
+
     @Test("when the new bundle can't be moved in, the old one comes back from the Trash")
     func failedMoveRestoresOldBundle() async throws {
         let sandbox = try Sandbox()
