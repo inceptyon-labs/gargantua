@@ -15,9 +15,18 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
     /// Bundle ID to the highest version already announced for that app.
     public var announcedVersions: [String: AppReleaseVersion]
 
-    public init(lastCheck: Date? = nil, announcedVersions: [String: AppReleaseVersion] = [:]) {
+    /// Mostly-failed runs retried back to back; capped so a few permanently
+    /// broken sources can't block the healthy ones forever.
+    public var consecutiveFailedRuns: Int
+
+    public init(
+        lastCheck: Date? = nil,
+        announcedVersions: [String: AppReleaseVersion] = [:],
+        consecutiveFailedRuns: Int = 0
+    ) {
         self.lastCheck = lastCheck
         self.announcedVersions = announcedVersions
+        self.consecutiveFailedRuns = consecutiveFailedRuns
     }
 
     private struct StoredVersion: Codable {
@@ -30,6 +39,7 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
         lastCheck = try container.decodeIfPresent(Date.self, forKey: .lastCheck)
         let stored = try container.decodeIfPresent([String: StoredVersion].self, forKey: .announcedVersions) ?? [:]
         announcedVersions = stored.mapValues { AppReleaseVersion(short: $0.short, build: $0.build) }
+        consecutiveFailedRuns = try container.decodeIfPresent(Int.self, forKey: .consecutiveFailedRuns) ?? 0
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -39,10 +49,11 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
             announcedVersions.mapValues { StoredVersion(short: $0.short, build: $0.build) },
             forKey: .announcedVersions
         )
+        try container.encode(consecutiveFailedRuns, forKey: .consecutiveFailedRuns)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case lastCheck, announcedVersions
+        case lastCheck, announcedVersions, consecutiveFailedRuns
     }
 
     public static func stored(in defaults: UserDefaults = .standard) -> AppReleaseBackgroundState {
@@ -169,7 +180,12 @@ public struct AppReleaseBackgroundCheck: Sendable {
         guard AppReleasePreferences.stored(in: defaults).backgroundCheckEnabled else { return .disabled }
         let rows = await checker.check(apps, preferences: preferences)
         guard AppReleasePreferences.stored(in: defaults).backgroundCheckEnabled else { return .disabled }
-        if Self.mostQueriedFailed(rows) { return .failed }
+        if Self.mostQueriedFailed(rows), state.consecutiveFailedRuns < Self.maxFailedRetries {
+            var retry = state
+            retry.consecutiveFailedRuns += 1
+            retry.store(in: defaults)
+            return .failed
+        }
 
         let available = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
         var announced = state.announcedVersions.filter { Set(apps.map(\.bundleID)).contains($0.key) }
@@ -184,9 +200,28 @@ public struct AppReleaseBackgroundCheck: Sendable {
         // An undelivered notification leaves its updates unannounced so a later
         // run (e.g. once permission is granted) announces them.
         if delivered || !hasNew { Self.raise(&announced, to: available) }
+        Self.enrich(&announced, from: available)
         AppReleaseBackgroundState(lastCheck: now(), announcedVersions: announced).store(in: defaults)
         AppReleaseBackgroundState.storeAvailableCount(available.count, in: defaults)
         return .checked(availableCount: available.count, notified: delivered)
+    }
+
+    private static let maxFailedRetries = 3
+
+    /// A release first announced without a build (e.g. from Homebrew) takes the
+    /// build once a source reports one, so a later build of it isn't tied
+    /// against the missing one. Never changes what counts as new.
+    private static func enrich(
+        _ announced: inout [String: AppReleaseVersion],
+        from available: [(app: InstalledApp, version: AppReleaseVersion)]
+    ) {
+        for entry in available {
+            let id = entry.app.bundleID
+            guard let prior = announced[id], prior.build == nil, entry.version.build != nil,
+                  prior.short == entry.version.short
+            else { continue }
+            announced[id] = entry.version
+        }
     }
 
     private static func raise(

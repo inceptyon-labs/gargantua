@@ -250,7 +250,11 @@ extension SettingsView {
                 // Without settings the scan configuration is unknown; only
                 // register, so a failed load can't switch off scheduled scans.
                 guard let settings else {
-                    if enabled { registerWithoutSettings(preferences: &preferences) }
+                    if enabled {
+                        registerWithoutSettings(preferences: &preferences)
+                    } else {
+                        appUpdatesBackgroundNotice = nil
+                    }
                     return
                 }
                 do {

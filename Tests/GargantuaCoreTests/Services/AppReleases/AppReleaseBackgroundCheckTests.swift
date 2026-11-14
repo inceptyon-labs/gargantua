@@ -24,6 +24,7 @@ struct AppReleaseBackgroundCheckTests {
             var builds: [String: String] = [:]
             var failing: Set<String> = []
             var untracked: Set<String> = []
+            var skipped: Set<String> = []
             var onCheck: (@Sendable () -> Void)?
         }
         private let state: OSAllocatedUnfairLock<State>
@@ -35,6 +36,8 @@ struct AppReleaseBackgroundCheckTests {
 
         func setUntracked(_ ids: Set<String>) { state.withLock { $0.untracked = ids } }
 
+        func setSkipped(_ ids: Set<String>) { state.withLock { $0.skipped = ids } }
+
         func setBuild(_ id: String, _ build: String?) { state.withLock { $0.builds[id] = build } }
 
         func setVersion(_ id: String, _ version: String) { state.withLock { $0.versions[id] = version } }
@@ -44,9 +47,9 @@ struct AppReleaseBackgroundCheckTests {
         func setOnCheck(_ action: @escaping @Sendable () -> Void) { state.withLock { $0.onCheck = action } }
 
         func check(_ apps: [InstalledApp], preferences: AppReleasePreferences) async -> [AppReleaseRow] {
-            let (versions, builds, failing, untracked, onCheck) = state.withLock { state in
+            let (versions, builds, failing, untracked, skipped, onCheck) = state.withLock { state in
                 state.calls += 1
-                return (state.versions, state.builds, state.failing, state.untracked, state.onCheck)
+                return (state.versions, state.builds, state.failing, state.untracked, state.skipped, state.onCheck)
             }
             onCheck?()
             return apps.map { app in
@@ -55,6 +58,7 @@ struct AppReleaseBackgroundCheckTests {
                     return AppReleaseRow(app: app, status: .ignored)
                 }
                 if untracked.contains(app.bundleID) { return AppReleaseRow(app: app, status: .untracked) }
+                if skipped.contains(app.bundleID) { return AppReleaseRow(app: app, status: .skippedVersion("9")) }
                 if failing.contains(app.bundleID) { return AppReleaseRow(app: app, status: .failed("offline")) }
                 guard let version = versions[app.bundleID] else {
                     return AppReleaseRow(app: app, status: .upToDate(latest: nil))
@@ -98,10 +102,15 @@ struct AppReleaseBackgroundCheckTests {
         let clock = Clock(Date(timeIntervalSince1970: 1_800_000_000))
         let check: AppReleaseBackgroundCheck
 
-        init(versions: [String: String], enabled: Bool = true, onInventory: (@Sendable (String) -> Void)? = nil) {
+        init(
+            versions: [String: String],
+            enabled: Bool = true,
+            ignored: Set<String> = ["com.c"],
+            extraApps: [InstalledApp] = [],
+            onInventory: (@Sendable (String) -> Void)? = nil) {
             defaults = UserDefaults(suiteName: suite)!
             checker = StubChecker(versions: versions)
-            AppReleasePreferences(ignoredBundleIDs: ["com.c"], backgroundCheckEnabled: enabled).store(in: defaults)
+            AppReleasePreferences(ignoredBundleIDs: ignored, backgroundCheckEnabled: enabled).store(in: defaults)
             let clock = clock
             let suite = suite
             var inventoryHook: (@Sendable () -> Void)?
@@ -112,7 +121,7 @@ struct AppReleaseBackgroundCheckTests {
                     AppReleaseBackgroundCheckTests.app("com.b", name: "Bravo"),
                     AppReleaseBackgroundCheckTests.app("com.a", name: "Alpha"),
                     AppReleaseBackgroundCheckTests.app("com.c", name: "Charlie"),
-                ], onCall: inventoryHook),
+                ] + extraApps, onCall: inventoryHook),
                 checker: checker,
                 notifier: notifier,
                 now: { clock.current }
@@ -213,7 +222,10 @@ extension AppReleaseBackgroundCheckTests {
         harness.checker.setFailing(["com.a", "com.b", "com.c"])
         harness.clock.advance(hours: 25)
         #expect(await harness.check.runIfDue() == .failed)
-        #expect(AppReleaseBackgroundState.stored(in: harness.defaults) == before)
+        var after = AppReleaseBackgroundState.stored(in: harness.defaults)
+        #expect(after.consecutiveFailedRuns == 1)
+        after.consecutiveFailedRuns = 0
+        #expect(after == before)
         #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 1)
         #expect(await harness.notifier.deliveries.count == 1)
     }
@@ -300,7 +312,9 @@ extension AppReleaseBackgroundCheckTests {
         harness.checker.setFailing(["com.a", "com.b"])
         harness.clock.advance(hours: 25)
         #expect(await harness.check.runIfDue() == .failed)
-        #expect(AppReleaseBackgroundState.stored(in: harness.defaults) == before)
+        var after = AppReleaseBackgroundState.stored(in: harness.defaults)
+        after.consecutiveFailedRuns = 0
+        #expect(after == before)
     }
 
     @Test("a minority of failures is a normal run")
@@ -395,5 +409,66 @@ extension AppReleaseBackgroundCheckTests {
         #expect(AppReleaseBackgroundCheck.containingAppSuiteName(executable: inside) == "com.example.foo")
         #expect(AppReleaseBackgroundCheck.containingAppSuiteName(executable: root.appendingPathComponent("tool")) == nil)
         #expect(AppReleaseBackgroundCheck.containingAppSuiteName(executable: nil) == nil)
+    }
+
+    @Test("a build reported later for an announced build-less version is recorded, so the next build notifies")
+    func buildEnrichment() async {
+        let harness = Harness(versions: ["com.a": "2.0"])
+        defer { harness.cleanUp() }
+        _ = await harness.check.runIfDue()
+
+        harness.checker.setBuild("com.a", "200")
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        let stored = AppReleaseBackgroundState.stored(in: harness.defaults).announcedVersions["com.a"]
+        #expect(stored == AppReleaseVersion(short: "2.0", build: "200"))
+
+        harness.checker.setBuild("com.a", "201")
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: true))
+        #expect(await harness.notifier.deliveries.count == 2)
+    }
+
+    @Test("mostly failed runs are retried three times, then the check runs normally")
+    func boundedRetries() async {
+        let delta = Self.app("com.d", name: "Delta")
+        let harness = Harness(versions: ["com.a": "2.0"], extraApps: [delta])
+        defer { harness.cleanUp() }
+        // Queried: a, b, d (c is ignored); b and d fail.
+        harness.checker.setFailing(["com.b", "com.d"])
+        let lastCheck = AppReleaseBackgroundState.stored(in: harness.defaults).lastCheck
+        for expected in 1 ... 3 {
+            #expect(await harness.check.runIfDue() == .failed)
+            let state = AppReleaseBackgroundState.stored(in: harness.defaults)
+            #expect(state.consecutiveFailedRuns == expected)
+            #expect(state.lastCheck == lastCheck)
+        }
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: true))
+        let state = AppReleaseBackgroundState.stored(in: harness.defaults)
+        #expect(state.lastCheck == harness.clock.current)
+        #expect(state.consecutiveFailedRuns == 0)
+        #expect(await harness.notifier.deliveries.last?.names == ["Alpha"])
+    }
+
+    @Test("zero queried rows is a normal run")
+    func zeroQueried() async {
+        let harness = Harness(versions: [:], ignored: ["com.a", "com.b", "com.c"])
+        defer { harness.cleanUp() }
+        harness.checker.setFailing(["com.a", "com.b", "com.c"])
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 0, notified: false))
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).consecutiveFailedRuns == 0)
+    }
+
+    @Test("a skipped version row is excluded from the failure ratio")
+    func skippedExcludedFromRatio() async {
+        let harness = Harness(versions: [:])
+        defer { harness.cleanUp() }
+        harness.checker.setFailing(["com.b"])
+        harness.checker.setSkipped(["com.a"])
+        // Queried: com.b only (com.c ignored, com.a skipped): 1 of 1 failed.
+        #expect(await harness.check.runIfDue() == .failed)
+        harness.checker.setFailing([])
+        // Nothing queried failed; a skipped row doesn't count either way.
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 0, notified: false))
     }
 }
