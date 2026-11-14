@@ -14,6 +14,7 @@ public enum MCPToolName: String, Codable, Sendable, CaseIterable {
     case status
     case clean
     case listBackgroundItems = "list_background_items"
+    case listAppUpdates = "list_app_updates"
 }
 
 /// A self-describing MCP tool definition: name, human description, and a
@@ -162,6 +163,7 @@ public enum MCPPhase2Tools {
         listProfiles,
         status,
         listBackgroundItems,
+        listAppUpdates,
     ]
 
     // MARK: scan
@@ -279,6 +281,32 @@ public enum MCPPhase2Tools {
                         + "filename stem (they can differ — e.g. com.adobe.GC.Invoker-1.0.plist carries Label "
                         + "com.adobe.GC.Scheduler-1.0). Returns every match; the same label can exist in both "
                         + "the user and system domains."
+                ),
+            ],
+            required: []
+        )
+    )
+
+    // MARK: list_app_updates
+
+    public static let listAppUpdates = MCPToolDescriptor(
+        name: .listAppUpdates,
+        description: "List installed apps with an available update, from the same check as the App Updates page. "
+            + "Read-only: nothing is downloaded or installed. Contacts the apps' update feeds, Homebrew and the "
+            + "App Store, like a manual check in the app, so it can take a while. Honors the app's ignored and "
+            + "skipped lists. The wire list is capped at 100 rows; total_items carries the real count.",
+        inputSchema: MCPJSONSchema(
+            type: .object,
+            description: "All inputs optional.",
+            properties: [
+                "include_all": MCPJSONSchema(
+                    type: .boolean,
+                    description: "Also return apps with no available update (up to date, ignored, skipped, "
+                        + "failed, untracked). Default false."
+                ),
+                "bundle_id": MCPJSONSchema(
+                    type: .string,
+                    description: "Exact bundle identifier of one app to inspect, whatever its status."
                 ),
             ],
             required: []
