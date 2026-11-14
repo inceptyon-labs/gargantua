@@ -7,14 +7,23 @@ import Testing
 struct AppReleaseBackgroundCheckTests {
     struct StubInventory: AppReleaseInventoryProviding {
         let apps: [InstalledApp]
-        func installedApps() async -> [InstalledApp] { apps }
+        var onCall: (@Sendable () -> Void)?
+        func installedApps() async -> [InstalledApp] {
+            onCall?()
+            return apps
+        }
         func installedApp(at url: URL) async -> InstalledApp? { nil }
     }
 
     /// Reports the given versions as available; counts calls.
     final class StubChecker: AppReleaseChecking {
         // swiftlint:disable:next nesting
-        private struct State { var calls = 0; var versions: [String: String]; var failing: Set<String> = [] }
+        private struct State {
+            var calls = 0
+            var versions: [String: String]
+            var failing: Set<String> = []
+            var onCheck: (@Sendable () -> Void)?
+        }
         private let state: OSAllocatedUnfairLock<State>
         var calls: Int { state.withLock { $0.calls } }
 
@@ -24,11 +33,16 @@ struct AppReleaseBackgroundCheckTests {
 
         func setVersion(_ id: String, _ version: String) { state.withLock { $0.versions[id] = version } }
 
+        func clearVersion(_ id: String) { state.withLock { $0.versions[id] = nil } }
+
+        func setOnCheck(_ action: @escaping @Sendable () -> Void) { state.withLock { $0.onCheck = action } }
+
         func check(_ apps: [InstalledApp], preferences: AppReleasePreferences) async -> [AppReleaseRow] {
-            let (versions, failing) = state.withLock { state -> ([String: String], Set<String>) in
+            let (versions, failing, onCheck) = state.withLock { state in
                 state.calls += 1
-                return (state.versions, state.failing)
+                return (state.versions, state.failing, state.onCheck)
             }
+            onCheck?()
             return apps.map { app in
                 if failing.contains(app.bundleID) { return AppReleaseRow(app: app, status: .failed("offline")) }
                 if preferences.ignoredBundleIDs.contains(app.bundleID) {
@@ -49,7 +63,12 @@ struct AppReleaseBackgroundCheckTests {
 
     actor RecordingNotifier: AppReleaseUpdateNotifying {
         private(set) var deliveries: [(count: Int, names: [String])] = []
-        func deliver(count: Int, appNames: [String]) async { deliveries.append((count, appNames)) }
+        private var succeeds = true
+        func setSucceeds(_ value: Bool) { succeeds = value }
+        func deliver(count: Int, appNames: [String]) async -> Bool {
+            deliveries.append((count, appNames))
+            return succeeds
+        }
     }
 
     final class Clock: Sendable {
@@ -71,18 +90,21 @@ struct AppReleaseBackgroundCheckTests {
         let clock = Clock(Date(timeIntervalSince1970: 1_800_000_000))
         let check: AppReleaseBackgroundCheck
 
-        init(versions: [String: String], enabled: Bool = true) {
+        init(versions: [String: String], enabled: Bool = true, onInventory: (@Sendable (String) -> Void)? = nil) {
             defaults = UserDefaults(suiteName: suite)!
             checker = StubChecker(versions: versions)
             AppReleasePreferences(ignoredBundleIDs: ["com.c"], backgroundCheckEnabled: enabled).store(in: defaults)
             let clock = clock
+            let suite = suite
+            var inventoryHook: (@Sendable () -> Void)?
+            if let onInventory { inventoryHook = { onInventory(suite) } }
             check = AppReleaseBackgroundCheck(
                 suiteName: suite,
                 inventory: StubInventory(apps: [
                     AppReleaseBackgroundCheckTests.app("com.b", name: "Bravo"),
                     AppReleaseBackgroundCheckTests.app("com.a", name: "Alpha"),
                     AppReleaseBackgroundCheckTests.app("com.c", name: "Charlie"),
-                ]),
+                ], onCall: inventoryHook),
                 checker: checker,
                 notifier: notifier,
                 now: { clock.current }
@@ -184,6 +206,81 @@ struct AppReleaseBackgroundCheckTests {
         #expect(AppReleaseBackgroundState.stored(in: harness.defaults) == before)
         #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 1)
         #expect(await harness.notifier.deliveries.count == 1)
+    }
+
+    static func disableBackgroundCheck(suite: String) {
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+        AppReleasePreferences(ignoredBundleIDs: ["com.c"], backgroundCheckEnabled: false).store(in: defaults)
+    }
+
+    @Test("an announced key survives an up-to-date run and is pruned when the app is gone")
+    func keyKeptWhileUpToDate() async {
+        let harness = Harness(versions: ["com.a": "2", "com.b": "3"])
+        defer { harness.cleanUp() }
+        _ = await harness.check.runIfDue()
+
+        harness.checker.clearVersion("com.a")
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).notifiedUpdateKeys == ["com.a@2", "com.b@3"])
+
+        harness.checker.setVersion("com.a", "2")
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: false))
+        #expect(await harness.notifier.deliveries.count == 1)
+
+        harness.checker.setVersion("com.a", "3")
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: true))
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).notifiedUpdateKeys == ["com.a@3", "com.b@3"])
+
+        let clock = harness.clock
+        let onlyBravo = AppReleaseBackgroundCheck(
+            suiteName: harness.suite,
+            inventory: StubInventory(apps: [Self.app("com.b", name: "Bravo")]),
+            checker: harness.checker,
+            notifier: harness.notifier,
+            now: { clock.current }
+        )
+        harness.clock.advance(hours: 25)
+        _ = await onlyBravo.runIfDue()
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).notifiedUpdateKeys == ["com.b@3"])
+    }
+
+    @Test("an undelivered notification leaves its updates unannounced")
+    func undeliveredNotRecorded() async {
+        let harness = Harness(versions: ["com.a": "2.0", "com.b": "3.0"])
+        defer { harness.cleanUp() }
+        await harness.notifier.setSucceeds(false)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: false))
+        let state = AppReleaseBackgroundState.stored(in: harness.defaults)
+        #expect(state.notifiedUpdateKeys.isEmpty)
+        #expect(state.lastCheck == harness.clock.current)
+        #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 2)
+
+        await harness.notifier.setSucceeds(true)
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: true))
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).notifiedUpdateKeys == ["com.a@2.0", "com.b@3.0"])
+    }
+
+    @Test("turning the preference off during the inventory stops before any source is contacted")
+    func disabledDuringInventory() async {
+        let harness = Harness(versions: ["com.a": "2.0"], onInventory: { Self.disableBackgroundCheck(suite: $0) })
+        defer { harness.cleanUp() }
+        #expect(await harness.check.runIfDue() == .disabled)
+        #expect(harness.checker.calls == 0)
+    }
+
+    @Test("turning the preference off during the check notifies and stores nothing")
+    func disabledDuringCheck() async {
+        let harness = Harness(versions: ["com.a": "2.0"])
+        defer { harness.cleanUp() }
+        let before = AppReleaseBackgroundState.stored(in: harness.defaults)
+        harness.checker.setOnCheck { [suite = harness.suite] in Self.disableBackgroundCheck(suite: suite) }
+        #expect(await harness.check.runIfDue() == .disabled)
+        #expect(await harness.notifier.deliveries.isEmpty)
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults) == before)
     }
 
     @Test("preferences stored before backgroundCheckEnabled existed keep their data")

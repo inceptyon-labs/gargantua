@@ -54,7 +54,9 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
 }
 
 public protocol AppReleaseUpdateNotifying: Sendable {
-    func deliver(count: Int, appNames: [String]) async
+    /// True when the notification was handed to the system; false when it
+    /// couldn't be (permission not granted, add failed).
+    func deliver(count: Int, appNames: [String]) async -> Bool
 }
 
 #if os(macOS)
@@ -76,10 +78,10 @@ public protocol AppReleaseUpdateNotifying: Sendable {
             return (title, body)
         }
 
-        public func deliver(count: Int, appNames: [String]) async {
+        public func deliver(count: Int, appNames: [String]) async -> Bool {
             do {
                 let granted = try await center.requestAuthorization(options: [.alert, .sound])
-                guard granted else { return }
+                guard granted else { return false }
 
                 let text = Self.content(count: count, appNames: appNames)
                 let content = UNMutableNotificationContent()
@@ -89,8 +91,9 @@ public protocol AppReleaseUpdateNotifying: Sendable {
 
                 let request = UNNotificationRequest(identifier: Self.identifier, content: content, trigger: nil)
                 try await center.add(request)
+                return true
             } catch {
-                return
+                return false
             }
         }
     }
@@ -146,7 +149,11 @@ public struct AppReleaseBackgroundCheck: Sendable {
         if let lastCheck = state.lastCheck, now().timeIntervalSince(lastCheck) < interval { return .notDue }
 
         let apps = await inventory.installedApps()
+        // The user can turn the check off while a run is in flight; re-read
+        // before contacting any source and again before announcing.
+        guard AppReleasePreferences.stored(in: defaults).backgroundCheckEnabled else { return .disabled }
         let rows = await checker.check(apps, preferences: preferences)
+        guard AppReleasePreferences.stored(in: defaults).backgroundCheckEnabled else { return .disabled }
         let failedIDs = Set(rows.compactMap { row -> String? in
             if case .failed = row.status { return row.app.bundleID }
             return nil
@@ -155,20 +162,35 @@ public struct AppReleaseBackgroundCheck: Sendable {
 
         let available = rows.compactMap { row in row.availableCandidate.map { (row.app, $0) } }
         let current = Set(available.map { "\($0.0.bundleID)@\($0.1.displayVersion)" })
-        // An app whose source failed this run keeps its announced key so it
-        // isn't announced again once the source answers.
-        let carried = state.notifiedUpdateKeys.filter { key in
-            failedIDs.contains { key.hasPrefix("\($0)@") }
+        // An app keeps its last announced key until a different version is
+        // available or it is uninstalled, so a feed outage that resolves the
+        // row up-to-date or failed doesn't re-announce the update on recovery.
+        let inventoryIDs = Set(apps.map(\.bundleID))
+        let currentIDs = Set(current.map(Self.bundleID(ofKey:)))
+        let retained = state.notifiedUpdateKeys.filter { key in
+            let id = Self.bundleID(ofKey: key)
+            return inventoryIDs.contains(id) && !currentIDs.contains(id)
         }
-        let keys = current.union(carried)
+        let keys = current.union(retained)
+        // Only keys of failed rows count as available; the rest are history.
+        let count = current.union(retained.filter { failedIDs.contains(Self.bundleID(ofKey: $0)) }).count
 
-        let notified = !current.subtracting(state.notifiedUpdateKeys).isEmpty
-        if notified {
-            await notifier.deliver(count: keys.count, appNames: available.map(\.0.name).sorted())
+        let newKeys = current.subtracting(state.notifiedUpdateKeys)
+        var delivered = false
+        if !newKeys.isEmpty {
+            delivered = await notifier.deliver(count: count, appNames: available.map(\.0.name).sorted())
         }
-        AppReleaseBackgroundState(lastCheck: now(), notifiedUpdateKeys: keys).store(in: defaults)
-        AppReleaseBackgroundState.storeAvailableCount(keys.count, in: defaults)
-        return .checked(availableCount: keys.count, notified: notified)
+        // An undelivered notification leaves its updates unannounced so a later
+        // run (e.g. once permission is granted) announces them.
+        let stored = delivered ? keys : keys.subtracting(newKeys)
+        AppReleaseBackgroundState(lastCheck: now(), notifiedUpdateKeys: stored).store(in: defaults)
+        AppReleaseBackgroundState.storeAvailableCount(count, in: defaults)
+        return .checked(availableCount: count, notified: delivered)
+    }
+
+    private static func bundleID(ofKey key: String) -> String {
+        guard let at = key.lastIndex(of: "@") else { return key }
+        return String(key[..<at])
     }
 
     /// The containing app's bundle ID, which is its defaults suite, for the
