@@ -48,13 +48,11 @@ extension AppReleaseInstaller {
 
     /// A refused Trash move is App Management (or plain file permissions)
     /// when Cocoa reports no write permission or POSIX reports `EPERM` /
-    /// `EACCES`, directly or as an underlying error. `FallbackTrashMover`
-    /// keeps only the messages, so its failure is classified by text the way
-    /// `CleanupFailureClassifier` does for other Trash failures.
+    /// `EACCES`, directly or as an underlying error. A `FallbackTrashMover`
+    /// failure is denied when either of its two errors is.
     static func isPermissionDenied(_ error: any Error) -> Bool {
         if let fallback = error as? TrashMoveFallbackFailure {
-            return CleanupFailureClassifier.isElevatable(fallback.primaryError)
-                || CleanupFailureClassifier.isElevatable(fallback.fallbackError)
+            return isPermissionDenied(fallback.primary) || isPermissionDenied(fallback.fallback)
         }
         var current: NSError? = error as NSError
         var depth = 0

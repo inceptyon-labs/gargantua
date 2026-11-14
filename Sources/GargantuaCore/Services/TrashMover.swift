@@ -13,11 +13,11 @@ struct TrashMoveFailure: LocalizedError, Sendable {
 }
 
 struct TrashMoveFallbackFailure: LocalizedError, Sendable {
-    let primaryError: String
-    let fallbackError: String
+    let primary: any Error
+    let fallback: any Error
 
     var errorDescription: String? {
-        "Trash move failed: \(primaryError). Fallback also failed: \(fallbackError)."
+        "Trash move failed: \(primary.localizedDescription). Fallback also failed: \(fallback.localizedDescription)."
     }
 }
 
@@ -42,13 +42,13 @@ final class FallbackTrashMover: TrashMoving {
         do {
             return try await primary.moveToTrash(url)
         } catch {
-            let primaryMessage = error.localizedDescription
+            let primaryError = error
             do {
                 return try await fallback.moveToTrash(url)
             } catch {
                 throw TrashMoveFallbackFailure(
-                    primaryError: primaryMessage,
-                    fallbackError: error.localizedDescription
+                    primary: primaryError,
+                    fallback: error
                 )
             }
         }

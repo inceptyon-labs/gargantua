@@ -45,7 +45,7 @@ struct AppReleaseInstallerTests {
         runner: any ProcessRunner = ScriptedBrewRunner { _ in ProcessOutput(stdout: "", stderr: "", exitCode: 0) },
         quitter: StubAppQuitter = StubAppQuitter(),
         audit: SpyUninstallAuditRecorder = SpyUninstallAuditRecorder(),
-        trash: FakeTrashMover? = nil,
+        trash: (any TrashMoving)? = nil,
         teamIDReader: @escaping @Sendable (URL) -> String? = { _ in "TEAM123456" }
     ) -> AppReleaseInstaller {
         AppReleaseInstaller(
@@ -127,6 +127,43 @@ struct AppReleaseInstallerTests {
         #expect(result == .failure(.appManagementDenied))
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
         #expect(sandbox.stagingLeftovers.isEmpty)
+    }
+
+    @Test("a fallback Trash failure in another language is still App Management")
+    func fallbackTrashFailureLocalized() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let denied = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError, userInfo: [
+            NSLocalizedDescriptionKey: "Vous n’avez pas l’autorisation d’enregistrer le fichier « Foo.app »."
+        ])
+        let other = NSError(domain: "NSOSStatusErrorDomain", code: -1, userInfo: [
+            NSLocalizedDescriptionKey: "L’opération n’a pas pu être effectuée."
+        ])
+        let trash = FallbackTrashMover(
+            primary: FakeTrashMover(trashDirectory: sandbox.trashDirectory, error: denied),
+            fallback: FakeTrashMover(trashDirectory: sandbox.trashDirectory, error: other)
+        )
+
+        let result = await install(makeInstaller(sandbox: sandbox, trash: trash), sandbox: sandbox)
+
+        #expect(result == .failure(.appManagementDenied))
+        #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
+    }
+
+    @Test("a fallback Trash failure is classified by code, not by English text")
+    func fallbackTrashFailureByCode() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let error = NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Operation not permitted"])
+        let trash = FallbackTrashMover(
+            primary: FakeTrashMover(trashDirectory: sandbox.trashDirectory, error: error),
+            fallback: FakeTrashMover(trashDirectory: sandbox.trashDirectory, error: error)
+        )
+
+        let result = await install(makeInstaller(sandbox: sandbox, trash: trash), sandbox: sandbox)
+
+        if case .failure(.swapFailed) = result {} else { Issue.record("expected swapFailed, got \(result)") }
+        #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
     }
 
     @Test("when the new bundle can't be moved in, the old one comes back from the Trash")
