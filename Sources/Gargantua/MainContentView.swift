@@ -13,6 +13,9 @@ import SwiftUI
 // that extension can reach them.
 struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding = false
+    // Observed so a count the scheduler writes while the app is open updates the badge.
+    @AppStorage(AppReleaseBackgroundState.userDefaultsKey) private var appReleaseBackgroundStateData: Data?
+    @AppStorage(AppReleasePreferences.userDefaultsKey) private var appReleasePreferencesData: Data?
     @State var sidebarSelection: String? = "dashboard"
     /// Toggled by ⌘/ (via the Help-menu command) to show the shortcut cheat sheet.
     @State var showKeyboardCheatSheet = false
@@ -39,6 +42,21 @@ struct MainContentView: View {
         _window = StateObject(wrappedValue: WindowState())
     }
 
+    private var appUpdatesBadgeCount: Int {
+        let stored = appReleaseBackgroundStateData.flatMap {
+            try? JSONDecoder().decode(AppReleaseBackgroundState.self, from: $0)
+        }
+        let preferences = appReleasePreferencesData.flatMap {
+            try? JSONDecoder().decode(AppReleasePreferences.self, from: $0)
+        }
+        return AppReleaseBadge.count(
+            sessionHasChecked: appReleasesSession.lastChecked != nil,
+            sessionCount: appReleasesSession.availableCount,
+            backgroundCheckEnabled: preferences?.backgroundCheckEnabled ?? false,
+            storedCount: stored?.availableCount ?? 0
+        )
+    }
+
     var body: some View {
         ZStack {
             GargantuaColors.void_
@@ -51,7 +69,8 @@ struct MainContentView: View {
                     SidebarView(
                         selection: $sidebarSelection,
                         mcpStatusModel: mcpStatusModel,
-                        updateModel: updateSettingsViewModel
+                        updateModel: updateSettingsViewModel,
+                        badges: ["appUpdates": appUpdatesBadgeCount]
                     )
 
                     // Content area

@@ -16,6 +16,8 @@ import SwiftUI
 public struct SidebarView: View {
     @Binding public var selection: String?
     public var sections: [SidebarSection]
+    /// Item id to count, shown as a badge on the row.
+    public var badges: [String: Int] = [:]
     @ObservedObject private var mcpStatusModel: MCPServerStatusViewModel
     private let updateModel: AppUpdateSettingsViewModel?
     @AppStorage("sidebar.collapsed") private var isCollapsed: Bool = false
@@ -39,10 +41,12 @@ public struct SidebarView: View {
         selection: Binding<String?>,
         sections: [SidebarSection] = SidebarSection.defaultSections,
         mcpStatusModel: MCPServerStatusViewModel,
-        updateModel: AppUpdateSettingsViewModel? = nil
+        updateModel: AppUpdateSettingsViewModel? = nil,
+        badges: [String: Int] = [:]
     ) {
         self._selection = selection
         self.sections = sections
+        self.badges = badges
         self.mcpStatusModel = mcpStatusModel
         self.updateModel = updateModel
     }
@@ -78,7 +82,8 @@ public struct SidebarView: View {
                         SidebarSectionView(
                             section: section,
                             selection: $selection,
-                            isCollapsed: isCollapsed
+                            isCollapsed: isCollapsed,
+                            badges: badges
                         )
                         .padding(.top, GargantuaSpacing.space3)
                     }
