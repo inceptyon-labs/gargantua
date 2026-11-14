@@ -13,9 +13,8 @@ struct AppReleaseInventoryTests {
         func verify(bundleURL _: URL) -> CodeSignatureInfo { CodeSignatureInfo(valid: true, teamIdentifier: "TEAM123456") }
     }
 
-    /// Under home: the system temp dir is /private/var, which the updater skips.
     private static func tempRoot() -> URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("gargantua-inv-\(UUID().uuidString)")
+        FileManager.default.temporaryDirectory.appendingPathComponent("gargantua-inv-\(UUID().uuidString)")
     }
 
     private func makeApp(in root: URL, _ name: String, plist: [String: Any], mas: Bool = false) throws -> URL {
@@ -47,7 +46,7 @@ struct AppReleaseInventoryTests {
         let apps = await DefaultAppReleaseInventory(
             enumerator: StubEnumerator(urls: [foo, bar, noID, foo]),
             signatureReader: StubSigner(),
-            excludedBundleIDs: []
+            excludedBundleIDs: [], isUpdatableLocation: { _ in true }
         ).installedApps()
 
         #expect(apps.map(\.bundleID) == ["com.test.bar", "com.test.foo"])
@@ -75,7 +74,7 @@ struct AppReleaseInventoryTests {
         let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo", "CFBundleShortVersionString": "3.1"])
         let skipped = try makeApp(in: root, "Skip", plist: ["CFBundleIdentifier": "com.test.skip"])
         let inventory = DefaultAppReleaseInventory(
-            enumerator: StubEnumerator(urls: []), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.skip"]
+            enumerator: StubEnumerator(urls: []), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.skip"], isUpdatableLocation: { _ in true }
         )
 
         #expect(await inventory.installedApp(at: foo)?.shortVersion == "3.1")
@@ -88,45 +87,57 @@ struct AppReleaseInventoryTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo"])
         let apps = await DefaultAppReleaseInventory(
-            enumerator: StubEnumerator(urls: [foo]), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.foo"]
+            enumerator: StubEnumerator(urls: [foo]), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.foo"], isUpdatableLocation: { _ in true }
         ).installedApps()
         #expect(apps.isEmpty)
     }
 
     @Test("update-location filter", arguments: [
-        ("/Applications/Foo.app", true),
-        ("/Applications/Utilities/Foo.app", true),
-        ("/Users/test/Applications/Foo.app", true),
-        ("/Users/test/Downloads/Foo.app", true),
-        ("/System/Applications/Notes.app", true),
-        ("/Applications/Foo.app/Contents/Helpers/Helper.app", false),
-        ("/Users/test/.codex/computer-use/Codex Computer Use.app", false),
-        ("/Users/test/Library/Application Support/X/Updater.app", false),
-        ("/Library/Application Support/X/Y.app", false),
-        ("/System/Library/CoreServices/Z.app", false),
-        ("/private/var/folders/ab/T/AppTranslocation/UUID/d/Foo.app", false),
-        ("/Volumes/Foo/Foo.app", false),
-        ("/opt/homebrew/Caskroom/x/1.0/X.app", false),
-    ])
-    func updatableLocation(path: String, expected: Bool) {
+        ("/Applications/Foo.app", true, "/Users/test"),
+        ("/Applications/Utilities/Foo.app", true, "/Users/test"),
+        ("/Users/test/Applications/Foo.app", true, "/Users/test"),
+        ("/Users/test/Downloads/Foo.app", true, "/Users/test"),
+        ("/System/Applications/Notes.app", true, "/Users/test"),
+        ("/Applications/Foo.app/Contents/Helpers/Helper.app", false, "/Users/test"),
+        ("/Users/test/.codex/computer-use/Codex Computer Use.app", false, "/Users/test"),
+        ("/Users/test/Library/Application Support/X/Updater.app", false, "/Users/test"),
+        ("/Library/Application Support/X/Y.app", false, "/Users/test"),
+        ("/System/Library/CoreServices/Z.app", false, "/Users/test"),
+        ("/private/var/folders/ab/T/AppTranslocation/UUID/d/Foo.app", false, "/Users/test"),
+        ("/Volumes/Foo/Foo.app", false, "/Users/test"),
+        ("/opt/homebrew/Caskroom/x/1.0/X.app", false, "/Users/test"),
+        ("/Applications/Setapp/Foo.app", true, "/Users/test"),
+        ("/tmp/Foo.app", false, "/Users/test"),
+        ("/var/x/Foo.app", false, "/Users/test"),
+        ("/home/u/Applications/Foo.app", true, "/home/u"),
+        ("/home/u/Library/X.app", false, "/home/u"),
+        ("/Users/.foo/Applications/A.app", true, "/Users/.foo"),
+    ] as [(String, Bool, String)]) // swiftlint:disable:this large_tuple
+    func updatableLocation(path: String, expected: Bool, home: String) {
         #expect(DefaultAppReleaseInventory.isUpdatableLocation(
-            URL(fileURLWithPath: path), home: URL(fileURLWithPath: "/Users/test")
+            URL(fileURLWithPath: path), home: URL(fileURLWithPath: home)
         ) == expected)
     }
 
     @Test func installedAppsSkipsHelperAndToolPrivateBundles() async throws {
         let root = Self.tempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
-        let home = FileManager.default.homeDirectoryForCurrentUser
         let plist: (String) -> [String: Any] = { ["CFBundleIdentifier": $0] }
         let normal = try makeApp(in: root, "Normal", plist: plist("com.test.normal"))
         let nested = try makeApp(in: normal.appendingPathComponent("Contents/Helpers"), "Helper", plist: plist("com.test.helper"))
         let hidden = try makeApp(in: root.appendingPathComponent(".tool"), "Hidden", plist: plist("com.test.hidden"))
-        let library = try makeApp(in: home.appendingPathComponent("Library/gargantua-test-\(UUID().uuidString)"), "Lib", plist: plist("com.test.lib"))
-        defer { try? FileManager.default.removeItem(at: library.deletingLastPathComponent()) }
 
+        // The real rule, with the temp root standing in for /Applications.
+        let rootPath = root.standardizedFileURL.path
         let apps = await DefaultAppReleaseInventory(
-            enumerator: StubEnumerator(urls: [normal, nested, hidden, library]), signatureReader: StubSigner(), excludedBundleIDs: []
+            enumerator: StubEnumerator(urls: [normal, nested, hidden]),
+            signatureReader: StubSigner(),
+            excludedBundleIDs: [],
+            isUpdatableLocation: { url in
+                DefaultAppReleaseInventory.isUpdatableLocation(
+                    URL(fileURLWithPath: "/Applications" + url.standardizedFileURL.path.dropFirst(rootPath.count))
+                )
+            }
         ).installedApps()
         #expect(apps.map(\.bundleID) == ["com.test.normal"])
     }
