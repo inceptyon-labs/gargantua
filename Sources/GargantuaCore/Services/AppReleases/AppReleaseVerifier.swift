@@ -319,11 +319,16 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     /// starts with `BZh`. An encrypted image has no readable trailer and is
     /// refused from its `encrcdsa` header: its key-derivation cost is set by
     /// whoever built it, so attaching one can keep `diskimages-helper` busy
-    /// past any timeout.
+    /// past any timeout. A v1 encrypted image carries a `cdsaencr` header at
+    /// the end of the file, so a `koly` trailer is only trusted when the last
+    /// 4096 bytes hold no such header.
     static func sniff(head: [UInt8], tail: [UInt8]?) throws(AppReleaseVerificationFailure) -> AppReleasePayloadKind {
         if head.starts(with: Array("xar!".utf8)) { throw .installerPackage }
         if head.starts(with: Array("encrcdsa".utf8)) { throw .encryptedDiskImage }
-        if let tail, tail.count == 512, tail.starts(with: Array("koly".utf8)) { return .dmg }
+        if let tail, tail.count >= 512, tail.suffix(512).starts(with: Array("koly".utf8)) {
+            if containsSubsequence(tail, Array("cdsaencr".utf8)) { throw .encryptedDiskImage }
+            return .dmg
+        }
         if head.starts(with: [0x50, 0x4B, 0x03, 0x04]) { return .zip }
         if head.starts(with: [0x1F, 0x8B])
             || head.starts(with: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])
@@ -334,6 +339,11 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         throw .unrecognizedPayload
     }
 
+    private static func containsSubsequence(_ haystack: [UInt8], _ needle: [UInt8]) -> Bool {
+        guard haystack.count >= needle.count else { return false }
+        return (0 ... haystack.count - needle.count).contains { haystack[$0 ..< $0 + needle.count].elementsEqual(needle) }
+    }
+
     private static func readHeadAndTail(of url: URL) throws(AppReleaseVerificationFailure) -> ([UInt8], [UInt8]?) {
         let descriptor = open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
         guard descriptor >= 0 else { throw .unreadablePayload(Self.errnoMessage()) }
@@ -341,13 +351,14 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         var info = stat()
         guard fstat(descriptor, &info) == 0 else { throw .unreadablePayload(Self.errnoMessage()) }
 
-        func readBlock(at offset: off_t) -> [UInt8] {
-            var block = [UInt8](repeating: 0, count: 512)
+        func readBlock(at offset: off_t, length: Int = 512) -> [UInt8] {
+            var block = [UInt8](repeating: 0, count: length)
             let count = block.withUnsafeMutableBytes { pread(descriptor, $0.baseAddress, $0.count, offset) }
             return count > 0 ? Array(block.prefix(count)) : []
         }
         let head = readBlock(at: 0)
-        let tail = info.st_size >= 512 ? readBlock(at: info.st_size - 512) : nil
+        let tailLength = Int(min(info.st_size, 4096))
+        let tail = info.st_size >= 512 ? readBlock(at: info.st_size - off_t(tailLength), length: tailLength) : nil
         return (head, tail)
     }
 

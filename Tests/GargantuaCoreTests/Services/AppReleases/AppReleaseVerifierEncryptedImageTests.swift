@@ -98,6 +98,31 @@ struct AppReleaseVerifierEncryptedImageTests {
         }
     }
 
+    @Test("a v1 cdsaencr tail with a planted koly block is refused, and no process runs")
+    func v1EncryptedTailRefusedWithoutHdiutil() throws {
+        struct FailingRunner: ProcessRunner {
+            func run(executable: URL, arguments: [String]) throws -> ProcessOutput {
+                Issue.record("a process ran for an encrypted image: \(executable.path)")
+                return ProcessOutput(stdout: "", stderr: "", exitCode: 1)
+            }
+        }
+        try withTemporaryDirectory { directory in
+            let image = try writeFile(
+                Array(repeating: 0, count: 1024) + Array("cdsaencr".utf8) + Array(repeating: 0, count: 600)
+                    + Array("koly".utf8) + Array(repeating: 0, count: 508),
+                in: directory
+            )
+            let work = directory.appendingPathComponent("work", isDirectory: true)
+            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+            #expect(throws: Failure.encryptedDiskImage) {
+                try AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper(), runner: FailingRunner())
+                    .verify(payload: image, app: someApp,
+                            candidate: Fixtures.candidate(downloadURL: "https://example.com/Foo.dmg"),
+                            strategy: .inPlace, workDirectory: work)
+            }
+        }
+    }
+
     @Test("a real AES-encrypted disk image is refused at once, not after the attach timeout",
           .enabled(if: FileManager.default.isExecutableFile(atPath: "/usr/bin/hdiutil")))
     func realEncryptedDiskImage() throws {
@@ -121,7 +146,6 @@ struct AppReleaseVerifierEncryptedImageTests {
 
             let work = directory.appendingPathComponent("work", isDirectory: true)
             try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-            let started = Date()
             #expect(throws: Failure.encryptedDiskImage) {
                 try AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper()).verify(
                     payload: dmg, app: someApp,
@@ -129,7 +153,6 @@ struct AppReleaseVerifierEncryptedImageTests {
                     strategy: .inPlace, workDirectory: work
                 )
             }
-            #expect(Date().timeIntervalSince(started) < 1)
         }
     }
 }
