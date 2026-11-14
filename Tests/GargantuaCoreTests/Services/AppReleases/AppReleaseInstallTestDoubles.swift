@@ -1,0 +1,205 @@
+import Foundation
+import os
+@testable import GargantuaCore
+
+/// Fixtures shared by the verifier and installer tests.
+enum AppReleaseInstallFixtures {
+    static let bundleID = "com.example.Foo"
+
+    /// A fresh directory under the temp dir. Callers remove it.
+    static func makeTemporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AppReleaseInstall-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// Writes a minimal bundle: `Contents/Info.plist` with an identifier and
+    /// versions.
+    static func writeBundle(
+        at url: URL,
+        bundleID: String = bundleID,
+        short: String,
+        build: String,
+        extra: [String: Any] = [:]
+    ) throws {
+        let contents = url.appendingPathComponent("Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        var plist: [String: Any] = [
+            "CFBundleIdentifier": bundleID,
+            "CFBundleShortVersionString": short,
+            "CFBundleVersion": build,
+        ]
+        plist.merge(extra) { _, new in new }
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try data.write(to: contents.appendingPathComponent("Info.plist"))
+    }
+
+    static func installedApp(
+        at url: URL,
+        short: String = "1.0",
+        build: String = "100",
+        teamID: String? = "TEAM123456",
+        sparklePublicEDKey: String? = nil
+    ) -> InstalledApp {
+        InstalledApp(
+            bundleID: bundleID,
+            name: "Foo",
+            url: url,
+            shortVersion: short,
+            buildVersion: build,
+            teamID: teamID,
+            sparklePublicEDKey: sparklePublicEDKey
+        )
+    }
+
+    static func candidate(
+        source: AppReleaseSourceKind = .sparkle,
+        short: String = "2.0",
+        build: String = "200",
+        expectedLength: Int64? = nil,
+        edSignature: String? = nil,
+        sha256: String? = nil,
+        pinnedTeamID: String? = nil,
+        isSparkleFeed: Bool? = nil,
+        caskToken: String? = nil
+    ) -> AppReleaseCandidate {
+        AppReleaseCandidate(
+            source: source,
+            version: AppReleaseVersion(short: short, build: build),
+            downloadURL: URL(string: "https://example.com/Foo.zip"),
+            expectedLength: expectedLength,
+            edSignature: edSignature,
+            sha256: sha256,
+            caskToken: caskToken,
+            pinnedTeamID: pinnedTeamID,
+            isSparkleFeed: isSparkleFeed
+        )
+    }
+}
+
+/// Writes a fixed payload and counts downloads.
+final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
+    private let downloads = OSAllocatedUnfairLock(initialState: 0)
+
+    var downloadCount: Int { downloads.withLock { $0 } }
+
+    func get(_ url: URL, etag _: String?) async throws -> AppReleaseHTTPResponse {
+        throw AppReleaseHTTPError.network("get is not stubbed: \(url)")
+    }
+
+    func download(_: URL, to destination: URL, maxBytes _: Int64) async throws -> Int64 {
+        downloads.withLock { $0 += 1 }
+        let data = Data("payload".utf8)
+        try data.write(to: destination)
+        return Int64(data.count)
+    }
+}
+
+/// Skips real verification and stages whatever `stage` builds in the work
+/// directory.
+struct StubAppReleaseVerifier: AppReleaseVerifying {
+    let stage: @Sendable (URL) -> Result<AppReleaseStagedBundle, AppReleaseVerificationFailure>
+
+    func checkSourcePolicy(
+        _: AppReleaseCandidate,
+        strategy _: AppReleaseInstallStrategy
+    ) throws(AppReleaseVerificationFailure) {}
+
+    func verify(
+        payload _: URL,
+        app _: InstalledApp,
+        candidate _: AppReleaseCandidate,
+        strategy _: AppReleaseInstallStrategy,
+        workDirectory: URL
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle {
+        try stage(workDirectory).get()
+    }
+
+    /// Stages a real bundle at `<work>/extracted/Foo.app` with the given version.
+    static func staging(short: String, build: String) -> StubAppReleaseVerifier {
+        StubAppReleaseVerifier { workDirectory in
+            let url = workDirectory.appendingPathComponent("extracted/Foo.app", isDirectory: true)
+            do {
+                try AppReleaseInstallFixtures.writeBundle(at: url, short: short, build: build)
+            } catch {
+                return .failure(.extractionFailed(error.localizedDescription))
+            }
+            return .success(AppReleaseStagedBundle(url: url, version: AppReleaseVersion(short: short, build: build)))
+        }
+    }
+
+    /// Reports a staged bundle that doesn't exist, so the swap's move fails.
+    static func stagingMissingBundle() -> StubAppReleaseVerifier {
+        StubAppReleaseVerifier { workDirectory in
+            .success(AppReleaseStagedBundle(
+                url: workDirectory.appendingPathComponent("extracted/Missing.app", isDirectory: true),
+                version: AppReleaseVersion(short: "2.0", build: "200")
+            ))
+        }
+    }
+}
+
+/// Moves items into a test-owned directory, or throws `error`.
+@MainActor
+final class FakeTrashMover: TrashMoving {
+    let trashDirectory: URL
+    var error: (any Error)?
+    private(set) var movedItems: [URL] = []
+
+    init(trashDirectory: URL, error: (any Error)? = nil) {
+        self.trashDirectory = trashDirectory
+        self.error = error
+    }
+
+    func moveToTrash(_ url: URL) async throws -> URL? {
+        if let error { throw error }
+        let destination = trashDirectory.appendingPathComponent(url.lastPathComponent, isDirectory: true)
+        try FileManager.default.moveItem(at: url, to: destination)
+        movedItems.append(url)
+        return destination
+    }
+}
+
+@MainActor
+final class StubAppQuitter: AppReleaseAppQuitting {
+    var running: Bool
+    private(set) var quitRequests: [String] = []
+    private(set) var relaunchedURLs: [URL] = []
+
+    init(running: Bool = false) {
+        self.running = running
+    }
+
+    func isRunning(bundleID _: String) -> Bool {
+        running
+    }
+
+    func quitGracefully(bundleID: String, timeout _: TimeInterval) async -> Bool {
+        quitRequests.append(bundleID)
+        running = false
+        return true
+    }
+
+    func relaunch(at url: URL) async -> Bool {
+        relaunchedURLs.append(url)
+        return true
+    }
+}
+
+/// Answers every run with `handler` and records the arguments.
+final class ScriptedBrewRunner: ProcessRunner {
+    private let handler: @Sendable ([String]) -> ProcessOutput
+    private let calls = OSAllocatedUnfairLock<[[String]]>(initialState: [])
+
+    init(handler: @escaping @Sendable ([String]) -> ProcessOutput) {
+        self.handler = handler
+    }
+
+    var recordedArguments: [[String]] { calls.withLock { $0 } }
+
+    func run(executable _: URL, arguments: [String]) throws -> ProcessOutput {
+        calls.withLock { $0.append(arguments) }
+        return handler(arguments)
+    }
+}

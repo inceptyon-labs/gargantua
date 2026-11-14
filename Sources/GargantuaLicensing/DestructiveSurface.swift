@@ -35,6 +35,8 @@ extension BlockReason: Error {}
 /// authorizes before trashing a folder Apply created. Organizing itself (the
 /// moves, and Undo) is not destructive and stays ungated.
 ///
+/// `.appUpdater` is asserted by `AppReleaseInstaller.install`, which refuses a token for any other surface.
+///
 /// Background Items (`DefaultBackgroundItemTrasher`) destroys user data
 /// outside these boundaries and is deliberately not enumerated here. Whether
 /// it should require a license is a product decision that has not been made;
@@ -53,6 +55,7 @@ public enum DestructiveSurface: String, CaseIterable, Sendable {
     case claudeCodeAgent
     case diskExplorer
     case fileOrganizer
+    case appUpdater
 }
 
 /// Proof that ``LicenseGate/canExecuteDestructiveAction()`` was consulted and

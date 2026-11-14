@@ -107,6 +107,7 @@ let package = Package(
                 .copy("Resources/cleanup_rules"),
                 .copy("Resources/command_rules"),
                 .copy("Resources/uninstall_rules"),
+                .copy("Resources/update_catalog"),
                 .copy("Resources/safety_policy"),
                 .copy("Resources/Brand"),
                 .copy("Resources/bin"),
