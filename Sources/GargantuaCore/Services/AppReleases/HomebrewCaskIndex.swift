@@ -19,7 +19,8 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
     public let disabled: Bool
     /// Non-optional so a cache written before variations existed fails to decode and is refetched.
     public let variations: [String: HomebrewCaskVariation]
-    public var hasVariations: Bool { !variations.isEmpty }
+    /// Non-optional for the same reason as `variations`.
+    public let dependsOn: HomebrewCaskRequirements
 
     public init(
         token: String,
@@ -31,7 +32,8 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         quitBundleIDs: [String] = [],
         hasPkg: Bool = false,
         disabled: Bool = false,
-        variations: [String: HomebrewCaskVariation] = [:]
+        variations: [String: HomebrewCaskVariation] = [:],
+        dependsOn: HomebrewCaskRequirements = HomebrewCaskRequirements()
     ) {
         self.token = token
         self.version = version
@@ -43,6 +45,7 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         self.hasPkg = hasPkg
         self.disabled = disabled
         self.variations = variations
+        self.dependsOn = dependsOn
     }
 
     /// Decodes `cask.json`, skipping entries that are malformed.
@@ -70,23 +73,28 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
             hasPkg: artifacts.hasPkg,
             disabled: json["disabled"] as? Bool ?? false,
             variations: (json["variations"] as? [String: Any] ?? [:]).compactMapValues { value in
-                (value as? [String: Any]).map {
-                    HomebrewCaskVariation(
-                        url: $0["url"] as? String, sha256: $0["sha256"] as? String, version: $0["version"] as? String
-                    )
-                }
-            }
+                (value as? [String: Any]).map(HomebrewCaskVariation.init(json:))
+            },
+            dependsOn: (json["depends_on"] as? [String: Any]).map(HomebrewCaskRequirements.init(json:)) ?? HomebrewCaskRequirements()
         )
     }
 
-    /// The download for `host`: its variation's fields over the top level's. An
-    /// unknown (newer) macOS is the top level on Apple silicon, link-only on Intel.
+    /// The download for `host`: its variation's fields over the top level's. No
+    /// download when the host fails `depends_on`, the variation's url or sha256 is
+    /// an explicit null, or the macOS is newer than the table on Intel.
     func release(for host: HomebrewCaskHost) -> HomebrewCaskRelease {
-        guard !variations.isEmpty else { return HomebrewCaskRelease(url: url, sha256: sha256, version: version) }
-        guard let key = host.variationKey else { return HomebrewCaskRelease(url: host.isArm64 ? url : nil, sha256: sha256, version: version) }
-        guard let variation = variations[key] else { return HomebrewCaskRelease(url: url, sha256: sha256, version: version) }
+        let variation = host.variationKey.flatMap { variations[$0] }
+        let requirements = variation?.dependsOn ?? dependsOn
+        let blocked = !requirements.allows(host)
+            || variation?.urlIsNull == true || variation?.sha256IsNull == true
+            || (!variations.isEmpty && host.variationKey == nil && !host.isArm64)
+        guard let variation else {
+            return HomebrewCaskRelease(url: blocked ? nil : url, sha256: sha256, version: version)
+        }
         let checksum = variation.sha256.map { $0 == "no_check" || $0.isEmpty ? nil : $0 } ?? sha256
-        return HomebrewCaskRelease(url: variation.url ?? url, sha256: checksum, version: variation.version ?? version)
+        return HomebrewCaskRelease(
+            url: blocked ? nil : variation.url ?? url, sha256: checksum, version: variation.version ?? version
+        )
     }
 }
 

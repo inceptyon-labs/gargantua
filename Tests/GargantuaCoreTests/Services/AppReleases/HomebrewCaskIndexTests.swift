@@ -25,7 +25,7 @@ struct HomebrewCaskIndexTests {
         #expect(all[1].appNames == ["Renamed.app"])
         #expect(all[1].quitBundleIDs == ["com.test.renamed"])
         #expect(all[1].sha256 == nil)
-        #expect(all[1].hasVariations)
+        #expect(!all[1].variations.isEmpty)
         #expect(all[2].quitBundleIDs == ["com.a", "com.b"])
         #expect(all[2].hasPkg)
     }
@@ -221,6 +221,81 @@ struct HomebrewCaskIndexTests {
         let old = try await candidate(HomebrewCaskHost(isArm64: true, macOSMajorVersion: 14))
         #expect(old.downloadURL?.absoluteString == "https://x.test/old.dmg")
         #expect(old.displayVersion == "1.5")
+        #expect(old.sha256 == "s1")
+    }
+
+    // MARK: - Null checksums and depends_on
+
+    private static func host(_ arm: Bool, _ major: Int) -> HomebrewCaskHost {
+        HomebrewCaskHost(isArm64: arm, macOSMajorVersion: major)
+    }
+
+    @Test func decodesNullsAndDependsOn() throws {
+        let json = """
+        [{"token":"n","version":"1","depends_on":{"macos":{">=":["15"]},"arch":[{"type":"arm","bits":64}]},
+          "variations":{"sequoia":{"sha256":null},"sonoma":{"url":"https://x.test/x64.dmg","sha256":null,"depends_on":{"macos":{}}}}}]
+        """
+        let entry = try #require(HomebrewCaskEntry.decodeAll(from: Data(json.utf8)).first)
+        #expect(entry.dependsOn == HomebrewCaskRequirements(macOS: [">=": ["15"]], arch: ["arm"]))
+        #expect(entry.variations["sequoia"]?.sha256IsNull == true)
+        #expect(entry.variations["sequoia"]?.urlIsNull == false)
+        #expect(entry.variations["sonoma"]?.sha256IsNull == true)
+        #expect(entry.variations["sonoma"]?.urlIsNull == false)
+        #expect(entry.variations["sonoma"]?.url == "https://x.test/x64.dmg")
+        #expect(entry.variations["sonoma"]?.dependsOn == HomebrewCaskRequirements())
+        #expect(entry.variations["sequoia"]?.dependsOn == nil)
+    }
+
+    @Test func nullChecksumGivesNoDownload() {
+        let entry = HomebrewCaskEntry(
+            token: "n", version: "1", url: "https://x.test/arm.dmg", sha256: "top",
+            variations: [
+                "sequoia": HomebrewCaskVariation(sha256IsNull: true),
+                "sonoma": HomebrewCaskVariation(url: "https://x.test/x64.dmg", sha256IsNull: true),
+            ]
+        )
+        #expect(entry.release(for: Self.host(false, 15)).url == nil)
+        #expect(entry.release(for: Self.host(false, 14)).url == nil)
+    }
+
+    @Test func topLevelMacOSRequirement() {
+        let entry = HomebrewCaskEntry(
+            token: "m", version: "1", url: "https://x.test/a.dmg", sha256: "top",
+            variations: ["arm64_sequoia": HomebrewCaskVariation(version: "1")],
+            dependsOn: HomebrewCaskRequirements(macOS: [">=": ["15"]])
+        )
+        #expect(entry.release(for: Self.host(false, 14)).url == nil)
+        #expect(entry.release(for: Self.host(true, 14)).url == nil)
+        #expect(entry.release(for: Self.host(true, 15)).url == "https://x.test/a.dmg")
+    }
+
+    @Test func topLevelArchRequirement() {
+        let entry = HomebrewCaskEntry(
+            token: "a", version: "1", url: "https://x.test/a.dmg", sha256: "top",
+            variations: ["arm64_sequoia": HomebrewCaskVariation(version: "1")],
+            dependsOn: HomebrewCaskRequirements(arch: ["arm"])
+        )
+        #expect(entry.release(for: Self.host(false, 15)).url == nil)
+        #expect(entry.release(for: Self.host(true, 15)).url == "https://x.test/a.dmg")
+    }
+
+    @Test func variationDependsOnReplacesTopLevel() {
+        let entry = HomebrewCaskEntry(
+            token: "r", version: "1", url: "https://x.test/a.dmg", sha256: "top",
+            variations: ["sonoma": HomebrewCaskVariation(url: "https://x.test/old.dmg", dependsOn: HomebrewCaskRequirements())],
+            dependsOn: HomebrewCaskRequirements(macOS: [">=": ["15"]])
+        )
+        #expect(entry.release(for: Self.host(false, 14)).url == "https://x.test/old.dmg")
+    }
+
+    @Test func equalityRequirementList() {
+        let entry = HomebrewCaskEntry(
+            token: "e", version: "1", url: "https://x.test/a.dmg", sha256: "top",
+            variations: ["arm64_sonoma": HomebrewCaskVariation(version: "1")],
+            dependsOn: HomebrewCaskRequirements(macOS: ["==": ["14", "15", "26", "27"]])
+        )
+        #expect(entry.release(for: Self.host(true, 14)).url == "https://x.test/a.dmg")
+        #expect(entry.release(for: Self.host(true, 28)).url == nil)
     }
 
     @Test func cacheWithoutVariationsIsRefetched() async throws {
