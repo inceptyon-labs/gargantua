@@ -143,7 +143,7 @@ struct HomebrewCaskIndexTests {
     func caskBuildIgnored() async throws {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(Self.sample.utf8)) }
-        let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir), hostIsArm64: true)
+        let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir), host: HomebrewCaskHost(isArm64: true, macOSMajorVersion: 27))
         let app = InstalledApp(
             bundleID: "com.test.renamed",
             name: "Renamed",
@@ -157,5 +157,84 @@ struct HomebrewCaskIndexTests {
         }
         #expect(candidate.version.build == nil)
         #expect(!candidate.version.isNewer(than: app.version))
+    }
+
+    // MARK: - Variations
+
+    private static let variationsJSON = """
+    {"arm64_sonoma":{"url":"https://x.test/old.dmg","sha256":"s1","version":"1.5"},"sequoia":{"url":"https://x.test/intel.dmg","sha256":"s2"},"x86_64_linux":{"url":"https://x.test/linux.tgz"}}
+    """
+
+    private static let variations: [String: HomebrewCaskVariation] = [
+        "arm64_sonoma": HomebrewCaskVariation(url: "https://x.test/old.dmg", sha256: "s1", version: "1.5"),
+        "sequoia": HomebrewCaskVariation(url: "https://x.test/intel.dmg", sha256: "s2", version: nil),
+        "x86_64_linux": HomebrewCaskVariation(url: "https://x.test/linux.tgz", sha256: nil, version: nil),
+    ]
+
+    @Test func decodesVariationsRaw() throws {
+        let json = #"[{"token":"v","version":"2.0","variations":\#(Self.variationsJSON)}]"#
+        let entry = try #require(HomebrewCaskEntry.decodeAll(from: Data(json.utf8)).first)
+        #expect(entry.variations == Self.variations)
+    }
+
+    @Test func resolvesVariationForHost() {
+        var withTahoe = Self.variations
+        withTahoe["tahoe"] = HomebrewCaskVariation(url: "https://x.test/t.dmg", sha256: "no_check", version: nil)
+        let entry = HomebrewCaskEntry(token: "v", version: "2.0", url: "https://x.test/new.dmg", sha256: "top", variations: withTahoe)
+        func release(_ arm: Bool, _ major: Int) -> [String?] {
+            let r = entry.release(for: HomebrewCaskHost(isArm64: arm, macOSMajorVersion: major))
+            return [r.url, r.sha256, r.version]
+        }
+        #expect(release(true, 27) == ["https://x.test/new.dmg", "top", "2.0"])
+        #expect(release(true, 14) == ["https://x.test/old.dmg", "s1", "1.5"])
+        #expect(release(false, 15) == ["https://x.test/intel.dmg", "s2", "2.0"])
+        #expect(release(false, 26) == ["https://x.test/t.dmg", nil, "2.0"])
+        #expect(release(false, 14) == ["https://x.test/new.dmg", "top", "2.0"])
+        #expect(release(true, 28) == ["https://x.test/new.dmg", "top", "2.0"])
+        #expect(release(false, 28) == [nil, "top", "2.0"])
+        let plain = HomebrewCaskEntry(token: "p", version: "2.0", url: "https://x.test/new.dmg", sha256: "top")
+        let r = plain.release(for: HomebrewCaskHost(isArm64: false, macOSMajorVersion: 15))
+        #expect([r.url, r.sha256, r.version] == ["https://x.test/new.dmg", "top", "2.0"])
+    }
+
+    @Test func sourceResolvesHostVariation() async throws {
+        let json = """
+        [{"token":"v","version":"2.0","url":"https://x.test/new.dmg","sha256":"top","variations":\(Self.variationsJSON),
+          "artifacts":[{"app":["V.app"]}]}]
+        """
+        let app = InstalledApp(
+            bundleID: "com.test.v", name: "V", url: URL(fileURLWithPath: "/Applications/V.app"),
+            shortVersion: "1.0", buildVersion: "1"
+        )
+        func candidate(_ host: HomebrewCaskHost) async throws -> AppReleaseCandidate {
+            let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+            let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(json.utf8)) }
+            let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir), host: host)
+            guard case .found(let found) = await source.lookUp([app]).outcomes[app.bundleID] else {
+                throw AppReleaseHTTPError.network("no candidate")
+            }
+            return found
+        }
+        let intel = try await candidate(HomebrewCaskHost(isArm64: false, macOSMajorVersion: 15))
+        #expect(intel.downloadURL?.absoluteString == "https://x.test/intel.dmg")
+        #expect(intel.sha256 == "s2")
+        let old = try await candidate(HomebrewCaskHost(isArm64: true, macOSMajorVersion: 14))
+        #expect(old.downloadURL?.absoluteString == "https://x.test/old.dmg")
+        #expect(old.displayVersion == "1.5")
+    }
+
+    @Test func cacheWithoutVariationsIsRefetched() async throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let fetchedAt = ISO8601DateFormatter().string(from: Date())
+        let old = """
+        {"etag":"\\"old\\"","fetchedAt":"\(fetchedAt)","entries":[{"token":"plain","version":"1.0","appNames":["Plain.app"],\
+        "quitBundleIDs":[],"hasPkg":false,"disabled":false,"hasVariations":true}]}
+        """
+        try Data(old.utf8).write(to: dir.appendingPathComponent("homebrew-casks.json"))
+        let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(Self.sample.utf8)) }
+        let result = try await HomebrewCaskIndex(http: http, cacheDirectory: dir, freshFor: 600).entries()
+        #expect(http.requests.count == 1)
+        #expect(result.map(\.token) == ["plain", "renamed", "multi"])
     }
 }

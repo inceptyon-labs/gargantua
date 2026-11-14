@@ -30,7 +30,7 @@ struct AppReleaseCheckServiceTests {
         let sparkle = SparkleAppcastSource(http: http)
         let service = AppReleaseCheckService(
             catalog: AppReleaseCatalogSource(catalog: AppReleaseCatalog(entries: []), http: http, sparkle: sparkle),
-            homebrew: HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: cacheDirectory), hostIsArm64: true),
+            homebrew: HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: cacheDirectory), host: HomebrewCaskHost(isArm64: true, macOSMajorVersion: 27)),
             sources: [sparkle],
             installedCasks: { caskroom }
         )

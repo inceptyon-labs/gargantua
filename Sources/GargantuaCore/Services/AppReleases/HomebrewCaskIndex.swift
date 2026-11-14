@@ -17,7 +17,9 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
     public let quitBundleIDs: [String]
     public let hasPkg: Bool
     public let disabled: Bool
-    public let hasVariations: Bool
+    /// Non-optional so a cache written before variations existed fails to decode and is refetched.
+    public let variations: [String: HomebrewCaskVariation]
+    public var hasVariations: Bool { !variations.isEmpty }
 
     public init(
         token: String,
@@ -29,7 +31,7 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         quitBundleIDs: [String] = [],
         hasPkg: Bool = false,
         disabled: Bool = false,
-        hasVariations: Bool = false
+        variations: [String: HomebrewCaskVariation] = [:]
     ) {
         self.token = token
         self.version = version
@@ -40,7 +42,7 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         self.quitBundleIDs = quitBundleIDs
         self.hasPkg = hasPkg
         self.disabled = disabled
-        self.hasVariations = hasVariations
+        self.variations = variations
     }
 
     /// Decodes `cask.json`, skipping entries that are malformed.
@@ -67,8 +69,24 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
             quitBundleIDs: artifacts.quitBundleIDs,
             hasPkg: artifacts.hasPkg,
             disabled: json["disabled"] as? Bool ?? false,
-            hasVariations: !((json["variations"] as? [String: Any])?.isEmpty ?? true)
+            variations: (json["variations"] as? [String: Any] ?? [:]).compactMapValues { value in
+                (value as? [String: Any]).map {
+                    HomebrewCaskVariation(
+                        url: $0["url"] as? String, sha256: $0["sha256"] as? String, version: $0["version"] as? String
+                    )
+                }
+            }
         )
+    }
+
+    /// The download for `host`: its variation's fields over the top level's. An
+    /// unknown (newer) macOS is the top level on Apple silicon, link-only on Intel.
+    func release(for host: HomebrewCaskHost) -> HomebrewCaskRelease {
+        guard !variations.isEmpty else { return HomebrewCaskRelease(url: url, sha256: sha256, version: version) }
+        guard let key = host.variationKey else { return HomebrewCaskRelease(url: host.isArm64 ? url : nil, sha256: sha256, version: version) }
+        guard let variation = variations[key] else { return HomebrewCaskRelease(url: url, sha256: sha256, version: version) }
+        let checksum = variation.sha256.map { $0 == "no_check" || $0.isEmpty ? nil : $0 } ?? sha256
+        return HomebrewCaskRelease(url: variation.url ?? url, sha256: checksum, version: variation.version ?? version)
     }
 }
 
@@ -129,7 +147,8 @@ public enum HomebrewCaskIndexError: Error, LocalizedError, Equatable {
 
 /// Homebrew's cask index with an on-disk cache of the slim entries. A cache
 /// written with fields this version no longer keeps still decodes, since
-/// `JSONDecoder` ignores unknown keys.
+/// `JSONDecoder` ignores unknown keys; one missing a field this version needs
+/// is refetched.
 public actor HomebrewCaskIndex {
     public static let indexURL = URL(string: "https://formulae.brew.sh/api/cask.json")!
 
@@ -276,18 +295,12 @@ public struct HomebrewCaskLookup: Sendable, Equatable {
 /// tokens to tell which apps brew manages, so it takes this source directly.
 public struct HomebrewCaskSource: Sendable {
     private let index: HomebrewCaskIndex
-    private let hostIsArm64: Bool
+    private let host: HomebrewCaskHost
 
-    public init(index: HomebrewCaskIndex, hostIsArm64: Bool = Self.currentHostIsArm64) {
+    public init(index: HomebrewCaskIndex, host: HomebrewCaskHost = .current) {
         self.index = index
-        self.hostIsArm64 = hostIsArm64
+        self.host = host
     }
-
-    #if arch(arm64)
-        public static let currentHostIsArm64 = true
-    #else
-        public static let currentHostIsArm64 = false
-    #endif
 
     public func lookUp(_ apps: [InstalledApp]) async -> HomebrewCaskLookup {
         let entries: [HomebrewCaskEntry]
@@ -308,21 +321,20 @@ public struct HomebrewCaskSource: Sendable {
     }
 
     private func outcome(for entry: HomebrewCaskEntry) -> AppReleaseSourceOutcome {
-        guard let parsed = AppReleaseVersion.cask(entry.version), !parsed.isPrerelease else {
+        let release = entry.release(for: host)
+        guard let parsed = AppReleaseVersion.cask(release.version), !parsed.isPrerelease else {
             return .noEligibleRelease
         }
         // The part after a cask's comma is the vendor's build or a hash, not
         // the app's CFBundleVersion, so only the marketing version is compared.
         let version = AppReleaseVersion(short: parsed.short, build: nil)
-        // Variations may swap the download per architecture; the top-level URL
-        // is the arm64 one, so don't hand it to an Intel host.
-        let downloadURL = entry.hasVariations && !hostIsArm64 ? nil : entry.url.flatMap(URL.init(string:))?.httpsOnly
+        let downloadURL = release.url.flatMap(URL.init(string:))?.httpsOnly
         return .found(AppReleaseCandidate(
             source: .homebrewCask,
             version: version,
             displayVersion: parsed.short,
             downloadURL: downloadURL,
-            sha256: entry.sha256,
+            sha256: release.sha256,
             payloadKind: entry.hasPkg ? .pkg : .infer(url: downloadURL),
             vendorURL: entry.homepage.flatMap(URL.init(string:)),
             caskToken: entry.token
