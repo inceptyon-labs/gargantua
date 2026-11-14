@@ -73,10 +73,15 @@ public struct AppReleaseCheckService: AppReleaseChecking {
             for (kind, results) in byKind {
                 if let outcome = results[app.bundleID] { outcomes[kind] = outcome }
             }
+            let indexToken = casks.tokens[app.bundleID]
+            let owner = ownership.owner(of: app, indexToken: indexToken)
+            if let owner, !ownership.publicIndexDescribes(owner: owner, indexToken: indexToken) {
+                outcomes[.homebrewCask] = nil
+            }
             return AppReleaseResolver.resolve(
                 app: app,
                 outcomes: outcomes,
-                brewManagedToken: ownership.owner(of: app, indexToken: casks.tokens[app.bundleID]),
+                brewManagedToken: owner,
                 preferences: preferences,
                 osVersion: osVersion
             )

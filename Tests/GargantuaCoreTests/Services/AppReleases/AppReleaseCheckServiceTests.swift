@@ -18,13 +18,15 @@ struct AppReleaseCheckServiceTests {
     /// its own Sparkle feed.
     private func status(
         caskroom: [HomebrewInstalledCask],
-        indexReachable: Bool = true
+        indexReachable: Bool = true,
+        index: String = AppReleaseCheckServiceTests.casks,
+        sparkleFeed: Bool = true
     ) async throws -> AppReleaseStatus {
         let cacheDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("check-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: cacheDirectory) }
         let http = StubAppReleaseHTTP { url, _ in
             if url == HomebrewCaskIndex.indexURL, !indexReachable { throw AppReleaseHTTPError.network("offline") }
-            let body = url == HomebrewCaskIndex.indexURL ? Self.casks : Self.appcast
+            let body = url == HomebrewCaskIndex.indexURL ? index : Self.appcast
             return AppReleaseHTTPResponse(statusCode: 200, data: Data(body.utf8))
         }
         let sparkle = SparkleAppcastSource(http: http)
@@ -40,7 +42,7 @@ struct AppReleaseCheckServiceTests {
             url: URL(fileURLWithPath: "/Applications/Latest.app"),
             shortVersion: "2.0",
             teamID: "TEAM123456",
-            sparkleFeedURL: URL(string: "https://example.com/appcast.xml")
+            sparkleFeedURL: sparkleFeed ? URL(string: "https://example.com/appcast.xml") : nil
         )
         let rows = await service.check([app], preferences: AppReleasePreferences())
         return try #require(rows.first).status
@@ -78,5 +80,34 @@ struct AppReleaseCheckServiceTests {
             return
         }
         #expect(strategy == .linkOnly(URL(string: "https://example.com/news"), reason: .brewCaskBehind))
+    }
+
+    private static let publicFoo = """
+    [{"token":"foo","version":"3.0","url":"https://example.com/Foo-3.0.zip","sha256":"no_check",
+      "homepage":"https://example.com","artifacts":[{"app":["Latest.app"]}]}]
+    """
+
+    private func fooStatus(tap: String) async throws -> AppReleaseStatus {
+        try await status(
+            caskroom: [HomebrewInstalledCask(token: "foo", appNames: ["Latest.app"], tap: tap)],
+            index: Self.publicFoo,
+            sparkleFeed: false
+        )
+    }
+
+    @Test("a cask installed from another tap doesn't take its version from the public cask of the same name")
+    func thirdPartyTapIgnoresPublicCask() async throws {
+        let status = try await fooStatus(tap: "acme/tap")
+        if case .available(let candidate, _) = status { #expect(candidate.displayVersion != "3.0") }
+    }
+
+    @Test("a cask installed from homebrew/cask still offers the public version, brew-managed")
+    func publicTapOffersPublicCask() async throws {
+        guard case .available(let candidate, let strategy) = try await fooStatus(tap: "homebrew/cask") else {
+            Issue.record("expected an available update")
+            return
+        }
+        #expect(candidate.source == .homebrewCask)
+        #expect(strategy != .inPlace)
     }
 }

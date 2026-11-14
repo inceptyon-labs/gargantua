@@ -358,9 +358,12 @@ public struct HomebrewInstalledCask: Sendable, Equatable {
     public let appNames: [String]?
     /// Bundle IDs from `uninstall: quit:`; a trailing `.*` is a prefix wildcard.
     public let quitBundleIDs: [String]
+    /// The tap from the install receipt's `source`; nil on older receipts.
+    public let tap: String?
 
-    public init(token: String, appNames: [String]? = nil, quitBundleIDs: [String] = []) {
+    public init(token: String, appNames: [String]? = nil, quitBundleIDs: [String] = [], tap: String? = nil) {
         self.token = token
+        self.tap = tap
         self.appNames = appNames
         self.quitBundleIDs = quitBundleIDs
     }
@@ -391,7 +394,8 @@ public struct HomebrewCaskroomProbe: Sendable {
         let token = directory.lastPathComponent
         let metadata = directory.appendingPathComponent(".metadata", isDirectory: true)
         var found: [HomebrewCaskArtifacts] = []
-        if let list = readJSON(metadata.appendingPathComponent("INSTALL_RECEIPT.json"))?["uninstall_artifacts"] as? [Any] {
+        let receipt = readJSON(metadata.appendingPathComponent("INSTALL_RECEIPT.json"))
+        if let list = receipt?["uninstall_artifacts"] as? [Any] {
             found.append(HomebrewCaskArtifacts(list))
         }
         if let newest = newestMetadataDirectory(in: metadata),
@@ -401,7 +405,8 @@ public struct HomebrewCaskroomProbe: Sendable {
         return HomebrewInstalledCask(
             token: token,
             appNames: found.isEmpty ? nil : found.flatMap(\.appNames),
-            quitBundleIDs: found.flatMap(\.quitBundleIDs)
+            quitBundleIDs: found.flatMap(\.quitBundleIDs),
+            tap: (receipt?["source"] as? [String: Any])?["tap"] as? String
         )
     }
 
@@ -459,6 +464,14 @@ public struct HomebrewCaskOwnership: Sendable {
         }
         .map(\.token)
         .min()
+    }
+
+    /// Whether the public index's entry describes the owning cask: it must be
+    /// the index's match and installed from the public tap (or an unknown one).
+    public func publicIndexDescribes(owner: String, indexToken: String?) -> Bool {
+        guard owner == indexToken else { return false }
+        let tap = casks.first { $0.token == owner }?.tap?.lowercased()
+        return tap == nil || tap == "homebrew/cask"
     }
 
     /// A quit list naming only same-vendor helpers doesn't contradict the app

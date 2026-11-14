@@ -61,7 +61,7 @@ struct HomebrewCaskIndexTests {
     func caskroomProbeReadsMetadata() throws {
         let prefix = try CaskroomFixture.makePrefix([
             "Caskroom/foo/.metadata/INSTALL_RECEIPT.json":
-                #"{"uninstall_artifacts":[{"uninstall":[{"quit":"com.example.Foo"}]},{"app":["Foo.app"]}]}"#,
+                #"{"uninstall_artifacts":[{"uninstall":[{"quit":"com.example.Foo"}]},{"app":["Foo.app"]}],"source":{"tap":"acme/tap"}}"#,
             "Caskroom/foo/.metadata/1.0/20250101000000.000/Casks/foo.json": "{}",
             "Caskroom/bar/.metadata/1.0/20240101000000.000/Casks/bar.json": #"{"artifacts":[{"app":["Old.app"]}]}"#,
             "Caskroom/bar/.metadata/2.0/20250101000000.000/Casks/bar.json":
@@ -75,8 +75,22 @@ struct HomebrewCaskIndexTests {
         #expect(casks == [
             HomebrewInstalledCask(token: "bar", appNames: ["Bar.app"]),
             HomebrewInstalledCask(token: "baz", appNames: nil),
-            HomebrewInstalledCask(token: "foo", appNames: ["Foo.app"], quitBundleIDs: ["com.example.Foo"]),
+            HomebrewInstalledCask(token: "foo", appNames: ["Foo.app"], quitBundleIDs: ["com.example.Foo"], tap: "acme/tap"),
         ])
+    }
+
+    @Test("the public index describes an owner only when it is the index's cask from homebrew/cask or an unknown tap")
+    func publicIndexDescribesOwner() {
+        let ownership = HomebrewCaskOwnership(casks: [
+            HomebrewInstalledCask(token: "pub", tap: "Homebrew/Cask"),
+            HomebrewInstalledCask(token: "old"),
+            HomebrewInstalledCask(token: "third", tap: "acme/tap"),
+        ])
+        #expect(ownership.publicIndexDescribes(owner: "pub", indexToken: "pub"))
+        #expect(ownership.publicIndexDescribes(owner: "old", indexToken: "old"))
+        #expect(!ownership.publicIndexDescribes(owner: "third", indexToken: "third"))
+        #expect(!ownership.publicIndexDescribes(owner: "pub", indexToken: "other"))
+        #expect(!ownership.publicIndexDescribes(owner: "pub", indexToken: nil))
     }
 
     @Test("an installed cask owns the app it names, a quit list must include the app or its vendor, and unknown casks match by token")
