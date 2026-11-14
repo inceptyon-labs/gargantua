@@ -5,14 +5,91 @@ extension AppReleaseVerifier {
 
     // MARK: - Archive entries and extraction
 
-    /// Rejects absolute paths, any `..` component, and empty names.
+    /// Rejects absolute paths, any `..` component, and empty names. Also
+    /// rejects an entry under a path that another entry stores as a file or
+    /// symlink (no trailing `/`): extracting a symlink and then a child
+    /// through it writes outside the destination on extractors that follow
+    /// the link (CVE-2025-31198). Paths are compared without `.` or empty
+    /// components, ignoring case and Unicode normalization, as APFS does.
     static func validateArchiveEntries(_ paths: [String]) throws(AppReleaseVerificationFailure) {
+        var leaves = Set<String>()
         for path in paths {
             guard !path.isEmpty else { throw .unsafeArchiveEntry("(empty name)") }
             guard !path.hasPrefix("/") else { throw .unsafeArchiveEntry(path) }
             if path.split(separator: "/").contains("..") { throw .unsafeArchiveEntry(path) }
+            if !path.hasSuffix("/") { leaves.insert(archiveKey(archiveComponents(path))) }
+        }
+        for path in paths {
+            let components = archiveComponents(path)
+            for length in components.indices.dropFirst() where leaves.contains(archiveKey(components[..<length])) {
+                throw .unsafeArchiveEntry(path)
+            }
         }
     }
+
+    private static func archiveComponents(_ path: String) -> [String] {
+        path.split(separator: "/").map(String.init).filter { $0 != "." }
+    }
+
+    private static func archiveKey(_ components: some Sequence<String>) -> String {
+        components.joined(separator: "/").precomposedStringWithCanonicalMapping.lowercased()
+    }
+
+    // MARK: - Disk space
+
+    static let minimumFreeBytes: Int64 = 1_073_741_824
+    static let maxExtractedBytes: Int64 = 16 * 1_073_741_824
+
+    /// Unpacking needs four times the payload free, and never less than
+    /// 1 GiB. Free space that can't be read fails the same way.
+    static func checkFreeSpace(available: Int64?, payloadSize: Int64) throws(AppReleaseVerificationFailure) {
+        let fourTimes = payloadSize > Int64.max / 4 ? Int64.max : payloadSize * 4
+        let needed = max(fourTimes, minimumFreeBytes)
+        guard let available, available >= needed else {
+            throw .insufficientDiskSpace(needed: needed, available: available)
+        }
+    }
+
+    static func checkExtractedSize(_ size: Int64) throws(AppReleaseVerificationFailure) {
+        guard size <= maxExtractedBytes else { throw .extractedTooLarge(limit: maxExtractedBytes) }
+    }
+
+    static func availableCapacity(at url: URL) -> Int64? {
+        try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            .volumeAvailableCapacityForImportantUsage
+    }
+
+    /// Total size of the regular files under `root`, without following
+    /// links. Stops counting once past `limit`.
+    static func treeSize(of root: URL, limit: Int64) throws(AppReleaseVerificationFailure) -> Int64 {
+        var total: Int64 = 0
+        var pending = [root.path]
+        while let directory = pending.popLast() {
+            let names: [String]
+            do {
+                names = try FileManager.default.contentsOfDirectory(atPath: directory)
+            } catch {
+                throw .unreadablePayload(error.localizedDescription)
+            }
+            for name in names {
+                let path = directory + "/" + name
+                var info = stat()
+                guard lstat(path, &info) == 0 else { throw .unreadablePayload(String(cString: strerror(errno))) }
+                switch info.st_mode & S_IFMT {
+                case S_IFDIR:
+                    pending.append(path)
+                case S_IFREG:
+                    total += Int64(info.st_size)
+                    if total > limit { return total }
+                default:
+                    continue
+                }
+            }
+        }
+        return total
+    }
+
+    // MARK: - Unpacking
 
     func unpack(
         _ payload: URL,

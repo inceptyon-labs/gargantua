@@ -55,6 +55,46 @@ struct HomebrewCaskIndexTests {
         #expect(matcher.match(app("Dup.app", "x")) == nil)
     }
 
+    // MARK: - Caskroom
+
+    @Test("the Caskroom yields each cask's apps from the receipt or the newest cask JSON")
+    func caskroomProbeReadsMetadata() throws {
+        let prefix = try CaskroomFixture.makePrefix([
+            "Caskroom/foo/.metadata/INSTALL_RECEIPT.json":
+                #"{"uninstall_artifacts":[{"uninstall":[{"quit":"com.example.Foo"}]},{"app":["Foo.app"]}]}"#,
+            "Caskroom/foo/.metadata/1.0/20250101000000.000/Casks/foo.json": "{}",
+            "Caskroom/bar/.metadata/1.0/20240101000000.000/Casks/bar.json": #"{"artifacts":[{"app":["Old.app"]}]}"#,
+            "Caskroom/bar/.metadata/2.0/20250101000000.000/Casks/bar.json":
+                #"{"artifacts":[{"app":["Bar Beta.app",{"target":"Bar.app"}]}]}"#,
+            "Caskroom/baz/.metadata/1.0/20250101000000.000/Casks/baz.rb": "cask \"baz\" do\nend\n",
+        ])
+        defer { try? FileManager.default.removeItem(at: prefix) }
+
+        let casks = HomebrewCaskroomProbe(prefixes: [prefix.path]).installedCasks().sorted { $0.token < $1.token }
+
+        #expect(casks == [
+            HomebrewInstalledCask(token: "bar", appNames: ["Bar.app"]),
+            HomebrewInstalledCask(token: "baz", appNames: nil),
+            HomebrewInstalledCask(token: "foo", appNames: ["Foo.app"], quitBundleIDs: ["com.example.Foo"]),
+        ])
+    }
+
+    @Test("an installed cask owns the app it names, a quit list must include the app, and unknown casks match by token")
+    func caskOwnershipRules() {
+        let ownership = HomebrewCaskOwnership(casks: [
+            HomebrewInstalledCask(token: "foo", appNames: ["Foo.app"], quitBundleIDs: ["com.example.Foo"]),
+            HomebrewInstalledCask(token: "bar", appNames: ["Bar.app"]),
+            HomebrewInstalledCask(token: "baz-app", appNames: nil),
+        ])
+        #expect(ownership.owner(of: app("Foo.app", "com.example.Foo"), indexToken: nil) == "foo")
+        #expect(ownership.owner(of: app("Foo.app", "com.other.Foo"), indexToken: nil) == nil)
+        #expect(ownership.owner(of: app("bar.app", "any.id"), indexToken: nil) == "bar")
+        #expect(ownership.owner(of: app("Baz App.app", "any.id"), indexToken: nil) == "baz-app")
+        #expect(ownership.owner(of: app("Other.app", "any.id"), indexToken: nil) == nil)
+        #expect(ownership.owner(of: app("Other.app", "any.id"), indexToken: "bar") == "bar")
+        #expect(ownership.owner(of: app("Other.app", "any.id"), indexToken: "not-installed") == nil)
+    }
+
     private func tempDir() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent("cask-\(UUID().uuidString)") }
 
     private func okResponse() -> AppReleaseHTTPResponse {

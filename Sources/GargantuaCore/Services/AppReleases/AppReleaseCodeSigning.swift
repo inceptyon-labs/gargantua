@@ -23,6 +23,9 @@ public struct AppReleaseSignatureReport: Sendable, Equatable {
 /// Code-signature seam for the App Updater's install verification.
 public protocol AppReleaseCodeSigning: Sendable {
     func assess(bundleURL: URL) -> AppReleaseSignatureReport
+    /// Whether the code is Apple-anchored with a leaf certificate issued to
+    /// `teamID`. False for anything that isn't a well-formed Team ID.
+    func satisfiesTeamRequirement(bundleURL: URL, teamID: String) -> Bool
 }
 
 /// Full signature validation, equivalent to `codesign --verify --deep --strict`.
@@ -95,6 +98,37 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
                 ? nil
                 : Self.describe(status: requirementStatus, error: requirementError?.takeRetainedValue())
         )
+    }
+
+    public func satisfiesTeamRequirement(bundleURL: URL, teamID: String) -> Bool {
+        guard let text = Self.teamRequirement(for: teamID) else { return false }
+        var staticCode: SecStaticCode?
+        var requirement: SecRequirement?
+        guard SecStaticCodeCreateWithPath(bundleURL as CFURL, SecCSFlags(), &staticCode) == errSecSuccess,
+              let code = staticCode,
+              SecRequirementCreateWithString(text as CFString, SecCSFlags(), &requirement) == errSecSuccess,
+              let requirement
+        else { return false }
+        return SecStaticCodeCheckValidity(code, Self.validationFlags, requirement) == errSecSuccess
+    }
+
+    /// The requirement text for `teamID`, or nil unless it is exactly ten
+    /// ASCII uppercase letters and digits, so nothing else is ever spliced
+    /// into the requirement language.
+    static func teamRequirement(for teamID: String) -> String? {
+        let isWellFormed = teamID.utf8.count == 10
+            && teamID.utf8.allSatisfy { (0x41...0x5A).contains($0) || (0x30...0x39).contains($0) }
+        guard isWellFormed else { return nil }
+        return "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
+    }
+
+    /// Team ID from the signature, read without validating anything.
+    static func teamIdentifier(ofBundle url: URL) -> String? {
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &staticCode) == errSecSuccess,
+              let code = staticCode
+        else { return nil }
+        return teamIdentifier(of: code)
     }
 
     private static func teamIdentifier(of code: SecStaticCode) -> String? {

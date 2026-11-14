@@ -32,10 +32,29 @@ struct AppReleasesSessionTests {
         }
     }
 
+    /// Holds checks until the test opens it.
+    actor CheckGate {
+        private var isOpen = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func wait() async {
+            guard !isOpen else { return }
+            await withCheckedContinuation { waiters.append($0) }
+        }
+
+        func open() {
+            isOpen = true
+            waiters.forEach { $0.resume() }
+            waiters = []
+        }
+    }
+
     struct ScriptedChecker: AppReleaseChecking {
         let script: CheckerScript
+        var gate: CheckGate?
         func check(_ apps: [InstalledApp], preferences: AppReleasePreferences) async -> [AppReleaseRow] {
             let step = await script.next()
+            await gate?.wait()
             if step.delay > 0 { try? await Task.sleep(for: .seconds(step.delay)) }
             return apps.map { AppReleaseRow(app: $0, status: step.status) }
         }
@@ -51,6 +70,7 @@ struct AppReleasesSessionTests {
     @MainActor
     final class StubInstaller: AppReleaseInstalling {
         private(set) var calls: [(bundleID: String, quitIfRunning: Bool)] = []
+        var warning: String?
 
         // swiftlint:disable:next function_parameter_count
         func install(
@@ -63,7 +83,7 @@ struct AppReleasesSessionTests {
         ) async -> Result<AppReleaseInstallResult, AppReleaseInstallError> {
             calls.append((app.bundleID, quitIfRunning))
             return .success(AppReleaseInstallResult(
-                installedVersion: candidate.version, previousCopyInTrash: nil, relaunched: false
+                installedVersion: candidate.version, previousCopyInTrash: nil, relaunched: false, warning: warning
             ))
         }
     }
@@ -101,13 +121,14 @@ struct AppReleasesSessionTests {
         isAppRunning: Bool = false,
         steps: [(delay: Double, status: AppReleaseStatus)] = [],
         now: @escaping () -> Date = Date.init,
-        defaults: UserDefaults = makeDefaults()
+        defaults: UserDefaults = makeDefaults(),
+        gate: CheckGate? = nil
     ) -> Fixture {
         let installer = StubInstaller()
         let script = CheckerScript(fallback: .available(candidate, .inPlace), steps: steps)
         let session = AppReleasesSession(
             inventory: StubInventory(apps: [app]),
-            checker: ScriptedChecker(script: script),
+            checker: ScriptedChecker(script: script, gate: gate),
             installer: installer,
             authorize: authorize,
             quitter: StubQuitter(running: isAppRunning),
@@ -307,5 +328,46 @@ struct AppReleasesSessionTests {
         fixture.session.paneDidDisappear()
         #expect(fixture.session.visibleRows.isEmpty)
         #expect(fixture.session.rowMessages[Self.app.bundleID] == nil)
+    }
+
+    @Test("An app ignored while a check runs stays ignored when the check finishes")
+    func ignoreDuringCheckSurvives() async {
+        let gate = CheckGate()
+        let fixture = Self.makeFixture(gate: gate)
+
+        fixture.session.startCheck()
+        await Self.waitUntil { await fixture.script.calls == 1 }
+        fixture.session.ignore(Self.app.bundleID)
+        await gate.open()
+        await Self.waitUntil { !fixture.session.isChecking }
+
+        #expect(fixture.session.rows.first?.status == .ignored)
+    }
+
+    @Test("A version skipped while a check runs stays skipped when the check finishes")
+    func skipDuringCheckSurvives() async {
+        let gate = CheckGate()
+        let fixture = Self.makeFixture(gate: gate)
+
+        fixture.session.startCheck()
+        await Self.waitUntil { await fixture.script.calls == 1 }
+        fixture.session.skip(version: Self.candidate.displayVersion, for: Self.app.bundleID)
+        await gate.open()
+        await Self.waitUntil { !fixture.session.isChecking }
+
+        #expect(fixture.session.rows.first?.status == .skippedVersion("2.0"))
+    }
+
+    @Test("An install that comes back with a warning shows it on the row")
+    func installWarningShown() async throws {
+        let fixture = Self.makeFixture()
+        fixture.installer.warning = "The new copy is signed by a different developer."
+        await fixture.session.check()
+        let row = try #require(fixture.session.rows.first)
+
+        await fixture.session.install(row, quitIfRunning: false)
+
+        #expect(fixture.session.rowMessages[Self.app.bundleID]
+            == .installedWithWarning("Updated to 2.0. The new copy is signed by a different developer."))
     }
 }

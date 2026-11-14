@@ -173,11 +173,14 @@ final class FakeTrashMover: TrashMoving {
 @MainActor
 final class StubAppQuitter: AppReleaseAppQuitting {
     var running: Bool
+    /// Runs when the app quits, standing in for what the app does on its way out.
+    var onQuit: (@MainActor () -> Void)?
     private(set) var quitRequests: [String] = []
     private(set) var relaunchedURLs: [URL] = []
 
-    init(running: Bool = false) {
+    init(running: Bool = false, onQuit: (@MainActor () -> Void)? = nil) {
         self.running = running
+        self.onQuit = onQuit
     }
 
     func isRunning(bundleID _: String) -> Bool {
@@ -187,6 +190,7 @@ final class StubAppQuitter: AppReleaseAppQuitting {
     func quitGracefully(bundleID: String, timeout _: TimeInterval) async -> Bool {
         quitRequests.append(bundleID)
         running = false
+        onQuit?()
         return true
     }
 
@@ -210,5 +214,26 @@ final class ScriptedBrewRunner: ProcessRunner {
     func run(executable _: URL, arguments: [String]) throws -> ProcessOutput {
         calls.withLock { $0.append(arguments) }
         return handler(arguments)
+    }
+}
+
+/// Reports a fixed signature and satisfies the team requirement only for
+/// `certifiedTeams`.
+struct StubCodeSigner: AppReleaseCodeSigning {
+    var report = AppReleaseSignatureReport(isValid: true, teamID: "TEAM123456", isDeveloperID: true)
+    var certifiedTeams: Set<String> = ["TEAM123456"]
+
+    func assess(bundleURL _: URL) -> AppReleaseSignatureReport {
+        report
+    }
+
+    func satisfiesTeamRequirement(bundleURL _: URL, teamID: String) -> Bool {
+        certifiedTeams.contains(teamID)
+    }
+}
+
+struct AcceptingGatekeeper: AppReleaseGatekeeperAssessing {
+    func assess(bundleURL _: URL) -> AppReleaseGatekeeperVerdict {
+        AppReleaseGatekeeperVerdict(accepted: true, source: "Notarized Developer ID", detail: "accepted")
     }
 }

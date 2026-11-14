@@ -181,6 +181,7 @@ struct AppReleaseRowView: View {
     private func messageLine(_ message: AppReleaseRowMessage) -> some View {
         let (text, color): (String, Color) = switch message {
         case .installed(let text): (text, GargantuaColors.safe)
+        case .installedWithWarning(let text): (text, GargantuaColors.review)
         case .failed(let text): (text, GargantuaColors.protected_)
         }
         return Text(text)

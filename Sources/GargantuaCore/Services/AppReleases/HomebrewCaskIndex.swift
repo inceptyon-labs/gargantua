@@ -55,10 +55,33 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         guard let token = json["token"] as? String, !token.isEmpty,
               let version = json["version"] as? String else { return nil }
 
-        var appNames: [String] = []
-        var quitIDs: [String] = []
-        var hasPkg = false
-        for case let artifact as [String: Any] in json["artifacts"] as? [Any] ?? [] {
+        let artifacts = HomebrewCaskArtifacts(json["artifacts"])
+        let sha = json["sha256"] as? String
+        self.init(
+            token: token,
+            version: version,
+            url: json["url"] as? String,
+            sha256: sha == nil || sha == "no_check" || sha?.isEmpty == true ? nil : sha,
+            homepage: json["homepage"] as? String,
+            appNames: artifacts.appNames,
+            quitBundleIDs: artifacts.quitBundleIDs,
+            hasPkg: artifacts.hasPkg,
+            disabled: json["disabled"] as? Bool ?? false,
+            hasVariations: !((json["variations"] as? [String: Any])?.isEmpty ?? true)
+        )
+    }
+}
+
+/// The parts of a cask's `artifacts` array the updater reads. The same shape
+/// appears in the index, in a Caskroom cask JSON, and as a Caskroom install
+/// receipt's `uninstall_artifacts`.
+struct HomebrewCaskArtifacts {
+    var appNames: [String] = []
+    var quitBundleIDs: [String] = []
+    var hasPkg = false
+
+    init(_ value: Any?) {
+        for case let artifact as [String: Any] in value as? [Any] ?? [] {
             if let apps = artifact["app"] as? [Any] {
                 appNames.append(contentsOf: Self.installedNames(apps))
             }
@@ -67,26 +90,12 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
             let directives = (uninstall as? [Any]) ?? (uninstall as? [String: Any]).map { [$0] } ?? []
             for case let directive as [String: Any] in directives {
                 if let quit = directive["quit"] as? String {
-                    quitIDs.append(quit)
+                    quitBundleIDs.append(quit)
                 } else if let quit = directive["quit"] as? [Any] {
-                    quitIDs.append(contentsOf: quit.compactMap { $0 as? String })
+                    quitBundleIDs.append(contentsOf: quit.compactMap { $0 as? String })
                 }
             }
         }
-
-        let sha = json["sha256"] as? String
-        self.init(
-            token: token,
-            version: version,
-            url: json["url"] as? String,
-            sha256: sha == nil || sha == "no_check" || sha?.isEmpty == true ? nil : sha,
-            homepage: json["homepage"] as? String,
-            appNames: appNames,
-            quitBundleIDs: quitIDs,
-            hasPkg: hasPkg,
-            disabled: json["disabled"] as? Bool ?? false,
-            hasVariations: !((json["variations"] as? [String: Any])?.isEmpty ?? true)
-        )
     }
 
     /// `["Foo.app"]` installs `Foo.app`; `["Foo.app", {"target": "Bar.app"}]` installs `Bar.app`.
@@ -232,8 +241,12 @@ public struct HomebrewCaskMatcher: Sendable {
     }
 
     private static func quits(_ entry: HomebrewCaskEntry, bundleID: String) -> Bool {
+        quits(entry.quitBundleIDs, bundleID: bundleID)
+    }
+
+    static func quits(_ quitBundleIDs: [String], bundleID: String) -> Bool {
         let id = bundleID.lowercased()
-        return entry.quitBundleIDs.contains { quit in
+        return quitBundleIDs.contains { quit in
             let quit = quit.lowercased()
             if quit.hasSuffix(".*") { return id.hasPrefix(quit.dropLast()) }
             return quit == id
@@ -317,27 +330,120 @@ public struct HomebrewCaskSource: Sendable {
     }
 }
 
-/// Tokens of casks Homebrew has installed, from the Caskroom directories.
+/// A cask Homebrew has installed, read from its Caskroom folder.
+public struct HomebrewInstalledCask: Sendable, Equatable {
+    public let token: String
+    /// Installed `.app` names, after any `target` rename. Nil when the cask's
+    /// metadata couldn't be read, so which app it installed is unknown.
+    public let appNames: [String]?
+    /// Bundle IDs from `uninstall: quit:`; a trailing `.*` is a prefix wildcard.
+    public let quitBundleIDs: [String]
+
+    public init(token: String, appNames: [String]? = nil, quitBundleIDs: [String] = []) {
+        self.token = token
+        self.appNames = appNames
+        self.quitBundleIDs = quitBundleIDs
+    }
+}
+
+/// Casks Homebrew has installed, from the local Caskroom. This covers casks
+/// from any tap, and works when the public index is unreachable.
 public struct HomebrewCaskroomProbe: Sendable {
+    static let maxMetadataBytes = 4 * 1_048_576
     private let prefixes: [String]
 
     public init(prefixes: [String] = ["/opt/homebrew", "/usr/local"]) {
         self.prefixes = prefixes
     }
 
-    public func installedTokens() -> Set<String> {
-        var tokens = Set<String>()
-        for prefix in prefixes {
-            let root = URL(fileURLWithPath: prefix).appendingPathComponent("Caskroom", isDirectory: true)
-            let entries = (try? FileManager.default.contentsOfDirectory(
-                at: root,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )) ?? []
-            for entry in entries where (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
-                tokens.insert(entry.lastPathComponent)
-            }
+    public func installedCasks() -> [HomebrewInstalledCask] {
+        prefixes.flatMap { prefix in
+            Self.subdirectories(of: URL(fileURLWithPath: prefix).appendingPathComponent("Caskroom", isDirectory: true))
+                .map(Self.readCask(at:))
         }
-        return tokens
+    }
+
+    /// Current Homebrew keeps the cask's artifacts in the install receipt's
+    /// `uninstall_artifacts` and leaves `Casks/<token>.json` nearly empty;
+    /// older versions wrote the whole cask there. Both are read and merged.
+    /// A `.rb` cask isn't parseable here and is skipped.
+    static func readCask(at directory: URL) -> HomebrewInstalledCask {
+        let token = directory.lastPathComponent
+        let metadata = directory.appendingPathComponent(".metadata", isDirectory: true)
+        var found: [HomebrewCaskArtifacts] = []
+        if let list = readJSON(metadata.appendingPathComponent("INSTALL_RECEIPT.json"))?["uninstall_artifacts"] as? [Any] {
+            found.append(HomebrewCaskArtifacts(list))
+        }
+        if let newest = newestMetadataDirectory(in: metadata),
+           let list = readJSON(newest.appendingPathComponent("Casks/\(token).json"))?["artifacts"] as? [Any] {
+            found.append(HomebrewCaskArtifacts(list))
+        }
+        return HomebrewInstalledCask(
+            token: token,
+            appNames: found.isEmpty ? nil : found.flatMap(\.appNames),
+            quitBundleIDs: found.flatMap(\.quitBundleIDs)
+        )
+    }
+
+    /// `.metadata/<version>/<timestamp>` with the latest timestamp. Homebrew
+    /// writes timestamps as fixed-width `YYYYMMDDhhmmss.sss`, so they sort as text.
+    static func newestMetadataDirectory(in metadata: URL) -> URL? {
+        subdirectories(of: metadata)
+            .flatMap(subdirectories(of:))
+            .max { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    private static func subdirectories(of directory: URL) -> [URL] {
+        let entries = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return entries.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+    }
+
+    private static func readJSON(_ url: URL) -> [String: Any]? {
+        guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= maxMetadataBytes,
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+}
+
+/// Which installed cask owns an app, so its updates go through brew.
+///
+/// Errs toward brew: calling an app brew-managed only limits it to a link or
+/// `brew upgrade`, while missing one would replace it behind brew's back.
+public struct HomebrewCaskOwnership: Sendable {
+    private let casks: [HomebrewInstalledCask]
+
+    public init(casks: [HomebrewInstalledCask]) {
+        self.casks = casks
+    }
+
+    /// - Parameter indexToken: The cask the public index matched to the app.
+    ///   It owns the app when that cask is installed, and wins over the
+    ///   Caskroom's own matches.
+    /// - Returns: The owning cask's token, or nil when brew didn't install
+    ///   the app.
+    public func owner(of app: InstalledApp, indexToken: String?) -> String? {
+        if let indexToken, casks.contains(where: { $0.token == indexToken }) { return indexToken }
+        let filename = app.url.lastPathComponent.lowercased()
+        return casks.filter { cask in
+            guard let appNames = cask.appNames else {
+                // Unknown contents: a token that reads as the app's name counts.
+                return cask.token.lowercased() == Self.tokenGuess(forAppNamed: filename)
+            }
+            return appNames.contains { $0.lowercased() == filename }
+                && (cask.quitBundleIDs.isEmpty || HomebrewCaskMatcher.quits(cask.quitBundleIDs, bundleID: app.bundleID))
+        }
+        .map(\.token)
+        .min()
+    }
+
+    /// `foo bar.app` → `foo-bar`, Homebrew's usual token for an app.
+    static func tokenGuess(forAppNamed filename: String) -> String {
+        let base = filename.lowercased().hasSuffix(".app") ? String(filename.dropLast(4)) : filename
+        return base.lowercased().replacingOccurrences(of: " ", with: "-")
     }
 }

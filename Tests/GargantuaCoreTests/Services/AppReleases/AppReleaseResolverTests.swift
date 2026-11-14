@@ -110,6 +110,36 @@ struct AppReleaseResolverTests {
         #expect(status == .available(sparkle, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
     }
 
+    @Test("a release newer only by build is not one the cask has, so brew-managed links only")
+    func brewCaskWithoutChosenBuild() {
+        let installed = InstalledApp(
+            bundleID: "com.example.App",
+            name: "Example",
+            url: URL(fileURLWithPath: "/Applications/Example.app"),
+            shortVersion: "1.0",
+            buildVersion: "100",
+            teamID: "ABCDE12345"
+        )
+        let sparkle = AppReleaseCandidate(
+            source: .sparkle,
+            version: AppReleaseVersion(short: "1.0", build: "101"),
+            downloadURL: URL(string: "https://example.com/Example.zip"),
+            vendorURL: URL(string: "https://example.com")
+        )
+        let cask = candidate(.homebrewCask, "1.0", token: "example")
+
+        let status = resolve(installed, [.sparkle: .found(sparkle), .homebrewCask: .found(cask)], brewToken: "example")
+
+        #expect(status == .available(sparkle, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
+    }
+
+    @Test("brew upgrade is offered only when the index's cask is the installed one")
+    func brewUpgradeNeedsOwningCask() {
+        let cask = candidate(.homebrewCask, "2.0", token: "example")
+        #expect(resolve(app(), [.homebrewCask: .found(cask)], brewToken: "example@beta")
+            == .available(cask, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
+    }
+
     @Test("unsafe or unsupported installs fall back to a link with the reason")
     func linkOnlyReasons() {
         let url = URL(string: "https://example.com")

@@ -79,11 +79,20 @@ public struct AppReleaseInstallResult: Sendable, Equatable {
     /// Where the replaced bundle went; nil for Homebrew upgrades.
     public let previousCopyInTrash: URL?
     public let relaunched: Bool
+    /// Something the user should know about an install that did happen,
+    /// e.g. a brew upgrade that brought a copy signed by another team.
+    public let warning: String?
 
-    public init(installedVersion: AppReleaseVersion, previousCopyInTrash: URL?, relaunched: Bool) {
+    public init(
+        installedVersion: AppReleaseVersion,
+        previousCopyInTrash: URL?,
+        relaunched: Bool,
+        warning: String? = nil
+    ) {
         self.installedVersion = installedVersion
         self.previousCopyInTrash = previousCopyInTrash
         self.relaunched = relaunched
+        self.warning = warning
     }
 }
 
@@ -169,6 +178,8 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
     let stagingRoot: URL
     let brewLocator: @Sendable () -> URL?
     let trash: any TrashMoving
+    /// Reads a bundle's Team ID from its signature, without validation.
+    let teamIDReader: @Sendable (URL) -> String?
 
     /// Also starts a background sweep of staging folders a crash left behind.
     init(
@@ -179,7 +190,8 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         auditRecorder: any UninstallAuditRecording = AuditWriter(),
         stagingRoot: URL = AppReleaseInstaller.defaultStagingRoot(),
         brewLocator: @escaping @Sendable () -> URL? = { DeveloperToolBinaryResolver().resolve(.homebrew) },
-        trash: any TrashMoving = FallbackTrashMover()
+        trash: any TrashMoving = FallbackTrashMover(),
+        teamIDReader: @escaping @Sendable (URL) -> String? = { StrictAppReleaseCodeSigner.teamIdentifier(ofBundle: $0) }
     ) {
         self.http = http
         self.verifier = verifier
@@ -189,6 +201,7 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         self.stagingRoot = stagingRoot
         self.brewLocator = brewLocator
         self.trash = trash
+        self.teamIDReader = teamIDReader
         Task.detached(priority: .utility) { Self.sweepStaleStaging(in: stagingRoot) }
     }
 
@@ -297,7 +310,21 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         return current
     }
 
-    /// Every check runs before the running app is touched.
+    /// The download, verification and quit can take minutes, and the app's
+    /// own updater may land a newer version meanwhile (the quit can trigger
+    /// it). Re-read right before the swap, so only a bundle that is still a
+    /// real directory with the same ID and an older version is replaced.
+    static func confirmStillReplaceable(
+        _ app: InstalledApp,
+        with stagedVersion: AppReleaseVersion
+    ) throws(AppReleaseInstallError) {
+        guard AppBundleFiles.fileType(atPath: app.url.path) == S_IFDIR else { throw .installedAppChanged }
+        let current = try onDisk(app)
+        guard stagedVersion.isNewer(than: current.version) else { throw .installedAppChanged }
+    }
+
+    /// Verification runs before the running app is touched; the installed
+    /// copy is re-read once more right before the swap.
     @MainActor
     private func stageAndSwap(
         app: InstalledApp,
@@ -323,6 +350,7 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
             progress: progress
         ) { () async throws(AppReleaseStepFailure) -> (URL?, AppReleaseAuditLine) in
             do throws(AppReleaseInstallError) {
+                try Self.confirmStillReplaceable(app, with: staged.version)
                 let trashURL = try await swapBundle(at: app.url, with: staged.url)
                 let files = [AuditFile(path: app.url.path, size: 0, trashPath: trashURL?.path)]
                 return (trashURL, AppReleaseAuditLine(command: summary, files: files))

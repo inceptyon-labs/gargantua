@@ -10,26 +10,28 @@ public struct AppReleaseCheckService: AppReleaseChecking {
     private let catalog: AppReleaseCatalogSource
     private let homebrew: HomebrewCaskSource
     private let sources: [any AppReleaseSourcing]
-    private let installedCaskTokens: @Sendable () -> Set<String>
+    private let installedCasks: @Sendable () -> [HomebrewInstalledCask]
     private let osVersion: OperatingSystemVersion
 
     /// - Parameters:
     ///   - catalog: Consulted first; apps it covers are not sent to the plain
     ///     Sparkle source, so one feed is never fetched twice.
-    ///   - homebrew: Supplies cask releases and, for every app it matches, the
-    ///     cask token that decides whether brew manages the app.
+    ///   - homebrew: Supplies cask releases and, for every app it matches, a
+    ///     cask token that marks the app brew-managed when that cask is installed.
     ///   - sources: The other automatic sources (Sparkle, App Store).
+    ///   - installedCasks: The local Caskroom, which decides brew ownership
+    ///     for casks the public index doesn't know or can't be reached for.
     public init(
         catalog: AppReleaseCatalogSource,
         homebrew: HomebrewCaskSource,
         sources: [any AppReleaseSourcing],
-        installedCaskTokens: @escaping @Sendable () -> Set<String> = { HomebrewCaskroomProbe().installedTokens() },
+        installedCasks: @escaping @Sendable () -> [HomebrewInstalledCask] = { HomebrewCaskroomProbe().installedCasks() },
         osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
     ) {
         self.catalog = catalog
         self.homebrew = homebrew
         self.sources = sources
-        self.installedCaskTokens = installedCaskTokens
+        self.installedCasks = installedCasks
         self.osVersion = osVersion
     }
 
@@ -65,7 +67,7 @@ public struct AppReleaseCheckService: AppReleaseChecking {
         let casks = await brew
         byKind[.homebrewCask] = casks.outcomes
 
-        let caskroom = installedCaskTokens()
+        let ownership = HomebrewCaskOwnership(casks: installedCasks())
         return apps.map { app in
             var outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [:]
             for (kind, results) in byKind {
@@ -74,7 +76,7 @@ public struct AppReleaseCheckService: AppReleaseChecking {
             return AppReleaseResolver.resolve(
                 app: app,
                 outcomes: outcomes,
-                brewManagedToken: casks.tokens[app.bundleID].flatMap { caskroom.contains($0) ? $0 : nil },
+                brewManagedToken: ownership.owner(of: app, indexToken: casks.tokens[app.bundleID]),
                 preferences: preferences,
                 osVersion: osVersion
             )

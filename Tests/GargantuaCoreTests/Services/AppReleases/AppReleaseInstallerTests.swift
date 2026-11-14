@@ -45,7 +45,8 @@ struct AppReleaseInstallerTests {
         runner: any ProcessRunner = ScriptedBrewRunner { _ in ProcessOutput(stdout: "", stderr: "", exitCode: 0) },
         quitter: StubAppQuitter = StubAppQuitter(),
         audit: SpyUninstallAuditRecorder = SpyUninstallAuditRecorder(),
-        trash: FakeTrashMover? = nil
+        trash: FakeTrashMover? = nil,
+        teamIDReader: @escaping @Sendable (URL) -> String? = { _ in "TEAM123456" }
     ) -> AppReleaseInstaller {
         AppReleaseInstaller(
             http: http,
@@ -55,7 +56,8 @@ struct AppReleaseInstallerTests {
             auditRecorder: audit,
             stagingRoot: sandbox.stagingRoot,
             brewLocator: { URL(fileURLWithPath: "/opt/homebrew/bin/brew") },
-            trash: trash ?? FakeTrashMover(trashDirectory: sandbox.trashDirectory)
+            trash: trash ?? FakeTrashMover(trashDirectory: sandbox.trashDirectory),
+            teamIDReader: teamIDReader
         )
     }
 
@@ -173,6 +175,53 @@ struct AppReleaseInstallerTests {
         #expect(audit.entries.isEmpty)
     }
 
+    @Test("a newer version landing during the quit stops the swap and leaves it in place")
+    func installedAppUpdatedBeforeSwap() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        try Fixtures.writeBundle(at: sandbox.appURL, short: "1.9", build: "190")
+        let appURL = sandbox.appURL
+        // The app's own updater installs 2.1 as Gargantua quits it.
+        let quitter = StubAppQuitter(running: true) {
+            try? Fixtures.writeBundle(at: appURL, short: "2.1", build: "210")
+        }
+        let trash = FakeTrashMover(trashDirectory: sandbox.trashDirectory)
+        let audit = SpyUninstallAuditRecorder()
+
+        let result = await install(
+            makeInstaller(sandbox: sandbox, quitter: quitter, audit: audit, trash: trash),
+            sandbox: sandbox,
+            app: Fixtures.installedApp(at: sandbox.appURL, short: "1.9", build: "190")
+        )
+
+        #expect(result == .failure(.installedAppChanged))
+        #expect(sandbox.installedVersion == AppReleaseVersion(short: "2.1", build: "210"))
+        #expect(trash.movedItems.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.trashDirectory.path).isEmpty)
+        #expect(audit.entries.last?.files.isEmpty == true)
+        #expect(quitter.relaunchedURLs == [sandbox.appURL])
+    }
+
+    @Test("a bundle swapped for a link during the quit stops the swap")
+    func installedAppReplacedByLinkBeforeSwap() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let appURL = sandbox.appURL
+        let elsewhere = sandbox.root.appendingPathComponent("Elsewhere/Foo.app", isDirectory: true)
+        try Fixtures.writeBundle(at: elsewhere, short: "1.0", build: "100")
+        let quitter = StubAppQuitter(running: true) {
+            try? FileManager.default.removeItem(at: appURL)
+            try? FileManager.default.createSymbolicLink(at: appURL, withDestinationURL: elsewhere)
+        }
+        let trash = FakeTrashMover(trashDirectory: sandbox.trashDirectory)
+
+        let result = await install(makeInstaller(sandbox: sandbox, quitter: quitter, trash: trash), sandbox: sandbox)
+
+        #expect(result == .failure(.installedAppChanged))
+        #expect(trash.movedItems.isEmpty)
+        #expect(AppBundleFiles.fileType(atPath: appURL.path) == S_IFLNK)
+    }
+
     @Test("a different bundle at the app's path stops the install before anything downloads")
     func bundleIDChangedOnDisk() async throws {
         let sandbox = try Sandbox()
@@ -227,7 +276,9 @@ struct AppReleaseInstallerTests {
         #expect(audit.entries.isEmpty)
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
     }
+}
 
+extension AppReleaseInstallerTests {
     // MARK: - Homebrew
 
     @Test("brew upgrade that leaves a newer bundle on disk succeeds and is audited as a command")
@@ -257,6 +308,50 @@ struct AppReleaseInstallerTests {
         #expect(audit.entries.last?.kind == .command)
         #expect(audit.entries.last?.cleanupMethod == .toolNative)
         #expect(audit.entries.last?.commandArguments == ["upgrade", "--cask", "--greedy", "foo"])
+    }
+
+    @Test("a brew upgrade that brings another team's signature succeeds with a warning")
+    func brewUpgradeTeamChangeWarns() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let appURL = sandbox.appURL
+        let runner = ScriptedBrewRunner { _ in
+            try? Fixtures.writeBundle(at: appURL, short: "2.0", build: "200")
+            return ProcessOutput(stdout: "", stderr: "", exitCode: 0)
+        }
+        let audit = SpyUninstallAuditRecorder()
+
+        let result = await install(
+            makeInstaller(sandbox: sandbox, runner: runner, audit: audit, teamIDReader: { _ in "OTHERTEAM1" }),
+            sandbox: sandbox,
+            strategy: .brewUpgrade(token: "foo")
+        )
+
+        let warning = "The new copy is signed by a different developer (OTHERTEAM1) than the copy it replaced (TEAM123456)."
+        #expect(result == .success(AppReleaseInstallResult(
+            installedVersion: AppReleaseVersion(short: "2.0", build: "200"),
+            previousCopyInTrash: nil,
+            relaunched: false,
+            warning: warning
+        )))
+        #expect(audit.entries.map(\.status) == [.attempted, .completed])
+        #expect(audit.entries.last?.command.hasSuffix("(warning: \(warning))") == true)
+    }
+
+    @Test("a tap-qualified cask token is refused before brew runs")
+    func tapQualifiedTokenRefused() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let runner = ScriptedBrewRunner { _ in ProcessOutput(stdout: "", stderr: "", exitCode: 0) }
+
+        let result = await install(
+            makeInstaller(sandbox: sandbox, runner: runner),
+            sandbox: sandbox,
+            strategy: .brewUpgrade(token: "user/tap/name")
+        )
+
+        #expect(result == .failure(.notInstallable))
+        #expect(runner.recordedArguments.isEmpty)
     }
 
     @Test("a non-zero brew exit is reported with brew's own message")

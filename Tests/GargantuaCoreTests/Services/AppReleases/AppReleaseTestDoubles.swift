@@ -31,3 +31,17 @@ final class StubAppReleaseHTTP: AppReleaseHTTPFetching {
 
     func download(_ url: URL, to destination: URL, maxBytes: Int64) async throws -> Int64 { 0 }
 }
+
+/// Writes files into a temporary Homebrew prefix, e.g.
+/// `Caskroom/foo/.metadata/INSTALL_RECEIPT.json`. Callers remove the root.
+enum CaskroomFixture {
+    static func makePrefix(_ files: [String: String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("caskroom-\(UUID().uuidString)")
+        for (path, contents) in files {
+            let url = root.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(contents.utf8).write(to: url)
+        }
+        return root
+    }
+}

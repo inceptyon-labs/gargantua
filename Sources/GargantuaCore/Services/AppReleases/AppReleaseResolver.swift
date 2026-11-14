@@ -6,8 +6,8 @@ public enum AppReleaseResolver {
     /// - Parameters:
     ///   - outcomes: What each source reported for this app. Sources that
     ///     don't know the app are absent.
-    ///   - brewManagedToken: The matched cask token when that cask is also
-    ///     installed in the Caskroom, so brew owns the app's updates.
+    ///   - brewManagedToken: The token of the installed cask that owns the
+    ///     app, so brew owns the app's updates.
     public static func resolve(
         app: InstalledApp,
         outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome],
@@ -50,7 +50,7 @@ public enum AppReleaseResolver {
         }
 
         if let token = brewManagedToken {
-            return row(brewStatus(chosen: chosen, token: token, outcomes: considered))
+            return row(brewStatus(chosen: chosen, token: token, installed: app.version, outcomes: considered))
         }
         return row(.available(chosen, inPlaceStrategy(for: chosen, app: app)))
     }
@@ -113,15 +113,19 @@ public enum AppReleaseResolver {
         }
     }
 
-    /// Brew owns this app: update through `brew upgrade` when the cask has
-    /// the newest release, otherwise only link to it so brew's records stay
-    /// true.
+    /// Brew owns this app: update through `brew upgrade` when the owning
+    /// cask has the chosen release and is newer than the installed copy,
+    /// otherwise only link to it so brew's records stay true. Casks carry no
+    /// build number, so a release newer only by build is not one brew has.
     private static func brewStatus(
         chosen: AppReleaseCandidate,
         token: String,
+        installed: AppReleaseVersion,
         outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome]
     ) -> AppReleaseStatus {
-        if case .found(let cask) = outcomes[.homebrewCask], cask.version.compare(to: chosen.version) == .orderedSame {
+        if case .found(let cask) = outcomes[.homebrewCask], cask.caskToken == token,
+           cask.version.isNewer(than: installed),
+           cask.version.compare(to: chosen.version) != .orderedAscending {
             if cask.payloadKind == .pkg {
                 return .available(cask, .linkOnly(cask.vendorURL, reason: .packageInstaller))
             }

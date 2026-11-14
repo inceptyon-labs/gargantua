@@ -33,6 +33,71 @@ struct AppReleaseVerifierTests {
         }
     }
 
+    @Test("a Team ID is spliced into a requirement only when it is ten uppercase letters and digits")
+    func teamRequirementText() {
+        #expect(StrictAppReleaseCodeSigner.teamRequirement(for: "ABCDE12345")
+            == "anchor apple generic and certificate leaf[subject.OU] = \"ABCDE12345\"")
+        for malformed in ["abcde12345", "ABCDE1234", "ABCDE123456", "ABCDE\" or 1", "ABCDE1234É", ""] {
+            #expect(StrictAppReleaseCodeSigner.teamRequirement(for: malformed) == nil)
+        }
+    }
+
+    /// Zips a 2.0 `Foo.app` the way a vendor would ship it.
+    private func zippedUpdate(in directory: URL) throws -> URL {
+        let source = directory.appendingPathComponent("source", isDirectory: true)
+        try Fixtures.writeBundle(at: source.appendingPathComponent("Foo.app"), short: "2.0", build: "200")
+        let payload = directory.appendingPathComponent("payload")
+        let output = try DefaultProcessRunner().run(
+            executable: URL(fileURLWithPath: "/usr/bin/ditto"),
+            arguments: [
+                "-c", "-k", "--norsrc", "--noextattr", "--keepParent",
+                source.appendingPathComponent("Foo.app").path, payload.path,
+            ]
+        )
+        try #require(output.exitCode == 0)
+        return payload
+    }
+
+    private func verify(_ payload: URL, signer: StubCodeSigner, in directory: URL) throws -> AppReleaseStagedBundle {
+        let work = directory.appendingPathComponent("work", isDirectory: true)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        return try AppReleaseVerifier(signer: signer, gatekeeper: AcceptingGatekeeper()).verify(
+            payload: payload,
+            app: someApp,
+            candidate: Fixtures.candidate(),
+            strategy: .inPlace,
+            workDirectory: work
+        )
+    }
+
+    @Test("a signature naming the team in its Team ID field but not in an Apple-issued certificate is refused")
+    func teamCertificateMismatch() throws {
+        try withTemporaryDirectory { directory in
+            let payload = try zippedUpdate(in: directory)
+            #expect(throws: Failure.teamCertificateMismatch("TEAM123456")) {
+                try verify(payload, signer: StubCodeSigner(certifiedTeams: []), in: directory)
+            }
+        }
+    }
+
+    @Test("the same update passes when the certificate belongs to the team")
+    func teamCertificateMatch() throws {
+        try withTemporaryDirectory { directory in
+            let payload = try zippedUpdate(in: directory)
+            let staged = try verify(payload, signer: StubCodeSigner(), in: directory)
+            #expect(staged.version == AppReleaseVersion(short: "2.0", build: "200"))
+        }
+    }
+
+    @Test("a catalog-pinned team must also be the certificate's team")
+    func pinnedTeamCertificateMismatch() throws {
+        let verifier = AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper())
+        let candidate = Fixtures.candidate(source: .catalog, pinnedTeamID: "PINNEDTEAM")
+        #expect(throws: Failure.teamCertificateMismatch("PINNEDTEAM")) {
+            try verifier.checkTeamCertificate(URL(fileURLWithPath: "/tmp/Foo.app"), app: someApp, candidate: candidate)
+        }
+    }
+
     @Test("an installed app without a team ID can't be updated in place")
     func installedTeamIDMissing() {
         let app = Fixtures.installedApp(at: URL(fileURLWithPath: "/Applications/Foo.app"), teamID: nil)
@@ -172,6 +237,52 @@ struct AppReleaseVerifierTests {
             try AppReleaseVerifier.validateArchiveEntries(["/abs"])
         }
         try AppReleaseVerifier.validateArchiveEntries(["Foo.app/", "Foo.app/Contents/Info.plist"])
+    }
+
+    @Test("an entry under a path another entry stores as a file or link is refused")
+    func archiveEntryThroughLink() throws {
+        #expect(throws: Failure.unsafeArchiveEntry("x/evil.txt")) {
+            try AppReleaseVerifier.validateArchiveEntries(["x", "x/evil.txt"])
+        }
+        // The same path spelled another way, or in another case, is the same
+        // path on APFS.
+        #expect(throws: Failure.unsafeArchiveEntry("x/evil.txt")) {
+            try AppReleaseVerifier.validateArchiveEntries(["./x", "x/evil.txt"])
+        }
+        #expect(throws: Failure.unsafeArchiveEntry("x/evil.txt")) {
+            try AppReleaseVerifier.validateArchiveEntries(["X", "x/evil.txt"])
+        }
+        try AppReleaseVerifier.validateArchiveEntries(["Foo.app/", "Foo.app/Contents/Info.plist"])
+        try AppReleaseVerifier.validateArchiveEntries(["Foo.app/Contents/MacOS/foo", "Foo.app/Contents/MacOS/foo.dSYM"])
+    }
+}
+
+extension AppReleaseVerifierTests {
+    // MARK: - Disk space
+
+    @Test("unpacking needs four times the payload free, and at least 1 GiB")
+    func freeSpaceGuard() throws {
+        let gib: Int64 = 1_073_741_824
+        try AppReleaseVerifier.checkFreeSpace(available: gib, payloadSize: 100 * 1_048_576)
+        try AppReleaseVerifier.checkFreeSpace(available: 8 * gib, payloadSize: 2 * gib)
+        #expect(throws: Failure.insufficientDiskSpace(needed: gib, available: gib - 1)) {
+            try AppReleaseVerifier.checkFreeSpace(available: gib - 1, payloadSize: 100 * 1_048_576)
+        }
+        #expect(throws: Failure.insufficientDiskSpace(needed: 8 * gib, available: 8 * gib - 1)) {
+            try AppReleaseVerifier.checkFreeSpace(available: 8 * gib - 1, payloadSize: 2 * gib)
+        }
+        #expect(throws: Failure.insufficientDiskSpace(needed: gib, available: nil)) {
+            try AppReleaseVerifier.checkFreeSpace(available: nil, payloadSize: 1)
+        }
+    }
+
+    @Test("an unpacked tree over 16 GiB is refused")
+    func extractedSizeLimit() throws {
+        let limit: Int64 = 16 * 1_073_741_824
+        try AppReleaseVerifier.checkExtractedSize(limit)
+        #expect(throws: Failure.extractedTooLarge(limit: limit)) {
+            try AppReleaseVerifier.checkExtractedSize(limit + 1)
+        }
     }
 
     @Test("zip, gzip and a UDIF trailer are recognized by their bytes")

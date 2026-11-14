@@ -27,7 +27,9 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
     case payloadKindMismatch(declared: AppReleasePayloadKind, actual: AppReleasePayloadKind)
     // Archive entries and extraction
     case unsafeArchiveEntry(String)
+    case insufficientDiskSpace(needed: Int64, available: Int64?)
     case extractionFailed(String)
+    case extractedTooLarge(limit: Int64)
     case licenseAgreementRequired
     // Locating the app
     case appNotFound
@@ -43,6 +45,7 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
     case installedTeamIDMissing
     case teamIDMismatch(expected: String, actual: String?)
     case pinnedTeamIDMismatch(expected: String, actual: String?)
+    case teamCertificateMismatch(String)
     // Gatekeeper
     case gatekeeperRejected(String)
     // Version
@@ -71,7 +74,15 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
         case .payloadKindMismatch(let declared, let actual):
             "The download was described as \(declared.rawValue) but is actually \(actual.rawValue)."
         case .unsafeArchiveEntry(let path): "The archive contains an unsafe path: \(path)"
+        case .insufficientDiskSpace(let needed, let available):
+            if let available {
+                "Not enough free disk space to unpack the update: it needs \(Self.bytes(needed)) free, "
+                    + "and \(Self.bytes(available)) is available."
+            } else {
+                "Not enough free disk space to unpack the update: the free space couldn't be read."
+            }
         case .extractionFailed(let detail): "The download couldn't be unpacked: \(detail)"
+        case .extractedTooLarge(let limit): "The unpacked update is larger than the \(Self.bytes(limit)) limit."
         case .licenseAgreementRequired:
             "The disk image asks you to accept a license agreement. Download and install this update by hand."
         case .appNotFound: "The download doesn't contain this app."
@@ -87,11 +98,17 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
             "The update is signed by a different developer (\(actual ?? "none")) than the installed app (\(expected))."
         case .pinnedTeamIDMismatch(let expected, let actual):
             "The update is signed by \(actual ?? "no developer"), not the expected developer \(expected)."
+        case .teamCertificateMismatch(let team):
+            "The update's signing certificate wasn't issued by Apple to the developer team \(team)."
         case .gatekeeperRejected(let detail): "macOS Gatekeeper rejected the new app: \(detail)"
         case .notNewer(let staged, let installed):
             "The download is version \(staged), which is not newer than the installed \(installed)."
         case .requiresNewerMacOS(let minimum): "The new version needs macOS \(minimum) or later."
         }
+    }
+
+    private static func bytes(_ count: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
     }
 }
 
@@ -163,13 +180,14 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         workDirectory: URL
     ) throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle {
         try checkSourcePolicy(candidate, strategy: strategy)
-        try Self.checkLength(of: payload, expected: candidate.expectedLength)
+        let payloadSize = try Self.checkLength(of: payload, expected: candidate.expectedLength)
         try Self.checkSHA256(of: payload, expected: candidate.sha256)
         try Self.checkEdSignature(of: payload, app: app, candidate: candidate)
         let kind = try Self.sniffPayload(payload, declared: candidate.payloadKind)
 
         let extracted = workDirectory.appendingPathComponent("extracted", isDirectory: true)
         try Self.makeEmptyDirectory(extracted)
+        try Self.checkFreeSpace(available: Self.availableCapacity(at: workDirectory), payloadSize: payloadSize)
         try unpack(
             payload,
             kind: kind,
@@ -177,11 +195,13 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
             mountRoot: workDirectory.appendingPathComponent("mounts", isDirectory: true),
             bundleID: app.bundleID
         )
+        try Self.checkExtractedSize(Self.treeSize(of: extracted, limit: Self.maxExtractedBytes))
 
         let bundle = try Self.locateApp(in: extracted, bundleID: app.bundleID)
         try Self.walkBundleTree(bundle)
         let report = try checkCodeSignature(bundle)
         try Self.checkTeamID(report.teamID, app: app, candidate: candidate)
+        try checkTeamCertificate(bundle, app: app, candidate: candidate)
         try checkGatekeeper(bundle)
         let version = try Self.checkVersion(of: bundle, installed: app, hostOSVersion: hostOSVersion)
         return AppReleaseStagedBundle(url: bundle, version: version)
@@ -344,6 +364,22 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         guard stagedTeamID == installed else { throw .teamIDMismatch(expected: installed, actual: stagedTeamID) }
         if let pinned = candidate.pinnedTeamID, pinned != stagedTeamID {
             throw .pinnedTeamIDMismatch(expected: pinned, actual: stagedTeamID)
+        }
+    }
+
+    /// The Team ID field alone is just a string in the signature; this
+    /// requires Apple to have issued the leaf certificate to that team, for
+    /// the installed app's team and any catalog-pinned one.
+    func checkTeamCertificate(
+        _ bundle: URL,
+        app: InstalledApp,
+        candidate: AppReleaseCandidate
+    ) throws(AppReleaseVerificationFailure) {
+        guard let installed = app.teamID?.trimmedNonEmpty else { throw .installedTeamIDMissing }
+        var teams = [installed]
+        if let pinned = candidate.pinnedTeamID, pinned != installed { teams.append(pinned) }
+        for team in teams where !signer.satisfiesTeamRequirement(bundleURL: bundle, teamID: team) {
+            throw .teamCertificateMismatch(team)
         }
     }
 

@@ -16,10 +16,14 @@ struct AppReleaseCheckServiceTests {
 
     /// One app matched to a `version :latest` cask, with a newer release in
     /// its own Sparkle feed.
-    private func status(caskroom: Set<String>) async throws -> AppReleaseStatus {
+    private func status(
+        caskroom: [HomebrewInstalledCask],
+        indexReachable: Bool = true
+    ) async throws -> AppReleaseStatus {
         let cacheDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("check-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: cacheDirectory) }
         let http = StubAppReleaseHTTP { url, _ in
+            if url == HomebrewCaskIndex.indexURL, !indexReachable { throw AppReleaseHTTPError.network("offline") }
             let body = url == HomebrewCaskIndex.indexURL ? Self.casks : Self.appcast
             return AppReleaseHTTPResponse(statusCode: 200, data: Data(body.utf8))
         }
@@ -28,7 +32,7 @@ struct AppReleaseCheckServiceTests {
             catalog: AppReleaseCatalogSource(catalog: AppReleaseCatalog(entries: []), http: http, sparkle: sparkle),
             homebrew: HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: cacheDirectory), hostIsArm64: true),
             sources: [sparkle],
-            installedCaskTokens: { caskroom }
+            installedCasks: { caskroom }
         )
         let app = InstalledApp(
             bundleID: "com.example.Latest",
@@ -44,7 +48,7 @@ struct AppReleaseCheckServiceTests {
 
     @Test("a brew-installed app is brew-managed even when its cask has no usable version")
     func brewManagedWithoutCaskVersion() async throws {
-        guard case .available(let candidate, let strategy) = try await status(caskroom: ["latest-app"]) else {
+        guard case .available(let candidate, let strategy) = try await status(caskroom: [HomebrewInstalledCask(token: "latest-app")]) else {
             Issue.record("expected an available update")
             return
         }
@@ -54,10 +58,25 @@ struct AppReleaseCheckServiceTests {
 
     @Test("a matched cask that brew didn't install leaves the app to the in-place path")
     func matchedCaskNotInstalled() async throws {
-        guard case .available(_, let strategy) = try await status(caskroom: ["other"]) else {
+        guard case .available(_, let strategy) = try await status(caskroom: [HomebrewInstalledCask(token: "other")]) else {
             Issue.record("expected an available update")
             return
         }
         #expect(strategy == .inPlace)
+    }
+
+    @Test("a cask from a tap the index doesn't know marks the app brew-managed from the Caskroom alone")
+    func caskroomOwnershipWithoutIndex() async throws {
+        let prefix = try CaskroomFixture.makePrefix([
+            "Caskroom/latest-tap/.metadata/INSTALL_RECEIPT.json": #"{"uninstall_artifacts":[{"app":["Latest.app"]}]}"#,
+        ])
+        defer { try? FileManager.default.removeItem(at: prefix) }
+        let caskroom = HomebrewCaskroomProbe(prefixes: [prefix.path]).installedCasks()
+
+        guard case .available(_, let strategy) = try await status(caskroom: caskroom, indexReachable: false) else {
+            Issue.record("expected an available update")
+            return
+        }
+        #expect(strategy == .linkOnly(URL(string: "https://example.com/news"), reason: .brewCaskBehind))
     }
 }

@@ -29,6 +29,8 @@ public enum AppReleasesFilter: String, CaseIterable, Sendable {
 /// What the last install attempt on a row left behind.
 public enum AppReleaseRowMessage: Equatable, Sendable {
     case installed(String)
+    /// Installed, but with something the user should look at.
+    case installedWithWarning(String)
     case failed(String)
 }
 
@@ -185,8 +187,9 @@ public final class AppReleasesSession {
         guard isCurrent(generation) else { return }
 
         let protected = installedDuringCheck
+        let current = preferences
         rows = result.compactMap { row in
-            protected.contains(row.id) ? rows.first { $0.id == row.id } : row
+            protected.contains(row.id) ? rows.first { $0.id == row.id } : Self.applying(current, to: row)
         }
         recentlyInstalled.formIntersection(protected)
         rowMessages = rowMessages.filter { id, message in
@@ -198,6 +201,18 @@ public final class AppReleasesSession {
         if isAutomatic {
             updatePreferences { $0.lastAutoCheck = lastChecked }
         }
+    }
+
+    /// The checker saw the preferences from when the check started; an app
+    /// ignored or a version skipped while it ran stays that way.
+    private static func applying(_ preferences: AppReleasePreferences, to row: AppReleaseRow) -> AppReleaseRow {
+        if preferences.ignoredBundleIDs.contains(row.id) {
+            return AppReleaseRow(app: row.app, status: .ignored, sources: row.sources)
+        }
+        if let candidate = row.availableCandidate, preferences.skippedVersions[row.id] == candidate.displayVersion {
+            return AppReleaseRow(app: row.app, status: .skippedVersion(candidate.displayVersion), sources: row.sources)
+        }
+        return row
     }
 
     /// False once a newer check or Cancel superseded this one; a cancelled
@@ -293,7 +308,9 @@ public final class AppReleasesSession {
 
         switch result {
         case .success(let installed):
-            rowMessages[id] = .installed("Updated to \(installed.installedVersion.description).")
+            let updated = "Updated to \(installed.installedVersion.description)."
+            // A warning stays on screen, in the failure style, until the next attempt.
+            rowMessages[id] = installed.warning.map { .installedWithWarning("\(updated) \($0)") } ?? .installed(updated)
             recentlyInstalled.insert(id)
             await refresh(row.app)
         case .failure(let error):
