@@ -422,13 +422,34 @@ struct AppReleasesSessionTests {
         await session.check()
         session.ignore(Self.app.bundleID)
 
-        session.startCheck()
+        let run = Task { await session.check() }
         await Self.waitUntil { await checker.calls == 2 }
         await session.unignore(Self.app.bundleID)
         await checker.open()
-        await Self.waitUntil { !session.isChecking }
+        await run.value
+
+        // Calls: initial check, gated full check, unignore's refresh. The
+        // row unignore already resolved is kept, so no fourth call.
+        #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
+        #expect(await checker.calls == 3)
+        #expect(session.phase == .ready)
+    }
+
+    @Test("A row already re-resolved mid-check is not checked again when the check finishes")
+    func reresolvedRowNotRechecked() async {
+        let (session, checker) = Self.makePreferenceSession(gatedCalls: [2])
+        await session.check()
+        session.ignore(Self.app.bundleID)
+
+        let run = Task { await session.check() }
+        await Self.waitUntil { await checker.calls == 2 }
+        await session.unignore(Self.app.bundleID)
+        #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
+        await checker.open()
+        await run.value
 
         #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
+        #expect(await checker.calls == 3)
     }
 
     @Test("A version un-skipped while a check runs is resolved again when the check finishes")
@@ -437,13 +458,17 @@ struct AppReleasesSessionTests {
         await session.check()
         session.skip(version: Self.candidate.displayVersion, for: Self.app.bundleID)
 
-        session.startCheck()
+        let run = Task { await session.check() }
         await Self.waitUntil { await checker.calls == 2 }
         await session.unskip(Self.app.bundleID)
         await checker.open()
-        await Self.waitUntil { !session.isChecking }
+        await run.value
 
+        // Calls: initial check, gated full check, unskip's refresh. The row
+        // unskip already resolved is kept, so no fourth call.
         #expect(session.rows.first?.status == .available(Self.candidate, .inPlace))
+        #expect(await checker.calls == 3)
+        #expect(session.phase == .ready)
     }
 
     @Test("An app ignored while its re-check runs stays ignored")

@@ -191,13 +191,28 @@ public final class AppReleasesSession {
 
         let protected = installedDuringCheck
         let current = preferences
+        let existing = rows
         rows = result.compactMap { row in
-            protected.contains(row.id) ? rows.first { $0.id == row.id } : Self.applying(current, to: row)
+            let old = existing.first { $0.id == row.id }
+            if protected.contains(row.id) { return old }
+            let resolved = Self.applying(current, to: row)
+            // The checker saw the old preferences; a row already re-resolved
+            // under the new ones is better than this stale result.
+            if Self.isStale(resolved, under: current), let old, !Self.isStale(old, under: current) { return old }
+            return resolved
         }
         recentlyInstalled.formIntersection(protected)
         rowMessages = rowMessages.filter { id, message in
             if case .installed = message { return protected.contains(id) }
             return true
+        }
+        // An ignore or skip lifted while the check ran left stale rows.
+        let staleApps = rows
+            .filter { !protected.contains($0.id) && Self.isStale($0, under: preferences) }
+            .map(\.app)
+        for app in staleApps {
+            await refresh(app)
+            guard isCurrent(generation) else { return }
         }
         lastChecked = now()
         phase = .ready
@@ -205,11 +220,6 @@ public final class AppReleasesSession {
         if isAutomatic {
             updatePreferences { $0.lastAutoCheck = lastChecked }
         }
-        // An ignore or skip lifted while the check ran left stale rows.
-        let staleApps = rows
-            .filter { !protected.contains($0.id) && Self.isStale($0, under: preferences) }
-            .map(\.app)
-        for app in staleApps { await refresh(app) }
     }
 
     /// True when the row shows an ignore or skip the preferences no longer hold.
