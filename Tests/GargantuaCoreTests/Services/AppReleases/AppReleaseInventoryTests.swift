@@ -13,6 +13,11 @@ struct AppReleaseInventoryTests {
         func verify(bundleURL _: URL) -> CodeSignatureInfo { CodeSignatureInfo(valid: true, teamIdentifier: "TEAM123456") }
     }
 
+    /// Under home: the system temp dir is /private/var, which the updater skips.
+    private static func tempRoot() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("gargantua-inv-\(UUID().uuidString)")
+    }
+
     private func makeApp(in root: URL, _ name: String, plist: [String: Any], mas: Bool = false) throws -> URL {
         let app = root.appendingPathComponent("\(name).app")
         let contents = app.appendingPathComponent("Contents")
@@ -27,7 +32,7 @@ struct AppReleaseInventoryTests {
     }
 
     @Test func readsInfoPlistFields() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("inv-\(UUID().uuidString)")
+        let root = Self.tempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let foo = try makeApp(in: root, "Foo", plist: [
             "CFBundleIdentifier": "com.test.foo", "CFBundleName": "Foo Name",
@@ -65,7 +70,7 @@ struct AppReleaseInventoryTests {
 
     @Test("one bundle is re-read on its own, with the same exclusions as a full scan")
     func installedAppAtURL() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("inv-\(UUID().uuidString)")
+        let root = Self.tempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo", "CFBundleShortVersionString": "3.1"])
         let skipped = try makeApp(in: root, "Skip", plist: ["CFBundleIdentifier": "com.test.skip"])
@@ -79,12 +84,50 @@ struct AppReleaseInventoryTests {
     }
 
     @Test func excludedBundleIDsAreDropped() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("inv-\(UUID().uuidString)")
+        let root = Self.tempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo"])
         let apps = await DefaultAppReleaseInventory(
             enumerator: StubEnumerator(urls: [foo]), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.foo"]
         ).installedApps()
         #expect(apps.isEmpty)
+    }
+
+    @Test("update-location filter", arguments: [
+        ("/Applications/Foo.app", true),
+        ("/Applications/Utilities/Foo.app", true),
+        ("/Users/test/Applications/Foo.app", true),
+        ("/Users/test/Downloads/Foo.app", true),
+        ("/System/Applications/Notes.app", true),
+        ("/Applications/Foo.app/Contents/Helpers/Helper.app", false),
+        ("/Users/test/.codex/computer-use/Codex Computer Use.app", false),
+        ("/Users/test/Library/Application Support/X/Updater.app", false),
+        ("/Library/Application Support/X/Y.app", false),
+        ("/System/Library/CoreServices/Z.app", false),
+        ("/private/var/folders/ab/T/AppTranslocation/UUID/d/Foo.app", false),
+        ("/Volumes/Foo/Foo.app", false),
+        ("/opt/homebrew/Caskroom/x/1.0/X.app", false),
+    ])
+    func updatableLocation(path: String, expected: Bool) {
+        #expect(DefaultAppReleaseInventory.isUpdatableLocation(
+            URL(fileURLWithPath: path), home: URL(fileURLWithPath: "/Users/test")
+        ) == expected)
+    }
+
+    @Test func installedAppsSkipsHelperAndToolPrivateBundles() async throws {
+        let root = Self.tempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let plist: (String) -> [String: Any] = { ["CFBundleIdentifier": $0] }
+        let normal = try makeApp(in: root, "Normal", plist: plist("com.test.normal"))
+        let nested = try makeApp(in: normal.appendingPathComponent("Contents/Helpers"), "Helper", plist: plist("com.test.helper"))
+        let hidden = try makeApp(in: root.appendingPathComponent(".tool"), "Hidden", plist: plist("com.test.hidden"))
+        let library = try makeApp(in: home.appendingPathComponent("Library/gargantua-test-\(UUID().uuidString)"), "Lib", plist: plist("com.test.lib"))
+        defer { try? FileManager.default.removeItem(at: library.deletingLastPathComponent()) }
+
+        let apps = await DefaultAppReleaseInventory(
+            enumerator: StubEnumerator(urls: [normal, nested, hidden, library]), signatureReader: StubSigner(), excludedBundleIDs: []
+        ).installedApps()
+        #expect(apps.map(\.bundleID) == ["com.test.normal"])
     }
 }

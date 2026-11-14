@@ -33,7 +33,7 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     }
 
     public func installedApps() async -> [InstalledApp] {
-        let urls = enumerator.enumerateBundles()
+        let urls = enumerator.enumerateBundles().filter { Self.isUpdatableLocation($0) }
         let running = await Self.runningBundleIDs()
         let reader = signatureReader
         let read = await boundedMap(urls) { Self.readApp(at: $0, running: running, signatureReader: reader) }
@@ -47,11 +47,28 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     }
 
     public func installedApp(at url: URL) async -> InstalledApp? {
+        guard Self.isUpdatableLocation(url) else { return nil }
         let running = await Self.runningBundleIDs()
         guard let app = Self.readApp(at: url, running: running, signatureReader: signatureReader),
               isTracked(app)
         else { return nil }
         return app
+    }
+
+    /// Helpers nested in other bundles and private tool bundles aren't the user's apps and can't be
+    /// updated in place; translocated and mounted-image copies are read-only.
+    static func isUpdatableLocation(
+        _ url: URL,
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> Bool {
+        let path = url.standardizedFileURL.path
+        let parts = path.split(separator: "/").map(String.init)
+        if parts.dropLast().contains(where: { $0.hasSuffix(".app") }) { return false }
+        if parts.contains(where: { $0.hasPrefix(".") }) { return false }
+        if path.hasPrefix("/System/Applications/") { return true }
+        let homeLibrary = home.standardizedFileURL.path + "/Library/"
+        let blocked = ["/Library/", "/System/", "/private/", "/Volumes/", "/usr/", "/opt/", "/tmp/", "/var/", homeLibrary]
+        return !blocked.contains { path.hasPrefix($0) }
     }
 
     private func isTracked(_ app: InstalledApp) -> Bool {
