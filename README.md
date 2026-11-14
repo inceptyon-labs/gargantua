@@ -183,7 +183,7 @@ In all engines: **AI can explain a classification but cannot lower it.** A `prot
 
 - **Scheduled scans**: launchd agent registered via SMAppService. Interval presets (hourly, daily, weekly) or a custom 5-field cron expression with validation. Selectable profile (default `Light`). Toggle to skip when on battery.
 - **Menu bar widget**: glanceable status, optional.
-- **App updates**: optional daily check while Gargantua is running. Off by default.
+- **App updates**: optional daily check while Gargantua is running. There is also an optional background check, about once a day even when Gargantua is closed, that notifies you about new updates. Both are off by default.
 - **Launch at login**: registered through `SMAppService.loginItem`.
 
 ### Network (Settings → Network)

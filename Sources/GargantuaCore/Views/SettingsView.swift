@@ -28,6 +28,7 @@ public struct SettingsView: View {
     @State var availableProfiles: [CleanupProfile] = CleanupProfile.builtIn
     @State var scheduledScanAgentStatus: ScheduledScanAgentStatus = .notRegistered
     @State var scheduledScanError: String?
+    @State var appUpdatesBackgroundNotice: String?
     @State var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     @State var launchAtLoginError: String?
     @AppStorage(SettingsTab.selectedTabKey) private var selectedTabRaw = SettingsTab.ai.rawValue

@@ -109,6 +109,9 @@ public final class AppReleasesSession {
         rows.filter { $0.availableCandidate != nil }.count
     }
 
+    /// False after `releaseResults()` empties the list.
+    public var hasResults: Bool { !rows.isEmpty }
+
     public var isChecking: Bool { phase == .checking }
 
     /// Apps the last check could not reach any source for.
@@ -344,9 +347,7 @@ public final class AppReleasesSession {
     /// Keeps the count the sidebar badge and the background check read current.
     private func storeAvailableCount() {
         guard lastChecked != nil else { return }
-        var state = AppReleaseBackgroundState.stored(in: defaults)
-        state.availableCount = availableCount
-        state.store(in: defaults)
+        AppReleaseBackgroundState.storeAvailableCount(availableCount, in: defaults)
     }
 
     // MARK: - Ignore and skip

@@ -3,23 +3,30 @@ import Testing
 
 @Suite("AppReleaseBadge")
 struct AppReleaseBadgeTests {
-    @Test("A checked session wins over the stored count")
-    func checkedSessionWins() {
+    @Test("Loaded results win over the stored count")
+    func resultsLoaded() {
         #expect(AppReleaseBadge.count(
-            sessionHasChecked: true, sessionCount: 2, backgroundCheckEnabled: true, storedCount: 5
+            sessionCount: 2, sessionHasChecked: true, backgroundCheckEnabled: true, storedCount: 5
         ) == 2)
         #expect(AppReleaseBadge.count(
-            sessionHasChecked: true, sessionCount: 0, backgroundCheckEnabled: true, storedCount: 5
+            sessionCount: 0, sessionHasChecked: true, backgroundCheckEnabled: false, storedCount: 5
         ) == 0)
     }
 
-    @Test("An unchecked session uses the stored count only when background checks are on")
-    func uncheckedSession() {
+    @Test("A session that checked and then released its results uses the stored count")
+    func releasedAfterCheck() {
         #expect(AppReleaseBadge.count(
-            sessionHasChecked: false, sessionCount: 0, backgroundCheckEnabled: true, storedCount: 3
+            sessionCount: nil, sessionHasChecked: true, backgroundCheckEnabled: false, storedCount: 3
         ) == 3)
+    }
+
+    @Test("A session that never checked uses the stored count only when background checks are on")
+    func neverChecked() {
         #expect(AppReleaseBadge.count(
-            sessionHasChecked: false, sessionCount: 0, backgroundCheckEnabled: false, storedCount: 3
+            sessionCount: nil, sessionHasChecked: false, backgroundCheckEnabled: false, storedCount: 3
         ) == 0)
+        #expect(AppReleaseBadge.count(
+            sessionCount: nil, sessionHasChecked: false, backgroundCheckEnabled: true, storedCount: 3
+        ) == 3)
     }
 }

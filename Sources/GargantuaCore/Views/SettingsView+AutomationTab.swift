@@ -215,6 +215,14 @@ extension SettingsView {
                     + "Uses the same sources as a manual check and uploads nothing about your Mac.",
                 isOn: appUpdatesBackgroundCheckBinding
             )
+
+            if let appUpdatesBackgroundNotice {
+                SettingsNoticeRow(
+                    icon: "exclamationmark.triangle.fill",
+                    message: appUpdatesBackgroundNotice,
+                    tone: .protected
+                )
+            }
         }
     }
 
@@ -246,11 +254,13 @@ extension SettingsView {
                         appUpdateChecks: enabled
                     )
                     scheduledScanAgentStatus = status
-                    scheduledScanError = enabled && status == .requiresApproval
+                    appUpdatesBackgroundNotice = enabled && status == .requiresApproval
                         ? "Allow Gargantua in System Settings > General > Login Items to run background checks."
                         : nil
                 } catch {
-                    scheduledScanError = error.localizedDescription
+                    preferences.backgroundCheckEnabled = false
+                    preferences.store()
+                    appUpdatesBackgroundNotice = error.localizedDescription
                 }
             }
         )

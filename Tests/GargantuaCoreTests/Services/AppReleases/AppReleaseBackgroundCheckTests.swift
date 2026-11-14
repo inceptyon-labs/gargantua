@@ -14,20 +14,23 @@ struct AppReleaseBackgroundCheckTests {
     /// Reports the given versions as available; counts calls.
     final class StubChecker: AppReleaseChecking {
         // swiftlint:disable:next nesting
-        private struct State { var calls = 0; var versions: [String: String] }
+        private struct State { var calls = 0; var versions: [String: String]; var failing: Set<String> = [] }
         private let state: OSAllocatedUnfairLock<State>
         var calls: Int { state.withLock { $0.calls } }
 
         init(versions: [String: String]) { state = OSAllocatedUnfairLock(initialState: State(versions: versions)) }
 
+        func setFailing(_ ids: Set<String>) { state.withLock { $0.failing = ids } }
+
         func setVersion(_ id: String, _ version: String) { state.withLock { $0.versions[id] = version } }
 
         func check(_ apps: [InstalledApp], preferences: AppReleasePreferences) async -> [AppReleaseRow] {
-            let versions = state.withLock { state -> [String: String] in
+            let (versions, failing) = state.withLock { state -> ([String: String], Set<String>) in
                 state.calls += 1
-                return state.versions
+                return (state.versions, state.failing)
             }
             return apps.map { app in
+                if failing.contains(app.bundleID) { return AppReleaseRow(app: app, status: .failed("offline")) }
                 if preferences.ignoredBundleIDs.contains(app.bundleID) {
                     return AppReleaseRow(app: app, status: .ignored)
                 }
@@ -120,7 +123,7 @@ struct AppReleaseBackgroundCheckTests {
         #expect(deliveries.first?.count == 2)
         #expect(deliveries.first?.names == ["Alpha", "Bravo"])
         let state = AppReleaseBackgroundState.stored(in: harness.defaults)
-        #expect(state.availableCount == 2)
+        #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 2)
         #expect(state.lastCheck == harness.clock.current)
         #expect(state.notifiedUpdateKeys == ["com.a@2.0", "com.b@3.0"])
     }
@@ -147,7 +150,40 @@ struct AppReleaseBackgroundCheckTests {
         defer { harness.cleanUp() }
         #expect(await harness.check.runIfDue() == .checked(availableCount: 0, notified: false))
         #expect(await harness.notifier.deliveries.isEmpty)
-        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).availableCount == 0)
+        #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 0)
+    }
+
+    @Test("an app whose source failed keeps its announced key and count")
+    func failedSourceKeepsKey() async {
+        let harness = Harness(versions: ["com.a": "2.0", "com.b": "3.0"])
+        defer { harness.cleanUp() }
+        _ = await harness.check.runIfDue()
+
+        harness.checker.setFailing(["com.b"])
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: false))
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).notifiedUpdateKeys == ["com.a@2.0", "com.b@3.0"])
+        #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 2)
+
+        harness.checker.setFailing([])
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: false))
+        #expect(await harness.notifier.deliveries.count == 1)
+    }
+
+    @Test("a run where every source failed changes nothing")
+    func allFailed() async {
+        let harness = Harness(versions: ["com.a": "2.0"])
+        defer { harness.cleanUp() }
+        _ = await harness.check.runIfDue()
+        let before = AppReleaseBackgroundState.stored(in: harness.defaults)
+
+        harness.checker.setFailing(["com.a", "com.b", "com.c"])
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .failed)
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults) == before)
+        #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 1)
+        #expect(await harness.notifier.deliveries.count == 1)
     }
 
     @Test("preferences stored before backgroundCheckEnabled existed keep their data")

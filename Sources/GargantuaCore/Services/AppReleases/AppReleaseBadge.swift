@@ -1,14 +1,15 @@
 /// Which count the App Updates sidebar badge shows.
 public enum AppReleaseBadge {
-    /// The in-app count once the session has checked; before that, the count the
-    /// background check stored, if background checks are on.
+    /// The in-app count while the session holds results (nil otherwise). Without
+    /// results, the stored count, which the session keeps current after a check
+    /// and the background check writes when it is enabled.
     public static func count(
+        sessionCount: Int?,
         sessionHasChecked: Bool,
-        sessionCount: Int,
         backgroundCheckEnabled: Bool,
         storedCount: Int
     ) -> Int {
-        if sessionHasChecked { return sessionCount }
-        return backgroundCheckEnabled ? storedCount : 0
+        if let sessionCount { return sessionCount }
+        return sessionHasChecked || backgroundCheckEnabled ? storedCount : 0
     }
 }
