@@ -13,17 +13,37 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
     /// contacts vendors' servers only when the user asks.
     public var autoCheckEnabled: Bool
     public var lastAutoCheck: Date?
+    /// Check about once a day from the scheduler agent, even while Gargantua is
+    /// closed, and notify about new updates. Off by default.
+    public var backgroundCheckEnabled: Bool
 
     public init(
         ignoredBundleIDs: Set<String> = [],
         skippedVersions: [String: String] = [:],
         autoCheckEnabled: Bool = false,
-        lastAutoCheck: Date? = nil
+        lastAutoCheck: Date? = nil,
+        backgroundCheckEnabled: Bool = false
     ) {
         self.ignoredBundleIDs = ignoredBundleIDs
         self.skippedVersions = skippedVersions
         self.autoCheckEnabled = autoCheckEnabled
         self.lastAutoCheck = lastAutoCheck
+        self.backgroundCheckEnabled = backgroundCheckEnabled
+    }
+
+    /// Every field is optional so blobs stored before a field existed still
+    /// decode instead of resetting the user's ignored apps and skipped versions.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ignoredBundleIDs = try container.decodeIfPresent(Set<String>.self, forKey: .ignoredBundleIDs) ?? []
+        skippedVersions = try container.decodeIfPresent([String: String].self, forKey: .skippedVersions) ?? [:]
+        autoCheckEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoCheckEnabled) ?? false
+        lastAutoCheck = try container.decodeIfPresent(Date.self, forKey: .lastAutoCheck)
+        backgroundCheckEnabled = try container.decodeIfPresent(Bool.self, forKey: .backgroundCheckEnabled) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ignoredBundleIDs, skippedVersions, autoCheckEnabled, lastAutoCheck, backgroundCheckEnabled
     }
 
     public static func stored(in defaults: UserDefaults = .standard) -> AppReleasePreferences {
