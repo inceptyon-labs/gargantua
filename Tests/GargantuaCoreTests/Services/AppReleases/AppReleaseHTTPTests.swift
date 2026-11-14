@@ -20,7 +20,7 @@ struct AppReleaseHTTPTests {
 
         await #expect(throws: AppReleaseHTTPError.tooLarge(limit: 1000)) {
             try await DefaultAppReleaseHTTPClient(session: session)
-                .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 1000)
+                .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 1000) { _, _ in }
         }
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
@@ -37,7 +37,7 @@ struct AppReleaseHTTPTests {
 
         await #expect(throws: AppReleaseHTTPError.tooLarge(limit: 1000)) {
             try await DefaultAppReleaseHTTPClient(session: session)
-                .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 1000)
+                .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 1000) { _, _ in }
         }
         #expect(ChunkedURLProtocol.sentChunks(key) < script.chunkCount)
         #expect(!FileManager.default.fileExists(atPath: file.path))
@@ -80,14 +80,22 @@ struct AppReleaseHTTPTests {
     }
 }
 
+final class FakeThrottleClock: Sendable {
+    private let current = OSAllocatedUnfairLock(initialState: ContinuousClock.now)
+    var now: @Sendable () -> ContinuousClock.Instant { { [current] in current.withLock { $0 } } }
+    func advance(_ duration: Duration) { current.withLock { $0 += duration } }
+}
+
 @Suite("DownloadProgressThrottle")
 struct DownloadProgressThrottleTests {
     private func reports(expected: Int64?, total: Int64, chunk: Int64) -> Int {
-        var throttle = DownloadProgressThrottle(expected: expected)
+        let clock = FakeThrottleClock()
+        var throttle = DownloadProgressThrottle(expected: expected, now: clock.now)
         var count = 0
         var received: Int64 = 0
         while received < total {
             received += chunk
+            clock.advance(.milliseconds(200))
             if throttle.shouldReport(received: received) { count += 1 }
         }
         return count
@@ -108,11 +116,42 @@ struct DownloadProgressThrottleTests {
 
     @Test("a huge body is capped at 256 KiB steps")
     func hugeLengthCap() {
-        var throttle = DownloadProgressThrottle(expected: 10_000_000_000)
+        let clock = FakeThrottleClock()
+        var throttle = DownloadProgressThrottle(expected: 10_000_000_000, now: clock.now)
         let early = throttle.shouldReport(received: 256 * 1024 - 1)
         let atStep = throttle.shouldReport(received: 256 * 1024)
         #expect(!early)
         #expect(atStep)
+    }
+
+    @Test("byte-eligible reports closer than 100 ms apart are dropped")
+    func timeFloor() {
+        let clock = FakeThrottleClock()
+        var throttle = DownloadProgressThrottle(expected: nil, now: clock.now)
+        let step = DownloadProgressThrottle.maxStep
+        let first = throttle.shouldReport(received: step)
+        clock.advance(.milliseconds(50))
+        let tooSoon = throttle.shouldReport(received: step * 2)
+        clock.advance(.milliseconds(100))
+        let later = throttle.shouldReport(received: step * 2)
+        #expect(first)
+        #expect(!tooSoon)
+        #expect(later)
+    }
+
+    @Test("the final report is skipped only when it repeats the last one")
+    func finalNotDuplicated() {
+        let clock = FakeThrottleClock()
+        var throttle = DownloadProgressThrottle(expected: nil, now: clock.now)
+        let step = DownloadProgressThrottle.maxStep
+        let first = throttle.shouldReport(received: step)
+        #expect(first)
+        let repeated = throttle.shouldReportFinal(received: step)
+        let advanced = throttle.shouldReportFinal(received: step + 5)
+        let again = throttle.shouldReportFinal(received: step + 5)
+        #expect(!repeated)
+        #expect(advanced)
+        #expect(!again)
     }
 }
 

@@ -53,26 +53,34 @@ public protocol AppReleaseHTTPFetching: Sendable {
     ) async throws -> Int64
 }
 
-extension AppReleaseHTTPFetching {
-    func download(_ url: URL, to destination: URL, maxBytes: Int64) async throws -> Int64 {
-        try await download(url, to: destination, maxBytes: maxBytes) { _, _ in }
-    }
-}
-
 /// Decides when a streaming download reports: after the body has grown by 1%
 /// of the expected length or 256 KiB, whichever is smaller (256 KiB when the
-/// length is unknown).
+/// length is unknown), and at least `minInterval` after the previous report.
 struct DownloadProgressThrottle {
     static let maxStep: Int64 = 256 * 1024
+    static let minInterval: Duration = .milliseconds(100)
     private let step: Int64
+    private let now: @Sendable () -> ContinuousClock.Instant
     private var lastReported: Int64 = 0
+    private var lastReportTime: ContinuousClock.Instant?
 
-    init(expected: Int64?) {
+    init(expected: Int64?, now: @escaping @Sendable () -> ContinuousClock.Instant = { .now }) {
         step = expected.map { min(max($0 / 100, 1), Self.maxStep) } ?? Self.maxStep
+        self.now = now
     }
 
     mutating func shouldReport(received: Int64) -> Bool {
         guard received - lastReported >= step else { return false }
+        let time = now()
+        if let lastReportTime, time - lastReportTime < Self.minInterval { return false }
+        lastReported = received
+        lastReportTime = time
+        return true
+    }
+
+    /// The report at completion: always sent, unless it repeats the last one.
+    mutating func shouldReportFinal(received: Int64) -> Bool {
+        guard received != lastReported else { return false }
         lastReported = received
         return true
     }
@@ -316,7 +324,10 @@ private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
             return (continuation, result)
         }
         if case .success((_, let received)) = result {
-            progress(received, state.withLock { $0.expected })
+            let (send, expected) = state.withLock { state in
+                (state.throttle.shouldReportFinal(received: received), state.expected)
+            }
+            if send { progress(received, expected) }
         }
         continuation?.resume(with: result)
     }

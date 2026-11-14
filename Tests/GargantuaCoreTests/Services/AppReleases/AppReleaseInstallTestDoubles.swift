@@ -84,7 +84,13 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
     /// (received, expected) pairs reported to the progress callback.
     let reports: [(Int64, Int64?)]
 
-    init(reports: [(Int64, Int64?)] = []) { self.reports = reports }
+    /// Thrown after the scripted reports instead of writing the payload.
+    let failure: (any Error)?
+
+    init(reports: [(Int64, Int64?)] = [], failure: (any Error)? = nil) {
+        self.reports = reports
+        self.failure = failure
+    }
 
     var downloadCount: Int { downloads.withLock { $0 } }
 
@@ -100,6 +106,7 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
     ) async throws -> Int64 {
         downloads.withLock { $0 += 1 }
         for (received, expected) in reports { progress(received, expected) }
+        if let failure { throw failure }
         let data = Data("payload".utf8)
         try data.write(to: destination)
         return Int64(data.count)

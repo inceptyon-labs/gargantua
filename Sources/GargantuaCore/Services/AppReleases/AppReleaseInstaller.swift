@@ -380,7 +380,10 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         let payload = workDirectory.appendingPathComponent("payload")
         // The stream keeps reports in order and lets every one land before
         // `.verifying`: it is drained once the download call returns.
-        let (reports, report) = AsyncStream.makeStream(of: (Int64, Int64?).self)
+        let (reports, report) = AsyncStream.makeStream(
+            of: (Int64, Int64?).self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
         let forwarder = Task { @MainActor in
             for await (received, expected) in reports {
                 progress(.downloading(received: received, expected: expected))

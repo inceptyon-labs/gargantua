@@ -73,6 +73,36 @@ struct AppReleaseRowView: View {
     private static let versionWidth: CGFloat = 150
     private static let sourceWidth: CGFloat = 124
     private static let actionWidth: CGFloat = 112
+    private static let barHeight: CGFloat = 3
+    private static let spinnerSize: CGFloat = 16
+    private static let topLineHeight: CGFloat = 16
+
+    /// A known-length download uses the whole column for the size label; every
+    /// other phase puts the label beside the spinner.
+    @ViewBuilder
+    private func installTopLine(_ phase: AppReleaseInstallPhase) -> some View {
+        if phase.downloadFraction != nil {
+            installLabel(phase.label, width: Self.actionWidth)
+        } else {
+            HStack(spacing: GargantuaSpacing.space2) {
+                AccretionDiskView(activityRate: 18, size: Self.spinnerSize, color: GargantuaColors.accretion)
+                installLabel(
+                    phase.label,
+                    width: Self.actionWidth - Self.spinnerSize - GargantuaSpacing.space2
+                )
+            }
+            .frame(height: Self.topLineHeight)
+        }
+    }
+
+    private func installLabel(_ text: String, width: CGFloat) -> some View {
+        Text(text)
+            .font(GargantuaFonts.caption.monospacedDigit())
+            .foregroundStyle(GargantuaColors.ink2)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(width: width, height: Self.topLineHeight, alignment: .trailing)
+    }
 
     private var versionAccessibilityLabel: String {
         var label = row.app.version.description
@@ -108,21 +138,19 @@ struct AppReleaseRowView: View {
     @ViewBuilder
     private var action: some View {
         if let installPhase {
-            HStack(spacing: GargantuaSpacing.space2) {
-                AccretionDiskView(activityRate: 18, size: 16, color: GargantuaColors.accretion)
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(installPhase.label)
-                        .font(GargantuaFonts.caption.monospacedDigit())
-                        .foregroundStyle(GargantuaColors.ink2)
-                        .lineLimit(1)
-                        .frame(width: 150, alignment: .trailing)
-                    if let fraction = installPhase.downloadFraction {
-                        ProgressView(value: fraction)
-                            .progressViewStyle(.linear)
-                            .tint(GargantuaColors.accretion)
-                            .frame(width: 150)
+            VStack(alignment: .trailing, spacing: 2) {
+                installTopLine(installPhase)
+                Capsule()
+                    .fill(GargantuaColors.borderEm)
+                    .frame(height: Self.barHeight)
+                    .overlay(alignment: .leading) {
+                        GeometryReader { proxy in
+                            Capsule()
+                                .fill(GargantuaColors.accretion)
+                                .frame(width: proxy.size.width * (installPhase.downloadFraction ?? 0))
+                        }
                     }
-                }
+                    .opacity(installPhase.downloadFraction == nil ? 0 : 1)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Installing \(row.app.name)")
@@ -270,7 +298,13 @@ extension AppReleaseInstallPhase {
     static func downloadLabel(received: Int64, expected: Int64?) -> String {
         guard received > 0 else { return "Downloading…" }
         let got = ByteCountFormatter.string(fromByteCount: received, countStyle: .file)
-        guard let expected, expected > 0 else { return got }
-        return "\(got) of \(ByteCountFormatter.string(fromByteCount: expected, countStyle: .file))"
+        guard let expected, expected > 0 else { return "\(got) downloaded" }
+        let total = ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)
+        // One unit at the end saves width: "12.3 of 85.0 MB".
+        if let gotSplit = got.lastIndex(of: " "), let totalSplit = total.lastIndex(of: " "),
+           got[got.index(after: gotSplit)...] == total[total.index(after: totalSplit)...] {
+            return "\(got[..<gotSplit]) of \(total)"
+        }
+        return "\(got) of \(total)"
     }
 }

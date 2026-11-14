@@ -333,7 +333,7 @@ struct AppReleaseInstallerTests {
 }
 
 extension AppReleaseInstallerTests {
-    @Test("download progress reaches the callback in order, before verifying and never after")
+    @Test("download progress reaches the callback ending at the full size, before verifying and never after")
     func forwardsDownloadProgress() async throws {
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
@@ -350,20 +350,40 @@ extension AppReleaseInstallerTests {
         )
 
         let seen = phases.withLock { $0 }
-        let expected: [AppReleaseInstallPhase] = [
-            .downloading(received: 0, expected: nil),
-            .downloading(received: 0, expected: 100),
-            .downloading(received: 50, expected: 100),
-            .downloading(received: 100, expected: 100),
-            .verifying,
-        ]
-        #expect(Array(seen.prefix(5)) == expected)
+        // The stream keeps only the newest pending report, so a fast double may
+        // coalesce the middle ones; the first and last must survive.
         let verifying = try #require(seen.firstIndex(of: .verifying))
+        #expect(seen.first == .downloading(received: 0, expected: nil))
+        #expect(seen[verifying - 1] == .downloading(received: 100, expected: 100))
         let downloadsAfter = seen[verifying...].filter { phase in
             if case .downloading = phase { return true }
             return false
         }
         #expect(downloadsAfter.isEmpty)
+    }
+
+    @Test("a download that fails after reporting progress fails the install with no later progress")
+    func downloadFailsAfterProgress() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.remove() }
+        let http = RecordingPayloadHTTP(
+            reports: [(10, 100), (50, 100)],
+            failure: AppReleaseHTTPError.network("connection lost")
+        )
+        let phases = OSAllocatedUnfairLock<[AppReleaseInstallPhase]>(initialState: [])
+
+        let result = await makeInstaller(sandbox: sandbox, http: http).install(
+            app: sandbox.app,
+            candidate: Fixtures.candidate(caskToken: "foo"),
+            strategy: .inPlace,
+            quitIfRunning: true,
+            authorization: .unchecked(.appUpdater),
+            progress: { phase in phases.withLock { $0.append(phase) } }
+        )
+
+        let seen = phases.withLock { $0 }
+        #expect(result == .failure(.download("connection lost")))
+        #expect(seen.last == .downloading(received: 50, expected: 100))
     }
 }
 
