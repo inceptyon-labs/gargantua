@@ -19,7 +19,7 @@
       "sublabel": "macOS developer",
       "pos": [
         40,
-        240
+        360
       ],
       "size": [
         130,
@@ -33,7 +33,7 @@
       "sublabel": "SwiftUI, user session",
       "pos": [
         290,
-        240
+        360
       ],
       "size": [
         130,
@@ -61,7 +61,7 @@
       "sublabel": "profile adapters",
       "pos": [
         540,
-        240
+        360
       ],
       "size": [
         130,
@@ -90,7 +90,7 @@
       "tag": "synced snapshot",
       "pos": [
         790,
-        240
+        360
       ],
       "size": [
         130,
@@ -117,8 +117,8 @@
       "label": "Scheduler",
       "sublabel": "launchd runner",
       "pos": [
-        290,
-        60
+        790,
+        200
       ],
       "size": [
         130,
@@ -151,7 +151,7 @@
       "label": "MCP Server",
       "sublabel": "GargantuaMCP",
       "pos": [
-        790,
+        540,
         60
       ],
       "size": [
@@ -185,7 +185,7 @@
       "label": "AI Agent",
       "sublabel": "Claude, Cursor",
       "pos": [
-        1040,
+        40,
         60
       ],
       "size": [
@@ -199,8 +199,8 @@
       "label": "License Gate",
       "sublabel": "destructive actions",
       "pos": [
-        540,
-        400
+        290,
+        520
       ],
       "size": [
         130,
@@ -227,8 +227,8 @@
       "label": "Polar.sh",
       "sublabel": "license API",
       "pos": [
-        790,
-        720
+        40,
+        520
       ],
       "size": [
         130,
@@ -255,8 +255,8 @@
       "label": "Cleanup Engine",
       "sublabel": "Trash-first removal",
       "pos": [
-        790,
-        400
+        290,
+        680
       ],
       "size": [
         130,
@@ -289,8 +289,8 @@
       "label": "Privileged Helper",
       "sublabel": "root XPC service",
       "pos": [
-        1040,
-        400
+        40,
+        680
       ],
       "size": [
         130,
@@ -323,8 +323,8 @@
       "label": "Local State",
       "sublabel": "SwiftData + audit.json",
       "pos": [
-        290,
-        400
+        540,
+        520
       ],
       "size": [
         130,
@@ -357,8 +357,8 @@
       "label": "App Updater",
       "sublabel": "check + verified install",
       "pos": [
-        540,
-        560
+        1040,
+        360
       ],
       "size": [
         130,
@@ -391,8 +391,8 @@
       "label": "Update Sources",
       "sublabel": "feeds, Homebrew, App Store",
       "pos": [
-        540,
-        720
+        1290,
+        360
       ],
       "size": [
         150,
@@ -476,17 +476,13 @@
       "id": "sched-to-scan",
       "from": "sched",
       "to": "scan",
-      "label": "due scans",
-      "fromSide": "right",
-      "toSide": "top"
+      "label": "due scans"
     },
     {
       "id": "mcp-to-scan",
       "from": "mcp",
       "to": "scan",
-      "label": "scan tool",
-      "fromSide": "left",
-      "toSide": "top"
+      "label": "scan tool"
     },
     {
       "id": "agent-to-mcp",
@@ -501,22 +497,8 @@
       "to": "gate",
       "label": "authorize",
       "variant": "emphasis",
-      "fromSide": "right",
-      "toSide": "top",
-      "via": [
-        [
-          455,
-          272
-        ],
-        [
-          455,
-          350
-        ],
-        [
-          605,
-          350
-        ]
-      ]
+      "fromSide": "bottom",
+      "toSide": "top"
     },
     {
       "id": "gate-to-cleanup",
@@ -530,9 +512,7 @@
       "from": "gate",
       "to": "polar",
       "label": "validate key",
-      "variant": "dashed",
-      "fromSide": "bottom",
-      "toSide": "top"
+      "variant": "dashed"
     },
     {
       "id": "cleanup-to-helper",
@@ -545,36 +525,24 @@
       "id": "app-to-state",
       "from": "app",
       "to": "state",
-      "label": "audit entry"
+      "label": "audit entry",
+      "fromSide": "bottom",
+      "toSide": "top"
     },
     {
       "id": "app-to-updater",
       "from": "app",
       "to": "updater",
-      "label": "check, update"
+      "label": "check, update",
+      "fromSide": "right",
+      "toSide": "bottom"
     },
     {
       "id": "sched-to-updater",
       "from": "sched",
       "to": "updater",
       "label": "background check (opt-in)",
-      "variant": "dashed",
-      "fromSide": "top",
-      "toSide": "left",
-      "via": [
-        [
-          355,
-          20
-        ],
-        [
-          10,
-          20
-        ],
-        [
-          10,
-          592
-        ]
-      ]
+      "variant": "dashed"
     },
     {
       "id": "mcp-to-updater",
@@ -587,7 +555,9 @@
       "from": "gate",
       "to": "updater",
       "label": "authorization",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "right"
     },
     {
       "id": "rules-to-updater",
@@ -606,7 +576,9 @@
       "id": "updater-to-state",
       "from": "updater",
       "to": "state",
-      "label": "audit entry"
+      "label": "audit entry",
+      "fromSide": "bottom",
+      "toSide": "right"
     }
   ],
   "cards": [
