@@ -349,3 +349,22 @@ Installed on this machine: Roo Code 3.54.0, Cline 4.1.22, Kilo Code 7.8.3 (darwi
 ## Still held
 
 Kiro `kiro.kiroagent/`, Cody `symf/` and OpenCode `storage/*` and `snapshot/` are unchanged from the 2026-10-03 table: the first two are not installed, and the OpenCode items need an adapter.
+
+# OpenCode 1.x adapter (2026-11-14)
+
+Inventory machine: OpenCode 2.0.20 (Homebrew) over data left by a 1.x install. `storage/` holds 4 sessions, 112 KB, newest file 2025-12-29. `snapshot/ef98…/` is one 1.x git directory of 112 MB whose `config` sets `core.worktree` to the project folder. There is no `opencode.db` yet.
+
+Evidence from the 2.0.20 binary: no `session_diff` string, no path join under `storage/`, no JSON import glob. The only data-directory joins are `snapshot/<project.id>/<fastHash(worktree)>` (the store is reused when that directory has a `HEAD`) and `worktree/<project.id prefix>`.
+
+## Shipped
+
+| Store | Unit | Gate |
+|---|---|---|
+| `AISessionStoreKind.openCodeLegacyStorage` | The whole `~/.local/share/opencode/storage` tree. A session spans `session/`, `message/`, `part/` and `session_diff/`, so the whole tree is the smallest unit that never splits one. Requires a `session/` subfolder. | Newest file anywhere inside idle 90 days; review. |
+| `AISessionStoreKind.openCodeLegacySnapshot` | One `snapshot/<projectID>/` git directory: a regular `HEAD`, a real `objects/`, and no subdirectory outside git's own layout, which rules out a nested 2.0 `<worktreeHash>/` store. | No entry left in `storage/session/<projectID>/` (an unreadable folder counts as a reference), and newest file idle 90 days; review. |
+
+A project's snapshot repository is offered only after its 1.x sessions are gone, so a machine with both shows the conversation history first and the snapshots on the next scan.
+
+## Dropped
+
+Kiro `kiro.kiroagent/` and Cody `symf/`: neither is installed and there is no inventory to write a rule from.
