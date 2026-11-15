@@ -179,8 +179,9 @@ public struct AppReleaseBackgroundCheck: Sendable {
 
         let state = AppReleaseBackgroundState.stored(in: defaults)
         let seen = AppReleaseBackgroundState.stored(in: defaults, key: AppReleaseBackgroundState.inAppKey)
-        if let lastCheck = [state.lastCheck, seen.lastCheck].compactMap(\.self).max(),
-           now().timeIntervalSince(lastCheck) < interval { return .notDue }
+        let recent = [state.lastCheck, seen.lastCheck].compactMap { $0 }
+            .contains { (0 ..< interval).contains(now().timeIntervalSince($0)) }
+        if recent { return .notDue }
 
         let apps = await inventory.installedApps()
         // The user can turn the check off while a run is in flight; re-read
@@ -198,7 +199,8 @@ public struct AppReleaseBackgroundCheck: Sendable {
         let available = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
         let installed = Set(apps.map(\.bundleID))
         var announced = state.announcedVersions.filter { installed.contains($0.key) }
-        Self.merge(&announced, seen: seen.announcedVersions.filter { installed.contains($0.key) })
+        let freshSeen = AppReleaseBackgroundState.stored(in: defaults, key: AppReleaseBackgroundState.inAppKey)
+        Self.merge(&announced, seen: freshSeen.announcedVersions.filter { installed.contains($0.key) })
         let hasNew = available.contains { entry in
             guard let prior = announced[entry.app.bundleID] else { return true }
             return entry.version.isNewer(than: prior)
@@ -255,7 +257,7 @@ public struct AppReleaseBackgroundCheck: Sendable {
     /// Rows the user opted out of or no source knows say nothing about the
     /// network. When most of the rest failed (e.g. waking before Wi-Fi), the
     /// run is retried on the agent's next wake instead of a day later.
-    private static func mostQueriedFailed(_ rows: [AppReleaseRow]) -> Bool {
+    static func mostQueriedFailed(_ rows: [AppReleaseRow]) -> Bool {
         let queried = rows.filter { row in
             switch row.status {
             case .ignored, .untracked, .skippedVersion: false

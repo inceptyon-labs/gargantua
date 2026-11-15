@@ -57,6 +57,7 @@ public final class AppReleasesSession {
     /// Set when macOS refused to let Gargantua replace another developer's app.
     public var showsAppManagementHelp = false
 
+    @ObservationIgnored private var isPaneVisible = false
     @ObservationIgnored private let inventory: any AppReleaseInventoryProviding
     @ObservationIgnored private let checker: any AppReleaseChecking
     @ObservationIgnored private let installer: any AppReleaseInstalling
@@ -275,12 +276,6 @@ public final class AppReleasesSession {
         await activeTask?.value
     }
 
-    /// Forgets this visit's finished installs once the user leaves the pane.
-    public func paneDidDisappear() {
-        recentlyInstalled = []
-        rowMessages = rowMessages.filter { if case .installed = $0.value { false } else { true } }
-    }
-
     /// Drops the list; used under memory pressure.
     public func releaseResults() {
         guard phase != .checking, installPhases.isEmpty else { return }
@@ -444,13 +439,35 @@ extension AppReleasesSession {
         )
     }
 
+    public func paneDidAppear() {
+        isPaneVisible = true
+        if lastChecked != nil, !rows.isEmpty { updateSeen(clock: false) }
+    }
+
+    /// Forgets this visit's finished installs once the user leaves the pane.
+    public func paneDidDisappear() {
+        isPaneVisible = false
+        recentlyInstalled = []
+        rowMessages = rowMessages.filter { if case .installed = $0.value { false } else { true } }
+    }
+
     /// Tells the background check what this check found, so it neither sweeps again within a day nor announces updates already shown here.
     private func recordFindingsForBackgroundCheck() {
+        guard !AppReleaseBackgroundCheck.mostQueriedFailed(rows) else { return }
+        updateSeen(clock: true)
+    }
+
+    /// Versions count as seen only while the list is on screen.
+    private func updateSeen(clock: Bool) {
         let key = AppReleaseBackgroundState.inAppKey
         var seen = AppReleaseBackgroundState.stored(in: defaults, key: key)
-        seen.lastCheck = lastChecked
-        let found = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
-        AppReleaseBackgroundCheck.raise(&seen.announcedVersions, to: found)
+        if clock { seen.lastCheck = lastChecked }
+        if isPaneVisible {
+            let ids = Set(rows.map(\.app.bundleID))
+            seen.announcedVersions = seen.announcedVersions.filter { ids.contains($0.key) }
+            let found = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
+            AppReleaseBackgroundCheck.raise(&seen.announcedVersions, to: found)
+        }
         seen.store(in: defaults, key: key)
     }
 }

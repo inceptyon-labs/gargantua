@@ -28,6 +28,7 @@ public struct AppReleasesView: View {
         }
         .background(GargantuaColors.void_)
         .destructiveActionGate(reason: $session.blockedReason)
+        .onAppear { session.paneDidAppear() }
         .onDisappear { session.paneDidDisappear() }
         .alert(
             pendingQuit.map { "\($0.app.name) is open" } ?? "App is open",

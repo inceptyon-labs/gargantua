@@ -67,7 +67,7 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
         lastBackgroundCheck: Date? = nil
     ) -> Bool {
         guard autoCheckEnabled else { return false }
-        guard let last = [lastAutoCheck, lastBackgroundCheck].compactMap(\.self).max() else { return true }
-        return now.timeIntervalSince(last) >= interval
+        return ![lastAutoCheck, lastBackgroundCheck].compactMap { $0 }
+            .contains { (0 ..< interval).contains(now.timeIntervalSince($0)) }
     }
 }

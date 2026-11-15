@@ -388,6 +388,7 @@ extension AppReleasesSessionTests {
     @Test("A completed check records its findings for the background check")
     func checkRecordsInAppFindings() async {
         let fixture = Self.makeFixture()
+        fixture.session.paneDidAppear()
         await fixture.session.check()
         let seen = AppReleaseBackgroundState.stored(in: fixture.defaults, key: AppReleaseBackgroundState.inAppKey)
         #expect(seen.lastCheck == fixture.session.lastChecked)
@@ -408,5 +409,51 @@ extension AppReleasesSessionTests {
         clock = start.addingTimeInterval(24 * 3_600)
         await fixture.session.checkIfAutoDue()
         #expect(fixture.session.lastChecked == clock)
+    }
+
+    @Test("Versions are recorded as seen only once the pane is visible")
+    func seenNeedsVisiblePane() async {
+        let fixture = Self.makeFixture()
+        let key = AppReleaseBackgroundState.inAppKey
+        await fixture.session.check()
+        let hidden = AppReleaseBackgroundState.stored(in: fixture.defaults, key: key)
+        #expect(hidden.lastCheck == fixture.session.lastChecked)
+        #expect(hidden.announcedVersions.isEmpty)
+
+        fixture.session.paneDidAppear()
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults, key: key).announcedVersions[Self.app.bundleID]
+            == Self.candidate.version)
+    }
+
+    @Test("Seen versions only go up")
+    func seenVersionsNeverLower() async {
+        let fixture = Self.makeFixture()
+        let key = AppReleaseBackgroundState.inAppKey
+        let higher = AppReleaseVersion(short: "3.0", build: nil)
+        AppReleaseBackgroundState(announcedVersions: [Self.app.bundleID: higher]).store(in: fixture.defaults, key: key)
+        fixture.session.paneDidAppear()
+        await fixture.session.check()
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults, key: key).announcedVersions[Self.app.bundleID] == higher)
+    }
+
+    @Test("A mostly failed check records nothing")
+    func failedCheckRecordsNothing() async {
+        let fixture = Self.makeFixture(steps: [(0, .failed("offline"))])
+        fixture.session.paneDidAppear()
+        await fixture.session.check()
+        let seen = AppReleaseBackgroundState.stored(in: fixture.defaults, key: AppReleaseBackgroundState.inAppKey)
+        #expect(seen.lastCheck == nil)
+        #expect(seen.announcedVersions.isEmpty)
+    }
+
+    @Test("A recent background check holds back the automatic check despite an old auto run")
+    func autoCheckOldAutoRecentBackground() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let defaults = Self.makeDefaults()
+        let fixture = Self.makeFixture(now: { start }, defaults: defaults)
+        AppReleasePreferences(autoCheckEnabled: true, lastAutoCheck: start.addingTimeInterval(-25 * 3_600)).store(in: defaults)
+        AppReleaseBackgroundState(lastCheck: start.addingTimeInterval(-3_600)).store(in: defaults)
+        await fixture.session.checkIfAutoDue()
+        #expect(fixture.session.lastChecked == nil)
     }
 }
