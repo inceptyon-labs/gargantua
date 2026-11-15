@@ -126,7 +126,7 @@ public struct SettingsView: View {
                         }
                     } catch {
                         scheduledScanAgentStatus = scheduledScanController.status()
-                        if appUpdateChecks { appUpdatesBackgroundNotice = error.localizedDescription }
+                        if appUpdateChecks { appUpdatesBackgroundNotice = Self.backgroundAgentNotice(for: error) }
                     }
                 } else {
                     scheduledScanAgentStatus = scheduledScanController.status()

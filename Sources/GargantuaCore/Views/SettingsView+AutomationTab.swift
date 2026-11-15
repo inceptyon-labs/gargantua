@@ -1,4 +1,7 @@
+import os
 import SwiftUI
+
+private let automationLogger = Logger(subsystem: "com.gargantua.core", category: "Settings")
 
 extension SettingsView {
 
@@ -270,7 +273,7 @@ extension SettingsView {
                 } catch {
                     preferences.backgroundCheckEnabled = false
                     preferences.store()
-                    appUpdatesBackgroundNotice = error.localizedDescription
+                    appUpdatesBackgroundNotice = Self.backgroundAgentNotice(for: error)
                 }
             }
         )
@@ -287,12 +290,16 @@ extension SettingsView {
         } catch {
             preferences.backgroundCheckEnabled = false
             preferences.store()
-            appUpdatesBackgroundNotice = error.localizedDescription
+            appUpdatesBackgroundNotice = Self.backgroundAgentNotice(for: error)
         }
     }
 
-    static let loginItemsApprovalNote =
-        "Allow Gargantua in System Settings > General > Login Items to run background checks."
+    static let loginItemsApprovalNote = ScheduledScanAgentRegistrationFailure.loginItemsApproval
+
+    static func backgroundAgentNotice(for error: Error) -> String {
+        automationLogger.error("Background agent registration failed: \(String(describing: error), privacy: .public)")
+        return ScheduledScanAgentRegistrationFailure.message(for: error)
+    }
 
     // MARK: - Helpers
 

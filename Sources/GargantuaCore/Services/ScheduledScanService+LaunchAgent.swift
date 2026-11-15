@@ -158,3 +158,31 @@ private struct UnavailableScheduledScanAgentInstaller: ScheduledScanAgentInstall
     func register() throws -> ScheduledScanAgentStatus { .unavailable }
     func unregister() throws -> ScheduledScanAgentStatus { .unavailable }
 }
+
+/// Plain-language reasons the background agent can't register.
+public enum ScheduledScanAgentRegistrationFailure {
+    public static let unsigned =
+        "This copy of Gargantua isn't signed for background tasks, so macOS won't register its background agent. "
+            + "Development builds hit this; the release build doesn't."
+    public static let loginItemsApproval =
+        "Allow Gargantua in System Settings > General > Login Items to run background checks."
+    public static let missingAgent =
+        "This copy of Gargantua is missing its background agent. Reinstall Gargantua to use background checks."
+    public static let generic = "macOS couldn't register Gargantua's background agent."
+
+    public static func message(for error: Error) -> String {
+        #if os(macOS)
+            let nsError = error as NSError
+            guard #available(macOS 15.0, *), nsError.domain == SMAppServiceErrorDomain else { return generic }
+            switch nsError.code {
+            case kSMErrorInvalidSignature: return unsigned
+            case kSMErrorLaunchDeniedByUser: return loginItemsApproval
+            // macOS 27 reports a missing plist as 108, "Unable to read plist".
+            case kSMErrorJobPlistNotFound, 108: return missingAgent
+            default: return generic
+            }
+        #else
+            return generic
+        #endif
+    }
+}
