@@ -224,9 +224,8 @@ public final class AppReleasesSession {
         lastChecked = now()
         phase = .ready
         storeAvailableCount()
-        if isAutomatic {
-            updatePreferences { $0.lastAutoCheck = lastChecked }
-        }
+        recordFindingsForBackgroundCheck()
+        if isAutomatic { updatePreferences { $0.lastAutoCheck = lastChecked } }
     }
 
     /// True when the row shows an ignore or skip the preferences no longer hold.
@@ -271,7 +270,7 @@ public final class AppReleasesSession {
     /// cancellable path as a manual check.
     public func checkIfAutoDue() async {
         guard activeTask == nil, phase != .checking, installPhases.isEmpty else { return }
-        guard AppReleasePreferences.stored(in: defaults).isAutoCheckDue(now: now()) else { return }
+        guard isAutoCheckDue else { return }
         startCheck(isAutomatic: true)
         await activeTask?.value
     }
@@ -434,5 +433,24 @@ public final class AppReleasesSession {
         change(&fresh)
         fresh.store(in: defaults)
         preferences = fresh
+    }
+}
+
+extension AppReleasesSession {
+    private var isAutoCheckDue: Bool {
+        AppReleasePreferences.stored(in: defaults).isAutoCheckDue(
+            now: now(),
+            lastBackgroundCheck: AppReleaseBackgroundState.stored(in: defaults).lastCheck
+        )
+    }
+
+    /// Tells the background check what this check found, so it neither sweeps again within a day nor announces updates already shown here.
+    private func recordFindingsForBackgroundCheck() {
+        let key = AppReleaseBackgroundState.inAppKey
+        var seen = AppReleaseBackgroundState.stored(in: defaults, key: key)
+        seen.lastCheck = lastChecked
+        let found = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
+        AppReleaseBackgroundCheck.raise(&seen.announcedVersions, to: found)
+        seen.store(in: defaults, key: key)
     }
 }

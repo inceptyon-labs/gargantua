@@ -7,6 +7,9 @@ import Foundation
 /// scheduler agent and the app never overwrite each other's data.
 public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
     public static let userDefaultsKey = "appReleases.backgroundCheck"
+    /// What the app's own full checks saw: when the last one finished and the
+    /// versions it showed. Written only by the app.
+    public static let inAppKey = "appReleases.inAppCheck"
     /// Updates available after ignore/skip, from the latest check by either
     /// process. Its own key so the app never rewrites the scheduler's state blob.
     public static let availableCountKey = "appReleases.availableUpdateCount"
@@ -56,8 +59,11 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
         case lastCheck, announcedVersions, consecutiveFailedRuns
     }
 
-    public static func stored(in defaults: UserDefaults = .standard) -> AppReleaseBackgroundState {
-        guard let data = defaults.data(forKey: userDefaultsKey),
+    public static func stored(
+        in defaults: UserDefaults = .standard,
+        key: String = userDefaultsKey
+    ) -> AppReleaseBackgroundState {
+        guard let data = defaults.data(forKey: key),
               let state = try? JSONDecoder().decode(AppReleaseBackgroundState.self, from: data)
         else {
             return AppReleaseBackgroundState()
@@ -65,9 +71,9 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
         return state
     }
 
-    public func store(in defaults: UserDefaults = .standard) {
+    public func store(in defaults: UserDefaults = .standard, key: String = userDefaultsKey) {
         guard let data = try? JSONEncoder().encode(self) else { return }
-        defaults.set(data, forKey: Self.userDefaultsKey)
+        defaults.set(data, forKey: key)
     }
 
     public static func storedAvailableCount(in defaults: UserDefaults = .standard) -> Int {
@@ -172,7 +178,9 @@ public struct AppReleaseBackgroundCheck: Sendable {
         guard preferences.backgroundCheckEnabled else { return .disabled }
 
         let state = AppReleaseBackgroundState.stored(in: defaults)
-        if let lastCheck = state.lastCheck, now().timeIntervalSince(lastCheck) < interval { return .notDue }
+        let seen = AppReleaseBackgroundState.stored(in: defaults, key: AppReleaseBackgroundState.inAppKey)
+        if let lastCheck = [state.lastCheck, seen.lastCheck].compactMap(\.self).max(),
+           now().timeIntervalSince(lastCheck) < interval { return .notDue }
 
         let apps = await inventory.installedApps()
         // The user can turn the check off while a run is in flight; re-read
@@ -188,7 +196,9 @@ public struct AppReleaseBackgroundCheck: Sendable {
         }
 
         let available = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
-        var announced = state.announcedVersions.filter { Set(apps.map(\.bundleID)).contains($0.key) }
+        let installed = Set(apps.map(\.bundleID))
+        var announced = state.announcedVersions.filter { installed.contains($0.key) }
+        Self.merge(&announced, seen: seen.announcedVersions.filter { installed.contains($0.key) })
         let hasNew = available.contains { entry in
             guard let prior = announced[entry.app.bundleID] else { return true }
             return entry.version.isNewer(than: prior)
@@ -224,7 +234,14 @@ public struct AppReleaseBackgroundCheck: Sendable {
         }
     }
 
-    private static func raise(
+    private static func merge(_ announced: inout [String: AppReleaseVersion], seen: [String: AppReleaseVersion]) {
+        for (id, version) in seen {
+            if let prior = announced[id], !version.isNewer(than: prior) { continue }
+            announced[id] = version
+        }
+    }
+
+    static func raise(
         _ announced: inout [String: AppReleaseVersion],
         to available: [(app: InstalledApp, version: AppReleaseVersion)]
     ) {

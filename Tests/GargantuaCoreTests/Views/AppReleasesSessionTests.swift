@@ -383,3 +383,30 @@ struct AppReleasesSessionTests {
             == .installedWithWarning("Updated to 2.0. The new copy is signed by a different developer."))
     }
 }
+
+extension AppReleasesSessionTests {
+    @Test("A completed check records its findings for the background check")
+    func checkRecordsInAppFindings() async {
+        let fixture = Self.makeFixture()
+        await fixture.session.check()
+        let seen = AppReleaseBackgroundState.stored(in: fixture.defaults, key: AppReleaseBackgroundState.inAppKey)
+        #expect(seen.lastCheck == fixture.session.lastChecked)
+        #expect(seen.announcedVersions[Self.app.bundleID] == Self.candidate.version)
+    }
+
+    @Test("The automatic check waits for a recent background check")
+    func autoCheckYieldsToBackground() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        var clock = start
+        let defaults = Self.makeDefaults()
+        let fixture = Self.makeFixture(now: { clock }, defaults: defaults)
+        AppReleasePreferences(autoCheckEnabled: true).store(in: defaults)
+        AppReleaseBackgroundState(lastCheck: start.addingTimeInterval(-3_600)).store(in: defaults)
+        await fixture.session.checkIfAutoDue()
+        #expect(fixture.session.lastChecked == nil)
+
+        clock = start.addingTimeInterval(24 * 3_600)
+        await fixture.session.checkIfAutoDue()
+        #expect(fixture.session.lastChecked == clock)
+    }
+}

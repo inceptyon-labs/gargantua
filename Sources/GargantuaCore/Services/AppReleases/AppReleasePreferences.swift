@@ -61,9 +61,13 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
     }
 
     /// Whether the daily check should run now.
-    public func isAutoCheckDue(now: Date = Date(), interval: TimeInterval = 24 * 60 * 60) -> Bool {
+    public func isAutoCheckDue(
+        now: Date = Date(),
+        interval: TimeInterval = 24 * 60 * 60,
+        lastBackgroundCheck: Date? = nil
+    ) -> Bool {
         guard autoCheckEnabled else { return false }
-        guard let lastAutoCheck else { return true }
-        return now.timeIntervalSince(lastAutoCheck) >= interval
+        guard let last = [lastAutoCheck, lastBackgroundCheck].compactMap(\.self).max() else { return true }
+        return now.timeIntervalSince(last) >= interval
     }
 }
