@@ -63,7 +63,8 @@ extension URL {
         if isHTTPS { return self }
         guard scheme?.lowercased() == "http",
               var components = URLComponents(url: self, resolvingAgainstBaseURL: true),
-              components.port == nil || components.port == 80
+              components.port == nil || components.port == 80,
+              components.user == nil, components.password == nil
         else { return nil }
         components.scheme = "https"
         components.port = nil

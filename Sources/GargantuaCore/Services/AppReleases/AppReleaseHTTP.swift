@@ -177,9 +177,9 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
         if (300 ... 399).contains(http.statusCode), !notModified {
             throw .insecureURL(http.value(forHTTPHeaderField: "Location") ?? requested)
         }
-        // The task delegate already refuses every non-https hop, but `session`
-        // is injectable, and a background session follows redirects without
-        // asking the task delegate.
+        // The task delegate upgrades or refuses non-https hops; this check is
+        // the backstop for an injected `session` (a background session follows
+        // redirects without asking the task delegate).
         if let final = http.url, !final.isHTTPS {
             throw .insecureURL(final.absoluteString)
         }
@@ -189,9 +189,9 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
 }
 
 /// One request whose body streams into a file, or into memory when `file` is
-/// nil. Upgrades a redirect to http on the default port to https, refuses any other redirect off https, refuses a declared length over `limit`
-/// before any body arrives, and cancels the transfer as soon as the body
-/// passes `limit`.
+/// nil. Upgrades a redirect to http on the default port to https, refuses any
+/// other redirect off https, refuses a declared length over `limit` before any
+/// body arrives, and cancels the transfer as soon as the body passes `limit`.
 private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
     private typealias Outcome = Result<(AppReleaseHTTPResponse, Int64), any Error>
 

@@ -87,6 +87,9 @@ struct AppReleaseHTTPTests {
         #expect(upgraded("http://h.example:80/p") == "https://h.example/p")
         #expect(upgraded("http://h.example:8080/p") == nil)
         #expect(upgraded("ftp://h.example/p") == nil)
+        #expect(upgraded("http://user:pw@h.example/p") == nil)
+        #expect(upgraded("HTTP://h.example/p") == "https://h.example/p")
+        #expect(upgraded("http://h.example:443/p") == nil)
     }
 
     @Test("a redirect to http on the default port is followed over https, never over http")
