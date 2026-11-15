@@ -114,6 +114,9 @@ extension AISessionScanAdapter {
     /// Whether the data directory holds an OpenCode SQLite database:
     /// `opencode.db`, a channel build's `opencode-<channel>.db`, or their
     /// `-wal`/`-shm` sidecars. An unreadable directory counts as yes.
+    /// `OPENCODE_DB` can put the database anywhere under any name, and a GUI
+    /// app never sees a shell-set variable, so only the data directory is
+    /// checked; the result text says so.
     func hasOpenCodeDatabase(in data: URL) -> Bool {
         guard let names = try? fileManager.contentsOfDirectory(atPath: data.path) else { return true }
         return names.contains { $0.hasPrefix("opencode") && ($0.hasSuffix(".db") || $0.contains(".db-")) }
@@ -158,7 +161,7 @@ extension AISessionScanAdapter {
                 "A separate git repository OpenCode 1.x kept\(finding.projectPath.map { " of \($0)" } ?? "")"
                     + " so a session could undo its edits.",
                 "Your project's own git history is not in it.",
-                "No OpenCode 1.x conversation for this project remains, there is no OpenCode database",
+                "No OpenCode 1.x conversation for this project remains, its data folder holds no OpenCode database",
                 "that could still refer to it, and OpenCode 2 has no store inside it.",
                 "Nothing anywhere inside it has been written for \(days) day\(days == 1 ? "" : "s").",
                 "It can hold copies of the project's files, including untracked ones,",

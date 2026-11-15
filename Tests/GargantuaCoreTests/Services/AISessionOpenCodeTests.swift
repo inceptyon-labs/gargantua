@@ -115,6 +115,51 @@ struct AISessionOpenCodeTests {
         #expect(!results.contains { $0.path.hasSuffix("/snapshot/ef98") })
     }
 
+    @Test(
+        "a snapshot folder whose HEAD or objects is not the real thing is not a 1.x repository",
+        arguments: ["HEAD as directory", "HEAD as symlink", "objects missing", "objects as symlink"]
+    )
+    func malformedSnapshotIgnored(defect: String) async throws {
+        let fixture = try OpenCodeFixture()
+        try fixture.addLegacySnapshot(project: "ef98", worktree: "/Users/me/Inceptyon", age: 120 * Self.day)
+        let repo = fixture.snapshot.appendingPathComponent("ef98", isDirectory: true)
+        let fm = FileManager.default
+        let target = defect.hasPrefix("HEAD") ? repo.appendingPathComponent("HEAD") : repo.appendingPathComponent("objects")
+        let elsewhere = fixture.root.appendingPathComponent("elsewhere", isDirectory: true)
+        try fm.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        try fm.moveItem(at: target, to: elsewhere.appendingPathComponent(target.lastPathComponent))
+        switch defect {
+        case "HEAD as directory":
+            try fm.createDirectory(at: target, withIntermediateDirectories: false)
+        case "HEAD as symlink", "objects as symlink":
+            try fm.createSymbolicLink(at: target, withDestinationURL: elsewhere.appendingPathComponent(target.lastPathComponent))
+        default:
+            break
+        }
+        try fixture.ageDirectories(under: repo, age: 120 * Self.day)
+
+        #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
+    }
+
+    @Test("default stores register OpenCode's storage and snapshot folders")
+    func defaultStoresIncludeOpenCode() throws {
+        let fixture = try OpenCodeFixture()
+        let data = fixture.storage.deletingLastPathComponent()
+        let home = data.deletingLastPathComponent()
+        let xdgData = home.appendingPathComponent(".local/share", isDirectory: true)
+        try FileManager.default.createDirectory(at: xdgData, withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: data, to: xdgData.appendingPathComponent("opencode", isDirectory: true))
+
+        let stores = AISessionScanAdapter.defaultStores(homeDirectory: home)
+            .filter { $0.toolName == "OpenCode" }
+            .map { "\($0.kind.rawValue) \($0.url.path.replacingOccurrences(of: home.path, with: "~"))" }
+
+        #expect(stores == [
+            "openCodeLegacyStorage ~/.local/share/opencode/storage",
+            "openCodeLegacySnapshot ~/.local/share/opencode/snapshot",
+        ])
+    }
+
     @Test("a snapshot folder with no HEAD of its own is not a 1.x repository")
     func headlessSnapshotIgnored() async throws {
         let fixture = try OpenCodeFixture()
