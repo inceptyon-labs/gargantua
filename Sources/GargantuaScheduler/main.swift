@@ -14,12 +14,13 @@ struct GargantuaSchedulerMain {
         }
 
         // Only inside the app bundle: outside it `.standard` would be this agent's own domain.
-        if let suite = AppReleaseBackgroundCheck.containingAppSuiteName() {
+        if let suite = AppReleaseBackgroundCheck.containingAppSuiteName(),
+           let appURL = AppReleaseBackgroundCheck.containingAppURL() {
             let check = AppReleaseBackgroundCheck(
                 suiteName: suite,
                 inventory: DefaultAppReleaseInventory(),
                 checker: AppReleaseCheckService.makeDefault(),
-                notifier: UserNotificationAppReleaseUpdateNotifier()
+                notifier: ContainingAppUpdateNotifier(suiteName: suite, appURL: appURL)
             )
             _ = await check.runIfDue()
         }

@@ -272,6 +272,15 @@ public struct AppReleaseBackgroundCheck: Sendable {
     /// scheduler agent whose own bundle ID differs. Nil outside an `.app`
     /// bundle (e.g. `swift run`).
     public static func containingAppSuiteName(executable: URL? = Bundle.main.executableURL) -> String? {
+        containingApp(executable: executable)?.identifier
+    }
+
+    /// The enclosing `.app`, under the same rules as `containingAppSuiteName`.
+    public static func containingAppURL(executable: URL? = Bundle.main.executableURL) -> URL? {
+        containingApp(executable: executable)?.url
+    }
+
+    private static func containingApp(executable: URL?) -> (url: URL, identifier: String)? {
         var url = executable?.resolvingSymlinksInPath()
         while let current = url, current.path != "/" {
             if current.pathExtension == "app" {
@@ -283,7 +292,7 @@ public struct AppReleaseBackgroundCheck: Sendable {
                       let identifier = plist["CFBundleIdentifier"] as? String,
                       identifier != Bundle.main.bundleIdentifier
                 else { return nil }
-                return identifier
+                return (current, identifier)
             }
             url = current.deletingLastPathComponent()
         }
