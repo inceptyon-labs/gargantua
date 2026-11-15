@@ -66,13 +66,6 @@ struct GargantuaApp: App {
                 .onChange(of: appearanceRaw) { _, _ in
                     AppAppearancePreference.apply(appearance)
                 }
-                .onOpenURL { url in
-                    LicenseActivationLink.handle(url)
-                    AppReleaseLinkHandler.handle(url)
-                }
-                // Let the open window take gargantua:// links instead of
-                // SwiftUI opening another window for each one.
-                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .defaultSize(width: 900, height: 600)
         .commands {
@@ -254,6 +247,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return NSColor(srgbRed: 0.0774, green: 0.0858, blue: 0.1026, alpha: 1.0)
         }
         return NSColor(srgbRed: 0.937, green: 0.945, blue: 0.957, alpha: 1.0)
+    }
+
+    // The app owns gargantua:// events: SwiftUI's scene routing un-hides and activates
+    // the app for every link, which a background announcement must not do.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @objc private func handleURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent _: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: text) else { return }
+        if AppReleaseLink.action(for: url) != nil {
+            AppReleaseLinkHandler.handle(url)
+        } else {
+            LicenseActivationLink.handle(url)
+            Self.activateMainWindow()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

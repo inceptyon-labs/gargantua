@@ -224,8 +224,10 @@ struct MainContentView: View {
                     refreshPersistedSettings()
                     window.visiblePane = sidebarSelection
                 }
-                .onReceive(NotificationCenter.default.publisher(for: AppNavigationRequest.didRequest)) { _ in
-                    consumeNavigationRequest()
+                .onReceive(NotificationCenter.default.publisher(for: AppNavigationRequest.didRequest)) { note in
+                    // Every window applies it; the pending pane is cleared once.
+                    if let pane = note.object as? String { sidebarSelection = pane }
+                    AppNavigationRequest.shared.pane = nil
                 }
                 .onChange(of: sidebarSelection) { _, pane in
                     refreshPersistedSettings()

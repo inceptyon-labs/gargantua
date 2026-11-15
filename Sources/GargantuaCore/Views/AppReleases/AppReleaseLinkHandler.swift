@@ -22,7 +22,7 @@ import Foundation
             switch AppReleaseLink.action(for: url) {
             case .open:
                 AppNavigationRequest.shared.pane = "appUpdates"
-                NotificationCenter.default.post(name: AppNavigationRequest.didRequest, object: nil)
+                NotificationCenter.default.post(name: AppNavigationRequest.didRequest, object: "appUpdates")
                 NSApp.unhide(nil)
                 activateMainWindow()
             case .announce:
