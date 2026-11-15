@@ -34,19 +34,21 @@ extension AISessionScanAdapter {
             confidence: 72,
             explanation: [
                 "Conversations from OpenCode 1.x, kept as JSON files.",
-                "OpenCode 2 keeps sessions in opencode.db and never reads or migrates this folder,",
-                "so the app can no longer open these conversations, but this folder is their only copy.",
+                "OpenCode 2 cannot open them: it keeps sessions in opencode.db and never reads or migrates this folder.",
+                "If a later 1.x release copied them into opencode.db they survive there;",
+                "otherwise this folder is their only copy.",
                 "Nothing anywhere inside it has been written for \(days) day\(days == 1 ? "" : "s"),",
                 "measured against its newest file rather than the folder's own timestamp.",
                 "It is one item because each conversation is spread across several of its subfolders;",
-                "the undo snapshots next to it are offered separately once no conversation refers to them.",
+                "the undo snapshots next to it are offered separately once nothing refers to them.",
                 "Gargantua marks this review and keeps removal behind confirmation.",
             ].joined(separator: " "),
             source: SourceAttribution(name: finding.toolName),
             lastAccessed: finding.lastActivity,
             category: category,
             tags: ["ai_history", "developer", tag, "review"].sorted(),
-            regenerates: false
+            regenerates: false,
+            ownerProcesses: openCodeOwnerProcesses
         )
     }
 
@@ -59,10 +61,21 @@ extension AISessionScanAdapter {
         "objects", "refs", "info", "hooks", "logs", "branches", "lfs", "rr-cache",
     ]
 
+    /// Checked again at clean time: OpenCode started between scan and clean
+    /// can write into either item (2.0 creates its store inside a 1.x snapshot
+    /// directory), so a running `opencode` holds removal back.
+    static let openCodeOwnerProcesses = ["opencode"]
+
     func staleOpenCodeSnapshots(in store: AISessionStore) -> [AISessionFinding] {
         guard ownedRealDirectory(store.url) else { return [] }
-        let sessions = store.url.deletingLastPathComponent()
-            .appendingPathComponent("storage/session", isDirectory: true)
+        let data = store.url.deletingLastPathComponent()
+        // 1.x releases after the JSON store kept sessions in `opencode.db`
+        // (2.0 migrates them out of its 1.x `session` table), and those never
+        // appear under `storage/session/`. Without reading the database there
+        // is no proof a repository is unreferenced, so any OpenCode database
+        // holds every snapshot back.
+        guard !hasOpenCodeDatabase(in: data) else { return [] }
+        let sessions = data.appendingPathComponent("storage/session", isDirectory: true)
         var out: [AISessionFinding] = []
         for repository in childDirectories(of: store.url) where ownedRealDirectory(repository) {
             guard policy.protectionReason(for: repository.path) == nil,
@@ -96,6 +109,14 @@ extension AISessionScanAdapter {
               )
         else { return false }
         return children.allSatisfy { !isDirectory($0) || Self.gitDirectoryLayout.contains($0.lastPathComponent) }
+    }
+
+    /// Whether the data directory holds an OpenCode SQLite database:
+    /// `opencode.db`, a channel build's `opencode-<channel>.db`, or their
+    /// `-wal`/`-shm` sidecars. An unreadable directory counts as yes.
+    func hasOpenCodeDatabase(in data: URL) -> Bool {
+        guard let names = try? fileManager.contentsOfDirectory(atPath: data.path) else { return true }
+        return names.contains { $0.hasPrefix("opencode") && ($0.hasSuffix(".db") || $0.contains(".db-")) }
     }
 
     /// Whether any 1.x session for this project remains under
@@ -137,8 +158,8 @@ extension AISessionScanAdapter {
                 "A separate git repository OpenCode 1.x kept\(finding.projectPath.map { " of \($0)" } ?? "")"
                     + " so a session could undo its edits.",
                 "Your project's own git history is not in it.",
-                "No OpenCode 1.x conversation for this project remains, and OpenCode 2 has no store inside it,",
-                "so nothing refers to this repository any more.",
+                "No OpenCode 1.x conversation for this project remains, there is no OpenCode database",
+                "that could still refer to it, and OpenCode 2 has no store inside it.",
                 "Nothing anywhere inside it has been written for \(days) day\(days == 1 ? "" : "s").",
                 "It can hold copies of the project's files, including untracked ones,",
                 "so Gargantua marks this review and keeps removal behind confirmation.",
@@ -147,7 +168,8 @@ extension AISessionScanAdapter {
             lastAccessed: finding.lastActivity,
             category: category,
             tags: ["ai_history", "developer", tag, "review"].sorted(),
-            regenerates: false
+            regenerates: false,
+            ownerProcesses: openCodeOwnerProcesses
         )
     }
 }

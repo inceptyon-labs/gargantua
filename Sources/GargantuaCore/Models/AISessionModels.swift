@@ -46,14 +46,17 @@ public enum AISessionStoreKind: String, Sendable, Equatable, Codable {
     /// file), so no subdirectory is a safe unit alone: the store directory
     /// itself is the single unit, judged by the newest file anywhere inside.
     /// OpenCode 2.0 keeps sessions in `opencode.db` and neither reads nor
-    /// migrates this tree (verified against 2.0.20), so it is the only copy of
-    /// those conversations.
+    /// migrates this tree (verified against 2.0.20). Later 1.x releases moved
+    /// to `opencode.db` too, so the tree is the only copy of its conversations
+    /// unless one of those imported it.
     case openCodeLegacyStorage
     /// OpenCode 1.x's undo snapshots, `<data>/snapshot`. Each child
     /// `<projectID>/` is a git directory that 1.x snapshotted the project's
     /// worktree into, and is one unit. OpenCode 2.0 builds its own store at
     /// `snapshot/<projectID>/<worktreeHash>/`, which can nest inside a 1.x
-    /// git directory.
+    /// git directory. A directory is surfaced only when it holds git's own
+    /// layout and nothing else, no `storage/session/<projectID>/` entry
+    /// remains, and no OpenCode database exists that could still refer to it.
     case openCodeLegacySnapshot
 }
 

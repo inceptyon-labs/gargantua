@@ -22,6 +22,7 @@ struct AISessionOpenCodeTests {
         #expect(result.safety == .review)
         #expect(result.name == "OpenCode 1.x conversation history")
         #expect(result.explanation.contains("120 days"))
+        #expect(result.ownerProcesses == ["opencode"])
     }
 
     @Test("storage age is the newest file anywhere, not any folder's timestamp")
@@ -54,6 +55,7 @@ struct AISessionOpenCodeTests {
         #expect(result.path.hasSuffix("/snapshot/ef98"))
         #expect(result.name == "OpenCode 1.x snapshots — Inceptyon")
         #expect(result.safety == .review)
+        #expect(result.ownerProcesses == ["opencode"])
     }
 
     @Test("a snapshot repository with a remaining 1.x session is left alone")
@@ -88,6 +90,29 @@ struct AISessionOpenCodeTests {
         )
 
         #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
+    }
+
+    @Test("any OpenCode database holds every snapshot repository back", arguments: ["opencode.db", "opencode-next.db"])
+    func databaseHoldsSnapshotsBack(database: String) async throws {
+        let fixture = try OpenCodeFixture()
+        try fixture.addLegacySnapshot(project: "ef98", worktree: "/Users/me/Inceptyon", age: 120 * Self.day)
+        try fixture.write(fixture.snapshot.deletingLastPathComponent().appendingPathComponent(database), age: 120 * Self.day)
+
+        #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
+    }
+
+    @Test("an unreadable session folder counts as a reference")
+    func unreadableSessionsHoldSnapshotBack() async throws {
+        let fixture = try OpenCodeFixture()
+        try fixture.addLegacySnapshot(project: "ef98", worktree: "/Users/me/Inceptyon", age: 120 * Self.day)
+        let sessions = fixture.storage.appendingPathComponent("session", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: sessions.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sessions.path) }
+
+        let results = try await fixture.makeAdapter().scan(progress: nil)
+
+        #expect(!results.contains { $0.path.hasSuffix("/snapshot/ef98") })
     }
 
     @Test("a snapshot folder with no HEAD of its own is not a 1.x repository")

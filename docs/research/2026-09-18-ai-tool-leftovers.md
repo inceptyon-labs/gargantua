@@ -354,16 +354,16 @@ Kiro `kiro.kiroagent/`, Cody `symf/` and OpenCode `storage/*` and `snapshot/` ar
 
 Inventory machine: OpenCode 2.0.20 (Homebrew) over data left by a 1.x install. `storage/` holds 4 sessions, 112 KB, newest file 2025-12-29. `snapshot/ef98…/` is one 1.x git directory of 112 MB whose `config` sets `core.worktree` to the project folder. There is no `opencode.db` yet.
 
-Evidence from the 2.0.20 binary: no `session_diff` string, no path join under `storage/`, no JSON import glob. The only data-directory joins are `snapshot/<project.id>/<fastHash(worktree)>` (the store is reused when that directory has a `HEAD`) and `worktree/<project.id prefix>`.
+Evidence from the 2.0.20 binary: no `session_diff` string, no path join under `storage/`, no JSON import glob. It builds its snapshot store at `snapshot/<project.id>/<fastHash(worktree)>` and reuses it when that directory has a `HEAD`. Its database is `opencode.db` (`opencode-<channel>.db` for channel builds, `OPENCODE_DB` overrides it), and on start it runs `migration.v1-v2` whenever that database still has a 1.x `session` table. So later 1.x releases kept sessions in SQLite. Those sessions never appear under `storage/session/`, and they may hold snapshot hashes that point into a 1.x snapshot directory.
 
 ## Shipped
 
 | Store | Unit | Gate |
 |---|---|---|
 | `AISessionStoreKind.openCodeLegacyStorage` | The whole `~/.local/share/opencode/storage` tree. A session spans `session/`, `message/`, `part/` and `session_diff/`, so the whole tree is the smallest unit that never splits one. Requires a `session/` subfolder. | Newest file anywhere inside idle 90 days; review. |
-| `AISessionStoreKind.openCodeLegacySnapshot` | One `snapshot/<projectID>/` git directory: a regular `HEAD`, a real `objects/`, and no subdirectory outside git's own layout, which rules out a nested 2.0 `<worktreeHash>/` store. | No entry left in `storage/session/<projectID>/` (an unreadable folder counts as a reference), and newest file idle 90 days; review. |
+| `AISessionStoreKind.openCodeLegacySnapshot` | One `snapshot/<projectID>/` git directory: a regular `HEAD`, a real `objects/`, and no subdirectory outside git's own layout, which rules out a nested 2.0 `<worktreeHash>/` store. | No entry left in `storage/session/<projectID>/` (an unreadable folder counts as a reference), no `opencode*.db` in the data directory (it could hold SQLite-era 1.x sessions that refer to the repository), and newest file idle 90 days; review. |
 
-A project's snapshot repository is offered only after its 1.x sessions are gone, so a machine with both shows the conversation history first and the snapshots on the next scan.
+A project's snapshot repository is offered only after its 1.x sessions are gone, so a machine with both shows the conversation history first and the snapshots on the next scan. Once OpenCode 2 has run, `opencode.db` exists and no snapshot repository is offered; unblocking that needs a read of the database's session tables. Both items name `opencode` as an owner process, so cleanup skips them while OpenCode runs.
 
 ## Dropped
 
