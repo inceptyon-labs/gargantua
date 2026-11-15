@@ -3,6 +3,7 @@ import Darwin
 import GargantuaAppKitShims
 import GargantuaCore
 import SwiftUI
+import UserNotifications
 
 @main
 struct GargantuaApp: App {
@@ -16,6 +17,10 @@ struct GargantuaApp: App {
 
     init() {
         Self.configureNativeToolTipDelay()
+        // An unbundled `swift run` process can't use UNUserNotificationCenter.
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            UNUserNotificationCenter.current().delegate = AppReleaseNotificationResponder.shared
+        }
         MetallibStager.stageIfNeeded()
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
@@ -62,6 +67,7 @@ struct GargantuaApp: App {
                 }
                 .onOpenURL { url in
                     LicenseActivationLink.handle(url)
+                    AppReleaseLinkHandler.handle(url)
                 }
                 // Let the open window take gargantua:// links instead of
                 // SwiftUI opening another window for each one.

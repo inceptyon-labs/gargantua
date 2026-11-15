@@ -26,6 +26,7 @@ struct MainContentView: View {
     @State var pendingBackgroundItemPlistPath: String?
     @State var persistence: PersistenceController?
     @State var activationLinkModel = LicenseActivationLinkModel.shared
+    @State var navigationRequest = AppNavigationRequest.shared
     @State var duplicateFinderSelection: Set<String> = []
     /// Settings the panes are built from, read from SwiftData when the window
     /// appears, on every navigation, and after "Add to Exclusions", instead of
@@ -215,6 +216,11 @@ struct MainContentView: View {
                     initializePersistenceIfNeeded()
                     refreshPersistedSettings()
                     window.visiblePane = sidebarSelection
+                }
+                .onChange(of: navigationRequest.pane) { _, pane in
+                    guard let pane else { return }
+                    sidebarSelection = pane
+                    navigationRequest.pane = nil
                 }
                 .onChange(of: sidebarSelection) { _, pane in
                     refreshPersistedSettings()
