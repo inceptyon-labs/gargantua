@@ -39,6 +39,22 @@ public enum AISessionStoreKind: String, Sendable, Equatable, Codable {
     /// would leave a broken history entry; Kilo Code 7.x keeps sessions in
     /// `kilo.db`. Don't add either without that evidence.
     case agentTaskStore
+    /// OpenCode 1.x's JSON conversation store, `<data>/storage`. One session is
+    /// spread across `session/<projectID>/<sessionID>.json`,
+    /// `message/<sessionID>/msg_*.json`, `part/<messageID>/prt_*.json` and
+    /// `session_diff/<sessionID>.json` (plus `project/*.json` and a `migration`
+    /// file), so no subdirectory is a safe unit alone: the store directory
+    /// itself is the single unit, judged by the newest file anywhere inside.
+    /// OpenCode 2.0 keeps sessions in `opencode.db` and neither reads nor
+    /// migrates this tree (verified against 2.0.20), so it is the only copy of
+    /// those conversations.
+    case openCodeLegacyStorage
+    /// OpenCode 1.x's undo snapshots, `<data>/snapshot`. Each child
+    /// `<projectID>/` is a git directory that 1.x snapshotted the project's
+    /// worktree into, and is one unit. OpenCode 2.0 builds its own store at
+    /// `snapshot/<projectID>/<worktreeHash>/`, which can nest inside a 1.x
+    /// git directory.
+    case openCodeLegacySnapshot
 }
 
 /// Why a session store was surfaced.
@@ -83,7 +99,8 @@ public struct AISessionScanPolicy: Sendable {
     public let scratchpadStaleAfter: TimeInterval
     /// How long an agent task directory must go completely untouched before it
     /// is surfaced, measured against the newest file anywhere inside it. 90
-    /// days matches the bundled rules' age gate for conversation history.
+    /// days matches the bundled rules' age gate for conversation history. It
+    /// also gates the OpenCode 1.x storage tree and snapshot repositories.
     public let taskStaleAfter: TimeInterval
     /// Where removable volumes are mounted. A seam for tests; in production
     /// this is always `/Volumes`.
@@ -146,6 +163,9 @@ public struct AISessionFinding: Sendable, Equatable {
     public let size: Int64
     /// Newest modification timestamp inside the entry.
     public let lastActivity: Date?
+    /// The project folder the entry was made for, when the store records one.
+    /// Display only; never a safety input.
+    public let projectPath: String?
 
     public init(
         toolName: String,
@@ -153,7 +173,8 @@ public struct AISessionFinding: Sendable, Equatable {
         path: String,
         reason: AISessionStaleReason,
         size: Int64,
-        lastActivity: Date?
+        lastActivity: Date?,
+        projectPath: String? = nil
     ) {
         self.toolName = toolName
         self.kind = kind
@@ -161,5 +182,6 @@ public struct AISessionFinding: Sendable, Equatable {
         self.reason = reason
         self.size = size
         self.lastActivity = lastActivity
+        self.projectPath = projectPath
     }
 }

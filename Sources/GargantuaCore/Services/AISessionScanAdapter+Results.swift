@@ -13,9 +13,16 @@ extension AISessionScanAdapter {
         case let .projectMissing(projectPath):
             return orphanResult(finding, projectPath: projectPath)
         case let .inactive(days):
-            return finding.kind == .agentTaskStore
-                ? inactiveTaskResult(finding, days: days)
-                : inactiveScratchpadResult(finding, days: days)
+            switch finding.kind {
+            case .agentTaskStore:
+                return inactiveTaskResult(finding, days: days)
+            case .openCodeLegacyStorage:
+                return openCodeStorageResult(finding, days: days)
+            case .openCodeLegacySnapshot:
+                return openCodeSnapshotResult(finding, days: days)
+            case .claudeCodeProject, .editorWorkspaceStorage, .agentScratchpad:
+                return inactiveScratchpadResult(finding, days: days)
+            }
         }
     }
 
@@ -30,6 +37,8 @@ extension AISessionScanAdapter {
             what = "Scratch files \(finding.toolName) kept for \(projectPath)."
         case .agentTaskStore:
             what = "Agent task history \(finding.toolName) kept for \(projectPath)."
+        case .openCodeLegacyStorage, .openCodeLegacySnapshot:
+            what = "OpenCode 1.x data \(finding.toolName) kept for \(projectPath)."
         }
 
         return ScanResult(

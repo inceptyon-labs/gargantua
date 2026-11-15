@@ -48,6 +48,21 @@ extension AISessionScanAdapter {
                 )
             }
 
+        // OpenCode follows XDG ($XDG_DATA_HOME/opencode, default
+        // ~/.local/share/opencode). A GUI app never sees a shell-set
+        // XDG_DATA_HOME, so only the default is scanned.
+        let openCodeData = homeDirectory.appendingPathComponent(".local/share/opencode", isDirectory: true)
+        stores.append(AISessionStore(
+            toolName: "OpenCode",
+            kind: .openCodeLegacyStorage,
+            url: openCodeData.appendingPathComponent("storage", isDirectory: true)
+        ))
+        stores.append(AISessionStore(
+            toolName: "OpenCode",
+            kind: .openCodeLegacySnapshot,
+            url: openCodeData.appendingPathComponent("snapshot", isDirectory: true)
+        ))
+
         // The scratchpad root is per-uid: /private/tmp/claude-<uid>. Only this
         // user's is ever scanned.
         stores.append(AISessionStore(

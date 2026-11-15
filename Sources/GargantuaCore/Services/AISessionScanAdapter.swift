@@ -74,6 +74,10 @@ public struct AISessionScanAdapter: ScanAdapter {
             return staleScratchpads(in: store)
         case .agentTaskStore:
             return staleTasks(in: store)
+        case .openCodeLegacyStorage:
+            return staleOpenCodeStorage(in: store)
+        case .openCodeLegacySnapshot:
+            return staleOpenCodeSnapshots(in: store)
         }
     }
 
@@ -125,7 +129,7 @@ public struct AISessionScanAdapter: ScanAdapter {
             return transcriptWorkingDirectories(in: entry)
         case .editorWorkspaceStorage:
             return workspaceFolderPath(in: entry).map { [$0] }
-        case .agentScratchpad, .agentTaskStore:
+        case .agentScratchpad, .agentTaskStore, .openCodeLegacyStorage, .openCodeLegacySnapshot:
             // Scratchpads and tasks are judged by inactivity, never routed through here.
             return nil
         }
