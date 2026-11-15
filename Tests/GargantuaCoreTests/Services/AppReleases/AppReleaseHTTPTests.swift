@@ -78,6 +78,49 @@ struct AppReleaseHTTPTests {
         #expect(received == received.sorted())
         #expect(declared == [2000])
     }
+
+    @Test("httpsUpgraded keeps https, upgrades default-port http, and refuses the rest")
+    func httpsUpgradedRules() {
+        func upgraded(_ string: String) -> String? { URL(string: string)?.httpsUpgraded?.absoluteString }
+        #expect(upgraded("https://h.example/p") == "https://h.example/p")
+        #expect(upgraded("http://h.example/p?q=1") == "https://h.example/p?q=1")
+        #expect(upgraded("http://h.example:80/p") == "https://h.example/p")
+        #expect(upgraded("http://h.example:8080/p") == nil)
+        #expect(upgraded("ftp://h.example/p") == nil)
+    }
+
+    @Test("a redirect to http on the default port is followed over https, never over http")
+    func httpRedirectIsUpgraded() async throws {
+        let (session, key) = RedirectURLProtocol.makeSession(redirectingTo: "http://mirror.example.net/app.dmg")
+        defer { RedirectURLProtocol.remove(key) }
+        let file = destination()
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let count = try await DefaultAppReleaseHTTPClient(session: session)
+            .download(URL(string: "https://get.example.org/app.dmg")!, to: file, maxBytes: 1000) { _, _ in }
+
+        let seen = RedirectURLProtocol.seen(key)
+        #expect(count == RedirectURLProtocol.body.count)
+        #expect(seen.contains("https://mirror.example.net/app.dmg"))
+        #expect(!seen.contains { $0.hasPrefix("http:") })
+    }
+
+    @Test("a redirect to http on another port is still refused")
+    func httpRedirectOnOtherPortIsRefused() async throws {
+        let (session, key) = RedirectURLProtocol.makeSession(redirectingTo: "http://mirror.example.net:8080/app.dmg")
+        defer { RedirectURLProtocol.remove(key) }
+        let file = destination()
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        await #expect {
+            try await DefaultAppReleaseHTTPClient(session: session)
+                .download(URL(string: "https://get.example.org/app.dmg")!, to: file, maxBytes: 1000) { _, _ in }
+        } throws: { error in
+            guard case .insecureURL = error as? AppReleaseHTTPError else { return false }
+            return true
+        }
+        #expect(!RedirectURLProtocol.seen(key).contains { $0.hasPrefix("http:") })
+    }
 }
 
 final class FakeThrottleClock: Sendable {
@@ -220,4 +263,57 @@ final class ChunkedURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {
         timer?.invalidate()
     }
+}
+
+/// Answers `get.example.org` with a 302 to the session's target and any other
+/// host with a small 200 body, recording every URL it is asked to load.
+final class RedirectURLProtocol: URLProtocol, @unchecked Sendable {
+    static let body = Data(repeating: 0x41, count: 64)
+
+    private static let keyHeader = "X-Redirect-Key"
+    private static let state = OSAllocatedUnfairLock<[String: (target: String, seen: [String])]>(initialState: [:])
+
+    static func makeSession(redirectingTo target: String) -> (URLSession, String) {
+        let key = UUID().uuidString
+        state.withLock { $0[key] = (target, []) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RedirectURLProtocol.self]
+        configuration.httpAdditionalHeaders = [keyHeader: key]
+        return (URLSession(configuration: configuration), key)
+    }
+
+    static func seen(_ key: String) -> [String] { state.withLock { $0[key]?.seen ?? [] } }
+
+    static func remove(_ key: String) { _ = state.withLock { $0.removeValue(forKey: key) } }
+
+    // swiftlint:disable:next static_over_final_class
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    // swiftlint:disable:next static_over_final_class
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let key = request.value(forHTTPHeaderField: Self.keyHeader) ?? ""
+        guard let url = request.url else { return client?.urlProtocol(self, didFailWithError: URLError(.badURL)) ?? () }
+        let target = Self.state.withLock { state -> String? in
+            state[key]?.seen.append(url.absoluteString)
+            return state[key]?.target
+        }
+        if url.host == "get.example.org", let target, let targetURL = URL(string: target),
+           let response = HTTPURLResponse(url: url, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": target]) {
+            var next = request
+            next.url = targetURL
+            client?.urlProtocol(self, wasRedirectedTo: next, redirectResponse: response)
+            // A refused redirect delivers the 3xx itself; a followed one cancels this load.
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocolDidFinishLoading(self)
+        } else if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]) {
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Self.body)
+            client?.urlProtocolDidFinishLoading(self)
+        } else {
+            client?.urlProtocol(self, didFailWithError: URLError(.unknown))
+        }
+    }
+
+    override func stopLoading() {}
 }

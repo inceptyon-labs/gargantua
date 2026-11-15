@@ -35,8 +35,9 @@ public enum AppReleaseHTTPError: Error, Equatable, LocalizedError {
     }
 }
 
-/// Network seam for the App Updater. Every request is https-only, including
-/// each redirect hop.
+/// Network seam for the App Updater. Every request is https-only; a redirect
+/// to plain http on the default port is followed over https instead, and any
+/// other non-https hop is refused.
 public protocol AppReleaseHTTPFetching: Sendable {
     func get(_ url: URL, etag: String?) async throws -> AppReleaseHTTPResponse
 
@@ -188,7 +189,7 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
 }
 
 /// One request whose body streams into a file, or into memory when `file` is
-/// nil. Refuses a redirect off https, refuses a declared length over `limit`
+/// nil. Upgrades a redirect to http on the default port to https, refuses any other redirect off https, refuses a declared length over `limit`
 /// before any body arrives, and cancels the transfer as soon as the body
 /// passes `limit`.
 private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
@@ -253,7 +254,10 @@ private final class BoundedTransfer: NSObject, URLSessionDataDelegate {
         willPerformHTTPRedirection _: HTTPURLResponse,
         newRequest request: URLRequest
     ) async -> URLRequest? {
-        request.url?.isHTTPS == true ? request : nil
+        guard let url = request.url?.httpsUpgraded else { return nil }
+        var upgraded = request
+        upgraded.url = url
+        return upgraded
     }
 
     func urlSession(

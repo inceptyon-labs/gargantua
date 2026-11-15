@@ -56,6 +56,19 @@ extension URL {
 
     /// `self` when it is an https URL, else nil.
     var httpsOnly: URL? { isHTTPS ? self : nil }
+
+    /// `self` when https; the https form of an http URL on the default port
+    /// (same host, path and query); else nil.
+    var httpsUpgraded: URL? {
+        if isHTTPS { return self }
+        guard scheme?.lowercased() == "http",
+              var components = URLComponents(url: self, resolvingAgainstBaseURL: true),
+              components.port == nil || components.port == 80
+        else { return nil }
+        components.scheme = "https"
+        components.port = nil
+        return components.url
+    }
 }
 
 extension String {
