@@ -21,6 +21,7 @@ struct GargantuaApp: App {
         if Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().delegate = AppReleaseNotificationResponder.shared
         }
+        AppReleaseLinkHandler.activateMainWindow = { AppDelegate.activateMainWindow() }
         MetallibStager.stageIfNeeded()
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
@@ -260,8 +261,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppAppearancePreference.apply()
         DispatchQueue.main.async { [weak self] in
             self?.configureMainWindow()
-            self?.activateMainWindow()
+            // Launched hidden (the scheduler's announcement hand-off): stay in the background.
+            if !NSApp.isHidden { self?.activateMainWindow() }
+            self?.postPendingAnnouncement()
         }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.postPendingAnnouncement() }
+        }
+    }
+
+    /// Retries an announcement the scheduler left pending (permission denied, app not running).
+    private func postPendingAnnouncement() {
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return }
+        Task { await AppReleaseAnnouncementPoster.postPending(notifier: UserNotificationAppReleaseUpdateNotifier()) }
     }
 
     func applicationShouldHandleReopen(

@@ -26,7 +26,6 @@ struct MainContentView: View {
     @State var pendingBackgroundItemPlistPath: String?
     @State var persistence: PersistenceController?
     @State var activationLinkModel = LicenseActivationLinkModel.shared
-    @State var navigationRequest = AppNavigationRequest.shared
     @State var duplicateFinderSelection: Set<String> = []
     /// Settings the panes are built from, read from SwiftData when the window
     /// appears, on every navigation, and after "Add to Exclusions", instead of
@@ -53,6 +52,13 @@ struct MainContentView: View {
             backgroundCheckEnabled: preferences?.backgroundCheckEnabled ?? false,
             storedCount: storedAvailableCount
         )
+    }
+
+    /// Applies a pane another part of the app asked for (e.g. a notification click).
+    func consumeNavigationRequest() {
+        guard let pane = AppNavigationRequest.shared.pane else { return }
+        sidebarSelection = pane
+        AppNavigationRequest.shared.pane = nil
     }
 
     var body: some View {
@@ -213,14 +219,13 @@ struct MainContentView: View {
                 })
                 .modifier(AIRootModifier(window: window, onOpenSettings: { sidebarSelection = "settings" }))
                 .onAppear {
+                    consumeNavigationRequest()
                     initializePersistenceIfNeeded()
                     refreshPersistedSettings()
                     window.visiblePane = sidebarSelection
                 }
-                .onChange(of: navigationRequest.pane) { _, pane in
-                    guard let pane else { return }
-                    sidebarSelection = pane
-                    navigationRequest.pane = nil
+                .onReceive(NotificationCenter.default.publisher(for: AppNavigationRequest.didRequest)) { _ in
+                    consumeNavigationRequest()
                 }
                 .onChange(of: sidebarSelection) { _, pane in
                     refreshPersistedSettings()

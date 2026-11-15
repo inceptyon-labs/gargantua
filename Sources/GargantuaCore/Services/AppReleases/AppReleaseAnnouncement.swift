@@ -73,32 +73,39 @@ public enum AppReleaseLink {
     public struct ContainingAppUpdateNotifier: AppReleaseUpdateNotifying {
         let suiteName: String
         let appURL: URL
-        let open: @Sendable (URL, URL) async -> Bool
+        let appBundleID: String
+        let open: @Sendable (URL, URL, String) async -> Bool
 
         public init(
             suiteName: String,
             appURL: URL,
-            open: @escaping @Sendable (URL, URL) async -> Bool = ContainingAppUpdateNotifier.openWithoutActivating
+            appBundleID: String,
+            open: @escaping @Sendable (URL, URL, String) async -> Bool = ContainingAppUpdateNotifier.openWithoutActivating
         ) {
             self.suiteName = suiteName
             self.appURL = appURL
+            self.appBundleID = appBundleID
             self.open = open
         }
 
         public func deliver(count: Int, appNames: [String]) async -> Bool {
             guard let defaults = UserDefaults(suiteName: suiteName) else { return false }
             AppReleaseAnnouncement(count: count, appNames: appNames).storePending(in: defaults)
-            return await open(appURL, AppReleaseLink.announceURL)
+            return await open(appURL, AppReleaseLink.announceURL, appBundleID)
         }
 
-        public static func openWithoutActivating(app: URL, link: URL) async -> Bool {
+        /// Hide only a launch this hand-off causes; a running Gargantua is left as it is.
+        static func shouldHide(runningCount: Int) -> Bool { runningCount == 0 }
+
+        public static func openWithoutActivating(app: URL, link: URL, bundleID: String) async -> Bool {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = false
             configuration.addsToRecentItems = false
             // Launching just to post must not show a window; a running app is left as is.
-            if let identifier = Bundle(url: app)?.bundleIdentifier {
-                configuration.hides = NSRunningApplication.runningApplications(withBundleIdentifier: identifier).isEmpty
-            }
+            // The ID is passed in: `Bundle(url:)` on the app returns the scheduler's own bundle here.
+            configuration.hides = shouldHide(
+                runningCount: NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).count
+            )
             do {
                 _ = try await NSWorkspace.shared.open([link], withApplicationAt: app, configuration: configuration)
                 return true

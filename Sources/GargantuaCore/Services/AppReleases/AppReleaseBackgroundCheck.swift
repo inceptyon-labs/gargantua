@@ -280,6 +280,13 @@ public struct AppReleaseBackgroundCheck: Sendable {
         containingApp(executable: executable)?.url
     }
 
+    /// The enclosing app's bundle ID and URL, for handing work to it.
+    public static func containingAppIdentity(
+        executable: URL? = Bundle.main.executableURL
+    ) -> (url: URL, identifier: String)? {
+        containingApp(executable: executable)
+    }
+
     private static func containingApp(executable: URL?) -> (url: URL, identifier: String)? {
         var url = executable?.resolvingSymlinksInPath()
         while let current = url, current.path != "/" {

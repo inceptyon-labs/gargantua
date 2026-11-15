@@ -84,9 +84,10 @@ struct AppReleaseAnnouncementTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let app = URL(fileURLWithPath: "/Applications/Foo.app")
         for result in [true, false] {
+            let ids = OSAllocatedUnfairLock(initialState: "")
             let opened = OSAllocatedUnfairLock<[(URL, URL)]>(initialState: [])
-            let notifier = ContainingAppUpdateNotifier(suiteName: suite, appURL: app) { app, link in
-                opened.withLock { $0.append((app, link)) }
+            let notifier = ContainingAppUpdateNotifier(suiteName: suite, appURL: app, appBundleID: "com.example.foo") { app, link, id in
+                opened.withLock { $0.append((app, link)); ids.withLock { $0 = id } }
                 return result
             }
             #expect(await notifier.deliver(count: 2, appNames: ["A", "B"]) == result)
@@ -94,6 +95,7 @@ struct AppReleaseAnnouncementTests {
             #expect(stored?.count == 2)
             #expect(stored?.appNames == ["A", "B"])
             #expect(opened.withLock { $0.count } == 1)
+            #expect(ids.withLock { $0 } == "com.example.foo")
             #expect(opened.withLock { $0[0].0 == app && $0[0].1 == AppReleaseLink.announceURL })
         }
     }
@@ -109,5 +111,29 @@ struct AppReleaseAnnouncementTests {
         let inside = contents.appendingPathComponent("MacOS/Helper")
         #expect(AppReleaseBackgroundCheck.containingAppURL(executable: inside)?.lastPathComponent == "Foo.app")
         #expect(AppReleaseBackgroundCheck.containingAppURL(executable: root.appendingPathComponent("tool")) == nil)
+    }
+
+    @Test("a launch is hidden only when the app isn't already running")
+    func hideDecision() {
+        #expect(ContainingAppUpdateNotifier.shouldHide(runningCount: 0))
+        #expect(!ContainingAppUpdateNotifier.shouldHide(runningCount: 1))
+    }
+
+    @Test("containingAppURL is nil for the host's own bundle ID, a missing plist and a malformed plist")
+    func containingURLRejects() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ann-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        func app(_ name: String, plist: Data?) throws -> URL {
+            let contents = root.appendingPathComponent("\(name).app/Contents")
+            try FileManager.default.createDirectory(at: contents.appendingPathComponent("MacOS"), withIntermediateDirectories: true)
+            if let plist { try plist.write(to: contents.appendingPathComponent("Info.plist")) }
+            return contents.appendingPathComponent("MacOS/Helper")
+        }
+        if let ownID = Bundle.main.bundleIdentifier {
+            let own = try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": ownID], format: .xml, options: 0)
+            #expect(AppReleaseBackgroundCheck.containingAppURL(executable: try app("Own", plist: own)) == nil)
+        }
+        #expect(AppReleaseBackgroundCheck.containingAppURL(executable: try app("Missing", plist: nil)) == nil)
+        #expect(AppReleaseBackgroundCheck.containingAppURL(executable: try app("Bad", plist: Data("junk".utf8))) == nil)
     }
 }
