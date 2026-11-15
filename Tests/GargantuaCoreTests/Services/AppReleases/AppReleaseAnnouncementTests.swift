@@ -86,8 +86,13 @@ struct AppReleaseAnnouncementTests {
         for result in [true, false] {
             let ids = OSAllocatedUnfairLock(initialState: "")
             let opened = OSAllocatedUnfairLock<[(URL, URL)]>(initialState: [])
-            let notifier = ContainingAppUpdateNotifier(suiteName: suite, appURL: app, appBundleID: "com.example.foo") { app, link, id in
+            let notifier = ContainingAppUpdateNotifier(
+                suiteName: suite, appURL: app, appBundleID: "com.example.foo", confirmTimeout: 1, pollInterval: 0.05
+            ) { app, link, id in
                 opened.withLock { $0.append((app, link)); ids.withLock { $0 = id } }
+                if result, let pending = AppReleaseAnnouncement.pending(in: UserDefaults(suiteName: suite)!) {
+                    UserDefaults(suiteName: suite)!.set(pending.id.uuidString, forKey: AppReleaseAnnouncement.postedKey)
+                }
                 return result
             }
             #expect(await notifier.deliver(count: 2, appNames: ["A", "B"]) == result)
@@ -135,5 +140,15 @@ struct AppReleaseAnnouncementTests {
         }
         #expect(AppReleaseBackgroundCheck.containingAppURL(executable: try app("Missing", plist: nil)) == nil)
         #expect(AppReleaseBackgroundCheck.containingAppURL(executable: try app("Bad", plist: Data("junk".utf8))) == nil)
+    }
+
+    @Test("an opened app that never posts is not a delivery")
+    func unconfirmed() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let notifier = ContainingAppUpdateNotifier(
+            suiteName: suite, appURL: URL(fileURLWithPath: "/x.app"), appBundleID: "x", confirmTimeout: 0.3, pollInterval: 0.05
+        ) { _, _, _ in true }
+        #expect(await !notifier.deliver(count: 1, appNames: ["A"]))
     }
 }

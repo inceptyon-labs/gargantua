@@ -74,24 +74,39 @@ public enum AppReleaseLink {
         let suiteName: String
         let appURL: URL
         let appBundleID: String
+        let confirmTimeout: TimeInterval
+        let pollInterval: TimeInterval
         let open: @Sendable (URL, URL, String) async -> Bool
 
         public init(
             suiteName: String,
             appURL: URL,
             appBundleID: String,
+            confirmTimeout: TimeInterval = 15,
+            pollInterval: TimeInterval = 0.5,
             open: @escaping @Sendable (URL, URL, String) async -> Bool = ContainingAppUpdateNotifier.openWithoutActivating
         ) {
             self.suiteName = suiteName
             self.appURL = appURL
             self.appBundleID = appBundleID
+            self.confirmTimeout = confirmTimeout
+            self.pollInterval = pollInterval
             self.open = open
         }
 
         public func deliver(count: Int, appNames: [String]) async -> Bool {
             guard let defaults = UserDefaults(suiteName: suiteName) else { return false }
-            AppReleaseAnnouncement(count: count, appNames: appNames).storePending(in: defaults)
-            return await open(appURL, AppReleaseLink.announceURL, appBundleID)
+            let announcement = AppReleaseAnnouncement(count: count, appNames: appNames)
+            announcement.storePending(in: defaults)
+            guard await open(appURL, AppReleaseLink.announceURL, appBundleID) else { return false }
+            // Opening the app isn't delivery: wait for it to record that it posted this one.
+            let deadline = Date().addingTimeInterval(confirmTimeout)
+            while true {
+                if UserDefaults(suiteName: suiteName)?.string(forKey: AppReleaseAnnouncement.postedKey)
+                    == announcement.id.uuidString { return true }
+                guard Date() < deadline else { return false }
+                try? await Task.sleep(for: .seconds(pollInterval))
+            }
         }
 
         /// Hide only a launch this hand-off causes; a running Gargantua is left as it is.

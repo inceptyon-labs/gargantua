@@ -21,7 +21,7 @@ struct GargantuaApp: App {
         if Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().delegate = AppReleaseNotificationResponder.shared
         }
-        AppReleaseLinkHandler.activateMainWindow = { AppDelegate.activateMainWindow() }
+        AppReleaseLinkHandler.activateMainWindow = { AppDelegate.showMainWindow() }
         MetallibStager.stageIfNeeded()
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
@@ -267,7 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppReleaseLinkHandler.handle(url)
         } else {
             LicenseActivationLink.handle(url)
-            Self.activateMainWindow()
+            Self.showMainWindow()
         }
     }
 
@@ -329,6 +329,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let spacerView = NSView(frame: NSRect(x: 0, y: 0, width: 0, height: 8))
         spacer.view = spacerView
         window.addTitlebarAccessoryViewController(spacer)
+    }
+
+    /// Fronts the main window, or reopens one the way a Dock click does when it was closed.
+    static func showMainWindow() {
+        if !activateExistingMainWindow() {
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration())
+        }
     }
 
     static func activateMainWindow() {
