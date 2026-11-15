@@ -51,6 +51,19 @@ extension AppReleaseBackgroundCheckTests {
         #expect(harness.checker.calls == 1)
     }
 
+    @Test("a version marked seen during the sweep is not notified")
+    func seenDuringSweep() async {
+        let harness = Harness(versions: ["com.a": "2.0"])
+        defer { harness.cleanUp() }
+        let suite = harness.suite
+        harness.checker.setOnCheck {
+            AppReleaseBackgroundState(announcedVersions: ["com.a": AppReleaseVersion(short: "2.0", build: nil)])
+                .store(in: UserDefaults(suiteName: suite)!, key: AppReleaseBackgroundState.inAppKey)
+        }
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        #expect(await harness.notifier.deliveries.isEmpty)
+    }
+
     @Test("an app seen in the app doesn't hide another app's new version")
     func seenPlusNew() async {
         let harness = Harness(versions: ["com.a": "2.0", "com.b": "3.0"])

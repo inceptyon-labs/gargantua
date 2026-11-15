@@ -456,4 +456,18 @@ extension AppReleasesSessionTests {
         await fixture.session.checkIfAutoDue()
         #expect(fixture.session.lastChecked == nil)
     }
+
+    @Test("An un-ignored app's re-check is recorded as seen while the pane is visible")
+    func unignoreRecordsSeen() async {
+        let fixture = Self.makeFixture()
+        let key = AppReleaseBackgroundState.inAppKey
+        fixture.session.ignore(Self.app.bundleID)
+        fixture.session.paneDidAppear()
+        await fixture.session.check()
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults, key: key).announcedVersions.isEmpty)
+
+        await fixture.session.unignore(Self.app.bundleID)
+        #expect(AppReleaseBackgroundState.stored(in: fixture.defaults, key: key).announcedVersions[Self.app.bundleID]
+            == Self.candidate.version)
+    }
 }

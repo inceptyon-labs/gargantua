@@ -225,7 +225,7 @@ public final class AppReleasesSession {
         lastChecked = now()
         phase = .ready
         storeAvailableCount()
-        recordFindingsForBackgroundCheck()
+        recordFindingsForBackgroundCheck(raw: result)
         if isAutomatic { updatePreferences { $0.lastAutoCheck = lastChecked } }
     }
 
@@ -385,6 +385,7 @@ public final class AppReleasesSession {
             rows.append(row)
         }
         storeAvailableCount()
+        if isPaneVisible, lastChecked != nil { updateSeen(clock: false) }
     }
 
     /// Keeps the count the sidebar badge and the background check read current.
@@ -452,8 +453,8 @@ extension AppReleasesSession {
     }
 
     /// Tells the background check what this check found, so it neither sweeps again within a day nor announces updates already shown here.
-    private func recordFindingsForBackgroundCheck() {
-        guard !AppReleaseBackgroundCheck.mostQueriedFailed(rows) else { return }
+    private func recordFindingsForBackgroundCheck(raw: [AppReleaseRow]) {
+        guard !AppReleaseBackgroundCheck.mostQueriedFailed(raw) else { return }
         updateSeen(clock: true)
     }
 
