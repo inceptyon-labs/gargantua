@@ -8,7 +8,7 @@
     "repository": {
       "url": "git@github.com:inceptyon-labs/gargantua.git",
       "link_mode": "local-only",
-      "revision": "ed63bae708fe11efb4d6492a69ad5517e4a5ecc9"
+      "revision": "d60e34ebfea6abcaed79f33f9d38847a41581159"
     }
   },
   "components": [
@@ -42,8 +42,8 @@
       "sources": [
         {
           "path": "Sources/Gargantua/GargantuaApp.swift",
-          "line": 7,
-          "end_line": 8,
+          "line": 8,
+          "end_line": 9,
           "label": "App entry"
         },
         {
@@ -51,6 +51,12 @@
           "line": 274,
           "end_line": 278,
           "label": "Starts a scan"
+        },
+        {
+          "path": "Sources/Gargantua/GargantuaApp.swift",
+          "line": 263,
+          "end_line": 272,
+          "label": "Owns gargantua:// links"
         }
       ]
     },
@@ -138,10 +144,10 @@
           "label": "Background update check"
         },
         {
-          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseBackgroundCheck.swift",
-          "line": 163,
-          "end_line": 163,
-          "label": "runIfDue"
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseAnnouncement.swift",
+          "line": 97,
+          "end_line": 109,
+          "label": "Hands the notice to the app"
         }
       ]
     },
@@ -579,6 +585,15 @@
       "label": "audit entry",
       "fromSide": "bottom",
       "toSide": "right"
+    },
+    {
+      "id": "sched-to-app",
+      "from": "sched",
+      "to": "app",
+      "label": "update notice",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "top"
     }
   ],
   "cards": [
