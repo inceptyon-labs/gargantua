@@ -101,6 +101,36 @@ struct AISessionOpenCodeTests {
         #expect(try await fixture.makeAdapter().scan(progress: nil).isEmpty)
     }
 
+    @Test("sessions under another project, or an emptied project folder, do not hold a snapshot back")
+    func otherProjectSessionsDoNotHoldSnapshotBack() async throws {
+        let fixture = try OpenCodeFixture()
+        try fixture.addSession(project: "other", id: "ses_1", age: 120 * Self.day)
+        try FileManager.default.createDirectory(
+            at: fixture.storage.appendingPathComponent("session/ef98", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try fixture.ageDirectories(under: fixture.storage, age: 120 * Self.day)
+        try fixture.addLegacySnapshot(project: "ef98", worktree: "/Users/me/Inceptyon", age: 120 * Self.day)
+
+        let results = try await fixture.makeAdapter().scan(progress: nil)
+
+        #expect(results.contains { $0.path.hasSuffix("/snapshot/ef98") })
+    }
+
+    @Test("a symlinked session folder whose target is gone counts as a reference")
+    func danglingSessionLinkHoldsSnapshotBack() async throws {
+        let fixture = try OpenCodeFixture()
+        try fixture.addLegacySnapshot(project: "ef98", worktree: "/Users/me/Inceptyon", age: 120 * Self.day)
+        try FileManager.default.createSymbolicLink(
+            at: fixture.storage.appendingPathComponent("session"),
+            withDestinationURL: fixture.root.appendingPathComponent("Volumes/Unplugged/session")
+        )
+
+        let results = try await fixture.makeAdapter().scan(progress: nil)
+
+        #expect(!results.contains { $0.path.hasSuffix("/snapshot/ef98") })
+    }
+
     @Test("an unreadable session folder counts as a reference")
     func unreadableSessionsHoldSnapshotBack() async throws {
         let fixture = try OpenCodeFixture()

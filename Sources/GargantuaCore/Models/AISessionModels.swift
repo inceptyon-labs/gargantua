@@ -54,8 +54,8 @@ public enum AISessionStoreKind: String, Sendable, Equatable, Codable {
     /// `<projectID>/` is a git directory that 1.x snapshotted the project's
     /// worktree into, and is one unit. OpenCode 2.0 builds its own store at
     /// `snapshot/<projectID>/<worktreeHash>/`, which can nest inside a 1.x
-    /// git directory. A directory is surfaced only when it holds git's own
-    /// layout and nothing else, no `storage/session/<projectID>/` entry
+    /// git directory. A directory is surfaced only when it has no
+    /// subdirectory outside git's own layout, no `storage/session/<projectID>/` entry
     /// remains, and no OpenCode database exists that could still refer to it.
     case openCodeLegacySnapshot
 }

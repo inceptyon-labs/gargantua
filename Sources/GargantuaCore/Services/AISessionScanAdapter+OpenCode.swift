@@ -124,8 +124,15 @@ extension AISessionScanAdapter {
 
     /// Whether any 1.x session for this project remains under
     /// `storage/session/<projectID>/`. Anything but a definite "no" (the folder
-    /// is unreadable, or lists any entry) counts as a reference.
+    /// is unreadable, or lists any entry) counts as a reference. So does a
+    /// symlinked `storage/` or `storage/session/`: one pointing at an unmounted
+    /// volume makes every session behind it read as absent.
     func hasLegacySessions(in projectSessions: URL) -> Bool {
+        let sessionRoot = projectSessions.deletingLastPathComponent()
+        for ancestor in [sessionRoot.deletingLastPathComponent(), sessionRoot] {
+            var info = stat()
+            if lstat(ancestor.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFLNK { return true }
+        }
         switch Self.existence(of: projectSessions.path) {
         case .absent: return false
         case .indeterminate: return true
