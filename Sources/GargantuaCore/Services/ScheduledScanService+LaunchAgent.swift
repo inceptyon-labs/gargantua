@@ -168,12 +168,13 @@ public enum ScheduledScanAgentRegistrationFailure {
         "Allow Gargantua in System Settings > General > Login Items to run background checks."
     public static let missingAgent =
         "This copy of Gargantua is missing its background agent. Reinstall Gargantua to use background checks."
+    private static let serviceManagementDomain = "SMAppServiceErrorDomain"
     public static let generic = "macOS couldn't register Gargantua's background agent."
 
     public static func message(for error: Error) -> String {
         #if os(macOS)
             let nsError = error as NSError
-            guard #available(macOS 15.0, *), nsError.domain == SMAppServiceErrorDomain else { return generic }
+            guard nsError.domain == serviceManagementDomain else { return generic }
             switch nsError.code {
             case kSMErrorInvalidSignature: return unsigned
             case kSMErrorLaunchDeniedByUser: return loginItemsApproval
