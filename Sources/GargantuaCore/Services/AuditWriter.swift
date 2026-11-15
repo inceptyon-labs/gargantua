@@ -107,6 +107,9 @@ public final class AuditWriter: Sendable {
     /// call opens a fresh descriptor, so calling it twice from one thread
     /// self-deadlocks until `lockTimeout` elapses.
     private func acquireFileLock() throws -> Int32 {
+        if usesProductionLogDirectory && Self.refusesProductionWrites {
+            throw AuditWriteError.productionLogDuringTests(logFile.path)
+        }
         let deadline = Date().addingTimeInterval(lockTimeout)
         return try lockDescriptor(openDescriptor(at: lockFile), deadline: deadline)
     }
@@ -159,6 +162,14 @@ public final class AuditWriter: Sendable {
     /// every acquisition into an immediate failure or an unbounded wait.
     private let lockTimeout: TimeInterval
 
+    private let usesProductionLogDirectory: Bool
+
+    /// Under the test runner (XCTest is loaded even for Swift Testing) the
+    /// production log is off limits: tests that fell back to `AuditWriter()`
+    /// used to write the user's real audit.json. The shipping app, scheduler
+    /// and MCP server never load XCTest.
+    static let refusesProductionWrites = NSClassFromString("XCTestCase") != nil
+
     /// Creates an AuditWriter targeting the given directory.
     ///
     /// Defaults: log in `~/Library/Logs/Gargantua/`, sidecar in
@@ -187,6 +198,7 @@ public final class AuditWriter: Sendable {
 
         let usesProductionLogDirectory = dir.resolvingSymlinksInPath().standardizedFileURL
             == productionLogDirectory.resolvingSymlinksInPath().standardizedFileURL
+        self.usesProductionLogDirectory = usesProductionLogDirectory
         let defaultLockDir = usesProductionLogDirectory
             ? home.appendingPathComponent("Library/Application Support/Gargantua")
             : dir
@@ -472,6 +484,7 @@ public enum AuditWriteError: Error, LocalizedError {
     case openFailed(code: Int32)
     case writeFailed(code: Int32)
     case lockFailed(code: Int32)
+    case productionLogDuringTests(String)
 
     public var errorDescription: String? {
         switch self {
@@ -479,6 +492,7 @@ public enum AuditWriteError: Error, LocalizedError {
         case let .openFailed(code): "Failed to open audit log for appending (errno \(code))"
         case let .writeFailed(code): "Failed to append to audit log (errno \(code))"
         case let .lockFailed(code): "Failed to lock the audit log for exclusive access (errno \(code))"
+        case let .productionLogDuringTests(path): "Tests must not write the production audit log at \(path); pass a temporary logDirectory."
         }
     }
 }

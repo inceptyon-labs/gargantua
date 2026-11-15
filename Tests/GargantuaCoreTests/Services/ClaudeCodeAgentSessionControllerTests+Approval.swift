@@ -300,10 +300,15 @@ extension ClaudeCodeAgentSessionControllerTests {
         let scanResultLine = #"""
         {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_scan_progress","type":"tool_result","content":"summary"}]},"tool_use_result":{"content":"summary","structuredContent":{"items":[{"id":"a","name":"A","path":"/tmp/nonexistent-a-\#(UUID().uuidString)","size":"100 bytes","safety":"safe","confidence":90,"explanation":"x","source":"X","category":"browser_cache"}],"summary":{"safe_count":1,"safe_size":"100 bytes","review_count":0,"review_size":"0 bytes","protected_count":0},"total_reclaimable":"100 bytes"}}}
         """#
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
         let runner = try makeRunner(executor: ControllerFakeProcessExecutor(outputs: [
             .stdout(scanResultLine + "\n"),
         ]))
-        let controller = ClaudeCodeAgentSessionController(runner: runner)
+        let controller = ClaudeCodeAgentSessionController(
+            runner: runner,
+            auditWriter: AuditWriter(logDirectory: directory.appendingPathComponent("audit"))
+        )
         controller.start(template: .investigateSpace, userContext: "audit")
         _ = await waitForTerminalStatus(controller)
 
