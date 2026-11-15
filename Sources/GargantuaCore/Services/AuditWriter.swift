@@ -107,11 +107,15 @@ public final class AuditWriter: Sendable {
     /// call opens a fresh descriptor, so calling it twice from one thread
     /// self-deadlocks until `lockTimeout` elapses.
     private func acquireFileLock() throws -> Int32 {
+        try refuseProductionLogDuringTests()
+        let deadline = Date().addingTimeInterval(lockTimeout)
+        return try lockDescriptor(openDescriptor(at: lockFile), deadline: deadline)
+    }
+
+    private func refuseProductionLogDuringTests() throws {
         if usesProductionLogDirectory && Self.refusesProductionWrites {
             throw AuditWriteError.productionLogDuringTests(logFile.path)
         }
-        let deadline = Date().addingTimeInterval(lockTimeout)
-        return try lockDescriptor(openDescriptor(at: lockFile), deadline: deadline)
     }
 
     /// Release a descriptor returned by `acquireFileLock`.
@@ -161,13 +165,9 @@ public final class AuditWriter: Sendable {
     /// Clamped to [0, 60]: a negative or non-finite bound would silently turn
     /// every acquisition into an immediate failure or an unbounded wait.
     private let lockTimeout: TimeInterval
-
     private let usesProductionLogDirectory: Bool
-
-    /// Under the test runner (XCTest is loaded even for Swift Testing) the
-    /// production log is off limits: tests that fell back to `AuditWriter()`
-    /// used to write the user's real audit.json. The shipping app, scheduler
-    /// and MCP server never load XCTest.
+    /// Under the test runner (XCTest loads even for Swift Testing) the production
+    /// log is off limits; the app, scheduler and MCP server never load XCTest.
     static let refusesProductionWrites = NSClassFromString("XCTestCase") != nil
 
     /// Creates an AuditWriter targeting the given directory.
@@ -214,6 +214,7 @@ public final class AuditWriter: Sendable {
     /// as a single JSON line (JSONL format). Thread-safe — concurrent
     /// calls are serialized.
     public func write(_ entry: AuditEntry) throws {
+        try refuseProductionLogDuringTests()
         let data = try Self.encoder.encode(entry)
         guard var line = String(data: data, encoding: .utf8) else {
             throw AuditWriteError.encodingFailed
@@ -421,6 +422,7 @@ public final class AuditWriter: Sendable {
     /// - Returns: The number of entries purged.
     @discardableResult
     public func purgeEntries(olderThanDays retentionDays: Int = 90, now: Date = Date()) throws -> Int {
+        try refuseProductionLogDuringTests()
         guard FileManager.default.fileExists(atPath: logFile.path) else { return 0 }
 
         // Unlike write(_:), retention is deferrable — running the

@@ -127,6 +127,8 @@ extension AuditWriterTests {
             return (size, modified)
         }
         let before = stamp()
+        // A refused write must not even create the directory (no-op where it exists).
+        let directoryExisted = FileManager.default.fileExists(atPath: writer.logDirectory.path)
 
         #expect {
             try writer.write(makeEntry(path: "/never-written"))
@@ -141,6 +143,9 @@ extension AuditWriterTests {
             return false
         }
 
+        if !directoryExisted {
+            #expect(!FileManager.default.fileExists(atPath: writer.logDirectory.path))
+        }
         let after = stamp()
         #expect(before?.0 == after?.0)
         #expect(before?.1 == after?.1)
