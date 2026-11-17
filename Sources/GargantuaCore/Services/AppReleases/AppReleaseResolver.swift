@@ -35,9 +35,10 @@ public enum AppReleaseResolver {
         }
         // A release already found installed under another version string
         // is not an update, however its number compares.
-        let newer = eligible.filter {
+        let isUpdate: (AppReleaseCandidate) -> Bool = {
             $0.version.isNewer(than: app.version) && !preferences.confirms($0, isInstalledAs: app)
         }
+        let newer = eligible.filter(isUpdate)
 
         guard let chosen = preferred(among: newer) else {
             return row(noUpdateStatus(considered: considered, eligible: eligible))
@@ -49,7 +50,7 @@ public enum AppReleaseResolver {
                 ?? .linkOnly(nil, reason: .noInstallablePayload)
             status = .available(chosen, strategy)
         } else if let token = brewManagedToken {
-            status = brewStatus(chosen: chosen, token: token, installed: app.version, outcomes: considered)
+            status = brewStatus(chosen: chosen, token: token, isUpdate: isUpdate, outcomes: considered)
         } else {
             status = .available(chosen, inPlaceStrategy(for: chosen, app: app))
         }
@@ -128,11 +129,11 @@ public enum AppReleaseResolver {
     private static func brewStatus(
         chosen: AppReleaseCandidate,
         token: String,
-        installed: AppReleaseVersion,
+        isUpdate: (AppReleaseCandidate) -> Bool,
         outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome]
     ) -> AppReleaseStatus {
         if case .found(let cask) = outcomes[.homebrewCask], cask.caskToken == token,
-           cask.version.isNewer(than: installed),
+           isUpdate(cask),
            cask.version.compare(to: chosen.version) != .orderedAscending {
             if cask.payloadKind == .pkg {
                 return .available(cask, .linkOnly(cask.vendorURL, reason: .packageInstaller))

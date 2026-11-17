@@ -124,7 +124,7 @@ extension AppReleasesSessionTests {
         await fixture.session.install(try #require(fixture.session.rows.first), quitIfRunning: false)
         let offered = Self.candidate.version.description
         #expect(AppReleasePreferences.stored(in: fixture.defaults).confirmedReleases[id]
-            == AppReleaseConfirmedRelease(offered: offered, installed: offered))
+            == AppReleaseConfirmedRelease(offered: offered, installed: offered, source: Self.candidate.source))
 
         // The download turns out to hold the installed version: current, not a failure.
         let same = Self.makeFixture()
@@ -132,7 +132,7 @@ extension AppReleasesSessionTests {
         await same.session.check()
         await same.session.install(try #require(same.session.rows.first), quitIfRunning: false)
         #expect(AppReleasePreferences.stored(in: same.defaults).confirmedReleases[id]
-            == AppReleaseConfirmedRelease(offered: offered, installed: "1.0"))
+            == AppReleaseConfirmedRelease(offered: offered, installed: "1.0", source: Self.candidate.source))
         guard case .installed = same.session.rowMessages[id] else {
             Issue.record("expected an up-to-date message, got \(String(describing: same.session.rowMessages[id]))")
             return

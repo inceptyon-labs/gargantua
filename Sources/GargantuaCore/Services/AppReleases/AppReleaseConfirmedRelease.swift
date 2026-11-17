@@ -9,10 +9,15 @@ public struct AppReleaseConfirmedRelease: Codable, Sendable, Equatable {
     public let offered: String
     /// The bundle version that release's download held.
     public let installed: String
+    /// The source that named the release. Another source's release of the
+    /// same number is a different download, so it isn't covered. Optional so
+    /// an entry stored without it still decodes; such an entry matches nothing.
+    public let source: AppReleaseSourceKind?
 
-    public init(offered: String, installed: String) {
+    public init(offered: String, installed: String, source: AppReleaseSourceKind?) {
         self.offered = offered
         self.installed = installed
+        self.source = source
     }
 }
 
@@ -21,14 +26,17 @@ public extension AppReleasePreferences {
     /// from a download Gargantua opened.
     func confirms(_ candidate: AppReleaseCandidate, isInstalledAs app: InstalledApp) -> Bool {
         guard let known = confirmedReleases[app.bundleID] else { return false }
-        return known.offered == candidate.version.description && known.installed == app.version.description
+        return known.source == candidate.source
+            && known.offered == candidate.version.description
+            && known.installed == app.version.description
     }
 
     /// Records that `candidate`'s download held bundle version `installed`.
     mutating func confirm(_ candidate: AppReleaseCandidate, holds installed: String, for bundleID: String) {
         confirmedReleases[bundleID] = AppReleaseConfirmedRelease(
             offered: candidate.version.description,
-            installed: installed
+            installed: installed,
+            source: candidate.source
         )
     }
 }

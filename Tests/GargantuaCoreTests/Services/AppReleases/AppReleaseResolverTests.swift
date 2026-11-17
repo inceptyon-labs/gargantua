@@ -214,7 +214,7 @@ struct AppReleaseResolverTests {
         let cask = candidate(.homebrewCask, "2026.2.2.9", token: "example")
         let outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [.homebrewCask: .found(cask)]
         let confirmed = AppReleasePreferences(confirmedReleases: [
-            "com.example.App": AppReleaseConfirmedRelease(offered: "2026.2.2.9", installed: "2026.2"),
+            "com.example.App": AppReleaseConfirmedRelease(offered: "2026.2.2.9", installed: "2026.2", source: .homebrewCask),
         ])
 
         #expect(resolve(app("2026.2"), outcomes) == .available(cask, .inPlace))
@@ -223,5 +223,15 @@ struct AppReleaseResolverTests {
         #expect(resolve(app("2026.1"), outcomes, preferences: confirmed) == .available(cask, .inPlace))
         let next = candidate(.homebrewCask, "2026.2.3.1", token: "example")
         #expect(resolve(app("2026.2"), [.homebrewCask: .found(next)], preferences: confirmed) == .available(next, .inPlace))
+
+        // What Homebrew's download held says nothing about another source's release of that number.
+        let feed = candidate(.sparkle, "2026.2.2.9")
+        #expect(resolve(app("2026.2"), [.sparkle: .found(feed)], preferences: confirmed) == .available(feed, .inPlace))
+
+        // Brew-managed: another source's update doesn't bring the confirmed cask back as a brew upgrade.
+        let older = candidate(.sparkle, "2026.2.1")
+        let both: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [.sparkle: .found(older), .homebrewCask: .found(cask)]
+        let managed = resolve(app("2026.2"), both, brewToken: "example", preferences: confirmed)
+        #expect(managed == .available(older, .linkOnly(older.vendorURL ?? older.releaseNotesURL, reason: .brewCaskBehind)))
     }
 }
