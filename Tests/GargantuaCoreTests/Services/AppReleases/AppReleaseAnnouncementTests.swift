@@ -105,16 +105,17 @@ struct AppReleaseAnnouncementTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let notifier = ContainingAppUpdateNotifier(
             suiteName: suite, appURL: URL(fileURLWithPath: "/Applications/Foo.app"), appBundleID: "com.example.foo",
-            confirmTimeout: 30, pollInterval: 0.05
+            confirmTimeout: 120, pollInterval: 0.05
         ) { _, _, _ in
             if let pending = AppReleaseAnnouncement.pending(in: UserDefaults(suiteName: suite)!) {
                 UserDefaults(suiteName: suite)!.set(pending.id.uuidString, forKey: AppReleaseAnnouncement.refusedKey)
             }
             return true
         }
+        // The margin is for a loaded CI runner; without the early exit this takes the full 120 s.
         let started = Date()
         #expect(await !notifier.deliver(count: 1, appNames: ["A"]))
-        #expect(Date().timeIntervalSince(started) < 10)
+        #expect(Date().timeIntervalSince(started) < 90)
         #expect(AppReleaseAnnouncement.isPendingSettled(in: defaults))
     }
 

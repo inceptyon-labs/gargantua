@@ -296,17 +296,18 @@ extension AppReleaseVerifierTests {
         try withTemporaryDirectory { directory in
             let destination = directory.appendingPathComponent("out", isDirectory: true)
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-            // Appends 1 MiB every 20 ms and would run for over 8 s; the budget is 4 MiB.
-            let script = "i=0; while [ $i -lt 400 ]; do /usr/bin/head -c 1048576 /dev/zero >> \"$0\"; /bin/sleep 0.02; i=$((i+1)); done"
-            let budget: Int64 = 4 * 1_048_576
-            let started = Date()
+            let blob = destination.appendingPathComponent("blob")
+            // Appends 64 KiB every 20 ms: 192 MiB over a minute or more if left
+            // to finish. The budget is 256 KiB, passed after a few rounds.
+            let script = "i=0; while [ $i -lt 3000 ]; do /usr/bin/head -c 65536 /dev/zero >> \"$0\"; /bin/sleep 0.02; i=$((i+1)); done"
+            let budget: Int64 = 262_144
             #expect(throws: Failure.extractedTooLarge(limit: budget)) {
-                try AppReleaseVerifier().extract(
-                    "/bin/sh", ["-c", script, destination.appendingPathComponent("blob").path],
-                    into: destination, budget: budget
-                )
+                try AppReleaseVerifier().extract("/bin/sh", ["-c", script, blob.path], into: destination, budget: budget)
             }
-            #expect(Date().timeIntervalSince(started) < 6)
+            // Judged by what was written, not by the clock: a loaded CI runner
+            // can take seconds to run the monitor, but never the whole minute.
+            let written = try #require(try FileManager.default.attributesOfItem(atPath: blob.path)[.size] as? NSNumber)
+            #expect(written.int64Value < 96 * 1_048_576)
         }
     }
 
