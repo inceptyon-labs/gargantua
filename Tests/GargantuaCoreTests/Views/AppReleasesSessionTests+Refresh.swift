@@ -98,4 +98,39 @@ extension AppReleasesSessionTests {
         #expect(session.rows.first?.status == .ignored)
         #expect(session.phase == .idle)
     }
+
+    @Test("An automatic check where most sources failed is tried again instead of using up the day")
+    func failedAutoCheckIsRetried() async {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let defaults = Self.makeDefaults()
+        AppReleasePreferences(autoCheckEnabled: true).store(in: defaults)
+        let fixture = Self.makeFixture(steps: [(0, .failed("offline"))], now: { start }, defaults: defaults)
+
+        await fixture.session.checkIfAutoDue()
+        #expect(fixture.session.failedCount == 1)
+        #expect(AppReleasePreferences.stored(in: defaults).lastAutoCheck == nil)
+
+        await fixture.session.checkIfAutoDue()
+        #expect(await fixture.script.calls == 2)
+        #expect(fixture.session.availableCount == 1)
+        #expect(AppReleasePreferences.stored(in: defaults).lastAutoCheck == start)
+    }
+
+    @Test("Quit consent follows whether the app is running now, not when it was checked")
+    func quitConsentIsLive() async throws {
+        var running = Self.app
+        running = InstalledApp(bundleID: running.bundleID, name: running.name, url: running.url, isRunning: true)
+        let session = AppReleasesSession(
+            inventory: StubInventory(apps: [running]),
+            checker: ScriptedChecker(script: CheckerScript(fallback: .available(Self.candidate, .inPlace))),
+            installer: StubInstaller(),
+            authorize: { .success(.unchecked($0)) },
+            quitter: StubQuitter(running: false),
+            defaults: Self.makeDefaults()
+        )
+        await session.check()
+        let row = try #require(session.rows.first)
+        #expect(row.app.isRunning)
+        #expect(!session.requiresQuitConsent(row))
+    }
 }

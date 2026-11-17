@@ -79,6 +79,8 @@ public final class AppReleasesSession {
     /// Bumped when the list is released or replaced by a full check, which
     /// drops every re-check that started before.
     @ObservationIgnored private var resultsEpoch = 0
+    /// Automatic checks in a row where most sources failed.
+    @ObservationIgnored private var failedAutoChecks = 0
 
     public init(
         inventory: any AppReleaseInventoryProviding,
@@ -225,8 +227,7 @@ public final class AppReleasesSession {
         lastChecked = now()
         phase = .ready
         storeAvailableCount()
-        recordFindingsForBackgroundCheck(raw: result)
-        if isAutomatic { updatePreferences { $0.lastAutoCheck = lastChecked } }
+        recordClocks(raw: result, isAutomatic: isAutomatic)
     }
 
     /// True when the row shows an ignore or skip the preferences no longer hold.
@@ -291,7 +292,9 @@ public final class AppReleasesSession {
 
     /// Whether updating this row first needs the user's consent to quit the app.
     public func requiresQuitConsent(_ row: AppReleaseRow) -> Bool {
-        row.app.isRunning || quitter.isRunning(bundleID: row.app.bundleID)
+        // Asked live: the row's `isRunning` is from the last check, and the
+        // app may have quit since.
+        quitter.isRunning(bundleID: row.app.bundleID)
     }
 
     /// Installs the row's update. The license gate runs first. A running app
@@ -453,13 +456,25 @@ extension AppReleasesSession {
         rowMessages = rowMessages.filter { if case .installed = $0.value { false } else { true } }
     }
 
-    /// Tells the background check what this check found, so it neither sweeps again within a day nor announces updates already shown here.
-    private func recordFindingsForBackgroundCheck(raw: [AppReleaseRow]) {
-        guard !AppReleaseBackgroundCheck.mostQueriedFailed(raw) else { return }
-        updateSeen(clock: true)
+    /// Stamps the daily clocks after a check. A run where most sources failed
+    /// (launched before Wi-Fi is up) leaves both alone, so the hourly loop
+    /// tries again instead of tomorrow; capped like the background check's
+    /// retries.
+    private func recordClocks(raw: [AppReleaseRow], isAutomatic: Bool) {
+        let mostlyFailed = AppReleaseBackgroundCheck.mostQueriedFailed(raw)
+        if !mostlyFailed { updateSeen(clock: true) }
+        guard isAutomatic else { return }
+        if mostlyFailed, failedAutoChecks < AppReleaseBackgroundCheck.maxFailedRetries {
+            failedAutoChecks += 1
+            return
+        }
+        failedAutoChecks = 0
+        updatePreferences { $0.lastAutoCheck = lastChecked }
     }
 
-    /// Versions count as seen only while the list is on screen.
+    /// Tells the background check what the app's check found, so it neither
+    /// sweeps again within a day (`clock`) nor announces updates already shown
+    /// here. Versions count as seen only while the list is on screen.
     private func updateSeen(clock: Bool) {
         let key = AppReleaseBackgroundState.inAppKey
         var seen = AppReleaseBackgroundState.stored(in: defaults, key: key)
