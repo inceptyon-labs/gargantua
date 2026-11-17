@@ -85,11 +85,40 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
         value.first?.isNumber == true && value.allSatisfy { $0.isNumber || $0 == "." }
     }
 
+    /// Whether `folded` spells this version with the build written into the
+    /// dotted number, as some Homebrew casks do: `3.5.2.1` for short `3.5.2`
+    /// with build `1` or build `3.5.2.1`. Compared as a marketing version,
+    /// such a string would read as newer than the release it names.
+    ///
+    /// Only for a short version of three or more parts: `1.2.1` after `1.2`
+    /// build `1` is an ordinary patch release, and far more common.
+    func isFolded(into folded: String) -> Bool {
+        guard let short, let build,
+              Self.isPlainNumber(short), Self.isPlainNumber(build), Self.isPlainNumber(folded)
+        else { return false }
+        let target = Self.parse(folded).numeric
+        let shortParts = Self.parse(short).numeric
+        let buildParts = Self.parse(build).numeric
+        guard shortParts.count >= 3, target.count > shortParts.count else { return false }
+        return target == shortParts + buildParts || (target == buildParts && buildParts.starts(with: shortParts))
+    }
+
+    /// The marketing version a cask's `short` stands for when this version is
+    /// installed: this one's own short when the cask folds its build in, so
+    /// the cask doesn't read as newer than the release it names.
+    func marketingVersion(ofCask short: String?) -> String? {
+        guard let short, isFolded(into: short) else { return short }
+        return self.short
+    }
+
     // MARK: - Parsing
 
     struct Parsed: Equatable {
         /// Leading dotted numeric core, e.g. `[2, 0, 1]` for `2.0.1-beta3`.
         let numeric: [Int]
+        /// A single trailing letter as 1 through 26, e.g. 1 for `2.3.1a`; 0
+        /// without one. It marks a patch release that follows the bare number.
+        let patch: Int
         /// Lowercased prerelease tag and its trailing digits, e.g. `beta3`.
         let prerelease: String?
     }
@@ -118,13 +147,20 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
             index = text.index(after: index)
         }
 
-        let remainder = text[index...].drop { "-_. +".contains($0) }
-        return Parsed(numeric: numeric, prerelease: prereleaseTag(in: String(remainder)))
+        let rest = text[index...]
+        // `2.3.1a` is the patch after `2.3.1`; `2.0a1` and `2.0b3` are the
+        // alpha and beta, and carry a digit.
+        if rest.count == 1, let ascii = rest.first?.asciiValue, (97 ... 122).contains(ascii) {
+            return Parsed(numeric: numeric, patch: Int(ascii) - 96, prerelease: nil)
+        }
+        let remainder = rest.drop { "-_. +".contains($0) }
+        return Parsed(numeric: numeric, patch: 0, prerelease: prereleaseTag(in: String(remainder)))
     }
 
     /// A remainder counts as prerelease only when it starts with a known tag
     /// followed by a digit, separator, or end. `2.0 (1234)`, `1.5 build 7`
-    /// and `3.1-universal` are not prereleases.
+    /// and `3.1-universal` are not prereleases, and neither is a single
+    /// letter attached to the number (see `parse`).
     private static func prereleaseTag(in remainder: String) -> String? {
         guard let first = remainder.first, first.isLetter else { return nil }
         for token in prereleaseTokens where remainder.hasPrefix(token) {
@@ -147,6 +183,10 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
             if leftValue != rightValue {
                 return leftValue < rightValue ? .orderedAscending : .orderedDescending
             }
+        }
+
+        if left.patch != right.patch {
+            return left.patch < right.patch ? .orderedAscending : .orderedDescending
         }
 
         switch (left.prerelease, right.prerelease) {

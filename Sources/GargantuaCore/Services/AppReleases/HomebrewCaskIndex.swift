@@ -322,20 +322,20 @@ public struct HomebrewCaskSource: Sendable {
         var lookup = HomebrewCaskLookup()
         for app in apps {
             guard let entry = matcher.match(app) else { continue }
-            lookup.outcomes[app.bundleID] = outcome(for: entry)
+            lookup.outcomes[app.bundleID] = outcome(for: entry, installed: app.version)
             lookup.tokens[app.bundleID] = entry.token
         }
         return lookup
     }
 
-    private func outcome(for entry: HomebrewCaskEntry) -> AppReleaseSourceOutcome {
+    private func outcome(for entry: HomebrewCaskEntry, installed: AppReleaseVersion) -> AppReleaseSourceOutcome {
         let release = entry.release(for: host)
         guard let parsed = AppReleaseVersion.cask(release.version), !parsed.isPrerelease else {
             return .noEligibleRelease
         }
         // The part after a cask's comma is the vendor's build or a hash, not
         // the app's CFBundleVersion, so only the marketing version is compared.
-        let version = AppReleaseVersion(short: parsed.short, build: nil)
+        let version = AppReleaseVersion(short: installed.marketingVersion(ofCask: parsed.short), build: nil)
         let downloadURL = release.url.flatMap(URL.init(string:))?.httpsOnly
         return .found(AppReleaseCandidate(
             source: .homebrewCask,

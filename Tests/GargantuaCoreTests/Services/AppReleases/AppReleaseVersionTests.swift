@@ -72,4 +72,25 @@ struct AppReleaseVersionTests {
         #expect(AppReleaseVersion.cask("") == nil)
         #expect(AppReleaseVersion.cask("1.2.3")?.build == nil)
     }
+
+    @Test("a single trailing letter is a patch release, newer than the bare version")
+    func patchLetter() {
+        #expect(version("2.3.1a").isNewer(than: version("2.3.1")))
+        #expect(!version("2.3.1").isNewer(than: version("2.3.1a")))
+        #expect(version("2.3.1b").isNewer(than: version("2.3.1a")))
+        #expect(version("2.3.2").isNewer(than: version("2.3.1a")))
+        #expect(!version("2.3.1a").isPrerelease)
+        #expect(version("2.0a1").isPrerelease)
+    }
+
+    @Test("a dotted version with the build written into it names the installed release")
+    func foldedBuild() {
+        #expect(version("3.5.2", "1").isFolded(into: "3.5.2.1"))
+        #expect(version("3.5.2", "3.5.2.1").isFolded(into: "3.5.2.1"))
+        #expect(!version("3.5.2", "1").isFolded(into: "3.5.2.2"))
+        #expect(!version("3.5.2", "1").isFolded(into: "3.5.3"))
+        #expect(!version("3.5.2", "abc").isFolded(into: "3.5.2.1"))
+        // An ordinary first patch release of a two-part version.
+        #expect(!version("1.2", "1").isFolded(into: "1.2.1"))
+    }
 }

@@ -338,3 +338,32 @@ struct HomebrewCaskIndexTests {
         #expect(result.map(\.token) == ["plain", "renamed", "multi"])
     }
 }
+
+extension HomebrewCaskIndexTests {
+    @Test("a cask version with the installed build written into it is not an update")
+    func foldedBuildIsInstalledRelease() async throws {
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let json = """
+        [{"token":"folded","version":"3.5.2.1","url":"https://x.test/f.dmg","sha256":"abc","artifacts":[{"app":["Folded.app"]}],"variations":{}}]
+        """
+        let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(json.utf8)) }
+        let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir), host: HomebrewCaskHost(isArm64: true, macOSMajorVersion: 27))
+        func folded(short: String, build: String) -> InstalledApp {
+            InstalledApp(
+                bundleID: "com.test.folded",
+                name: "Folded",
+                url: URL(fileURLWithPath: "/Applications/Folded.app"),
+                shortVersion: short,
+                buildVersion: build
+            )
+        }
+        for (app, isUpdate) in [(folded(short: "3.5.2", build: "1"), false), (folded(short: "3.5.1", build: "9"), true)] {
+            guard case .found(let candidate) = await source.lookUp([app]).outcomes[app.bundleID] else {
+                Issue.record("expected the cask to match")
+                return
+            }
+            #expect(candidate.version.isNewer(than: app.version) == isUpdate)
+            #expect(candidate.displayVersion == "3.5.2.1")
+        }
+    }
+}
