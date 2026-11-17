@@ -123,7 +123,7 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
     }
 
     /// Team ID from the signature, read without validating anything.
-    static func teamIdentifier(ofBundle url: URL) -> String? {
+    public static func teamIdentifier(ofBundle url: URL) -> String? {
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &staticCode) == errSecSuccess,
               let code = staticCode

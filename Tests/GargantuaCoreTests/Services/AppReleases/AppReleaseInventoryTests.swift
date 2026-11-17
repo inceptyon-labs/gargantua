@@ -9,10 +9,6 @@ struct AppReleaseInventoryTests {
         func enumerateBundles() -> [URL] { urls }
     }
 
-    private struct StubSigner: CodeSignatureVerifying {
-        func verify(bundleURL _: URL) -> CodeSignatureInfo { CodeSignatureInfo(valid: true, teamIdentifier: "TEAM123456") }
-    }
-
     private static func tempRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("gargantua-inv-\(UUID().uuidString)")
     }
@@ -45,7 +41,7 @@ struct AppReleaseInventoryTests {
 
         let apps = await DefaultAppReleaseInventory(
             enumerator: StubEnumerator(urls: [foo, bar, noID, foo]),
-            signatureReader: StubSigner(),
+            teamIDReader: { _ in "TEAM123456" },
             excludedBundleIDs: [], isUpdatableLocation: { _ in true }
         ).installedApps()
 
@@ -74,7 +70,7 @@ struct AppReleaseInventoryTests {
         let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo", "CFBundleShortVersionString": "3.1"])
         let skipped = try makeApp(in: root, "Skip", plist: ["CFBundleIdentifier": "com.test.skip"])
         let inventory = DefaultAppReleaseInventory(
-            enumerator: StubEnumerator(urls: []), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.skip"], isUpdatableLocation: { _ in true }
+            enumerator: StubEnumerator(urls: []), teamIDReader: { _ in "TEAM123456" }, excludedBundleIDs: ["com.test.skip"], isUpdatableLocation: { _ in true }
         )
 
         #expect(await inventory.installedApp(at: foo)?.shortVersion == "3.1")
@@ -87,7 +83,7 @@ struct AppReleaseInventoryTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let foo = try makeApp(in: root, "Foo", plist: ["CFBundleIdentifier": "com.test.foo"])
         let apps = await DefaultAppReleaseInventory(
-            enumerator: StubEnumerator(urls: [foo]), signatureReader: StubSigner(), excludedBundleIDs: ["com.test.foo"], isUpdatableLocation: { _ in true }
+            enumerator: StubEnumerator(urls: [foo]), teamIDReader: { _ in "TEAM123456" }, excludedBundleIDs: ["com.test.foo"], isUpdatableLocation: { _ in true }
         ).installedApps()
         #expect(apps.isEmpty)
     }
@@ -131,7 +127,7 @@ struct AppReleaseInventoryTests {
         let rootPath = root.standardizedFileURL.path
         let apps = await DefaultAppReleaseInventory(
             enumerator: StubEnumerator(urls: [normal, nested, hidden]),
-            signatureReader: StubSigner(),
+            teamIDReader: { _ in "TEAM123456" },
             excludedBundleIDs: [],
             isUpdatableLocation: { url in
                 DefaultAppReleaseInventory.isUpdatableLocation(

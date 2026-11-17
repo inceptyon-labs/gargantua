@@ -12,18 +12,19 @@ public protocol AppReleaseInventoryProviding: Sendable {
 /// Reads installed apps from Info.plist and filesystem attributes only.
 public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     private let enumerator: any AppBundleEnumerating
-    private let signatureReader: any CodeSignatureVerifying
+    /// Reads a bundle's Team ID from its signature, without validating it.
+    private let teamIDReader: @Sendable (URL) -> String?
     private let excludedBundleIDs: Set<String>
     private let isUpdatableLocation: @Sendable (URL) -> Bool
 
     public init(
         enumerator: any AppBundleEnumerating = DefaultAppBundleEnumerator(),
-        signatureReader: any CodeSignatureVerifying = DefaultCodeSignatureVerifier(includeNotarization: false),
+        teamIDReader: @escaping @Sendable (URL) -> String? = { StrictAppReleaseCodeSigner.teamIdentifier(ofBundle: $0) },
         excludedBundleIDs: Set<String> = Self.defaultExcludedBundleIDs,
         isUpdatableLocation: @escaping @Sendable (URL) -> Bool = { DefaultAppReleaseInventory.isUpdatableLocation($0) }
     ) {
         self.enumerator = enumerator
-        self.signatureReader = signatureReader
+        self.teamIDReader = teamIDReader
         self.excludedBundleIDs = excludedBundleIDs
         self.isUpdatableLocation = isUpdatableLocation
     }
@@ -36,10 +37,11 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     }
 
     public func installedApps() async -> [InstalledApp] {
-        let urls = enumerator.enumerateBundles().filter(isUpdatableLocation)
+        // System apps are never tracked, so they are dropped before any is read.
+        let urls = enumerator.enumerateBundles().filter { isUpdatableLocation($0) && !Self.isSystemPath($0) }
         let running = await Self.runningBundleIDs()
-        let reader = signatureReader
-        let read = await boundedMap(urls) { Self.readApp(at: $0, running: running, signatureReader: reader) }
+        let reader = teamIDReader
+        let read = await boundedMap(urls) { Self.readApp(at: $0, running: running, teamIDReader: reader) }
 
         var seen = Set<String>()
         var apps: [InstalledApp] = []
@@ -50,9 +52,9 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     }
 
     public func installedApp(at url: URL) async -> InstalledApp? {
-        guard isUpdatableLocation(url) else { return nil }
+        guard isUpdatableLocation(url), !Self.isSystemPath(url) else { return nil }
         let running = await Self.runningBundleIDs()
-        guard let app = Self.readApp(at: url, running: running, signatureReader: signatureReader),
+        guard let app = Self.readApp(at: url, running: running, teamIDReader: teamIDReader),
               isTracked(app)
         else { return nil }
         return app
@@ -81,6 +83,10 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
         !app.isSystem && !excludedBundleIDs.contains(app.bundleID)
     }
 
+    private static func isSystemPath(_ url: URL) -> Bool {
+        url.standardizedFileURL.path.hasPrefix("/System/")
+    }
+
     private static func runningBundleIDs() async -> Set<String> {
         await MainActor.run {
             Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
@@ -92,7 +98,7 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     static func readApp(
         at url: URL,
         running: Set<String>,
-        signatureReader: any CodeSignatureVerifying
+        teamIDReader: @Sendable (URL) -> String?
     ) -> InstalledApp? {
         guard let plist = AppBundleFiles.infoPlist(ofBundle: url),
               let bundleID = plist["CFBundleIdentifier"] as? String, !bundleID.isEmpty
@@ -106,7 +112,6 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
             ?? url.deletingPathExtension().lastPathComponent
         let version = AppReleaseVersion(plist: plist)
         let fileManager = FileManager.default
-        let path = url.standardizedFileURL.path
 
         return InstalledApp(
             bundleID: bundleID,
@@ -114,12 +119,12 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
             url: url,
             shortVersion: version.short,
             buildVersion: version.build,
-            teamID: signatureReader.verify(bundleURL: url).teamIdentifier,
+            teamID: teamIDReader(url),
             sparkleFeedURL: string("SUFeedURL").flatMap(URL.init(string:))?.httpsOnly,
             sparklePublicEDKey: string("SUPublicEDKey"),
             minimumSystemVersion: string("LSMinimumSystemVersion"),
             isMAS: fileManager.fileExists(atPath: url.appendingPathComponent("Contents/_MASReceipt/receipt").path),
-            isSystem: path.hasPrefix("/System/"),
+            isSystem: isSystemPath(url),
             isRootOwned: isRootOwned(url, fileManager: fileManager),
             isRunning: running.contains(bundleID)
         )
