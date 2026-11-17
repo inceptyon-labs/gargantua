@@ -3,6 +3,7 @@ import Testing
 @testable import GargantuaCore
 
 @Suite("AppReleasesView text")
+@MainActor
 struct AppReleasesViewTextTests {
     @Test("a check under a minute old reads as just now")
     func justNow() {
