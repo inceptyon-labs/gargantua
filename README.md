@@ -395,6 +395,7 @@ Useful supporting scripts:
 - `Scripts/build-metallib.sh`: build the MLX Metal shader library used by local inference
 - `Scripts/smoke/verify-vendored-bins.sh`: confirm an installed app resolves its bundled helpers
 - `Scripts/smoke/privileged-helper.sh`: smoke-test privileged helper installation and status
+- `Scripts/attack/helper-attack.sh`: attack the installed privileged helper and MCP server with the link, traversal, client-spoofing and DNS-rebinding cases they were fixed for; uses only its own test files, no sudo
 
 ## Rule Contributions
 

@@ -174,6 +174,16 @@ the app into `/Applications`, verify embedded helper selection and signing:
 Scripts/smoke/verify-vendored-bins.sh /Applications/Gargantua.app
 ```
 
+If the release touches the privileged helper, `CleanupEngine` or the MCP
+server, run the attack harness against the installed build. Check that the
+helper version it prints matches `PrivilegedHelperConfiguration.helperVersion`
+in the release (an older daemon can stay loaded across an update), and that it
+reports 0 failed:
+
+```sh
+Scripts/attack/helper-attack.sh
+```
+
 Then finish the user-facing smoke manually:
 
 1. Fresh user account or VM with no Gargantua history.
