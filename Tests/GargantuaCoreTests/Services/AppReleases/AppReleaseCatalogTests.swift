@@ -52,6 +52,37 @@ struct AppReleaseCatalogTests {
         #expect(catalog.errors.isEmpty)
         #expect(!catalog.entries.isEmpty)
         #expect(catalog.entries.values.allSatisfy { $0.teamID.count == 10 })
+        #expect(catalog.successorTeam(bundleID: "org.audacityteam.audacity", installedTeam: "AWEYX923UX") == "6EPAF2X3PR")
+    }
+
+    @Test("team successions load beside the sources; a malformed one is dropped with an error")
+    func parseSuccessions() throws {
+        let parsed = try AppReleaseCatalog.parse(yaml: """
+        team_successions:
+          - bundle_id: com.example.Example
+            name: Example
+            from_team_id: ABCDE12345
+            to_team_id: FGHIJ67890
+            explanation: Sold.
+          - bundle_id: com.example.Same
+            name: Same
+            from_team_id: ABCDE12345
+            to_team_id: ABCDE12345
+            explanation: Not a change.
+          - bundle_id: com.example.Short
+            name: Short
+            from_team_id: nope
+            to_team_id: FGHIJ67890
+            explanation: Malformed team.
+        """)
+        #expect(parsed.entries.isEmpty)
+        #expect(parsed.successions.map(\.bundleID) == ["com.example.Example"])
+        #expect(parsed.errors.count == 2)
+
+        let catalog = AppReleaseCatalog(entries: [], successions: parsed.successions)
+        #expect(catalog.successorTeam(bundleID: "com.example.Example", installedTeam: "ABCDE12345") == "FGHIJ67890")
+        #expect(catalog.successorTeam(bundleID: "com.example.Example", installedTeam: "FGHIJ67890") == nil)
+        #expect(catalog.successorTeam(bundleID: "com.example.Other", installedTeam: "ABCDE12345") == nil)
     }
 
     private func release(tag: String, assets: [(String, String?)], prerelease: Bool = false) throws -> GitHubRelease {

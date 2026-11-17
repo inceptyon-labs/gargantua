@@ -92,15 +92,22 @@ public struct AppReleaseCatalogEntry: Sendable, Equatable, Decodable {
 /// The curated update catalog, keyed by bundle ID.
 public struct AppReleaseCatalog: Sendable {
     public let entries: [String: AppReleaseCatalogEntry]
+    /// Declared changes of signer, for any source's update of that app.
+    public let successions: [AppReleaseTeamSuccession]
     /// Files or entries that failed to parse or validate; they are skipped.
     public let errors: [String]
 
-    public init(entries: [AppReleaseCatalogEntry], errors: [String] = []) {
+    public init(
+        entries: [AppReleaseCatalogEntry],
+        successions: [AppReleaseTeamSuccession] = [],
+        errors: [String] = []
+    ) {
         var byBundleID: [String: AppReleaseCatalogEntry] = [:]
         for entry in entries where byBundleID[entry.bundleID] == nil {
             byBundleID[entry.bundleID] = entry
         }
         self.entries = byBundleID
+        self.successions = successions
         self.errors = errors
     }
 
@@ -125,25 +132,40 @@ public struct AppReleaseCatalog: Sendable {
             options: [.skipsHiddenFiles]
         )
         var entries: [AppReleaseCatalogEntry] = []
+        var successions: [AppReleaseTeamSuccession] = []
         var errors: [String] = []
         while let url = enumerator?.nextObject() as? URL {
             guard ["yaml", "yml"].contains(url.pathExtension.lowercased()) else { continue }
             do {
                 let parsed = try parse(yaml: String(contentsOf: url, encoding: .utf8))
                 entries.append(contentsOf: parsed.entries)
+                successions.append(contentsOf: parsed.successions)
                 errors.append(contentsOf: parsed.errors.map { "\(url.lastPathComponent): \($0)" })
             } catch {
                 errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
             }
         }
-        return AppReleaseCatalog(entries: entries.sorted { $0.id < $1.id }, errors: errors)
+        return AppReleaseCatalog(entries: entries.sorted { $0.id < $1.id }, successions: successions, errors: errors)
     }
 
-    static func parse(yaml: String) throws -> (entries: [AppReleaseCatalogEntry], errors: [String]) {
+    static func parse(yaml: String) throws -> ParsedFile {
         let file = try YAMLDecoder().decode(CatalogFile.self, from: yaml)
         var entries: [AppReleaseCatalogEntry] = []
+        var successions: [AppReleaseTeamSuccession] = []
         var errors: [String] = []
-        for (index, item) in file.updateSources.enumerated() {
+        for (index, item) in (file.teamSuccessions ?? []).enumerated() {
+            switch item.result {
+            case .success(let succession):
+                if let problem = succession.validationError() {
+                    errors.append(problem)
+                } else {
+                    successions.append(succession)
+                }
+            case .failure(let error):
+                errors.append("team_successions[\(index)]: \(error)")
+            }
+        }
+        for (index, item) in (file.updateSources ?? []).enumerated() {
             switch item.result {
             case .success(let entry):
                 if let problem = entry.validationError() {
@@ -155,7 +177,13 @@ public struct AppReleaseCatalog: Sendable {
                 errors.append("update_sources[\(index)]: \(error)")
             }
         }
-        return (entries, errors)
+        return ParsedFile(entries: entries, successions: successions, errors: errors)
+    }
+
+    struct ParsedFile {
+        let entries: [AppReleaseCatalogEntry]
+        let successions: [AppReleaseTeamSuccession]
+        let errors: [String]
     }
 }
 
@@ -272,19 +300,21 @@ public struct AppReleaseCatalogSource: AppReleaseSourcing {
 }
 
 private struct CatalogFile: Decodable {
-    let updateSources: [LossyCatalogEntry]
+    let updateSources: [Lossy<AppReleaseCatalogEntry>]?
+    let teamSuccessions: [Lossy<AppReleaseTeamSuccession>]?
 
     enum CodingKeys: String, CodingKey {
         case updateSources = "update_sources"
+        case teamSuccessions = "team_successions"
     }
 }
 
 /// Decodes one entry without failing the whole file.
-private struct LossyCatalogEntry: Decodable {
-    let result: Result<AppReleaseCatalogEntry, Error>
+private struct Lossy<Entry: Decodable>: Decodable {
+    let result: Result<Entry, Error>
 
     init(from decoder: Decoder) throws {
-        result = Result { try AppReleaseCatalogEntry(from: decoder) }
+        result = Result { try Entry(from: decoder) }
     }
 }
 

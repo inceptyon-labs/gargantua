@@ -162,17 +162,20 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     private let gatekeeper: any AppReleaseGatekeeperAssessing
     let runner: any ProcessRunner
     private let hostOSVersion: OperatingSystemVersion
+    private let catalog: AppReleaseCatalog
 
     public init(
         signer: any AppReleaseCodeSigning = StrictAppReleaseCodeSigner(),
         gatekeeper: any AppReleaseGatekeeperAssessing = SpctlAppReleaseGatekeeper(),
         runner: any ProcessRunner = DefaultProcessRunner(),
-        hostOSVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
+        hostOSVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
+        catalog: AppReleaseCatalog = .bundled
     ) {
         self.signer = signer
         self.gatekeeper = gatekeeper
         self.runner = runner
         self.hostOSVersion = hostOSVersion
+        self.catalog = catalog
     }
 
     public func verify(
@@ -204,8 +207,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
         let bundle = try Self.locateApp(in: extracted, bundleID: app.bundleID)
         try Self.walkBundleTree(bundle)
-        let report = try checkCodeSignature(bundle, requiredTeams: Self.requiredTeams(app: app, candidate: candidate))
-        try Self.checkTeamID(report.teamID, app: app, candidate: candidate)
+        let report = try checkSigner(of: bundle, app: app, candidate: candidate)
         try Self.checkTeamCertificate(report)
         try checkGatekeeper(bundle)
         let version = try Self.checkVersion(of: bundle, installed: app, hostOSVersion: hostOSVersion)
@@ -378,13 +380,34 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
     // MARK: - Team ID
 
+    /// The signature and Team ID checks. The bundle must be signed by the
+    /// installed app's team, or by the team the catalog names as its
+    /// successor; in that case the certificate is checked for the successor.
+    private func checkSigner(
+        of bundle: URL,
+        app: InstalledApp,
+        candidate: AppReleaseCandidate
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseSignatureReport {
+        var report = try checkCodeSignature(bundle, requiredTeams: Self.requiredTeams(app: app, candidate: candidate))
+        let successor = catalog.successorTeam(bundleID: app.bundleID, installedTeam: app.teamID?.trimmedNonEmpty)
+        if let successor, report.teamID == successor {
+            let teams = Self.requiredTeams(team: successor, candidate: candidate)
+            report = try checkCodeSignature(bundle, requiredTeams: teams)
+        }
+        try Self.checkTeamID(report.teamID, app: app, candidate: candidate, successor: successor)
+        return report
+    }
+
     static func checkTeamID(
         _ stagedTeamID: String?,
         app: InstalledApp,
-        candidate: AppReleaseCandidate
+        candidate: AppReleaseCandidate,
+        successor: String? = nil
     ) throws(AppReleaseVerificationFailure) {
         guard let installed = app.teamID?.trimmedNonEmpty else { throw .installedTeamIDMissing }
-        guard stagedTeamID == installed else { throw .teamIDMismatch(expected: installed, actual: stagedTeamID) }
+        guard stagedTeamID == installed || (successor != nil && stagedTeamID == successor) else {
+            throw .teamIDMismatch(expected: installed, actual: stagedTeamID)
+        }
         if let pinned = candidate.pinnedTeamID, pinned != stagedTeamID {
             throw .pinnedTeamIDMismatch(expected: pinned, actual: stagedTeamID)
         }
@@ -395,7 +418,11 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     /// app's team and any catalog-pinned one. The signer checks these in the
     /// same pass as the signature.
     static func requiredTeams(app: InstalledApp, candidate: AppReleaseCandidate) -> [String] {
-        var teams = [app.teamID?.trimmedNonEmpty].compactMap { $0 }
+        requiredTeams(team: app.teamID?.trimmedNonEmpty, candidate: candidate)
+    }
+
+    static func requiredTeams(team: String?, candidate: AppReleaseCandidate) -> [String] {
+        var teams = [team].compactMap { $0 }
         if let pinned = candidate.pinnedTeamID, !teams.contains(pinned) { teams.append(pinned) }
         return teams
     }

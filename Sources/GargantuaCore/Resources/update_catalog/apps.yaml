@@ -70,3 +70,13 @@ update_sources:
     homepage: https://handy.computer
     explanation: Released on GitHub with separate Apple silicon and Intel downloads.
     tags: [productivity, github]
+
+# Apps whose releases changed Developer ID team. Gargantua refuses an update
+# signed by a different team than the installed copy unless the change is
+# listed here. See docs/schema.md#team-successions.
+team_successions:
+  - bundle_id: org.audacityteam.audacity
+    name: Audacity
+    from_team_id: AWEYX923UX
+    to_team_id: 6EPAF2X3PR
+    explanation: Audacity 3.7.7 is signed with Dmitri Vedenko's Developer ID; 3.7.9 is signed with MuseScore's.
