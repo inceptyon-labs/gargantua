@@ -9,6 +9,7 @@ struct AppReleaseRowView: View {
     let isChecking: Bool
     let message: AppReleaseRowMessage?
     let onUpdate: () -> Void
+    let onTrustSigner: (AppReleaseSignerChange) -> Void
     let onIgnore: () -> Void
     let onStopIgnoring: () -> Void
     let onSkip: (String) -> Void
@@ -227,12 +228,21 @@ struct AppReleaseRowView: View {
         case .installed(let text): (text, GargantuaColors.safe)
         case .installedWithWarning(let text): (text, GargantuaColors.review)
         case .failed(let text): (text, GargantuaColors.protected_)
+        case .signerChanged(let change): (change.rowText, GargantuaColors.review)
         }
-        return Text(text)
-            .font(GargantuaFonts.caption)
-            .foregroundStyle(color)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, 28 + GargantuaSpacing.space3)
+        return HStack(alignment: .firstTextBaseline, spacing: GargantuaSpacing.space3) {
+            Text(text)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(color)
+                .fixedSize(horizontal: false, vertical: true)
+            if case .signerChanged(let change) = message {
+                Spacer(minLength: 0)
+                GargantuaButton("Trust new signer…", isDisabled: isChecking || installPhase != nil) {
+                    onTrustSigner(change)
+                }
+            }
+        }
+        .padding(.leading, 28 + GargantuaSpacing.space3)
     }
 
     private func statusText(_ text: String) -> some View {

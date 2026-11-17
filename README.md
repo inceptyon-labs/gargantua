@@ -147,7 +147,7 @@ Checks run only when you open the pane or click Check, or daily if you turn that
 - match its declared size, SHA-256 and Sparkle EdDSA signature where the source provides them (an app with a Sparkle key rejects an unsigned release);
 - unpack without path traversal or symlinks that leave the bundle;
 - contain exactly one app with the installed app's bundle ID;
-- pass full code-signature validation, be signed by the same developer Team ID as the installed copy (or by the team the catalog lists as that app's new signer), and be accepted by Gatekeeper as notarized;
+- pass full code-signature validation, be signed by the same developer Team ID as the installed copy, and be accepted by Gatekeeper as notarized. An update signed by a different developer is installed only when the catalog lists that change, when the download is signed with the installed copy's own Sparkle update key, or after you approve the new signer for that app;
 - be newer than the installed version.
 
 Gargantua quits the app only with your consent and never force-quits it. It moves the old copy to the Trash (put it back to undo), moves the new one into place, and writes an audit entry. Apps that Homebrew manages update through `brew upgrade --cask` so brew's records stay correct. Installer packages, apps owned by an administrator and unsigned apps get a download link instead of an install.

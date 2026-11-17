@@ -61,15 +61,10 @@ struct AppReleaseVerifierTests {
         return payload
     }
 
-    private func verify(
-        _ payload: URL,
-        signer: StubCodeSigner,
-        in directory: URL,
-        catalog: AppReleaseCatalog = AppReleaseCatalog(entries: [])
-    ) throws -> AppReleaseStagedBundle {
-        let work = directory.appendingPathComponent("work-\(UUID().uuidString)", isDirectory: true)
+    private func verify(_ payload: URL, signer: StubCodeSigner, in directory: URL) throws -> AppReleaseStagedBundle {
+        let work = directory.appendingPathComponent("work", isDirectory: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-        return try AppReleaseVerifier(signer: signer, gatekeeper: AcceptingGatekeeper(), catalog: catalog).verify(
+        return try AppReleaseVerifier(signer: signer, gatekeeper: AcceptingGatekeeper()).verify(
             payload: payload,
             app: someApp,
             candidate: Fixtures.candidate(),
@@ -93,35 +88,6 @@ struct AppReleaseVerifierTests {
         try withTemporaryDirectory { directory in
             let payload = try zippedUpdate(in: directory)
             let staged = try verify(payload, signer: StubCodeSigner(), in: directory)
-            #expect(staged.version == AppReleaseVersion(short: "2.0", build: "200"))
-        }
-    }
-
-    @Test("another team's update passes only when the catalog declares that hand-over and Apple certified the new team")
-    func teamSuccession() throws {
-        let newTeam = "NEWTEAM123"
-        let report = AppReleaseSignatureReport(isValid: true, teamID: newTeam, isDeveloperID: true)
-        func catalog(from: String) -> AppReleaseCatalog {
-            let succession = AppReleaseTeamSuccession(
-                bundleID: someApp.bundleID, name: "Foo", fromTeamID: from, toTeamID: newTeam, explanation: "Sold."
-            )
-            return AppReleaseCatalog(entries: [], successions: [succession])
-        }
-        try withTemporaryDirectory { directory in
-            let payload = try zippedUpdate(in: directory)
-            let signer = StubCodeSigner(report: report, certifiedTeams: [newTeam])
-            #expect(throws: Failure.teamIDMismatch(expected: "TEAM123456", actual: newTeam)) {
-                try verify(payload, signer: signer, in: directory)
-            }
-            // A hand-over from some other team doesn't cover this install.
-            #expect(throws: Failure.teamIDMismatch(expected: "TEAM123456", actual: newTeam)) {
-                try verify(payload, signer: signer, in: directory, catalog: catalog(from: "OTHERTEAM1"))
-            }
-            #expect(throws: Failure.teamCertificateMismatch(newTeam)) {
-                let forged = StubCodeSigner(report: report, certifiedTeams: [])
-                try verify(payload, signer: forged, in: directory, catalog: catalog(from: "TEAM123456"))
-            }
-            let staged = try verify(payload, signer: signer, in: directory, catalog: catalog(from: "TEAM123456"))
             #expect(staged.version == AppReleaseVersion(short: "2.0", build: "200"))
         }
     }

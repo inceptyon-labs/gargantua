@@ -19,6 +19,8 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
     /// Bundle ID to the release Gargantua found installed under another
     /// version string.
     public var confirmedReleases: [String: AppReleaseConfirmedRelease]
+    /// Bundle ID to the changes of signer the user approved for that app.
+    public var approvedSigners: [String: [AppReleaseSignerChange]]
 
     public init(
         ignoredBundleIDs: Set<String> = [],
@@ -26,7 +28,8 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
         autoCheckEnabled: Bool = false,
         lastAutoCheck: Date? = nil,
         backgroundCheckEnabled: Bool = false,
-        confirmedReleases: [String: AppReleaseConfirmedRelease] = [:]
+        confirmedReleases: [String: AppReleaseConfirmedRelease] = [:],
+        approvedSigners: [String: [AppReleaseSignerChange]] = [:]
     ) {
         self.ignoredBundleIDs = ignoredBundleIDs
         self.skippedVersions = skippedVersions
@@ -34,6 +37,7 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
         self.lastAutoCheck = lastAutoCheck
         self.backgroundCheckEnabled = backgroundCheckEnabled
         self.confirmedReleases = confirmedReleases
+        self.approvedSigners = approvedSigners
     }
 
     /// Every field is optional so blobs stored before a field existed still
@@ -47,10 +51,13 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
         backgroundCheckEnabled = try container.decodeIfPresent(Bool.self, forKey: .backgroundCheckEnabled) ?? false
         confirmedReleases = try container
             .decodeIfPresent([String: AppReleaseConfirmedRelease].self, forKey: .confirmedReleases) ?? [:]
+        approvedSigners = try container
+            .decodeIfPresent([String: [AppReleaseSignerChange]].self, forKey: .approvedSigners) ?? [:]
     }
 
     private enum CodingKeys: String, CodingKey {
-        case ignoredBundleIDs, skippedVersions, autoCheckEnabled, lastAutoCheck, backgroundCheckEnabled, confirmedReleases
+        case ignoredBundleIDs, skippedVersions, autoCheckEnabled, lastAutoCheck, backgroundCheckEnabled
+        case confirmedReleases, approvedSigners
     }
 
     public static func stored(in defaults: UserDefaults = .standard) -> AppReleasePreferences {

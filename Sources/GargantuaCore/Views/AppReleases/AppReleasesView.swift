@@ -6,6 +6,7 @@ import SwiftUI
 public struct AppReleasesView: View {
     @Bindable var session: AppReleasesSession
     @State var pendingQuit: AppReleaseRow?
+    @State var pendingSigner: AppReleasePendingSigner?
 
     public init(session: AppReleasesSession) {
         self.session = session
@@ -45,6 +46,24 @@ public struct AppReleasesView: View {
             Button("Cancel", role: .cancel) { pendingQuit = nil }
         } message: { row in
             Text("Quit \(row.app.name) to update? Unsaved work in it may be lost.")
+        }
+        .alert(
+            pendingSigner?.title ?? "New signer",
+            isPresented: Binding(
+                get: { pendingSigner != nil },
+                set: { if !$0 { pendingSigner = nil } }
+            ),
+            presenting: pendingSigner
+        ) { pending in
+            Button(pending.approveLabel) {
+                pendingSigner = nil
+                Task {
+                    await session.approveSigner(pending.change, for: pending.row.id, quitIfRunning: pending.needsQuit)
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingSigner = nil }
+        } message: { pending in
+            Text(pending.message)
         }
         .alert("Allow Gargantua to update apps", isPresented: $session.showsAppManagementHelp) {
             Button("Open System Settings") {
@@ -210,6 +229,13 @@ public struct AppReleasesView: View {
                                 isChecking: session.isChecking,
                                 message: session.rowMessages[row.id],
                                 onUpdate: { requestUpdate(row) },
+                                onTrustSigner: { change in
+                                    pendingSigner = AppReleasePendingSigner(
+                                        row: row,
+                                        change: change,
+                                        needsQuit: session.requiresQuitConsent(row)
+                                    )
+                                },
                                 onIgnore: { session.ignore(row.id) },
                                 onStopIgnoring: { Task { await session.unignore(row.id) } },
                                 onSkip: { version in session.skip(version: version, for: row.id) },

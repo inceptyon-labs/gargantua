@@ -14,19 +14,23 @@ public struct AppReleaseSignatureReport: Sendable, Equatable {
     /// The first required team Apple did not issue the leaf certificate to;
     /// nil when it was issued to all of them.
     public let uncertifiedTeam: String?
+    /// Who Apple issued the signing certificate to, e.g. `MuseScore`.
+    public let signerName: String?
 
     public init(
         isValid: Bool,
         teamID: String?,
         isDeveloperID: Bool,
         failure: String? = nil,
-        uncertifiedTeam: String? = nil
+        uncertifiedTeam: String? = nil,
+        signerName: String? = nil
     ) {
         self.isValid = isValid
         self.teamID = teamID
         self.isDeveloperID = isDeveloperID
         self.failure = failure
         self.uncertifiedTeam = uncertifiedTeam
+        self.signerName = signerName
     }
 }
 
@@ -36,6 +40,14 @@ public protocol AppReleaseCodeSigning: Sendable {
     /// leaf-certified for. A team that isn't a well-formed Team ID is never
     /// certified.
     func assess(bundleURL: URL, requiredTeams: [String]) -> AppReleaseSignatureReport
+
+    /// Who Apple issued the bundle's signing certificate to, read without
+    /// validating anything. For display only.
+    func signerName(ofBundle url: URL) -> String?
+}
+
+public extension AppReleaseCodeSigning {
+    func signerName(ofBundle _: URL) -> String? { nil }
 }
 
 /// Full signature validation, equivalent to `codesign --verify --deep --strict`.
@@ -75,7 +87,12 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
         let teamID = Self.teamIdentifier(of: code)
         if let everything = Self.combinedRequirement(teams: requiredTeams),
            Self.satisfies(code, requirement: everything) {
-            return AppReleaseSignatureReport(isValid: true, teamID: teamID, isDeveloperID: true)
+            return AppReleaseSignatureReport(
+                isValid: true,
+                teamID: teamID,
+                isDeveloperID: true,
+                signerName: Self.signerName(of: code)
+            )
         }
 
         var validityError: Unmanaged<CFError>?
@@ -150,6 +167,35 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
     private static func isWellFormedTeamID(_ teamID: String) -> Bool {
         teamID.utf8.count == 10
             && teamID.utf8.allSatisfy { (0x41 ... 0x5A).contains($0) || (0x30 ... 0x39).contains($0) }
+    }
+
+    public func signerName(ofBundle url: URL) -> String? {
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, SecCSFlags(), &staticCode) == errSecSuccess,
+              let code = staticCode
+        else { return nil }
+        return Self.signerName(of: code)
+    }
+
+    private static func signerName(of code: SecStaticCode) -> String? {
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info)
+            == errSecSuccess,
+            let dictionary = info as? [String: Any],
+            let leaf = (dictionary[kSecCodeInfoCertificates as String] as? [SecCertificate])?.first,
+            let summary = SecCertificateCopySubjectSummary(leaf) as String?
+        else { return nil }
+        return displayName(fromCertificateSummary: summary)
+    }
+
+    /// `Developer ID Application: MuseScore (6EPAF2X3PR)` to `MuseScore`.
+    static func displayName(fromCertificateSummary summary: String) -> String? {
+        var name = summary
+        if let colon = name.range(of: ": ") { name = String(name[colon.upperBound...]) }
+        if let team = name.range(of: #" \([A-Z0-9]{10}\)$"#, options: .regularExpression) {
+            name = String(name[..<team.lowerBound])
+        }
+        return name.trimmedNonEmpty
     }
 
     /// Team ID from the signature, read without validating anything.

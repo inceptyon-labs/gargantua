@@ -150,6 +150,28 @@ extension AppReleasesSessionTests {
         }
     }
 
+    @Test("A change of signer waits on the row; approving stores it and installs")
+    func signerChangeIsApproved() async throws {
+        let id = Self.app.bundleID
+        let change = AppReleaseSignerChange(fromTeamID: "TEAM123456", toTeamID: "NEWTEAM123")
+        let fixture = Self.makeFixture()
+        fixture.installer.failure = .signerChanged(change)
+        await fixture.session.check()
+        await fixture.session.install(try #require(fixture.session.rows.first), quitIfRunning: false)
+        #expect(fixture.session.rowMessages[id] == .signerChanged(change))
+        #expect(AppReleasePreferences.stored(in: fixture.defaults).approvedSigners.isEmpty)
+        #expect(fixture.session.availableCount == 1)
+
+        fixture.installer.failure = nil
+        await fixture.session.approveSigner(change, for: id, quitIfRunning: false)
+        #expect(AppReleasePreferences.stored(in: fixture.defaults).approvedSigners[id] == [change])
+        #expect(fixture.installer.calls.count == 2)
+        guard case .installed = fixture.session.rowMessages[id] else {
+            Issue.record("expected the update to install after approval")
+            return
+        }
+    }
+
     @Test("Quit consent follows whether the app is running now, not when it was checked")
     func quitConsentIsLive() async throws {
         var running = Self.app

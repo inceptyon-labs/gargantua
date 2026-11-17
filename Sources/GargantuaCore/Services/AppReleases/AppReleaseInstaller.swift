@@ -19,6 +19,9 @@ public enum AppReleaseInstallPhase: Sendable, Equatable {
 
 public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
     case verification(AppReleaseVerificationFailure)
+    /// The update passed every check but is signed by another developer
+    /// than the installed copy. The user can approve the change.
+    case signerChanged(AppReleaseSignerChange)
     /// The bundle at the app's path is gone, unreadable, or now carries a
     /// different bundle ID than the one checked.
     case installedAppChanged
@@ -40,6 +43,9 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
         case .verification(let failure):
             "The update didn't pass verification, so nothing was changed. "
                 + (failure.errorDescription ?? "")
+        case .signerChanged(let change):
+            "This update is signed by \(change.toLabel). Your copy is signed by \(change.fromLabel). "
+                + "Nothing was changed."
         case .installedAppChanged:
             "The app changed on disk since Gargantua checked it, so nothing was changed. Check for updates again."
         case .download(let message):
@@ -337,7 +343,8 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         guard Self.onSameVolume(workDirectory, app.url) else { throw .differentVolume }
         let staged = try await downloadAndVerify(app: app, candidate: candidate, workDirectory: workDirectory, progress: progress)
 
-        let summary = "update \(app.bundleID) \(app.version) → \(staged.version)"
+        var summary = "update \(app.bundleID) \(app.version) → \(staged.version)"
+        if let signer = staged.signerChange { summary += " (\(signer.auditNote))" }
         let plan = AppReleaseAuditPlan(
             summary: summary,
             brewArguments: nil,
@@ -363,7 +370,8 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         return AppReleaseInstallResult(
             installedVersion: AppBundleFiles.bundleVersion(at: app.url) ?? staged.version,
             previousCopyInTrash: trashURL,
-            relaunched: relaunched
+            relaunched: relaunched,
+            warning: staged.signerChange?.warning
         )
     }
 
@@ -424,6 +432,7 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         switch failure {
         case .licenseAgreementRequired: .licenseAgreementRequired
         case .encryptedDiskImage: .encryptedDiskImage
+        case .signerChanged(let change): .signerChanged(change)
         default: .verification(failure)
         }
     }

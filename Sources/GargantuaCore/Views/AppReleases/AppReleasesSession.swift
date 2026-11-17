@@ -447,6 +447,16 @@ extension AppReleasesSession {
     }
 }
 
+public extension AppReleasesSession {
+    /// Stores the user's approval of `change` for the app, then installs the
+    /// update its row offers now.
+    func approveSigner(_ change: AppReleaseSignerChange, for bundleID: String, quitIfRunning: Bool) async {
+        updatePreferences { $0.approve(change, for: bundleID) }
+        guard let row = rows.first(where: { $0.id == bundleID }) else { return }
+        await install(row, quitIfRunning: quitIfRunning)
+    }
+}
+
 private extension AppReleasesSession {
     /// Shows what an install attempt left behind and re-checks the app.
     func finish(
@@ -462,6 +472,10 @@ private extension AppReleasesSession {
             rowMessages[id] = installed.warning.map { .installedWithWarning("\(updated) \($0)") } ?? .installed(updated)
             updatePreferences { $0.confirm(candidate, holds: installed.installedVersion.description, for: id) }
         case .failure(let error):
+            if case .signerChanged(let change) = error {
+                rowMessages[id] = .signerChanged(change)
+                return
+            }
             guard let current = error.versionAlreadyInstalled else {
                 rowMessages[id] = .failed(error.localizedDescription)
                 if error == .appManagementDenied { showsAppManagementHelp = true }

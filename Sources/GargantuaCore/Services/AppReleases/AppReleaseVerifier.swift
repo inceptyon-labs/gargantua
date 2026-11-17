@@ -47,6 +47,9 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
     case teamIDMismatch(expected: String, actual: String?)
     case pinnedTeamIDMismatch(expected: String, actual: String?)
     case teamCertificateMismatch(String)
+    /// Valid in every other respect, but signed by another team that
+    /// nothing vouches for. The user can approve it.
+    case signerChanged(AppReleaseSignerChange)
     // Gatekeeper
     case gatekeeperRejected(String)
     // Version
@@ -103,6 +106,8 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
             "The update is signed by \(actual ?? "no developer"), not the expected developer \(expected)."
         case .teamCertificateMismatch(let team):
             "The update's signing certificate wasn't issued by Apple to the developer team \(team)."
+        case .signerChanged(let change):
+            "The update is signed by \(change.toLabel), not by \(change.fromLabel) like the installed app."
         case .gatekeeperRejected(let detail): "macOS Gatekeeper rejected the new app: \(detail)"
         case .notNewer(let staged, let installed):
             "The download is version \(staged), which is not newer than the installed \(installed)."
@@ -119,10 +124,14 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
 public struct AppReleaseStagedBundle: Sendable, Equatable {
     public let url: URL
     public let version: AppReleaseVersion
+    /// Set when the bundle is signed by another team than the installed
+    /// copy and verification accepted that.
+    public let signerChange: AppReleaseAcceptedSignerChange?
 
-    public init(url: URL, version: AppReleaseVersion) {
+    public init(url: URL, version: AppReleaseVersion, signerChange: AppReleaseAcceptedSignerChange? = nil) {
         self.url = url
         self.version = version
+        self.signerChange = signerChange
     }
 }
 
@@ -158,24 +167,24 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     public static let maxPayloadBytes: Int64 = 4 * 1_073_741_824
     static let maxListingBytes = 64 * 1_048_576
 
-    private let signer: any AppReleaseCodeSigning
+    let signer: any AppReleaseCodeSigning
     private let gatekeeper: any AppReleaseGatekeeperAssessing
     let runner: any ProcessRunner
     private let hostOSVersion: OperatingSystemVersion
-    private let catalog: AppReleaseCatalog
+    let signerPolicy: AppReleaseSignerPolicy
 
     public init(
         signer: any AppReleaseCodeSigning = StrictAppReleaseCodeSigner(),
         gatekeeper: any AppReleaseGatekeeperAssessing = SpctlAppReleaseGatekeeper(),
         runner: any ProcessRunner = DefaultProcessRunner(),
         hostOSVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion,
-        catalog: AppReleaseCatalog = .bundled
+        signerPolicy: AppReleaseSignerPolicy = .standard
     ) {
         self.signer = signer
         self.gatekeeper = gatekeeper
         self.runner = runner
         self.hostOSVersion = hostOSVersion
-        self.catalog = catalog
+        self.signerPolicy = signerPolicy
     }
 
     public func verify(
@@ -188,7 +197,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         try checkSourcePolicy(candidate, strategy: strategy)
         let payloadSize = try Self.checkLength(of: payload, expected: candidate.expectedLength)
         try Self.checkSHA256(of: payload, expected: candidate.sha256)
-        try Self.checkEdSignature(of: payload, app: app, candidate: candidate)
+        let vouched = try Self.checkEdSignature(of: payload, app: app, candidate: candidate)
         let kind = try Self.sniffPayload(payload, declared: candidate.payloadKind)
 
         let extracted = workDirectory.appendingPathComponent("extracted", isDirectory: true)
@@ -207,11 +216,13 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
         let bundle = try Self.locateApp(in: extracted, bundleID: app.bundleID)
         try Self.walkBundleTree(bundle)
-        let report = try checkSigner(of: bundle, app: app, candidate: candidate)
-        try Self.checkTeamCertificate(report)
+        let signed = try checkSigner(of: bundle, app: app, candidate: candidate, vouchedByUpdateKey: vouched)
+        try Self.checkTeamCertificate(signed.report)
         try checkGatekeeper(bundle)
         let version = try Self.checkVersion(of: bundle, installed: app, hostOSVersion: hostOSVersion)
-        return AppReleaseStagedBundle(url: bundle, version: version)
+        // Last, so approval is only ever asked for an update that would install.
+        if let change = signed.unvouchedChange { throw .signerChanged(change) }
+        return AppReleaseStagedBundle(url: bundle, version: version, signerChange: signed.acceptedChange)
     }
 
     // MARK: - Source policy
@@ -277,15 +288,17 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
     /// Required when the item carries a signature, or when it comes from a
     /// Sparkle feed and the installed app publishes a key; skipped only when
-    /// neither side has anything.
+    /// neither side has anything. Returns whether a signature was verified
+    /// against the installed app's key.
+    @discardableResult
     static func checkEdSignature(
         of payload: URL,
         app: InstalledApp,
         candidate: AppReleaseCandidate
-    ) throws(AppReleaseVerificationFailure) {
+    ) throws(AppReleaseVerificationFailure) -> Bool {
         let key = app.sparklePublicEDKey?.trimmedNonEmpty
         let signature = candidate.edSignature?.trimmedNonEmpty
-        guard signature != nil || (candidate.isSparkleFeed && key != nil) else { return }
+        guard signature != nil || (candidate.isSparkleFeed && key != nil) else { return false }
         guard let key else { throw .publicKeyMissing }
         guard let signature else { throw .feedSignatureMissing }
 
@@ -303,6 +316,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
             throw .unreadablePayload(error.localizedDescription)
         }
         guard publicKey.isValidSignature(signatureData, for: bytes) else { throw .signatureInvalid }
+        return true
     }
 
     // MARK: - Payload sniff
@@ -364,71 +378,6 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         let tailLength = Int(min(info.st_size, 4096))
         let tail = info.st_size >= 512 ? readBlock(at: info.st_size - off_t(tailLength), length: tailLength) : nil
         return (head, tail)
-    }
-
-    // MARK: - Code signature
-
-    private func checkCodeSignature(
-        _ bundle: URL,
-        requiredTeams: [String]
-    ) throws(AppReleaseVerificationFailure) -> AppReleaseSignatureReport {
-        let report = signer.assess(bundleURL: bundle, requiredTeams: requiredTeams)
-        guard report.isValid else { throw .invalidCodeSignature(report.failure ?? "unknown error") }
-        guard report.isDeveloperID else { throw .notDeveloperID }
-        return report
-    }
-
-    // MARK: - Team ID
-
-    /// The signature and Team ID checks. The bundle must be signed by the
-    /// installed app's team, or by the team the catalog names as its
-    /// successor; in that case the certificate is checked for the successor.
-    private func checkSigner(
-        of bundle: URL,
-        app: InstalledApp,
-        candidate: AppReleaseCandidate
-    ) throws(AppReleaseVerificationFailure) -> AppReleaseSignatureReport {
-        var report = try checkCodeSignature(bundle, requiredTeams: Self.requiredTeams(app: app, candidate: candidate))
-        let successor = catalog.successorTeam(bundleID: app.bundleID, installedTeam: app.teamID?.trimmedNonEmpty)
-        if let successor, report.teamID == successor {
-            let teams = Self.requiredTeams(team: successor, candidate: candidate)
-            report = try checkCodeSignature(bundle, requiredTeams: teams)
-        }
-        try Self.checkTeamID(report.teamID, app: app, candidate: candidate, successor: successor)
-        return report
-    }
-
-    static func checkTeamID(
-        _ stagedTeamID: String?,
-        app: InstalledApp,
-        candidate: AppReleaseCandidate,
-        successor: String? = nil
-    ) throws(AppReleaseVerificationFailure) {
-        guard let installed = app.teamID?.trimmedNonEmpty else { throw .installedTeamIDMissing }
-        guard stagedTeamID == installed || (successor != nil && stagedTeamID == successor) else {
-            throw .teamIDMismatch(expected: installed, actual: stagedTeamID)
-        }
-        if let pinned = candidate.pinnedTeamID, pinned != stagedTeamID {
-            throw .pinnedTeamIDMismatch(expected: pinned, actual: stagedTeamID)
-        }
-    }
-
-    /// The Team ID field alone is just a string in the signature; Apple must
-    /// also have issued the leaf certificate to that team, for the installed
-    /// app's team and any catalog-pinned one. The signer checks these in the
-    /// same pass as the signature.
-    static func requiredTeams(app: InstalledApp, candidate: AppReleaseCandidate) -> [String] {
-        requiredTeams(team: app.teamID?.trimmedNonEmpty, candidate: candidate)
-    }
-
-    static func requiredTeams(team: String?, candidate: AppReleaseCandidate) -> [String] {
-        var teams = [team].compactMap { $0 }
-        if let pinned = candidate.pinnedTeamID, !teams.contains(pinned) { teams.append(pinned) }
-        return teams
-    }
-
-    static func checkTeamCertificate(_ report: AppReleaseSignatureReport) throws(AppReleaseVerificationFailure) {
-        if let team = report.uncertifiedTeam { throw .teamCertificateMismatch(team) }
     }
 
     // MARK: - Gatekeeper
