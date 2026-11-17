@@ -166,9 +166,9 @@ public final class AuditWriter: Sendable {
     /// every acquisition into an immediate failure or an unbounded wait.
     private let lockTimeout: TimeInterval
     private let usesProductionLogDirectory: Bool
-    /// Under the test runner (XCTest loads even for Swift Testing) the production
-    /// log is off limits; the app, scheduler and MCP server never load XCTest.
-    static let refusesProductionWrites = NSClassFromString("XCTestCase") != nil
+    /// Under the test runner the production log is off limits; the app,
+    /// scheduler and MCP server are never one (see `TestRunner`).
+    static let refusesProductionWrites = TestRunner.isActive
 
     /// Creates an AuditWriter targeting the given directory.
     ///

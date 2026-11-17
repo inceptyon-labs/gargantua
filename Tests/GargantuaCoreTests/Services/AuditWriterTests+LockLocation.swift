@@ -118,6 +118,7 @@ extension AuditWriterTests {
     @Test("the test runner cannot write or purge the production audit log")
     func productionLogIsOffLimitsDuringTests() throws {
         #expect(AuditWriter.refusesProductionWrites)
+        #expect(TestRunner.testBundleIsLoaded)
 
         let writer = AuditWriter()
         func stamp() -> (Int, Date)? {
