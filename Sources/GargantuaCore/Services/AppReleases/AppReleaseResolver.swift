@@ -39,20 +39,24 @@ public enum AppReleaseResolver {
             return row(noUpdateStatus(considered: considered, eligible: eligible))
         }
 
-        if preferences.skippedVersions[app.bundleID] == chosen.displayVersion {
-            return row(.skippedVersion(chosen.displayVersion))
-        }
-
+        let status: AppReleaseStatus
         if app.isMAS {
             let strategy: AppReleaseInstallStrategy = chosen.vendorURL.map { .openAppStore($0) }
                 ?? .linkOnly(nil, reason: .noInstallablePayload)
-            return row(.available(chosen, strategy))
+            status = .available(chosen, strategy)
+        } else if let token = brewManagedToken {
+            status = brewStatus(chosen: chosen, token: token, installed: app.version, outcomes: considered)
+        } else {
+            status = .available(chosen, inPlaceStrategy(for: chosen, app: app))
         }
 
-        if let token = brewManagedToken {
-            return row(brewStatus(chosen: chosen, token: token, installed: app.version, outcomes: considered))
+        // Compared with the release the row offers, which for a brew-managed
+        // app is the cask's and not `chosen`: that is the one the user skipped.
+        if case .available(let offered, _) = status, let skipped = preferences.skippedVersions[app.bundleID],
+           offered.matchesSkipped(skipped) {
+            return row(.skippedVersion(skipped))
         }
-        return row(.available(chosen, inPlaceStrategy(for: chosen, app: app)))
+        return row(status)
     }
 
     /// Nothing newer: the newest eligible release, or why there is none.

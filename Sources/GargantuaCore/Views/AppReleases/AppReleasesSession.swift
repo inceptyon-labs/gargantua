@@ -244,8 +244,9 @@ public final class AppReleasesSession {
         if preferences.ignoredBundleIDs.contains(row.id) {
             return AppReleaseRow(app: row.app, status: .ignored, sources: row.sources)
         }
-        if let candidate = row.availableCandidate, preferences.skippedVersions[row.id] == candidate.displayVersion {
-            return AppReleaseRow(app: row.app, status: .skippedVersion(candidate.displayVersion), sources: row.sources)
+        if let candidate = row.availableCandidate, let skipped = preferences.skippedVersions[row.id],
+           candidate.matchesSkipped(skipped) {
+            return AppReleaseRow(app: row.app, status: .skippedVersion(skipped), sources: row.sources)
         }
         return row
     }

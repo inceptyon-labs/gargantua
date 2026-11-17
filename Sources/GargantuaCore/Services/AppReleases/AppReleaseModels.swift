@@ -199,6 +199,17 @@ public struct AppReleaseCandidate: Sendable, Equatable {
         self.allowsInPlaceInstall = allowsInPlaceInstall
         self.isSparkleFeed = isSparkleFeed ?? (source == .sparkle)
     }
+
+    /// Whether `skipped`, a stored `displayVersion`, names this release.
+    /// Sources word one release differently (Sparkle `2.4.1 (812)`, Homebrew
+    /// `2.4.1`), so a skip recorded without a build covers every build of
+    /// that version, and one recorded with a build covers a source that
+    /// reports none.
+    public func matchesSkipped(_ skipped: String) -> Bool {
+        if skipped == displayVersion || skipped == version.description { return true }
+        guard let short = version.short else { return false }
+        return skipped == short || (version.build == nil && skipped.hasPrefix(short + " ("))
+    }
 }
 
 /// Why an available update can only be opened as a link.

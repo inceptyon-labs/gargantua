@@ -181,4 +181,30 @@ struct AppReleaseResolverTests {
         #expect(resolve(app(), [.sparkle: .failed("offline")]) == .failed("offline"))
         #expect(resolve(app(), [.sparkle: .failed("offline"), .homebrewCask: .noEligibleRelease]) == .upToDate(latest: nil))
     }
+
+    @Test("a skip names the release the row offers, however a source words it")
+    func skipMatchesOfferedRelease() {
+        func sparkle(build: String) -> AppReleaseCandidate {
+            AppReleaseCandidate(
+                source: .sparkle,
+                version: AppReleaseVersion(short: "2.4.1", build: build),
+                downloadURL: URL(string: "https://example.com/Example.zip")
+            )
+        }
+        let cask = candidate(.homebrewCask, "2.4.1", token: "example")
+        let id = "com.example.App"
+
+        // The brew row offered the cask's "2.4.1", though the tie-break picks Sparkle's "2.4.1 (812)".
+        let both: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [.sparkle: .found(sparkle(build: "812")), .homebrewCask: .found(cask)]
+        let asCask = AppReleasePreferences(skippedVersions: [id: "2.4.1"])
+        #expect(resolve(app(), both, brewToken: "example", preferences: asCask) == .skippedVersion("2.4.1"))
+
+        // Skipped as Sparkle worded it; the feed then fails and Homebrew is the only source.
+        let asSparkle = AppReleasePreferences(skippedVersions: [id: "2.4.1 (812)"])
+        #expect(resolve(app(), [.homebrewCask: .found(cask)], preferences: asSparkle) == .skippedVersion("2.4.1 (812)"))
+
+        // A later build of the skipped version is another release.
+        let later = resolve(app(), [.sparkle: .found(sparkle(build: "813"))], preferences: asSparkle)
+        #expect(later == .available(sparkle(build: "813"), .inPlace))
+    }
 }
