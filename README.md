@@ -133,12 +133,14 @@ A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_po
 
 ## App Updates
 
-App Updates lists installed third-party apps with a newer release and installs them. Release information comes from four places, all fetched over HTTPS, redirects included. No Inceptyon server is involved, and the list of apps on your Mac is never uploaded:
+App Updates lists installed third-party apps with a newer release and installs them. Release information comes from four places, all fetched over HTTPS, redirects included:
 
 - the app's own Sparkle feed (`SUFeedURL` in its Info.plist);
 - Homebrew's public cask metadata (`formulae.brew.sh`), matched by app name and confirmed by bundle ID where the cask lists one;
-- the Mac App Store lookup API, for App Store apps, which open in the App Store to update;
+- the Mac App Store lookup API, for App Store apps, which open in the App Store to update. The lookup sends Apple the bundle IDs of your App Store apps;
 - a curated catalog for apps the others miss (Sparkle feeds set in code, GitHub Releases), maintained in [`gargantua-rules/rules/updates`](https://github.com/inceptyon-labs/gargantua-rules/tree/main/rules/updates) and bundled like the cleanup rules. Every catalog entry pins the developer Team ID.
+
+No Inceptyon server is involved. Apart from the App Store lookup, a check sends no list of your apps anywhere: each feed or release page is fetched for its own app, and Homebrew's metadata is downloaded whole and matched on your Mac.
 
 Checks run only when you open the pane or click Check, or daily if you turn that on in Settings. Installing is license-gated like other destructive actions and fails closed. The download must:
 

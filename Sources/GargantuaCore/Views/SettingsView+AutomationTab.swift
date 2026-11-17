@@ -207,7 +207,8 @@ extension SettingsView {
                 icon: "arrow.down.app",
                 label: "Check for app updates daily",
                 detail: "Contacts each app's update feed, Homebrew and the App Store. "
-                    + "Off by default; nothing about your Mac is uploaded.",
+                    + "Off by default. Apple receives the bundle IDs of your App Store apps; "
+                    + "nothing else about your Mac is sent.",
                 isOn: appUpdatesAutoCheckBinding
             )
 
@@ -215,7 +216,7 @@ extension SettingsView {
                 icon: "bell.badge",
                 label: "Check in the background and notify me",
                 detail: "About once a day, even when Gargantua is closed. "
-                    + "Uses the same sources as a manual check and uploads nothing about your Mac.",
+                    + "Uses the same sources as a manual check and sends nothing more than one does.",
                 isOn: appUpdatesBackgroundCheckBinding
             )
 

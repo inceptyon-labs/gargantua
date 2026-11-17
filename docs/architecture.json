@@ -640,7 +640,7 @@
       "dot": "emerald",
       "title": "App Updates",
       "items": [
-        "Checks run on demand or opt-in daily; no app list is uploaded",
+        "Checks run on demand or opt-in daily; only App Store bundle IDs are sent",
         "Vendor feed or catalog caps the version other sources may offer",
         "Install needs a LicenseGate authorization and fails closed",
         "Same Team ID, notarized, newer; old copy goes to Trash",

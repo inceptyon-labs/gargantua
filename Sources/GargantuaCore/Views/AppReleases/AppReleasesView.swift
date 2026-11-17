@@ -130,7 +130,8 @@ public struct AppReleasesView: View {
 
             Text(
                 "Contacts each app's update feed, Homebrew and the App Store. "
-                    + "Nothing about your Mac is uploaded."
+                    + "Apple receives the bundle IDs of your App Store apps; "
+                    + "nothing else about your Mac is sent."
             )
             .font(GargantuaFonts.body)
             .foregroundStyle(GargantuaColors.ink2)
