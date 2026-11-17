@@ -3,6 +3,7 @@ import Darwin
 import GargantuaAppKitShims
 import GargantuaCore
 import SwiftUI
+import UserNotifications
 
 @main
 struct GargantuaApp: App {
@@ -16,6 +17,11 @@ struct GargantuaApp: App {
 
     init() {
         Self.configureNativeToolTipDelay()
+        // An unbundled `swift run` process can't use UNUserNotificationCenter.
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            UNUserNotificationCenter.current().delegate = AppReleaseNotificationResponder.shared
+        }
+        AppReleaseLinkHandler.activateMainWindow = { AppDelegate.showMainWindow() }
         MetallibStager.stageIfNeeded()
         if CommandLine.arguments.contains("--selfcheck-binaries") {
             Self.runBinarySelfCheck()
@@ -60,12 +66,6 @@ struct GargantuaApp: App {
                 .onChange(of: appearanceRaw) { _, _ in
                     AppAppearancePreference.apply(appearance)
                 }
-                .onOpenURL { url in
-                    LicenseActivationLink.handle(url)
-                }
-                // Let the open window take gargantua:// links instead of
-                // SwiftUI opening another window for each one.
-                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .defaultSize(width: 900, height: 600)
         .commands {
@@ -249,13 +249,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSColor(srgbRed: 0.937, green: 0.945, blue: 0.957, alpha: 1.0)
     }
 
+    // The app owns gargantua:// events: SwiftUI's scene routing un-hides and activates
+    // the app for every link, which a background announcement must not do.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @objc private func handleURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent _: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: text) else { return }
+        if AppReleaseLink.action(for: url) != nil {
+            AppReleaseLinkHandler.handle(url)
+        } else {
+            LicenseActivationLink.handle(url)
+            Self.showMainWindow()
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.regular)
         AppAppearancePreference.apply()
         DispatchQueue.main.async { [weak self] in
             self?.configureMainWindow()
-            self?.activateMainWindow()
+            // Launched hidden (the scheduler's announcement hand-off): stay in the background.
+            if !NSApp.isHidden { self?.activateMainWindow() }
+            self?.postPendingAnnouncement()
         }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.postPendingAnnouncement() }
+        }
+    }
+
+    /// Retries an announcement the scheduler left pending (permission denied, app not running).
+    private func postPendingAnnouncement() {
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return }
+        Task { await AppReleaseAnnouncementPoster.postPending(notifier: UserNotificationAppReleaseUpdateNotifier()) }
     }
 
     func applicationShouldHandleReopen(
@@ -294,6 +329,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let spacerView = NSView(frame: NSRect(x: 0, y: 0, width: 0, height: 8))
         spacer.view = spacerView
         window.addTitlebarAccessoryViewController(spacer)
+    }
+
+    /// Fronts the main window, or reopens one the way a Dock click does when it was closed.
+    static func showMainWindow() {
+        if !activateExistingMainWindow() {
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration())
+        }
     }
 
     static func activateMainWindow() {

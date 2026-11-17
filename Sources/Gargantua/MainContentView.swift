@@ -13,6 +13,9 @@ import SwiftUI
 // that extension can reach them.
 struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding = false
+    // Observed so a count the scheduler writes while the app is open updates the badge.
+    @AppStorage(AppReleaseBackgroundState.availableCountKey) private var storedAvailableCount: Int = 0
+    @AppStorage(AppReleasePreferences.userDefaultsKey) private var appReleasePreferencesData: Data?
     @State var sidebarSelection: String? = "dashboard"
     /// Toggled by ⌘/ (via the Help-menu command) to show the shortcut cheat sheet.
     @State var showKeyboardCheatSheet = false
@@ -39,6 +42,25 @@ struct MainContentView: View {
         _window = StateObject(wrappedValue: WindowState())
     }
 
+    private var appUpdatesBadgeCount: Int {
+        let preferences = appReleasePreferencesData.flatMap {
+            try? JSONDecoder().decode(AppReleasePreferences.self, from: $0)
+        }
+        return AppReleaseBadge.count(
+            sessionCount: appReleasesSession.hasResults ? appReleasesSession.availableCount : nil,
+            sessionHasChecked: appReleasesSession.lastChecked != nil,
+            backgroundCheckEnabled: preferences?.backgroundCheckEnabled ?? false,
+            storedCount: storedAvailableCount
+        )
+    }
+
+    /// Applies a pane another part of the app asked for (e.g. a notification click).
+    func consumeNavigationRequest() {
+        guard let pane = AppNavigationRequest.shared.pane else { return }
+        sidebarSelection = pane
+        AppNavigationRequest.shared.pane = nil
+    }
+
     var body: some View {
         ZStack {
             GargantuaColors.void_
@@ -51,7 +73,8 @@ struct MainContentView: View {
                     SidebarView(
                         selection: $sidebarSelection,
                         mcpStatusModel: mcpStatusModel,
-                        updateModel: updateSettingsViewModel
+                        updateModel: updateSettingsViewModel,
+                        badges: ["appUpdates": appUpdatesBadgeCount]
                     )
 
                     // Content area
@@ -128,6 +151,8 @@ struct MainContentView: View {
                                     onTriage: triageHandler,
                                     preSelectedPlistPath: $pendingBackgroundItemPlistPath
                                 )
+                            case "appUpdates":
+                                AppReleasesView(session: appReleasesSession)
                             case "processInventory":
                                 ProcessInventoryView(
                                     session: processInventorySession,
@@ -194,9 +219,15 @@ struct MainContentView: View {
                 })
                 .modifier(AIRootModifier(window: window, onOpenSettings: { sidebarSelection = "settings" }))
                 .onAppear {
+                    consumeNavigationRequest()
                     initializePersistenceIfNeeded()
                     refreshPersistedSettings()
                     window.visiblePane = sidebarSelection
+                }
+                .onReceive(NotificationCenter.default.publisher(for: AppNavigationRequest.didRequest)) { note in
+                    // Every window applies it; the pending pane is cleared once.
+                    if let pane = note.object as? String { sidebarSelection = pane }
+                    AppNavigationRequest.shared.pane = nil
                 }
                 .onChange(of: sidebarSelection) { _, pane in
                     refreshPersistedSettings()
@@ -239,6 +270,7 @@ struct MainContentView: View {
             )
         }
         .focusedSceneValue(\.keyboardCheatSheet, $showKeyboardCheatSheet)
+        .task { await runAutoUpdateCheckLoop() }
     }
 
     private var activationOutcome: LicenseActivationLinkModel.Outcome? {

@@ -3,12 +3,12 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Gargantua System Overview",
-    "output": ".archify/architecture-gargantua-overview-20261003-200931/review-2/gargantua-overview.html",
+    "output": ".archify/architecture-gargantua-overview-20261114-113228/gargantua-overview.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "git@github.com:inceptyon-labs/gargantua.git",
       "link_mode": "local-only",
-      "revision": "a451184bb515a82119105e5c5b40af03807aadc5"
+      "revision": "d60e34ebfea6abcaed79f33f9d38847a41581159"
     }
   },
   "components": [
@@ -19,7 +19,7 @@
       "sublabel": "macOS developer",
       "pos": [
         40,
-        240
+        360
       ],
       "size": [
         130,
@@ -33,7 +33,7 @@
       "sublabel": "SwiftUI, user session",
       "pos": [
         290,
-        240
+        360
       ],
       "size": [
         130,
@@ -42,8 +42,8 @@
       "sources": [
         {
           "path": "Sources/Gargantua/GargantuaApp.swift",
-          "line": 7,
-          "end_line": 8,
+          "line": 8,
+          "end_line": 9,
           "label": "App entry"
         },
         {
@@ -51,6 +51,12 @@
           "line": 274,
           "end_line": 278,
           "label": "Starts a scan"
+        },
+        {
+          "path": "Sources/Gargantua/GargantuaApp.swift",
+          "line": 263,
+          "end_line": 272,
+          "label": "Owns gargantua:// links"
         }
       ]
     },
@@ -61,7 +67,7 @@
       "sublabel": "profile adapters",
       "pos": [
         540,
-        240
+        360
       ],
       "size": [
         130,
@@ -90,7 +96,7 @@
       "tag": "synced snapshot",
       "pos": [
         790,
-        240
+        360
       ],
       "size": [
         130,
@@ -117,8 +123,8 @@
       "label": "Scheduler",
       "sublabel": "launchd runner",
       "pos": [
-        290,
-        60
+        790,
+        200
       ],
       "size": [
         130,
@@ -132,10 +138,16 @@
           "label": "runIfDue"
         },
         {
-          "path": "Sources/GargantuaCore/Services/ScheduledScanService+Scanning.swift",
-          "line": 15,
-          "end_line": 17,
-          "label": "Scan only"
+          "path": "Sources/GargantuaScheduler/main.swift",
+          "line": 17,
+          "end_line": 25,
+          "label": "Background update check"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseAnnouncement.swift",
+          "line": 97,
+          "end_line": 109,
+          "label": "Hands the notice to the app"
         }
       ]
     },
@@ -145,7 +157,7 @@
       "label": "MCP Server",
       "sublabel": "GargantuaMCP",
       "pos": [
-        790,
+        540,
         60
       ],
       "size": [
@@ -166,10 +178,10 @@
           "label": "Scan runner"
         },
         {
-          "path": "Sources/GargantuaCore/Services/MCP/MCPSSETransport.swift",
-          "line": 68,
-          "end_line": 78,
-          "label": "Bound listener"
+          "path": "Sources/GargantuaMCP/main.swift",
+          "line": 240,
+          "end_line": 252,
+          "label": "list_app_updates tool"
         }
       ]
     },
@@ -179,7 +191,7 @@
       "label": "AI Agent",
       "sublabel": "Claude, Cursor",
       "pos": [
-        1040,
+        40,
         60
       ],
       "size": [
@@ -193,8 +205,8 @@
       "label": "License Gate",
       "sublabel": "destructive actions",
       "pos": [
-        540,
-        400
+        290,
+        520
       ],
       "size": [
         130,
@@ -221,8 +233,8 @@
       "label": "Polar.sh",
       "sublabel": "license API",
       "pos": [
-        540,
-        560
+        40,
+        520
       ],
       "size": [
         130,
@@ -249,8 +261,8 @@
       "label": "Cleanup Engine",
       "sublabel": "Trash-first removal",
       "pos": [
-        790,
-        400
+        290,
+        680
       ],
       "size": [
         130,
@@ -283,8 +295,8 @@
       "label": "Privileged Helper",
       "sublabel": "root XPC service",
       "pos": [
-        1040,
-        400
+        40,
+        680
       ],
       "size": [
         130,
@@ -317,8 +329,8 @@
       "label": "Local State",
       "sublabel": "SwiftData + audit.json",
       "pos": [
-        290,
-        400
+        540,
+        520
       ],
       "size": [
         130,
@@ -344,6 +356,74 @@
           "label": "Audit after clean"
         }
       ]
+    },
+    {
+      "id": "updater",
+      "type": "backend",
+      "label": "App Updater",
+      "sublabel": "check + verified install",
+      "pos": [
+        1040,
+        360
+      ],
+      "size": [
+        130,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseCheckService.swift",
+          "line": 46,
+          "end_line": 81,
+          "label": "Check every source"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseInstaller.swift",
+          "line": 203,
+          "end_line": 211,
+          "label": "Install entry point"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/AppReleaseVerifier.swift",
+          "line": 338,
+          "end_line": 350,
+          "label": "Team ID must match"
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "Update Sources",
+      "sublabel": "feeds, Homebrew, App Store",
+      "pos": [
+        1290,
+        360
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/SparkleAppcastSource.swift",
+          "line": 26,
+          "end_line": 26,
+          "label": "Vendor Sparkle feeds"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/HomebrewCaskIndex.swift",
+          "line": 125,
+          "end_line": 125,
+          "label": "Homebrew cask API"
+        },
+        {
+          "path": "Sources/GargantuaCore/Services/AppReleases/MASLookupSource.swift",
+          "line": 48,
+          "end_line": 48,
+          "label": "App Store lookup"
+        }
+      ]
     }
   ],
   "boundaries": [
@@ -358,7 +438,8 @@
         "mcp",
         "gate",
         "cleanup",
-        "state"
+        "state",
+        "updater"
       ]
     },
     {
@@ -401,17 +482,13 @@
       "id": "sched-to-scan",
       "from": "sched",
       "to": "scan",
-      "label": "due scans",
-      "fromSide": "right",
-      "toSide": "top"
+      "label": "due scans"
     },
     {
       "id": "mcp-to-scan",
       "from": "mcp",
       "to": "scan",
-      "label": "scan tool",
-      "fromSide": "left",
-      "toSide": "top"
+      "label": "scan tool"
     },
     {
       "id": "agent-to-mcp",
@@ -426,22 +503,8 @@
       "to": "gate",
       "label": "authorize",
       "variant": "emphasis",
-      "fromSide": "right",
-      "toSide": "top",
-      "via": [
-        [
-          455,
-          272
-        ],
-        [
-          455,
-          350
-        ],
-        [
-          605,
-          350
-        ]
-      ]
+      "fromSide": "bottom",
+      "toSide": "top"
     },
     {
       "id": "gate-to-cleanup",
@@ -455,9 +518,7 @@
       "from": "gate",
       "to": "polar",
       "label": "validate key",
-      "variant": "dashed",
-      "fromSide": "bottom",
-      "toSide": "top"
+      "variant": "dashed"
     },
     {
       "id": "cleanup-to-helper",
@@ -470,7 +531,69 @@
       "id": "app-to-state",
       "from": "app",
       "to": "state",
-      "label": "audit entry"
+      "label": "audit entry",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "app-to-updater",
+      "from": "app",
+      "to": "updater",
+      "label": "check, update",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "sched-to-updater",
+      "from": "sched",
+      "to": "updater",
+      "label": "background check (opt-in)",
+      "variant": "dashed"
+    },
+    {
+      "id": "mcp-to-updater",
+      "from": "mcp",
+      "to": "updater",
+      "label": "list_app_updates (read-only)"
+    },
+    {
+      "id": "gate-to-updater",
+      "from": "gate",
+      "to": "updater",
+      "label": "authorization",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "rules-to-updater",
+      "from": "rules",
+      "to": "updater",
+      "label": "update catalog"
+    },
+    {
+      "id": "updater-to-sources",
+      "from": "updater",
+      "to": "sources",
+      "label": "HTTPS only",
+      "variant": "dashed"
+    },
+    {
+      "id": "updater-to-state",
+      "from": "updater",
+      "to": "state",
+      "label": "audit entry",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "sched-to-app",
+      "from": "sched",
+      "to": "app",
+      "label": "update notice",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "top"
     }
   ],
   "cards": [
@@ -511,6 +634,17 @@
         "Hugging Face for the default local MLX model download",
         "Sparkle appcast for updates; feedback Worker for reports",
         "Vendored fclones and czkawka binaries for duplicates and file health"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "App Updates",
+      "items": [
+        "Checks run on demand or opt-in daily; only App Store bundle IDs are sent",
+        "Vendor feed or catalog caps the version other sources may offer",
+        "Install needs a LicenseGate authorization and fails closed",
+        "Same Team ID, notarized, newer; old copy goes to Trash",
+        "Brew-managed apps update through brew upgrade --cask"
       ]
     }
   ]

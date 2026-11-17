@@ -41,8 +41,9 @@ enum ProcessSpawner {
     ///
     /// - Precondition: `executable` must be an absolute path. This helper uses
     ///   `posix_spawn`, not `posix_spawnp`, so it does not search PATH.
-    /// - The child inherits the parent's full environment and stdin fd, but not
-    ///   its working directory — see `configureWorkingDirectory`.
+    /// - The child inherits the parent's full environment, but not its working
+    ///   directory — see `configureWorkingDirectory`. Its stdin is /dev/null, so it can
+    ///   never read the parent's terminal or the MCP server's protocol stream.
     /// - The pipe fds (both read and write ends for stdout and stderr) are
     ///   closed in the child after the dup2s, so the child never holds extra
     ///   copies that would delay EOF on the parent side — except when a pipe
@@ -116,6 +117,8 @@ enum ProcessSpawner {
         for fd in [pipes.outWrite, pipes.errWrite, pipes.outRead, pipes.errRead] where fd != 1 && fd != 2 {
             try check(posix_spawn_file_actions_addclose(&fileActions, fd))
         }
+        // Last, so a pipe end that landed on fd 0 can't be closed over it.
+        try check(posix_spawn_file_actions_addopen(&fileActions, STDIN_FILENO, "/dev/null", O_RDONLY, 0))
     }
 
     /// Give the child an explicitly writable working directory instead of

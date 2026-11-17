@@ -114,9 +114,13 @@ public final class ScheduledScanController: @unchecked Sendable {
 
     @discardableResult
     /// Registers or unregisters the launch agent to match the supplied configuration.
-    public func synchronize(configuration: ScheduledScanConfiguration) throws -> ScheduledScanAgentStatus {
+    /// The agent stays registered while either background scans or background app-update checks are on.
+    public func synchronize(
+        configuration: ScheduledScanConfiguration,
+        appUpdateChecks: Bool = false
+    ) throws -> ScheduledScanAgentStatus {
         let current = installer.status()
-        if configuration.isEnabled {
+        if configuration.isEnabled || appUpdateChecks {
             switch current {
             case .enabled, .requiresApproval:
                 return current
@@ -153,4 +157,33 @@ private struct UnavailableScheduledScanAgentInstaller: ScheduledScanAgentInstall
     func status() -> ScheduledScanAgentStatus { .unavailable }
     func register() throws -> ScheduledScanAgentStatus { .unavailable }
     func unregister() throws -> ScheduledScanAgentStatus { .unavailable }
+}
+
+/// Plain-language reasons the background agent can't register.
+public enum ScheduledScanAgentRegistrationFailure {
+    public static let unsigned =
+        "This copy of Gargantua isn't signed for background tasks, so macOS won't register its background agent. "
+            + "Development builds hit this; the release build doesn't."
+    public static let loginItemsApproval =
+        "Allow Gargantua in System Settings > General > Login Items to run background checks."
+    public static let missingAgent =
+        "This copy of Gargantua is missing its background agent. Reinstall Gargantua to use background checks."
+    private static let serviceManagementDomain = "SMAppServiceErrorDomain"
+    public static let generic = "macOS couldn't register Gargantua's background agent."
+
+    public static func message(for error: Error) -> String {
+        #if os(macOS)
+            let nsError = error as NSError
+            guard nsError.domain == serviceManagementDomain else { return generic }
+            switch nsError.code {
+            case kSMErrorInvalidSignature: return unsigned
+            case kSMErrorLaunchDeniedByUser: return loginItemsApproval
+            // macOS 27 reports a missing plist as 108, "Unable to read plist".
+            case kSMErrorJobPlistNotFound, 108: return missingAgent
+            default: return generic
+            }
+        #else
+            return generic
+        #endif
+    }
 }

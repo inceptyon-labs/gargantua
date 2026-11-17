@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 usage() {
     cat <<'EOF'
-Usage: Scripts/validate-rules.sh [all|cleanup|uninstall|command]
+Usage: Scripts/validate-rules.sh [all|cleanup|uninstall|command|updates]
 
 Runs the focused rule-validation test suites used for community rule PRs.
 EOF
@@ -17,7 +17,7 @@ mode="${1:-all}"
 
 case "$mode" in
     all)
-        filter='RuleParserTests|RuleSetIntegration|CleanupProfileTests'
+        filter='RuleParserTests|RuleSetIntegration|CleanupProfileTests|AppReleaseCatalogTests'
         ;;
     cleanup)
         filter='RuleParserTests|RuleSetIntegration|CleanupProfileTests'
@@ -27,6 +27,9 @@ case "$mode" in
         ;;
     command)
         filter='CommandActionRuleParserTests|CommandActionRuleSetIntegrationTests|CleanupProfileTests'
+        ;;
+    updates)
+        filter='AppReleaseCatalogTests'
         ;;
     -h|--help|help)
         usage

@@ -1,0 +1,72 @@
+# Update sources for apps that Gargantua's automatic sources miss: the app sets
+# its Sparkle feed in code instead of Info.plist, or it ships through GitHub
+# Releases. Every entry pins the developer Team ID the update must be signed
+# with. See docs/schema.md#update-sources.
+update_sources:
+  - id: tailscale_standalone
+    name: Tailscale
+    bundle_id: io.tailscale.ipn.macsys
+    team_id: W5364U7YZB
+    source:
+      type: sparkle
+      feed_url: https://pkgs.tailscale.com/stable/appcast.xml
+    install: auto
+    homepage: https://tailscale.com/download/mac
+    explanation: The standalone build sets its Sparkle feed in code, so it is not in Info.plist.
+    tags: [network, sparkle]
+
+  - id: moonlight
+    name: Moonlight
+    bundle_id: com.moonlight-stream.Moonlight
+    team_id: 45U78722YL
+    source:
+      type: github
+      repo: moonlight-stream/moonlight-qt
+      asset: '^Moonlight-[0-9.]+\.dmg$'
+      tag_prefix: v
+    install: auto
+    homepage: https://moonlight-stream.org
+    explanation: Released on GitHub; the app has no update feed.
+    tags: [games, github]
+
+  - id: yubico_authenticator
+    name: Yubico Authenticator
+    bundle_id: com.yubico.yubioath
+    team_id: LQA3CS5MM7
+    source:
+      type: github
+      repo: Yubico/yubioath-flutter
+      asset: '^yubico-authenticator-[0-9.]+-macos\.dmg$'
+    install: auto
+    homepage: https://www.yubico.com/products/yubico-authenticator/
+    explanation: Released on GitHub; the app has no update feed.
+    tags: [security, github]
+
+  - id: raspberry_pi_imager
+    name: Raspberry Pi Imager
+    bundle_id: com.raspberrypi.rpi-imager
+    team_id: 8RDZTRXE62
+    source:
+      type: github
+      repo: raspberrypi/rpi-imager
+      asset: '^rpi-imager-v[0-9.]+\.dmg$'
+      tag_prefix: v
+    install: auto
+    homepage: https://www.raspberrypi.com/software/
+    explanation: Released on GitHub; the app has no update feed.
+    tags: [utilities, github]
+
+  - id: handy
+    name: Handy
+    bundle_id: com.pais.handy
+    team_id: UWFLB4GC25
+    source:
+      type: github
+      repo: cjpais/Handy
+      asset: '^Handy_[0-9.]+_aarch64\.dmg$'
+      asset_x86_64: '^Handy_[0-9.]+_x64\.dmg$'
+      tag_prefix: v
+    install: auto
+    homepage: https://handy.computer
+    explanation: Released on GitHub with separate Apple silicon and Intel downloads.
+    tags: [productivity, github]

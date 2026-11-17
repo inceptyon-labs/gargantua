@@ -4,6 +4,7 @@ struct SidebarSectionView: View {
     let section: SidebarSection
     @Binding var selection: String?
     let isCollapsed: Bool
+    var badges: [String: Int] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
@@ -22,6 +23,7 @@ struct SidebarSectionView: View {
                     item: item,
                     isSelected: selection == item.id,
                     isCollapsed: isCollapsed,
+                    badgeCount: badges[item.id] ?? 0,
                     onSelect: { selection = item.id }
                 )
             }
@@ -33,6 +35,7 @@ private struct SidebarItemRow: View {
     let item: SidebarItem
     let isSelected: Bool
     let isCollapsed: Bool
+    let badgeCount: Int
     let onSelect: () -> Void
 
     @State private var isHovered = false
@@ -47,6 +50,14 @@ private struct SidebarItemRow: View {
                     .foregroundStyle(isSelected ? GargantuaColors.ink : GargantuaColors.ink3)
                     .frame(width: 20, alignment: .center)
                     .frame(maxWidth: isCollapsed ? .infinity : nil, alignment: .center)
+                    .overlay(alignment: .topTrailing) {
+                        if isCollapsed, badgeCount > 0 {
+                            Circle()
+                                .fill(GargantuaColors.accent)
+                                .frame(width: 8, height: 8)
+                                .offset(x: 3, y: -2)
+                        }
+                    }
 
                 if !isCollapsed {
                     Text(item.label)
@@ -56,6 +67,16 @@ private struct SidebarItemRow: View {
                         .transition(.opacity)
 
                     Spacer(minLength: 0)
+
+                    if badgeCount > 0 {
+                        Text("\(badgeCount)")
+                            .font(GargantuaFonts.sectionLabel.monospacedDigit())
+                            .foregroundStyle(GargantuaColors.void_)
+                            .padding(.horizontal, GargantuaSpacing.space1)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Capsule(style: .continuous).fill(GargantuaColors.accent))
+                            .fixedSize()
+                    }
                 }
             }
             .padding(.vertical, GargantuaSpacing.space2)
@@ -87,7 +108,12 @@ private struct SidebarItemRow: View {
         }
         .animation(.easeOut(duration: Self.transitionDuration), value: isSelected)
         .animation(.easeOut(duration: Self.transitionDuration), value: isHovered)
-        .accessibilityLabel(item.label)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        guard badgeCount > 0 else { return item.label }
+        return "\(item.label), \(badgeCount) \(badgeCount == 1 ? "update" : "updates") available"
     }
 
     private var rowBackground: Color {

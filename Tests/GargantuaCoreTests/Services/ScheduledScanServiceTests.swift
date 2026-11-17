@@ -137,6 +137,23 @@ struct ScheduledScanServiceTests {
         #expect(installer.unregisterCount == 1)
     }
 
+    @Test("app-update checks keep the agent registered while scans are off")
+    func controllerHonorsAppUpdateChecks() throws {
+        let off = ScheduledScanConfiguration(isEnabled: false)
+
+        let fresh = SpyScheduledScanAgentInstaller()
+        #expect(try ScheduledScanController(installer: fresh).synchronize(configuration: off, appUpdateChecks: true) == .enabled)
+        #expect(fresh.registerCount == 1)
+
+        let running = SpyScheduledScanAgentInstaller(initialStatus: .enabled)
+        let controller = ScheduledScanController(installer: running)
+        #expect(try controller.synchronize(configuration: off, appUpdateChecks: true) == .enabled)
+        #expect(running.unregisterCount == 0)
+
+        #expect(try controller.synchronize(configuration: off, appUpdateChecks: false) == .notRegistered)
+        #expect(running.unregisterCount == 1)
+    }
+
     @Test("controller registers from notFound (the agent pre-registration state)")
     func controllerRegistersWhenAgentNotFound() throws {
         let installer = SpyScheduledScanAgentInstaller(initialStatus: .notFound)

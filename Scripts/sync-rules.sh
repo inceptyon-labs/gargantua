@@ -33,6 +33,7 @@ LANES=(
     "cleanup:rules/cleanup:cleanup_rules"
     "uninstall:rules/uninstall:uninstall_rules"
     "command:rules/command:command_rules"
+    "updates:rules/updates:update_catalog"
 )
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -192,14 +193,15 @@ cmd_apply() {
     )"
 
     today="$(date +%F)"
-    local c_clean c_uninstall c_command
+    local c_clean c_uninstall c_command c_updates
     c_clean="$(count_lane cleanup_rules)"
     c_uninstall="$(count_lane uninstall_rules)"
     c_command="$(count_lane command_rules)"
+    c_updates="$(count_lane update_catalog)"
 
     UPSTREAM_URL="$(manifest_field upstream)" \
     REF="$ref" COMMIT="$commit" SYNCED="$today" \
-    CLEAN="$c_clean" UNINSTALL="$c_uninstall" COMMAND="$c_command" \
+    CLEAN="$c_clean" UNINSTALL="$c_uninstall" COMMAND="$c_command" UPDATES="$c_updates" \
     LOCAL_ONLY="$local_only_json" PENDING="$pending_json" \
     python3 - "$MANIFEST" <<'PY'
 import json, os, sys
@@ -214,6 +216,7 @@ manifest = {
         "cleanup": int(os.environ["CLEAN"]),
         "uninstall": int(os.environ["UNINSTALL"]),
         "command": int(os.environ["COMMAND"]),
+        "updates": int(os.environ["UPDATES"]),
     },
     "localOnly": json.loads(os.environ["LOCAL_ONLY"]),
     "pendingFromUpstream": json.loads(os.environ["PENDING"]),

@@ -12,6 +12,8 @@ public struct SettingsView: View {
     @AppStorage(MenuBarPreferences.widgetEnabledKey) var menuBarWidgetEnabled = MenuBarPreferences.defaultWidgetEnabled
     @AppStorage(MenuBarPreferences.launchAtLoginEnabledKey) var launchAtLoginEnabled = MenuBarPreferences.defaultLaunchAtLoginEnabled
     @AppStorage(AppAppearance.userDefaultsKey) var appearanceRawValue = AppAppearance.defaultValue.rawValue
+    /// Observed so the App Updates toggle redraws when its stored preferences change.
+    @AppStorage(AppReleasePreferences.userDefaultsKey) var appReleasePreferencesData = Data()
 
     /// App-shared download manager. When `init(persistence:)` is used without
     /// an explicit manager, the view owns its own `@StateObject` so standalone
@@ -26,6 +28,7 @@ public struct SettingsView: View {
     @State var availableProfiles: [CleanupProfile] = CleanupProfile.builtIn
     @State var scheduledScanAgentStatus: ScheduledScanAgentStatus = .notRegistered
     @State var scheduledScanError: String?
+    @State var appUpdatesBackgroundNotice: String?
     @State var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     @State var launchAtLoginError: String?
     @AppStorage(SettingsTab.selectedTabKey) private var selectedTabRaw = SettingsTab.ai.rawValue
@@ -108,12 +111,23 @@ public struct SettingsView: View {
             // never registered (older builds bailed on `.notFound`), register it
             // now so the status reflects reality instead of a stale pre-register state.
             let scheduledScanController = ScheduledScanController()
-            if let fetched = settings, fetched.autoScanEnabled {
+            let appUpdateChecks = AppReleasePreferences.stored().backgroundCheckEnabled
+            if let fetched = settings, fetched.autoScanEnabled || appUpdateChecks {
                 let configuration = ScheduledScanConfiguration(settings: fetched)
                 if configuration.canSynchronizeLaunchAgent {
-                    scheduledScanAgentStatus =
-                        (try? scheduledScanController.synchronize(configuration: configuration))
-                            ?? scheduledScanController.status()
+                    do {
+                        scheduledScanAgentStatus = try scheduledScanController.synchronize(
+                            configuration: configuration,
+                            appUpdateChecks: appUpdateChecks
+                        )
+                        if appUpdateChecks {
+                            appUpdatesBackgroundNotice = scheduledScanAgentStatus == .requiresApproval
+                                ? Self.loginItemsApprovalNote : nil
+                        }
+                    } catch {
+                        scheduledScanAgentStatus = scheduledScanController.status()
+                        if appUpdateChecks { appUpdatesBackgroundNotice = Self.backgroundAgentNotice(for: error) }
+                    }
                 } else {
                     scheduledScanAgentStatus = scheduledScanController.status()
                 }
@@ -176,6 +190,7 @@ public struct SettingsView: View {
             appearanceSection
             schedulingSection
             menuBarSection
+            appUpdatesSection
         case .network:
             MCPTransportSettingsSection()
         case .storage:

@@ -7,7 +7,7 @@ extension SettingsView {
     var updatesSection: some View {
         SettingsSectionContainer(
             "Updates",
-            subtitle: "App updates are delivered through Sparkle."
+            subtitle: "Gargantua updates are delivered through Sparkle."
         ) {
             HStack(spacing: GargantuaSpacing.space3) {
                 SettingsRowIcon(systemName: "arrow.triangle.2.circlepath.circle", size: 20)

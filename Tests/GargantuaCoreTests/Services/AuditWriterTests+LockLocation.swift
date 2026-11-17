@@ -114,4 +114,40 @@ extension AuditWriterTests {
         #expect(writer.lockFile.path.hasSuffix("Library/Application Support/Gargantua/audit.lock"))
         #expect(!writer.lockFile.path.contains("/Library/Logs/"))
     }
+
+    @Test("the test runner cannot write or purge the production audit log")
+    func productionLogIsOffLimitsDuringTests() throws {
+        #expect(AuditWriter.refusesProductionWrites)
+
+        let writer = AuditWriter()
+        func stamp() -> (Int, Date)? {
+            let attributes = try? FileManager.default.attributesOfItem(atPath: writer.logFile.path)
+            guard let size = (attributes?[.size] as? NSNumber)?.intValue,
+                  let modified = attributes?[.modificationDate] as? Date else { return nil }
+            return (size, modified)
+        }
+        let before = stamp()
+        // A refused write must not even create the directory (no-op where it exists).
+        let directoryExisted = FileManager.default.fileExists(atPath: writer.logDirectory.path)
+
+        #expect {
+            try writer.write(makeEntry(path: "/never-written"))
+        } throws: { error in
+            if case AuditWriteError.productionLogDuringTests = error { return true }
+            return false
+        }
+        #expect {
+            try writer.purgeEntries(olderThanDays: 90)
+        } throws: { error in
+            if case AuditWriteError.productionLogDuringTests = error { return true }
+            return false
+        }
+
+        if !directoryExisted {
+            #expect(!FileManager.default.fileExists(atPath: writer.logDirectory.path))
+        }
+        let after = stamp()
+        #expect(before?.0 == after?.0)
+        #expect(before?.1 == after?.1)
+    }
 }

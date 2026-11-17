@@ -233,6 +233,24 @@ let listBackgroundItemsHandler = MCPListBackgroundItemsToolHandler(
 )
 dispatcher.register(tool: .listBackgroundItems, handler: listBackgroundItemsHandler.toolHandler)
 
+// MARK: - list_app_updates
+
+// The MCP server is a separate executable inside the app bundle, so the
+// ignored/skipped lists come from the containing app's defaults suite.
+let listAppUpdatesHandler = MCPListAppUpdatesToolHandler(
+    rowsProvider: {
+        try runBlocking {
+            let preferences = AppReleaseBackgroundCheck.containingAppSuiteName()
+                .flatMap { UserDefaults(suiteName: $0) }
+                .map { AppReleasePreferences.stored(in: $0) } ?? AppReleasePreferences()
+            let apps = await DefaultAppReleaseInventory().installedApps()
+            return await AppReleaseCheckService.makeDefault().check(apps, preferences: preferences)
+        }
+    },
+    log: stderrLog
+)
+dispatcher.register(tool: .listAppUpdates, handler: listAppUpdatesHandler.toolHandler)
+
 // MARK: - clean (Phase 3)
 
 // Shared infrastructure for Phase 3 destructive tools. The `clean` handler

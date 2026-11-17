@@ -1,4 +1,7 @@
+import os
 import SwiftUI
+
+private let automationLogger = Logger(subsystem: "com.gargantua.core", category: "Settings")
 
 extension SettingsView {
 
@@ -193,6 +196,112 @@ extension SettingsView {
         }
     }
 
+    // MARK: - App Updates Section
+
+    var appUpdatesSection: some View {
+        SettingsSectionContainer(
+            "Third-party app updates",
+            subtitle: "Find newer versions of the apps you have installed."
+        ) {
+            updateToggleRow(
+                icon: "arrow.down.app",
+                label: "Check for app updates daily",
+                detail: "Contacts each app's update feed, Homebrew and the App Store. "
+                    + "Off by default. Apple receives the bundle IDs of your App Store apps; "
+                    + "nothing else about your Mac is sent.",
+                isOn: appUpdatesAutoCheckBinding
+            )
+
+            updateToggleRow(
+                icon: "bell.badge",
+                label: "Check in the background and notify me",
+                detail: "About once a day, even when Gargantua is closed. "
+                    + "Uses the same sources as a manual check and sends nothing more than one does.",
+                isOn: appUpdatesBackgroundCheckBinding
+            )
+
+            if let appUpdatesBackgroundNotice {
+                SettingsNoticeRow(
+                    icon: "exclamationmark.triangle.fill",
+                    message: appUpdatesBackgroundNotice,
+                    tone: .protected
+                )
+            }
+        }
+    }
+
+    /// Reads and writes the App Updater's stored preferences directly; the
+    /// update page's session re-reads them each time.
+    private var appUpdatesAutoCheckBinding: Binding<Bool> {
+        Binding(
+            get: { _ = appReleasePreferencesData; return AppReleasePreferences.stored().autoCheckEnabled },
+            set: { enabled in
+                var preferences = AppReleasePreferences.stored()
+                preferences.autoCheckEnabled = enabled
+                preferences.store()
+            }
+        )
+    }
+
+    private var appUpdatesBackgroundCheckBinding: Binding<Bool> {
+        Binding(
+            get: { _ = appReleasePreferencesData; return AppReleasePreferences.stored().backgroundCheckEnabled },
+            set: { enabled in
+                var preferences = AppReleasePreferences.stored()
+                preferences.backgroundCheckEnabled = enabled
+                preferences.store()
+                if settings == nil { settings = try? persistence.fetchSettings() }
+                // Without settings the scan configuration is unknown; only
+                // register, so a failed load can't switch off scheduled scans.
+                guard let settings else {
+                    if enabled {
+                        registerWithoutSettings(preferences: &preferences)
+                    } else {
+                        appUpdatesBackgroundNotice = nil
+                    }
+                    return
+                }
+                do {
+                    let configuration = ScheduledScanConfiguration(settings: settings)
+                    let status = try ScheduledScanController().synchronize(
+                        configuration: configuration,
+                        appUpdateChecks: enabled
+                    )
+                    scheduledScanAgentStatus = status
+                    appUpdatesBackgroundNotice = enabled && status == .requiresApproval
+                        ? Self.loginItemsApprovalNote
+                        : nil
+                } catch {
+                    preferences.backgroundCheckEnabled = false
+                    preferences.store()
+                    appUpdatesBackgroundNotice = Self.backgroundAgentNotice(for: error)
+                }
+            }
+        )
+    }
+
+    private func registerWithoutSettings(preferences: inout AppReleasePreferences) {
+        do {
+            let status = try ScheduledScanController().synchronize(
+                configuration: ScheduledScanConfiguration(isEnabled: false),
+                appUpdateChecks: true
+            )
+            scheduledScanAgentStatus = status
+            appUpdatesBackgroundNotice = status == .requiresApproval ? Self.loginItemsApprovalNote : nil
+        } catch {
+            preferences.backgroundCheckEnabled = false
+            preferences.store()
+            appUpdatesBackgroundNotice = Self.backgroundAgentNotice(for: error)
+        }
+    }
+
+    static let loginItemsApprovalNote = ScheduledScanAgentRegistrationFailure.loginItemsApproval
+
+    static func backgroundAgentNotice(for error: Error) -> String {
+        automationLogger.error("Background agent registration failed: \(String(describing: error), privacy: .public)")
+        return ScheduledScanAgentRegistrationFailure.message(for: error)
+    }
+
     // MARK: - Helpers
 
     private func schedulingPickerRow<Control: View>(
@@ -335,7 +444,10 @@ extension SettingsView {
             settings = fetched
             let configuration = ScheduledScanConfiguration(settings: fetched)
             if configuration.canSynchronizeLaunchAgent {
-                scheduledScanAgentStatus = try ScheduledScanController().synchronize(configuration: configuration)
+                scheduledScanAgentStatus = try ScheduledScanController().synchronize(
+                    configuration: configuration,
+                    appUpdateChecks: AppReleasePreferences.stored().backgroundCheckEnabled
+                )
                 scheduledScanError = nil
             } else {
                 scheduledScanError = "Custom schedule is not valid."

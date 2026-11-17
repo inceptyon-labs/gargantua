@@ -107,8 +107,15 @@ public final class AuditWriter: Sendable {
     /// call opens a fresh descriptor, so calling it twice from one thread
     /// self-deadlocks until `lockTimeout` elapses.
     private func acquireFileLock() throws -> Int32 {
+        try refuseProductionLogDuringTests()
         let deadline = Date().addingTimeInterval(lockTimeout)
         return try lockDescriptor(openDescriptor(at: lockFile), deadline: deadline)
+    }
+
+    private func refuseProductionLogDuringTests() throws {
+        if usesProductionLogDirectory && Self.refusesProductionWrites {
+            throw AuditWriteError.productionLogDuringTests(logFile.path)
+        }
     }
 
     /// Release a descriptor returned by `acquireFileLock`.
@@ -158,6 +165,10 @@ public final class AuditWriter: Sendable {
     /// Clamped to [0, 60]: a negative or non-finite bound would silently turn
     /// every acquisition into an immediate failure or an unbounded wait.
     private let lockTimeout: TimeInterval
+    private let usesProductionLogDirectory: Bool
+    /// Under the test runner (XCTest loads even for Swift Testing) the production
+    /// log is off limits; the app, scheduler and MCP server never load XCTest.
+    static let refusesProductionWrites = NSClassFromString("XCTestCase") != nil
 
     /// Creates an AuditWriter targeting the given directory.
     ///
@@ -187,6 +198,7 @@ public final class AuditWriter: Sendable {
 
         let usesProductionLogDirectory = dir.resolvingSymlinksInPath().standardizedFileURL
             == productionLogDirectory.resolvingSymlinksInPath().standardizedFileURL
+        self.usesProductionLogDirectory = usesProductionLogDirectory
         let defaultLockDir = usesProductionLogDirectory
             ? home.appendingPathComponent("Library/Application Support/Gargantua")
             : dir
@@ -202,6 +214,7 @@ public final class AuditWriter: Sendable {
     /// as a single JSON line (JSONL format). Thread-safe — concurrent
     /// calls are serialized.
     public func write(_ entry: AuditEntry) throws {
+        try refuseProductionLogDuringTests()
         let data = try Self.encoder.encode(entry)
         guard var line = String(data: data, encoding: .utf8) else {
             throw AuditWriteError.encodingFailed
@@ -409,6 +422,7 @@ public final class AuditWriter: Sendable {
     /// - Returns: The number of entries purged.
     @discardableResult
     public func purgeEntries(olderThanDays retentionDays: Int = 90, now: Date = Date()) throws -> Int {
+        try refuseProductionLogDuringTests()
         guard FileManager.default.fileExists(atPath: logFile.path) else { return 0 }
 
         // Unlike write(_:), retention is deferrable — running the
@@ -472,6 +486,7 @@ public enum AuditWriteError: Error, LocalizedError {
     case openFailed(code: Int32)
     case writeFailed(code: Int32)
     case lockFailed(code: Int32)
+    case productionLogDuringTests(String)
 
     public var errorDescription: String? {
         switch self {
@@ -479,6 +494,7 @@ public enum AuditWriteError: Error, LocalizedError {
         case let .openFailed(code): "Failed to open audit log for appending (errno \(code))"
         case let .writeFailed(code): "Failed to append to audit log (errno \(code))"
         case let .lockFailed(code): "Failed to lock the audit log for exclusive access (errno \(code))"
+        case let .productionLogDuringTests(path): "Tests must not write the production audit log at \(path); pass a temporary logDirectory."
         }
     }
 }

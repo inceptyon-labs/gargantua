@@ -65,7 +65,7 @@ The features that don't exist anywhere else in this category:
 - **A three-tier safety classification that AI can't override.** Findings are graded `safe` / `review` / `protected` before any UI sees them. A bundled protected-roots policy hard-blocks cleanup at filesystem roots no matter what a rule (or a model) says.
 - **Explainability as a first-class output.** Every finding answers "why is this here and why is it safe to remove" — from rule metadata directly, or from an optional local/cloud model that can add detail but never lower a rating.
 - **AI-agent automation over MCP.** Gargantua ships a local Model Context Protocol server with segregated read-only and destructive tool registries, bearer-token auth, per-connection rate limits, and a hard `protected` reject. No other cleaner lets an AI agent drive it under guardrails.
-- **Local-first and telemetry-free.** The default explanation engine needs no network and no model. Local MLX inference runs entirely on Apple Silicon. Nothing phones home.
+- **Local-first and telemetry-free.** The default explanation engine needs no network and no model. Local MLX inference runs entirely on Apple Silicon. Nothing phones home: there is no telemetry. App Updates checks run only when you start or schedule them, go straight to each app's update feed, Homebrew and the App Store, and upload nothing about your Mac.
 - **Developer-native cleanup.** Tool-aware previews for Docker, Homebrew, Xcode simulators, pnpm, npm, Yarn, Go, and Cargo — run through each tool's own commands, not by blindly deleting directories.
 - **Open and free at the source.** The paid build only gates the *execution* of destructive actions behind a one-time license; scans always run, and a clean source build is fully unlocked forever.
 
@@ -75,6 +75,7 @@ The features that don't exist anywhere else in this category:
 - **Dev Purge**: narrow-scope view limited to developer artifacts, Docker, Homebrew, and stale developer versions so a routine cleanup can't accidentally widen into a full scan.
 - **Developer Tools**: tool-native Homebrew, Docker, Xcode Simulator, pnpm, npm, Yarn, Go, and Cargo cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
 - **Smart Uninstaller**: app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state, including a `review`-gated prune of orphaned Spotlight search rules (dead `com.apple.Spotlight` entries macOS leaves behind and offers no UI to remove).
+- **App Updates**: finds newer releases of your third-party apps and installs them after verifying them (see [App Updates](#app-updates)). Built for people moving off MacUpdater, whose update database shuts down after 2026.
 - **Duplicate Finder**: duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
 - **File Health**: empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
 - **Disk Explorer**: interactive treemap and directory drill-down for understanding where space goes before cleaning.
@@ -130,6 +131,27 @@ A few things to know about local rules:
 
 A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_policy/protected_roots.yaml`) hard-blocks cleanup at filesystem roots regardless of rule classification. It covers `/`, `/Applications`, `/Library`, `/System`, `/Users`, `~`, `~/Library`, `/private`, `/var`, `/var/folders/*/*/{C,T,X}`, and equivalents under `/System/Volumes/Data`. Users can add their own protected roots in Settings → Storage; bundled entries cannot be removed.
 
+## App Updates
+
+App Updates lists installed third-party apps with a newer release and installs them. Release information comes from four places, all fetched over HTTPS, redirects included:
+
+- the app's own Sparkle feed (`SUFeedURL` in its Info.plist);
+- Homebrew's public cask metadata (`formulae.brew.sh`), matched by app name and confirmed by bundle ID where the cask lists one;
+- the Mac App Store lookup API, for App Store apps, which open in the App Store to update. The lookup sends Apple the bundle IDs of your App Store apps;
+- a curated catalog for apps the others miss (Sparkle feeds set in code, GitHub Releases), maintained in [`gargantua-rules/rules/updates`](https://github.com/inceptyon-labs/gargantua-rules/tree/main/rules/updates) and bundled like the cleanup rules. Every catalog entry pins the developer Team ID.
+
+No Inceptyon server is involved. Apart from the App Store lookup, a check sends no list of your apps anywhere: each feed or release page is fetched for its own app, and Homebrew's metadata is downloaded whole and matched on your Mac.
+
+Checks run only when you open the pane or click Check, or daily if you turn that on in Settings. Installing is license-gated like other destructive actions and fails closed. The download must:
+
+- match its declared size, SHA-256 and Sparkle EdDSA signature where the source provides them (an app with a Sparkle key rejects an unsigned release);
+- unpack without path traversal or symlinks that leave the bundle;
+- contain exactly one app with the installed app's bundle ID;
+- pass full code-signature validation, be signed by the same developer Team ID as the installed copy, and be accepted by Gatekeeper as notarized;
+- be newer than the installed version.
+
+Gargantua quits the app only with your consent and never force-quits it. It moves the old copy to the Trash (put it back to undo), moves the new one into place, and writes an audit entry. Apps that Homebrew manages update through `brew upgrade --cask` so brew's records stay correct. Installer packages, apps owned by an administrator and unsigned apps get a download link instead of an install.
+
 ## Configuration
 
 Everything below is configurable from **Settings**. Five tabs: AI · Automation · Network · Storage · About.
@@ -163,6 +185,7 @@ In all engines: **AI can explain a classification but cannot lower it.** A `prot
 
 - **Scheduled scans**: launchd agent registered via SMAppService. Interval presets (hourly, daily, weekly) or a custom 5-field cron expression with validation. Selectable profile (default `Light`). Toggle to skip when on battery.
 - **Menu bar widget**: glanceable status, optional.
+- **App updates**: optional daily check while Gargantua is running. There is also an optional background check, about once a day even when Gargantua is closed, that notifies you about new updates. Both are off by default.
 - **Launch at login**: registered through `SMAppService.loginItem`.
 
 ### Network (Settings → Network)
@@ -375,7 +398,7 @@ Useful supporting scripts:
 
 ## Rule Contributions
 
-Rules use a **two-repo model**: rule-only PRs (schema, new paths, refinements) go to the public [`inceptyon-labs/gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) repository. This app repo vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`, which is what ships at runtime; there is no live remote rule fetch.
+Rules use a **two-repo model**: rule-only PRs (schema, new paths, refinements, App Updates sources) go to the public [`inceptyon-labs/gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) repository. This app repo vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`, which is what ships at runtime; there is no live remote rule fetch.
 
 The full flow (PR → review → snapshot sync → release), schema crib, classification guidance, evidence checklist, and local-testing steps are in [CONTRIBUTING.md](CONTRIBUTING.md#contributing-rules).
 
