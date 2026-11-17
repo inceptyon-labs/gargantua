@@ -120,9 +120,11 @@ public struct AppReleasesView: View {
 
     private var idleState: some View {
         centered {
-            Image(systemName: "arrow.down.app")
-                .font(.system(size: 34))
-                .foregroundStyle(GargantuaColors.ink4)
+            GargantuaBrandIcon(
+                resourceName: "app-updates-gargantua-gpt2",
+                fallbackSystemName: "arrow.down.app",
+                fallbackColor: GargantuaColors.ink4
+            )
 
             Text("Check your apps for updates")
                 .font(GargantuaFonts.heading)
