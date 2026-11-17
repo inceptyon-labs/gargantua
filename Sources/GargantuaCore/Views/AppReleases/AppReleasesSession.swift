@@ -2,38 +2,6 @@ import Foundation
 import GargantuaLicensing
 import SwiftUI
 
-/// Where the App Updates page is: nothing checked yet, a check running, a
-/// list on screen, or a check that produced nothing.
-public enum AppReleasesPhase: Equatable, Sendable {
-    case idle
-    case checking
-    case ready
-    case failed(String)
-}
-
-/// Which rows the list shows.
-public enum AppReleasesFilter: String, CaseIterable, Sendable {
-    case updates
-    case all
-    case ignored
-
-    var label: String {
-        switch self {
-        case .updates: "Updates"
-        case .all: "All"
-        case .ignored: "Ignored"
-        }
-    }
-}
-
-/// What the last install attempt on a row left behind.
-public enum AppReleaseRowMessage: Equatable, Sendable {
-    case installed(String)
-    /// Installed, but with something the user should look at.
-    case installedWithWarning(String)
-    case failed(String)
-}
-
 /// Holds the App Updates list, the user's ignore and skip choices, and the
 /// state of any install in flight. The window keeps one for its lifetime so
 /// the list survives navigating away.
@@ -340,17 +308,7 @@ public final class AppReleasesSession {
             }
         )
 
-        switch result {
-        case .success(let installed):
-            let updated = "Updated to \(installed.installedVersion.description)."
-            // A warning stays on screen, in the failure style, until the next attempt.
-            rowMessages[id] = installed.warning.map { .installedWithWarning("\(updated) \($0)") } ?? .installed(updated)
-            recentlyInstalled.insert(id)
-            await refresh(row.app)
-        case .failure(let error):
-            rowMessages[id] = .failed(error.localizedDescription)
-            if error == .appManagementDenied { showsAppManagementHelp = true }
-        }
+        await finish(result, of: candidate, for: row)
     }
 
     /// Re-reads one app from disk and checks just that app again. Drops its
@@ -486,5 +444,34 @@ extension AppReleasesSession {
             AppReleaseBackgroundCheck.raise(&seen.announcedVersions, to: found)
         }
         seen.store(in: defaults, key: key)
+    }
+}
+
+private extension AppReleasesSession {
+    /// Shows what an install attempt left behind and re-checks the app.
+    func finish(
+        _ result: Result<AppReleaseInstallResult, AppReleaseInstallError>,
+        of candidate: AppReleaseCandidate,
+        for row: AppReleaseRow
+    ) async {
+        let id = row.app.bundleID
+        switch result {
+        case .success(let installed):
+            let updated = "Updated to \(installed.installedVersion.description)."
+            // A warning stays on screen, in the failure style, until the next attempt.
+            rowMessages[id] = installed.warning.map { .installedWithWarning("\(updated) \($0)") } ?? .installed(updated)
+            updatePreferences { $0.confirm(candidate, holds: installed.installedVersion.description, for: id) }
+        case .failure(let error):
+            guard let current = error.versionAlreadyInstalled else {
+                rowMessages[id] = .failed(error.localizedDescription)
+                if error == .appManagementDenied { showsAppManagementHelp = true }
+                return
+            }
+            // The download holds the installed version; its source only names it differently.
+            rowMessages[id] = .installed("Already up to date. This release is the version that's installed.")
+            updatePreferences { $0.confirm(candidate, holds: current, for: id) }
+        }
+        recentlyInstalled.insert(id)
+        await refresh(row.app)
     }
 }

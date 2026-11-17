@@ -71,6 +71,7 @@ struct AppReleasesSessionTests {
     final class StubInstaller: AppReleaseInstalling {
         private(set) var calls: [(bundleID: String, quitIfRunning: Bool)] = []
         var warning: String?
+        var failure: AppReleaseInstallError?
 
         // swiftlint:disable:next function_parameter_count
         func install(
@@ -82,6 +83,7 @@ struct AppReleasesSessionTests {
             progress: @escaping @MainActor @Sendable (AppReleaseInstallPhase) -> Void
         ) async -> Result<AppReleaseInstallResult, AppReleaseInstallError> {
             calls.append((app.bundleID, quitIfRunning))
+            if let failure { return .failure(failure) }
             return .success(AppReleaseInstallResult(
                 installedVersion: candidate.version, previousCopyInTrash: nil, relaunched: false, warning: warning
             ))

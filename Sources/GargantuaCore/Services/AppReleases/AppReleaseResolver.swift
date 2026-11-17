@@ -33,7 +33,11 @@ public enum AppReleaseResolver {
         if brewManagedToken == nil, let ceiling = vendorCeiling(considered, installed: app.version) {
             eligible = eligible.filter { $0.version.compare(to: ceiling) != .orderedDescending }
         }
-        let newer = eligible.filter { $0.version.isNewer(than: app.version) }
+        // A release already found installed under another version string
+        // is not an update, however its number compares.
+        let newer = eligible.filter {
+            $0.version.isNewer(than: app.version) && !preferences.confirms($0, isInstalledAs: app)
+        }
 
         guard let chosen = preferred(among: newer) else {
             return row(noUpdateStatus(considered: considered, eligible: eligible))

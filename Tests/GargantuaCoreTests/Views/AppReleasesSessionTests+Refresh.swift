@@ -116,6 +116,40 @@ extension AppReleasesSessionTests {
         #expect(AppReleasePreferences.stored(in: defaults).lastAutoCheck == start)
     }
 
+    @Test("An install records which bundle version the release held, also when that version was already installed")
+    func installConfirmsRelease() async throws {
+        let id = Self.app.bundleID
+        let fixture = Self.makeFixture()
+        await fixture.session.check()
+        await fixture.session.install(try #require(fixture.session.rows.first), quitIfRunning: false)
+        let offered = Self.candidate.version.description
+        #expect(AppReleasePreferences.stored(in: fixture.defaults).confirmedReleases[id]
+            == AppReleaseConfirmedRelease(offered: offered, installed: offered))
+
+        // The download turns out to hold the installed version: current, not a failure.
+        let same = Self.makeFixture()
+        same.installer.failure = .verification(.notNewer(staged: "1.0", installed: "1.0"))
+        await same.session.check()
+        await same.session.install(try #require(same.session.rows.first), quitIfRunning: false)
+        #expect(AppReleasePreferences.stored(in: same.defaults).confirmedReleases[id]
+            == AppReleaseConfirmedRelease(offered: offered, installed: "1.0"))
+        guard case .installed = same.session.rowMessages[id] else {
+            Issue.record("expected an up-to-date message, got \(String(describing: same.session.rowMessages[id]))")
+            return
+        }
+
+        // An older download is still a failure.
+        let older = Self.makeFixture()
+        older.installer.failure = .verification(.notNewer(staged: "0.9", installed: "1.0"))
+        await older.session.check()
+        await older.session.install(try #require(older.session.rows.first), quitIfRunning: false)
+        #expect(AppReleasePreferences.stored(in: older.defaults).confirmedReleases.isEmpty)
+        guard case .failed = older.session.rowMessages[id] else {
+            Issue.record("expected a failure message")
+            return
+        }
+    }
+
     @Test("Quit consent follows whether the app is running now, not when it was checked")
     func quitConsentIsLive() async throws {
         var running = Self.app

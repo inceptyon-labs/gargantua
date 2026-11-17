@@ -16,19 +16,24 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
     /// Check about once a day from the scheduler agent, even while Gargantua is
     /// closed, and notify about new updates. Off by default.
     public var backgroundCheckEnabled: Bool
+    /// Bundle ID to the release Gargantua found installed under another
+    /// version string.
+    public var confirmedReleases: [String: AppReleaseConfirmedRelease]
 
     public init(
         ignoredBundleIDs: Set<String> = [],
         skippedVersions: [String: String] = [:],
         autoCheckEnabled: Bool = false,
         lastAutoCheck: Date? = nil,
-        backgroundCheckEnabled: Bool = false
+        backgroundCheckEnabled: Bool = false,
+        confirmedReleases: [String: AppReleaseConfirmedRelease] = [:]
     ) {
         self.ignoredBundleIDs = ignoredBundleIDs
         self.skippedVersions = skippedVersions
         self.autoCheckEnabled = autoCheckEnabled
         self.lastAutoCheck = lastAutoCheck
         self.backgroundCheckEnabled = backgroundCheckEnabled
+        self.confirmedReleases = confirmedReleases
     }
 
     /// Every field is optional so blobs stored before a field existed still
@@ -40,10 +45,12 @@ public struct AppReleasePreferences: Codable, Sendable, Equatable {
         autoCheckEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoCheckEnabled) ?? false
         lastAutoCheck = try container.decodeIfPresent(Date.self, forKey: .lastAutoCheck)
         backgroundCheckEnabled = try container.decodeIfPresent(Bool.self, forKey: .backgroundCheckEnabled) ?? false
+        confirmedReleases = try container
+            .decodeIfPresent([String: AppReleaseConfirmedRelease].self, forKey: .confirmedReleases) ?? [:]
     }
 
     private enum CodingKeys: String, CodingKey {
-        case ignoredBundleIDs, skippedVersions, autoCheckEnabled, lastAutoCheck, backgroundCheckEnabled
+        case ignoredBundleIDs, skippedVersions, autoCheckEnabled, lastAutoCheck, backgroundCheckEnabled, confirmedReleases
     }
 
     public static func stored(in defaults: UserDefaults = .standard) -> AppReleasePreferences {

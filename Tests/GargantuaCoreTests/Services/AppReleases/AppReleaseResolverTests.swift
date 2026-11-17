@@ -207,4 +207,21 @@ struct AppReleaseResolverTests {
         let later = resolve(app(), [.sparkle: .found(sparkle(build: "813"))], preferences: asSparkle)
         #expect(later == .available(sparkle(build: "813"), .inPlace))
     }
+
+    @Test("a release found installed under another version string is not offered again")
+    func confirmedReleaseIsCurrent() {
+        // The cask says 2026.2.2.9; the bundle it ships says 2026.2.
+        let cask = candidate(.homebrewCask, "2026.2.2.9", token: "example")
+        let outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [.homebrewCask: .found(cask)]
+        let confirmed = AppReleasePreferences(confirmedReleases: [
+            "com.example.App": AppReleaseConfirmedRelease(offered: "2026.2.2.9", installed: "2026.2"),
+        ])
+
+        #expect(resolve(app("2026.2"), outcomes) == .available(cask, .inPlace))
+        #expect(resolve(app("2026.2"), outcomes, preferences: confirmed) == .upToDate(latest: cask))
+        // Only for the bundle version that download held, and only that release.
+        #expect(resolve(app("2026.1"), outcomes, preferences: confirmed) == .available(cask, .inPlace))
+        let next = candidate(.homebrewCask, "2026.2.3.1", token: "example")
+        #expect(resolve(app("2026.2"), [.homebrewCask: .found(next)], preferences: confirmed) == .available(next, .inPlace))
+    }
 }
