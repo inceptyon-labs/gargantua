@@ -7,12 +7,23 @@ import Testing
 struct AppReleaseAnnouncementTests {
     final class RecordingNotifier: AppReleaseUpdateNotifying {
         private let state: OSAllocatedUnfairLock<(calls: Int, result: Bool)>
-        init(result: Bool = true) { state = OSAllocatedUnfairLock(initialState: (0, result)) }
+        private let refused: Bool
+        private let delay: Duration
+        init(result: Bool = true, refused: Bool = false, delay: Duration = .zero) {
+            state = OSAllocatedUnfairLock(initialState: (0, result))
+            self.refused = refused
+            self.delay = delay
+        }
+
         var calls: Int { state.withLock { $0.calls } }
         func setResult(_ value: Bool) { state.withLock { $0.result = value } }
         func deliver(count _: Int, appNames _: [String]) async -> Bool {
-            state.withLock { $0.calls += 1; return $0.result }
+            let result = state.withLock { $0.calls += 1; return $0.result }
+            try? await Task.sleep(for: delay)
+            return result
         }
+
+        func isRefused() async -> Bool { refused }
     }
 
     private func makeDefaults() -> (UserDefaults, String) {
@@ -54,6 +65,57 @@ struct AppReleaseAnnouncementTests {
         notifier.setResult(true)
         #expect(await AppReleaseAnnouncementPoster.postPending(defaults: defaults, notifier: notifier))
         #expect(notifier.calls == 2)
+    }
+
+    @Test("notifications turned off are recorded, so the scheduler stops retrying")
+    func refusedIsSettled() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let item = AppReleaseAnnouncement(count: 1, appNames: ["A"])
+        item.storePending(in: defaults)
+        #expect(!AppReleaseAnnouncement.isPendingSettled(in: defaults))
+        let notifier = RecordingNotifier(result: false, refused: true)
+        #expect(await !AppReleaseAnnouncementPoster.postPending(defaults: defaults, notifier: notifier))
+        #expect(defaults.string(forKey: AppReleaseAnnouncement.postedKey) == nil)
+        #expect(defaults.string(forKey: AppReleaseAnnouncement.refusedKey) == item.id.uuidString)
+        #expect(AppReleaseAnnouncement.isPendingSettled(in: defaults))
+    }
+
+    @Test("two calls at once post one notification")
+    func concurrentPostsDeliverOnce() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        AppReleaseAnnouncement(count: 1, appNames: ["A"]).storePending(in: defaults)
+        let notifier = RecordingNotifier(delay: .milliseconds(100))
+        let posted = await withTaskGroup(of: Bool.self) { group in
+            for _ in 0 ..< 2 {
+                group.addTask {
+                    await AppReleaseAnnouncementPoster.postPending(defaults: UserDefaults(suiteName: suite)!, notifier: notifier)
+                }
+            }
+            return await group.reduce(into: 0) { $0 += $1 ? 1 : 0 }
+        }
+        #expect(posted == 1)
+        #expect(notifier.calls == 1)
+    }
+
+    @Test("ContainingAppUpdateNotifier stops waiting once the app reports notifications off")
+    func containingNotifierStopsOnRefusal() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let notifier = ContainingAppUpdateNotifier(
+            suiteName: suite, appURL: URL(fileURLWithPath: "/Applications/Foo.app"), appBundleID: "com.example.foo",
+            confirmTimeout: 30, pollInterval: 0.05
+        ) { _, _, _ in
+            if let pending = AppReleaseAnnouncement.pending(in: UserDefaults(suiteName: suite)!) {
+                UserDefaults(suiteName: suite)!.set(pending.id.uuidString, forKey: AppReleaseAnnouncement.refusedKey)
+            }
+            return true
+        }
+        let started = Date()
+        #expect(await !notifier.deliver(count: 1, appNames: ["A"]))
+        #expect(Date().timeIntervalSince(started) < 10)
+        #expect(AppReleaseAnnouncement.isPendingSettled(in: defaults))
     }
 
     @Test("skips stale and future-dated announcements, and nothing pending")

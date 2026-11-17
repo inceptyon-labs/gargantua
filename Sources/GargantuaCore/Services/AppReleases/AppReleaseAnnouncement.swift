@@ -1,4 +1,5 @@
 import Foundation
+import os
 #if os(macOS)
     import AppKit
 #endif
@@ -10,6 +11,9 @@ public struct AppReleaseAnnouncement: Codable, Sendable, Equatable {
     public static let pendingKey = "appReleases.pendingAnnouncement"
     /// ID of the last announcement the app posted. Written only by the app.
     public static let postedKey = "appReleases.postedAnnouncementID"
+    /// ID of the last announcement the app could not post because the user
+    /// has notifications turned off for Gargantua. Written only by the app.
+    public static let refusedKey = "appReleases.refusedAnnouncementID"
 
     public var id: UUID
     public var count: Int
@@ -33,9 +37,21 @@ public struct AppReleaseAnnouncement: Codable, Sendable, Equatable {
             defaults.set(data, forKey: Self.pendingKey)
         }
     }
+
+    /// Whether the app has dealt with the pending announcement: it posted it,
+    /// or found notifications turned off. Either way a retry has nothing to add.
+    public static func isPendingSettled(in defaults: UserDefaults) -> Bool {
+        guard let id = pending(in: defaults)?.id.uuidString else { return false }
+        return defaults.string(forKey: postedKey) == id || defaults.string(forKey: refusedKey) == id
+    }
 }
 
 public enum AppReleaseAnnouncementPoster {
+    /// Announcements being posted now. A hidden launch calls `postPending`
+    /// from the launch path and from the announce link at once; only one may
+    /// deliver.
+    private static let posting = OSAllocatedUnfairLock(initialState: Set<UUID>())
+
     /// Posts the scheduler's pending announcement once, if it is recent enough.
     @discardableResult
     public static func postPending(
@@ -45,11 +61,20 @@ public enum AppReleaseAnnouncementPoster {
         maxAge: TimeInterval = 24 * 60 * 60
     ) async -> Bool {
         guard let pending = AppReleaseAnnouncement.pending(in: defaults),
-              pending.id.uuidString != defaults.string(forKey: AppReleaseAnnouncement.postedKey),
-              (0 ..< maxAge).contains(now.timeIntervalSince(pending.created))
+              (0 ..< maxAge).contains(now.timeIntervalSince(pending.created)),
+              posting.withLock({ $0.insert(pending.id).inserted })
         else { return false }
+        defer { posting.withLock { _ = $0.remove(pending.id) } }
+        // Read after the claim, so a call that just finished posting is seen.
+        let id = pending.id.uuidString
+        guard id != defaults.string(forKey: AppReleaseAnnouncement.postedKey) else { return false }
+
         let delivered = await notifier.deliver(count: pending.count, appNames: pending.appNames)
-        if delivered { defaults.set(pending.id.uuidString, forKey: AppReleaseAnnouncement.postedKey) }
+        if delivered {
+            defaults.set(id, forKey: AppReleaseAnnouncement.postedKey)
+        } else if await notifier.isRefused() {
+            defaults.set(id, forKey: AppReleaseAnnouncement.refusedKey)
+        }
         return delivered
     }
 }
@@ -101,9 +126,12 @@ public enum AppReleaseLink {
             guard await open(appURL, AppReleaseLink.announceURL, appBundleID) else { return false }
             // Opening the app isn't delivery: wait for it to record that it posted this one.
             let deadline = Date().addingTimeInterval(confirmTimeout)
+            let id = announcement.id.uuidString
             while true {
-                if UserDefaults(suiteName: suiteName)?.string(forKey: AppReleaseAnnouncement.postedKey)
-                    == announcement.id.uuidString { return true }
+                let current = UserDefaults(suiteName: suiteName)
+                if current?.string(forKey: AppReleaseAnnouncement.postedKey) == id { return true }
+                // Notifications are off for the app; waiting longer changes nothing.
+                if current?.string(forKey: AppReleaseAnnouncement.refusedKey) == id { return false }
                 guard Date() < deadline else { return false }
                 try? await Task.sleep(for: .seconds(pollInterval))
             }

@@ -22,14 +22,21 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
     /// broken sources can't block the healthy ones forever.
     public var consecutiveFailedRuns: Int
 
+    /// The versions in the last notification the run could not confirm was
+    /// delivered. The next run counts them as announced if the app turns out
+    /// to have dealt with that notification after the run stopped waiting.
+    public var unconfirmedVersions: [String: AppReleaseVersion]
+
     public init(
         lastCheck: Date? = nil,
         announcedVersions: [String: AppReleaseVersion] = [:],
-        consecutiveFailedRuns: Int = 0
+        consecutiveFailedRuns: Int = 0,
+        unconfirmedVersions: [String: AppReleaseVersion] = [:]
     ) {
         self.lastCheck = lastCheck
         self.announcedVersions = announcedVersions
         self.consecutiveFailedRuns = consecutiveFailedRuns
+        self.unconfirmedVersions = unconfirmedVersions
     }
 
     private struct StoredVersion: Codable {
@@ -43,6 +50,8 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
         let stored = try container.decodeIfPresent([String: StoredVersion].self, forKey: .announcedVersions) ?? [:]
         announcedVersions = stored.mapValues { AppReleaseVersion(short: $0.short, build: $0.build) }
         consecutiveFailedRuns = try container.decodeIfPresent(Int.self, forKey: .consecutiveFailedRuns) ?? 0
+        let unconfirmed = try container.decodeIfPresent([String: StoredVersion].self, forKey: .unconfirmedVersions) ?? [:]
+        unconfirmedVersions = unconfirmed.mapValues { AppReleaseVersion(short: $0.short, build: $0.build) }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -53,10 +62,14 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
             forKey: .announcedVersions
         )
         try container.encode(consecutiveFailedRuns, forKey: .consecutiveFailedRuns)
+        try container.encode(
+            unconfirmedVersions.mapValues { StoredVersion(short: $0.short, build: $0.build) },
+            forKey: .unconfirmedVersions
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
-        case lastCheck, announcedVersions, consecutiveFailedRuns
+        case lastCheck, announcedVersions, consecutiveFailedRuns, unconfirmedVersions
     }
 
     public static func stored(
@@ -89,6 +102,13 @@ public protocol AppReleaseUpdateNotifying: Sendable {
     /// True when the notification was handed to the system; false when it
     /// couldn't be (permission not granted, add failed).
     func deliver(count: Int, appNames: [String]) async -> Bool
+    /// True when the user has notifications turned off for Gargantua, so
+    /// delivering again can't succeed until they change that.
+    func isRefused() async -> Bool
+}
+
+public extension AppReleaseUpdateNotifying {
+    func isRefused() async -> Bool { false }
 }
 
 #if os(macOS)
@@ -127,6 +147,10 @@ public protocol AppReleaseUpdateNotifying: Sendable {
             } catch {
                 return false
             }
+        }
+
+        public func isRefused() async -> Bool {
+            await center.notificationSettings().authorizationStatus == .denied
         }
     }
 #endif
@@ -198,9 +222,7 @@ public struct AppReleaseBackgroundCheck: Sendable {
 
         let available = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
         let installed = Set(apps.map(\.bundleID))
-        var announced = state.announcedVersions.filter { installed.contains($0.key) }
-        let freshSeen = AppReleaseBackgroundState.stored(in: defaults, key: AppReleaseBackgroundState.inAppKey)
-        Self.merge(&announced, seen: freshSeen.announcedVersions.filter { installed.contains($0.key) })
+        var announced = Self.announcedSoFar(state, installed: installed, defaults: defaults)
         let hasNew = available.contains { entry in
             guard let prior = announced[entry.app.bundleID] else { return true }
             return entry.version.isNewer(than: prior)
@@ -210,15 +232,40 @@ public struct AppReleaseBackgroundCheck: Sendable {
             delivered = await notifier.deliver(count: available.count, appNames: available.map(\.app.name).sorted())
         }
         // An undelivered notification leaves its updates unannounced so a later
-        // run (e.g. once permission is granted) announces them.
-        if delivered || !hasNew { Self.raise(&announced, to: available) }
+        // run announces them. Not when the app reported notifications turned
+        // off: retrying would relaunch it every day to post nothing.
+        var unconfirmed: [String: AppReleaseVersion] = [:]
+        if delivered || !hasNew || AppReleaseAnnouncement.isPendingSettled(in: defaults) {
+            Self.raise(&announced, to: available)
+        } else {
+            Self.raise(&unconfirmed, to: available)
+        }
         Self.enrich(&announced, from: available)
-        AppReleaseBackgroundState(lastCheck: now(), announcedVersions: announced).store(in: defaults)
+        AppReleaseBackgroundState(lastCheck: now(), announcedVersions: announced, unconfirmedVersions: unconfirmed)
+            .store(in: defaults)
         AppReleaseBackgroundState.storeAvailableCount(available.count, in: defaults)
         return .checked(availableCount: available.count, notified: delivered)
     }
 
-    private static let maxFailedRetries = 3
+    static let maxFailedRetries = 3
+
+    /// What the user has already been told about: this check's own record,
+    /// the versions the app showed, and the last hand-off's when the app dealt
+    /// with it after that run stopped waiting (a slow permission prompt, a
+    /// later launch).
+    private static func announcedSoFar(
+        _ state: AppReleaseBackgroundState,
+        installed: Set<String>,
+        defaults: UserDefaults
+    ) -> [String: AppReleaseVersion] {
+        var announced = state.announcedVersions.filter { installed.contains($0.key) }
+        if AppReleaseAnnouncement.isPendingSettled(in: defaults) {
+            merge(&announced, seen: state.unconfirmedVersions.filter { installed.contains($0.key) })
+        }
+        let seen = AppReleaseBackgroundState.stored(in: defaults, key: AppReleaseBackgroundState.inAppKey)
+        merge(&announced, seen: seen.announcedVersions.filter { installed.contains($0.key) })
+        return announced
+    }
 
     /// A release first announced without a build (e.g. from Homebrew) takes the
     /// build once a source reports one, so a later build of it isn't tied

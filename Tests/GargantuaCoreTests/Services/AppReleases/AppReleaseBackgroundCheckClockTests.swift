@@ -73,4 +73,38 @@ extension AppReleaseBackgroundCheckTests {
         #expect(await harness.check.runIfDue() == .checked(availableCount: 2, notified: true))
         #expect(await harness.notifier.deliveries.count == 1)
     }
+
+    @Test("a hand-off the app posts after the run stopped waiting is not announced again")
+    func latePostIsNotRepeated() async {
+        let harness = Harness(versions: ["com.a": "2.0"])
+        defer { harness.cleanUp() }
+        await harness.notifier.setSucceeds(false)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).unconfirmedVersions.keys.sorted() == ["com.a"])
+
+        // The app posts it once the user answers the permission prompt.
+        let pending = AppReleaseAnnouncement(count: 1, appNames: ["Alpha"])
+        pending.storePending(in: harness.defaults)
+        harness.defaults.set(pending.id.uuidString, forKey: AppReleaseAnnouncement.postedKey)
+        await harness.notifier.setSucceeds(true)
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        #expect(await harness.notifier.deliveries.count == 1)
+        #expect(AppReleaseBackgroundState.stored(in: harness.defaults).unconfirmedVersions.isEmpty)
+    }
+
+    @Test("with notifications turned off the versions count as announced, so the app isn't opened every day")
+    func refusedHandOffIsNotRetried() async {
+        let harness = Harness(versions: ["com.a": "2.0"])
+        defer { harness.cleanUp() }
+        // What the app records when it finds notifications off for the pending hand-off.
+        let pending = AppReleaseAnnouncement(count: 1, appNames: ["Alpha"])
+        pending.storePending(in: harness.defaults)
+        harness.defaults.set(pending.id.uuidString, forKey: AppReleaseAnnouncement.refusedKey)
+        await harness.notifier.setSucceeds(false)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        harness.clock.advance(hours: 25)
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: false))
+        #expect(await harness.notifier.deliveries.count == 1)
+    }
 }
