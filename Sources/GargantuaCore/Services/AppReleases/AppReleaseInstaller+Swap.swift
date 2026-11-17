@@ -2,48 +2,43 @@ import Darwin
 import Foundation
 
 extension AppReleaseInstaller {
-    /// Old bundle to the Trash, staged bundle into its place by a same-volume
-    /// rename, and the old bundle back if that rename fails. Returns where the
-    /// old bundle landed in the Trash.
+    /// Exchanges the staged bundle with the installed one in one atomic
+    /// rename, so the app's path holds a complete bundle at every instant: a
+    /// crash or power loss leaves either the old app or the new one there.
+    /// The previous copy, now at the staged path, then goes to the Trash; if
+    /// that fails the exchange is undone. Returns where it landed in the Trash.
     @MainActor
     func swapBundle(at target: URL, with staged: URL) async throws(AppReleaseInstallError) -> URL? {
-        let trashURL: URL?
+        guard Self.exchange(staged, target) else {
+            let code = errno
+            throw code == EPERM || code == EACCES ? .appManagementDenied : .swapFailed(String(cString: strerror(code)) + ".")
+        }
         do {
-            trashURL = try await trash.moveToTrash(target)
+            return try await trash.moveToTrash(staged)
         } catch {
-            guard AppBundleFiles.fileType(atPath: target.path) != nil else {
-                throw .restoreFailed(trashPath: "the Trash")
+            guard Self.exchange(staged, target) else {
+                // The update is in place. Its previous copy left the staged
+                // path (a Trash move that failed late) or can't be put back.
+                appReleaseInstallLogger.error(
+                    "Previous copy of \(target.path, privacy: .public) not kept: \(error.localizedDescription, privacy: .public)"
+                )
+                return nil
             }
             throw Self.isPermissionDenied(error) ? .appManagementDenied : .swapFailed(error.localizedDescription)
         }
-
-        do {
-            try FileManager.default.moveItem(at: staged, to: target)
-            return trashURL
-        } catch {
-            let moveError = error.localizedDescription
-            guard let trashURL else { throw .restoreFailed(trashPath: "the Trash") }
-            do {
-                try FileManager.default.moveItem(at: trashURL, to: target)
-            } catch {
-                appReleaseInstallLogger.error(
-                    "Restoring \(target.path, privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
-                )
-                throw .restoreFailed(trashPath: trashURL.path)
-            }
-            throw .swapFailed(moveError)
-        }
     }
 
-    /// Outcome line for a swap that failed, naming only what actually moved.
-    static func failedSwapLine(summary: String, appURL: URL, error: AppReleaseInstallError) -> AppReleaseAuditLine {
-        if case .restoreFailed(let trashPath) = error {
-            return AppReleaseAuditLine(
-                command: "\(summary) (failed; previous copy left in the Trash)",
-                files: [AuditFile(path: appURL.path, size: 0, trashPath: trashPath)]
-            )
-        }
-        return AppReleaseAuditLine(command: "\(summary) (failed; nothing changed)", files: [])
+    /// `renamex_np(RENAME_SWAP)`: both paths must exist on one APFS or HFS+
+    /// volume, which `onSameVolume` and the staging root under `~/Library`
+    /// already require. False with `errno` set.
+    private static func exchange(_ lhs: URL, _ rhs: URL) -> Bool {
+        renamex_np(lhs.path, rhs.path, UInt32(RENAME_SWAP)) == 0
+    }
+
+    /// Outcome line for a swap that failed. The exchange either happens or is
+    /// undone, so a failure leaves the installed copy as it was.
+    static func failedSwapLine(summary: String) -> AppReleaseAuditLine {
+        AppReleaseAuditLine(command: "\(summary) (failed; nothing changed)", files: [])
     }
 
     /// A refused Trash move is App Management (or plain file permissions)

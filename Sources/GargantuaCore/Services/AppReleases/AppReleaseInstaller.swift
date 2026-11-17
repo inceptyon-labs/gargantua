@@ -29,7 +29,6 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
     case appManagementDenied
     case differentVolume
     case swapFailed(String)
-    case restoreFailed(trashPath: String)
     case brewUnavailable
     case brewFailed(String)
     case brewNoChange
@@ -61,9 +60,6 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
                 + "replaced safely. Update it from the developer's site."
         case .swapFailed(let message):
             "The update couldn't be moved into place: \(message) The installed version was left as it was."
-        case .restoreFailed(let trashPath):
-            "The update couldn't be moved into place, and the previous version couldn't be put back. "
-                + "Your previous copy is in the Trash at \(trashPath). Drag it back to Applications to restore it."
         case .brewUnavailable:
             "Homebrew isn't installed where Gargantua can find it."
         case .brewFailed(let message):
@@ -165,7 +161,7 @@ public struct WorkspaceAppReleaseQuitter: AppReleaseAppQuitting {
 }
 
 /// Installs an available update: either downloads, verifies, and swaps the
-/// bundle (old copy to the Trash), or runs `brew upgrade --cask` for apps
+/// bundle (atomically; old copy to the Trash), or runs `brew upgrade --cask` for apps
 /// Homebrew manages.
 public final class AppReleaseInstaller: AppReleaseInstalling {
     public static let quitTimeout: TimeInterval = 20
@@ -360,7 +356,7 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
                 let files = [AuditFile(path: app.url.path, size: 0, trashPath: trashURL?.path)]
                 return (trashURL, AppReleaseAuditLine(command: summary, files: files))
             } catch {
-                throw AppReleaseStepFailure(error: error, line: Self.failedSwapLine(summary: summary, appURL: app.url, error: error))
+                throw AppReleaseStepFailure(error: error, line: Self.failedSwapLine(summary: summary))
             }
         }
 

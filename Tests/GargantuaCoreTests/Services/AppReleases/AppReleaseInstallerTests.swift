@@ -183,8 +183,8 @@ struct AppReleaseInstallerTests {
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
     }
 
-    @Test("when the new bundle can't be moved in, the old one comes back from the Trash")
-    func failedMoveRestoresOldBundle() async throws {
+    @Test("when the new bundle can't be exchanged in, the installed one is never moved")
+    func failedExchangeLeavesInstalledBundle() async throws {
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
         let trash = FakeTrashMover(trashDirectory: sandbox.trashDirectory)
@@ -198,7 +198,7 @@ struct AppReleaseInstallerTests {
             Issue.record("Expected swapFailed, got \(result)")
             return
         }
-        #expect(trash.movedItems == [sandbox.appURL])
+        #expect(trash.movedItems.isEmpty)
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "1.0", build: "100"))
         #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.trashDirectory.path).isEmpty)
     }
