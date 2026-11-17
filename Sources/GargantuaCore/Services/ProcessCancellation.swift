@@ -58,7 +58,7 @@ public final class ProcessCancellation: Sendable {
         state.withLock { $0.pid = nil }
     }
 
-    private func cancel() {
+    func cancel() {
         state.withLock { state in
             state.cancelled = true
             if let pid = state.pid {

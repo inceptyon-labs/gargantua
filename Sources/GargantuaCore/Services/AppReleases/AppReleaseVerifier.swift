@@ -190,13 +190,15 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
         let extracted = workDirectory.appendingPathComponent("extracted", isDirectory: true)
         try Self.makeEmptyDirectory(extracted)
-        try Self.checkFreeSpace(available: Self.availableCapacity(at: workDirectory), payloadSize: payloadSize)
+        let available = Self.availableCapacity(at: workDirectory)
+        try Self.checkFreeSpace(available: available, payloadSize: payloadSize)
         try unpack(
             payload,
             kind: kind,
             into: extracted,
             mountRoot: workDirectory.appendingPathComponent("mounts", isDirectory: true),
-            bundleID: app.bundleID
+            bundleID: app.bundleID,
+            budget: Self.extractionBudget(available: available)
         )
         try Self.checkExtractedSize(Self.treeSize(of: extracted, limit: Self.maxExtractedBytes))
 

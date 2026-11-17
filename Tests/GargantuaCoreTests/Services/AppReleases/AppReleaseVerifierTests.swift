@@ -286,6 +286,32 @@ extension AppReleaseVerifierTests {
         }
     }
 
+    @Test("an extraction that outgrows its budget is killed while it runs")
+    func runawayExtractionIsKilled() throws {
+        try withTemporaryDirectory { directory in
+            let destination = directory.appendingPathComponent("out", isDirectory: true)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            // Appends 1 MiB every 20 ms and would run for over 8 s; the budget is 4 MiB.
+            let script = "i=0; while [ $i -lt 400 ]; do /usr/bin/head -c 1048576 /dev/zero >> \"$0\"; /bin/sleep 0.02; i=$((i+1)); done"
+            let budget: Int64 = 4 * 1_048_576
+            let started = Date()
+            #expect(throws: Failure.extractedTooLarge(limit: budget)) {
+                try AppReleaseVerifier().extract(
+                    "/bin/sh", ["-c", script, destination.appendingPathComponent("blob").path],
+                    into: destination, budget: budget
+                )
+            }
+            #expect(Date().timeIntervalSince(started) < 6)
+        }
+    }
+
+    @Test("the extraction budget is the 16 GiB cap, or what leaves 512 MiB free")
+    func extractionBudget() {
+        #expect(AppReleaseVerifier.extractionBudget(available: 1 << 40) == AppReleaseVerifier.maxExtractedBytes)
+        #expect(AppReleaseVerifier.extractionBudget(available: 2 << 30) == (2 << 30) - AppReleaseVerifier.extractionReserveBytes)
+        #expect(AppReleaseVerifier.extractionBudget(available: 1024) == 0)
+    }
+
     @Test("zip, gzip and a UDIF trailer are recognized by their bytes")
     func payloadSniffRecognizesKinds() throws {
         try withTemporaryDirectory { directory in

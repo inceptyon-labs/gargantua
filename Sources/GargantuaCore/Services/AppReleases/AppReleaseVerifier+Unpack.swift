@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 extension AppReleaseVerifier {
 
@@ -50,8 +51,21 @@ extension AppReleaseVerifier {
         }
     }
 
-    static func checkExtractedSize(_ size: Int64) throws(AppReleaseVerificationFailure) {
-        guard size <= maxExtractedBytes else { throw .extractedTooLarge(limit: maxExtractedBytes) }
+    static func checkExtractedSize(
+        _ size: Int64,
+        limit: Int64 = maxExtractedBytes
+    ) throws(AppReleaseVerificationFailure) {
+        guard size <= limit else { throw .extractedTooLarge(limit: limit) }
+    }
+
+    /// Free space an extraction must leave on the volume.
+    static let extractionReserveBytes: Int64 = 536_870_912
+
+    /// How much an extraction may write: `maxExtractedBytes`, or less when
+    /// that would leave the volume with under `extractionReserveBytes`.
+    static func extractionBudget(available: Int64?) -> Int64 {
+        guard let available else { return maxExtractedBytes }
+        return min(maxExtractedBytes, max(0, available - extractionReserveBytes))
     }
 
     static func availableCapacity(at url: URL) -> Int64? {
@@ -91,28 +105,72 @@ extension AppReleaseVerifier {
 
     // MARK: - Unpacking
 
+    // swiftlint:disable:next function_parameter_count
     func unpack(
         _ payload: URL,
         kind: AppReleasePayloadKind,
         into destination: URL,
         mountRoot: URL,
-        bundleID: String
+        bundleID: String,
+        budget: Int64
     ) throws(AppReleaseVerificationFailure) {
         switch kind {
         case .zip:
             try Self.validateArchiveEntries(listArchive("/usr/bin/zipinfo", ["-1", payload.path]))
-            try runChecked("/usr/bin/ditto", ["-x", "-k", payload.path, destination.path], timeout: 900)
+            try extract("/usr/bin/ditto", ["-x", "-k", payload.path, destination.path], into: destination, budget: budget)
         case .tar:
             try Self.validateArchiveEntries(listArchive("/usr/bin/tar", ["-tf", payload.path]))
-            try runChecked("/usr/bin/tar", ["-xf", payload.path, "-C", destination.path], timeout: 900)
+            try extract("/usr/bin/tar", ["-xf", payload.path, "-C", destination.path], into: destination, budget: budget)
         case .dmg:
-            try copyApp(fromDiskImage: payload, into: destination, mountRoot: mountRoot, bundleID: bundleID)
+            try copyApp(
+                fromDiskImage: payload,
+                into: destination,
+                mountRoot: mountRoot,
+                bundleID: bundleID,
+                budget: budget
+            )
         case .pkg:
             throw .installerPackage
         case .unknown:
             throw .unrecognizedPayload
         }
     }
+
+    /// Runs an extraction and kills it once it has written more than
+    /// `budget` into `destination`, so a small archive that expands without
+    /// end is stopped while it runs instead of measured after it filled the
+    /// disk. The archive's listing can't give the bound: a zip's declared
+    /// sizes are whatever its author wrote.
+    ///
+    /// The kill goes through `ProcessCancellation`, so it reaches children of
+    /// `DefaultProcessRunner` only; `verify` measures the result again.
+    func extract(
+        _ tool: String,
+        _ arguments: [String],
+        into destination: URL,
+        budget: Int64
+    ) throws(AppReleaseVerificationFailure) {
+        let cancellation = ProcessCancellation()
+        let overBudget = OSAllocatedUnfairLock(initialState: false)
+        let monitor = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        monitor.schedule(deadline: .now() + Self.extractionPollInterval, repeating: Self.extractionPollInterval)
+        monitor.setEventHandler {
+            guard let written = try? Self.treeSize(of: destination, limit: budget), written > budget else { return }
+            overBudget.withLock { $0 = true }
+            cancellation.cancel()
+        }
+        monitor.resume()
+        let result = ProcessCancellation.$current.withValue(cancellation) {
+            Result { () throws(AppReleaseVerificationFailure) in
+                _ = try runChecked(tool, arguments, timeout: 900)
+            }
+        }
+        monitor.cancel()
+        if overBudget.withLock({ $0 }) { throw .extractedTooLarge(limit: budget) }
+        try result.get()
+    }
+
+    static let extractionPollInterval: TimeInterval = 0.5
 
     private func listArchive(_ tool: String, _ arguments: [String]) throws(AppReleaseVerificationFailure) -> [String] {
         let output = try runChecked(tool, arguments, timeout: 120, maxCapturedBytes: Self.maxListingBytes)
@@ -129,7 +187,8 @@ extension AppReleaseVerifier {
         fromDiskImage image: URL,
         into destination: URL,
         mountRoot: URL,
-        bundleID: String
+        bundleID: String,
+        budget: Int64
     ) throws(AppReleaseVerificationFailure) {
         try Self.makeEmptyDirectory(mountRoot)
         defer { detachVolumes(under: mountRoot) }
@@ -158,6 +217,8 @@ extension AppReleaseVerifier {
         let source = try Self.uniqueMatch(volumes.flatMap {
             Self.matchingApps(in: URL(fileURLWithPath: $0), bundleID: bundleID)
         })
+        // Measured on the mounted volume, before anything is copied.
+        try Self.checkExtractedSize(Self.treeSize(of: source, limit: budget), limit: budget)
         let target = destination.appendingPathComponent(source.lastPathComponent, isDirectory: true)
         try runChecked("/usr/bin/ditto", [source.path, target.path], timeout: 900)
     }
