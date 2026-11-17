@@ -235,18 +235,20 @@ final class ScriptedBrewRunner: ProcessRunner {
     }
 }
 
-/// Reports a fixed signature and satisfies the team requirement only for
+/// Reports a fixed signature whose certificate was issued only to
 /// `certifiedTeams`.
 struct StubCodeSigner: AppReleaseCodeSigning {
     var report = AppReleaseSignatureReport(isValid: true, teamID: "TEAM123456", isDeveloperID: true)
     var certifiedTeams: Set<String> = ["TEAM123456"]
 
-    func assess(bundleURL _: URL) -> AppReleaseSignatureReport {
-        report
-    }
-
-    func satisfiesTeamRequirement(bundleURL _: URL, teamID: String) -> Bool {
-        certifiedTeams.contains(teamID)
+    func assess(bundleURL _: URL, requiredTeams: [String]) -> AppReleaseSignatureReport {
+        AppReleaseSignatureReport(
+            isValid: report.isValid,
+            teamID: report.teamID,
+            isDeveloperID: report.isDeveloperID,
+            failure: report.failure,
+            uncertifiedTeam: requiredTeams.first { !certifiedTeams.contains($0) }
+        )
     }
 }
 

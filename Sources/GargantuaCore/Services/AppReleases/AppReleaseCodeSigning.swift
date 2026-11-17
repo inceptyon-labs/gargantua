@@ -11,21 +11,31 @@ public struct AppReleaseSignatureReport: Sendable, Equatable {
     public let isDeveloperID: Bool
     /// Why validation failed, when it did.
     public let failure: String?
+    /// The first required team Apple did not issue the leaf certificate to;
+    /// nil when it was issued to all of them.
+    public let uncertifiedTeam: String?
 
-    public init(isValid: Bool, teamID: String?, isDeveloperID: Bool, failure: String? = nil) {
+    public init(
+        isValid: Bool,
+        teamID: String?,
+        isDeveloperID: Bool,
+        failure: String? = nil,
+        uncertifiedTeam: String? = nil
+    ) {
         self.isValid = isValid
         self.teamID = teamID
         self.isDeveloperID = isDeveloperID
         self.failure = failure
+        self.uncertifiedTeam = uncertifiedTeam
     }
 }
 
 /// Code-signature seam for the App Updater's install verification.
 public protocol AppReleaseCodeSigning: Sendable {
-    func assess(bundleURL: URL) -> AppReleaseSignatureReport
-    /// Whether the code is Apple-anchored with a leaf certificate issued to
-    /// `teamID`. False for anything that isn't a well-formed Team ID.
-    func satisfiesTeamRequirement(bundleURL: URL, teamID: String) -> Bool
+    /// `requiredTeams` are the Team IDs the code must be Apple-anchored and
+    /// leaf-certified for. A team that isn't a well-formed Team ID is never
+    /// certified.
+    func assess(bundleURL: URL, requiredTeams: [String]) -> AppReleaseSignatureReport
 }
 
 /// Full signature validation, equivalent to `codesign --verify --deep --strict`.
@@ -46,7 +56,11 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
 
     public init() {}
 
-    public func assess(bundleURL: URL) -> AppReleaseSignatureReport {
+    /// One full validation in the usual case. Each validation hashes every
+    /// sealed resource of the bundle, so the Developer ID and team
+    /// requirements are checked together with the signature; the separate
+    /// passes below run only after that fails, to say which part did.
+    public func assess(bundleURL: URL, requiredTeams: [String]) -> AppReleaseSignatureReport {
         var staticCode: SecStaticCode?
         let createStatus = SecStaticCodeCreateWithPath(bundleURL as CFURL, SecCSFlags(), &staticCode)
         guard createStatus == errSecSuccess, let code = staticCode else {
@@ -59,6 +73,10 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
         }
 
         let teamID = Self.teamIdentifier(of: code)
+        if let everything = Self.combinedRequirement(teams: requiredTeams),
+           Self.satisfies(code, requirement: everything) {
+            return AppReleaseSignatureReport(isValid: true, teamID: teamID, isDeveloperID: true)
+        }
 
         var validityError: Unmanaged<CFError>?
         let validity = SecStaticCodeCheckValidityWithErrors(code, Self.validationFlags, nil, &validityError)
@@ -71,6 +89,9 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
             )
         }
 
+        let uncertifiedTeam = requiredTeams.first { team in
+            !(Self.teamRequirement(for: team).map { Self.satisfies(code, requirement: $0) } ?? false)
+        }
         var requirement: SecRequirement?
         guard SecRequirementCreateWithString(Self.developerIDRequirement as CFString, SecCSFlags(), &requirement)
             == errSecSuccess, let requirement
@@ -79,7 +100,8 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
                 isValid: true,
                 teamID: teamID,
                 isDeveloperID: false,
-                failure: "Could not build the Developer ID requirement."
+                failure: "Could not build the Developer ID requirement.",
+                uncertifiedTeam: uncertifiedTeam
             )
         }
         var requirementError: Unmanaged<CFError>?
@@ -96,30 +118,38 @@ public struct StrictAppReleaseCodeSigner: AppReleaseCodeSigning {
             isDeveloperID: isDeveloperID,
             failure: isDeveloperID
                 ? nil
-                : Self.describe(status: requirementStatus, error: requirementError?.takeRetainedValue())
+                : Self.describe(status: requirementStatus, error: requirementError?.takeRetainedValue()),
+            uncertifiedTeam: uncertifiedTeam
         )
     }
 
-    public func satisfiesTeamRequirement(bundleURL: URL, teamID: String) -> Bool {
-        guard let text = Self.teamRequirement(for: teamID) else { return false }
-        var staticCode: SecStaticCode?
+    /// Full validation of `code` against a requirement in text form.
+    private static func satisfies(_ code: SecStaticCode, requirement text: String) -> Bool {
         var requirement: SecRequirement?
-        guard SecStaticCodeCreateWithPath(bundleURL as CFURL, SecCSFlags(), &staticCode) == errSecSuccess,
-              let code = staticCode,
-              SecRequirementCreateWithString(text as CFString, SecCSFlags(), &requirement) == errSecSuccess,
+        guard SecRequirementCreateWithString(text as CFString, SecCSFlags(), &requirement) == errSecSuccess,
               let requirement
         else { return false }
-        return SecStaticCodeCheckValidity(code, Self.validationFlags, requirement) == errSecSuccess
+        return SecStaticCodeCheckValidity(code, validationFlags, requirement) == errSecSuccess
+    }
+
+    /// Developer ID and a leaf certificate issued to every team in `teams`,
+    /// as one requirement. Nil when any team isn't a well-formed Team ID.
+    static func combinedRequirement(teams: [String]) -> String? {
+        guard teams.allSatisfy(isWellFormedTeamID) else { return nil }
+        return teams.reduce(developerIDRequirement) { $0 + " and certificate leaf[subject.OU] = \"\($1)\"" }
     }
 
     /// The requirement text for `teamID`, or nil unless it is exactly ten
     /// ASCII uppercase letters and digits, so nothing else is ever spliced
     /// into the requirement language.
     static func teamRequirement(for teamID: String) -> String? {
-        let isWellFormed = teamID.utf8.count == 10
-            && teamID.utf8.allSatisfy { (0x41 ... 0x5A).contains($0) || (0x30 ... 0x39).contains($0) }
-        guard isWellFormed else { return nil }
+        guard isWellFormedTeamID(teamID) else { return nil }
         return "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
+    }
+
+    private static func isWellFormedTeamID(_ teamID: String) -> Bool {
+        teamID.utf8.count == 10
+            && teamID.utf8.allSatisfy { (0x41 ... 0x5A).contains($0) || (0x30 ... 0x39).contains($0) }
     }
 
     /// Team ID from the signature, read without validating anything.

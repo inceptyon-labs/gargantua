@@ -204,9 +204,9 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
         let bundle = try Self.locateApp(in: extracted, bundleID: app.bundleID)
         try Self.walkBundleTree(bundle)
-        let report = try checkCodeSignature(bundle)
+        let report = try checkCodeSignature(bundle, requiredTeams: Self.requiredTeams(app: app, candidate: candidate))
         try Self.checkTeamID(report.teamID, app: app, candidate: candidate)
-        try checkTeamCertificate(bundle, app: app, candidate: candidate)
+        try Self.checkTeamCertificate(report)
         try checkGatekeeper(bundle)
         let version = try Self.checkVersion(of: bundle, installed: app, hostOSVersion: hostOSVersion)
         return AppReleaseStagedBundle(url: bundle, version: version)
@@ -366,8 +366,11 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
     // MARK: - Code signature
 
-    private func checkCodeSignature(_ bundle: URL) throws(AppReleaseVerificationFailure) -> AppReleaseSignatureReport {
-        let report = signer.assess(bundleURL: bundle)
+    private func checkCodeSignature(
+        _ bundle: URL,
+        requiredTeams: [String]
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseSignatureReport {
+        let report = signer.assess(bundleURL: bundle, requiredTeams: requiredTeams)
         guard report.isValid else { throw .invalidCodeSignature(report.failure ?? "unknown error") }
         guard report.isDeveloperID else { throw .notDeveloperID }
         return report
@@ -387,20 +390,18 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         }
     }
 
-    /// The Team ID field alone is just a string in the signature; this
-    /// requires Apple to have issued the leaf certificate to that team, for
-    /// the installed app's team and any catalog-pinned one.
-    func checkTeamCertificate(
-        _ bundle: URL,
-        app: InstalledApp,
-        candidate: AppReleaseCandidate
-    ) throws(AppReleaseVerificationFailure) {
-        guard let installed = app.teamID?.trimmedNonEmpty else { throw .installedTeamIDMissing }
-        var teams = [installed]
-        if let pinned = candidate.pinnedTeamID, pinned != installed { teams.append(pinned) }
-        for team in teams where !signer.satisfiesTeamRequirement(bundleURL: bundle, teamID: team) {
-            throw .teamCertificateMismatch(team)
-        }
+    /// The Team ID field alone is just a string in the signature; Apple must
+    /// also have issued the leaf certificate to that team, for the installed
+    /// app's team and any catalog-pinned one. The signer checks these in the
+    /// same pass as the signature.
+    static func requiredTeams(app: InstalledApp, candidate: AppReleaseCandidate) -> [String] {
+        var teams = [app.teamID?.trimmedNonEmpty].compactMap { $0 }
+        if let pinned = candidate.pinnedTeamID, !teams.contains(pinned) { teams.append(pinned) }
+        return teams
+    }
+
+    static func checkTeamCertificate(_ report: AppReleaseSignatureReport) throws(AppReleaseVerificationFailure) {
+        if let team = report.uncertifiedTeam { throw .teamCertificateMismatch(team) }
     }
 
     // MARK: - Gatekeeper

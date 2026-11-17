@@ -39,7 +39,10 @@ struct AppReleaseVerifierTests {
             == "anchor apple generic and certificate leaf[subject.OU] = \"ABCDE12345\"")
         for malformed in ["abcde12345", "ABCDE1234", "ABCDE123456", "ABCDE\" or 1", "ABCDE1234É", ""] {
             #expect(StrictAppReleaseCodeSigner.teamRequirement(for: malformed) == nil)
+            #expect(StrictAppReleaseCodeSigner.combinedRequirement(teams: ["ABCDE12345", malformed]) == nil)
         }
+        #expect(StrictAppReleaseCodeSigner.combinedRequirement(teams: ["ABCDE12345"])
+            == StrictAppReleaseCodeSigner.developerIDRequirement + " and certificate leaf[subject.OU] = \"ABCDE12345\"")
     }
 
     /// Zips a 2.0 `Foo.app` the way a vendor would ship it.
@@ -91,10 +94,12 @@ struct AppReleaseVerifierTests {
 
     @Test("a catalog-pinned team must also be the certificate's team")
     func pinnedTeamCertificateMismatch() throws {
-        let verifier = AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper())
         let candidate = Fixtures.candidate(source: .catalog, pinnedTeamID: "PINNEDTEAM")
+        let teams = AppReleaseVerifier.requiredTeams(app: someApp, candidate: candidate)
+        #expect(teams == ["TEAM123456", "PINNEDTEAM"])
+        let report = StubCodeSigner().assess(bundleURL: URL(fileURLWithPath: "/tmp/Foo.app"), requiredTeams: teams)
         #expect(throws: Failure.teamCertificateMismatch("PINNEDTEAM")) {
-            try verifier.checkTeamCertificate(URL(fileURLWithPath: "/tmp/Foo.app"), app: someApp, candidate: candidate)
+            try AppReleaseVerifier.checkTeamCertificate(report)
         }
     }
 
