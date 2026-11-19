@@ -27,6 +27,10 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
     /// The bundle at the app's path is gone, unreadable, or now carries a
     /// different bundle ID than the one checked.
     case installedAppChanged
+    /// Something else, usually the app's own updater as it quit, installed
+    /// `to`, the staged version or a newer one, while the update was being
+    /// prepared.
+    case updatedMeanwhile(to: AppReleaseVersion, staged: AppReleaseVersion)
     case download(String)
     case licenseAgreementRequired
     case encryptedDiskImage
@@ -50,6 +54,9 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
                 + "Nothing was changed."
         case .installedAppChanged:
             "The app changed on disk since Gargantua checked it, so nothing was changed. Check for updates again."
+        case .updatedMeanwhile(let version, _):
+            "The app was updated to \(version.description) while this update was being prepared, "
+                + "so nothing was changed."
         case .download(let message):
             "The update couldn't be downloaded: \(message)"
         case .licenseAgreementRequired:
@@ -328,8 +335,12 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
         with stagedVersion: AppReleaseVersion
     ) throws(AppReleaseInstallError) {
         guard AppBundleFiles.fileType(atPath: app.url.path) == S_IFDIR else { throw .installedAppChanged }
-        let current = try onDisk(app)
-        guard stagedVersion.isNewer(than: current.version) else { throw .installedAppChanged }
+        let current = try onDisk(app).version
+        guard stagedVersion.isNewer(than: current) else {
+            // A version that can't be compared is a change, not an update.
+            let caughtUp = current == stagedVersion || current.isNewer(than: stagedVersion)
+            throw caughtUp ? .updatedMeanwhile(to: current, staged: stagedVersion) : .installedAppChanged
+        }
     }
 
     /// Verification runs before the running app is touched; the installed
@@ -400,7 +411,12 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
             }
         }
         do {
-            _ = try await http.download(downloadURL, to: payload, maxBytes: AppReleaseVerifier.maxPayloadBytes) {
+            _ = try await http.download(
+                downloadURL,
+                to: payload,
+                as: candidate.downloadAgent,
+                maxBytes: AppReleaseVerifier.maxPayloadBytes
+            ) {
                 report.yield(($0, $1))
             }
             report.finish()

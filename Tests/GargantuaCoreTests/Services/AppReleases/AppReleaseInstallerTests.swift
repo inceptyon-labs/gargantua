@@ -229,31 +229,31 @@ struct AppReleaseInstallerTests {
         #expect(audit.entries.isEmpty)
     }
 
-    @Test("a newer version landing during the quit stops the swap and leaves it in place")
+    @Test("a version landing during the quit stops the swap; the same or a newer one reads as updated meanwhile")
     func installedAppUpdatedBeforeSwap() async throws {
-        let sandbox = try Sandbox()
-        defer { sandbox.remove() }
-        try Fixtures.writeBundle(at: sandbox.appURL, short: "1.9", build: "190")
-        let appURL = sandbox.appURL
-        // The app's own updater installs 2.1 as Gargantua quits it.
-        let quitter = StubAppQuitter(running: true) {
-            try? Fixtures.writeBundle(at: appURL, short: "2.1", build: "210")
+        let staged = AppReleaseVersion(short: "2.0", build: "200")
+        // The last build can't be compared with the staged one: a change, not an update.
+        for (short, build, updated) in [("2.1", "210", true), ("2.0", "200", true), ("2.0", "x7", false)] {
+            let sandbox = try Sandbox()
+            defer { sandbox.remove() }
+            try Fixtures.writeBundle(at: sandbox.appURL, short: "1.9", build: "190")
+            let appURL = sandbox.appURL
+            // The app's own updater installs short (build) as Gargantua quits it.
+            let quitter = StubAppQuitter(running: true) { try? Fixtures.writeBundle(at: appURL, short: short, build: build) }
+            let trash = FakeTrashMover(trashDirectory: sandbox.trashDirectory)
+            let audit = SpyUninstallAuditRecorder()
+            let installer = makeInstaller(sandbox: sandbox, quitter: quitter, audit: audit, trash: trash)
+
+            let result = await install(installer, sandbox: sandbox, app: Fixtures.installedApp(at: appURL, short: "1.9", build: "190"))
+
+            let landed = AppReleaseVersion(short: short, build: build)
+            #expect(result == .failure(updated ? .updatedMeanwhile(to: landed, staged: staged) : .installedAppChanged))
+            #expect(sandbox.installedVersion == landed)
+            #expect(trash.movedItems.isEmpty)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.trashDirectory.path).isEmpty)
+            #expect(audit.entries.last?.files.isEmpty == true)
+            #expect(quitter.relaunchedURLs == [sandbox.appURL])
         }
-        let trash = FakeTrashMover(trashDirectory: sandbox.trashDirectory)
-        let audit = SpyUninstallAuditRecorder()
-
-        let result = await install(
-            makeInstaller(sandbox: sandbox, quitter: quitter, audit: audit, trash: trash),
-            sandbox: sandbox,
-            app: Fixtures.installedApp(at: sandbox.appURL, short: "1.9", build: "190")
-        )
-
-        #expect(result == .failure(.installedAppChanged))
-        #expect(sandbox.installedVersion == AppReleaseVersion(short: "2.1", build: "210"))
-        #expect(trash.movedItems.isEmpty)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.trashDirectory.path).isEmpty)
-        #expect(audit.entries.last?.files.isEmpty == true)
-        #expect(quitter.relaunchedURLs == [sandbox.appURL])
     }
 
     @Test("a bundle swapped for a link during the quit stops the swap")
@@ -333,7 +333,7 @@ struct AppReleaseInstallerTests {
 }
 
 extension AppReleaseInstallerTests {
-    @Test("download progress reaches the callback ending at the full size, before verifying and never after")
+    @Test("the download goes out as its release's agent; progress ends at the full size, before verifying, never after")
     func forwardsDownloadProgress() async throws {
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
@@ -342,13 +342,14 @@ extension AppReleaseInstallerTests {
 
         _ = await makeInstaller(sandbox: sandbox, http: http).install(
             app: sandbox.app,
-            candidate: Fixtures.candidate(caskToken: "foo"),
+            candidate: Fixtures.candidate(caskToken: "foo", downloadAgent: .curl),
             strategy: .inPlace,
             quitIfRunning: true,
             authorization: .unchecked(.appUpdater),
             progress: { phase in phases.withLock { $0.append(phase) } }
         )
 
+        #expect(http.agents == [.curl])
         let seen = phases.withLock { $0 }
         // The stream keeps only the newest pending report, so a fast double may
         // coalesce the middle ones; the first and last must survive.

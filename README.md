@@ -144,13 +144,13 @@ No Inceptyon server is involved. Apart from the App Store lookup, a check sends 
 
 Checks run only when you open the pane or click Check, or daily if you turn that on in Settings. Installing is license-gated like other destructive actions and fails closed. The download must:
 
-- match its declared size, SHA-256 and Sparkle EdDSA signature where the source provides them (an app with a Sparkle key rejects an unsigned release);
+- match its declared size, SHA-256 and Sparkle EdDSA signature where the source provides them (an app with a Sparkle key rejects an unsigned release, and for an app still on Sparkle's older DSA key, the new version's own key must verify the signature, as Sparkle itself requires);
 - unpack without path traversal or symlinks that leave the bundle;
 - contain exactly one app with the installed app's bundle ID;
 - pass full code-signature validation, be signed by the same developer Team ID as the installed copy, and be accepted by Gatekeeper as notarized. An update signed by a different developer is installed only when the catalog lists that change, when the download is signed with the installed copy's own Sparkle update key, or after you approve the new signer for that app;
 - be newer than the installed version.
 
-Gargantua quits the app only with your consent and never force-quits it. It moves the old copy to the Trash (put it back to undo), moves the new one into place, and writes an audit entry. Apps that Homebrew manages update through `brew upgrade --cask` so brew's records stay correct. Installer packages, apps owned by an administrator and unsigned apps get a download link instead of an install.
+Gargantua quits the app only with your consent and never force-quits it. It moves the old copy to the Trash (put it back to undo), moves the new one into place, and writes an audit entry. Apps that Homebrew manages update through `brew upgrade --cask` so brew's records stay correct. A download from a Homebrew cask URL is requested with a Homebrew user agent that also names Gargantua, or with the browser or curl agent the cask asks for, since some vendors serve those URLs only to Homebrew. If the app's own updater installs the new version while Gargantua is preparing it (quitting an app can set that off), the update stops and the app is reported as up to date. Installer packages, apps owned by an administrator and unsigned apps get a download link instead of an install.
 
 **Update All** runs every install Gargantua can do itself, one app at a time, with the same checks. If any of those apps are open, it asks once whether to quit them or update only the closed ones. App Store apps and download links aren't included.
 

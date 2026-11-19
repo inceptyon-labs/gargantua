@@ -20,7 +20,7 @@ struct AppReleaseHTTPTests {
 
         await #expect(throws: AppReleaseHTTPError.tooLarge(limit: 1000)) {
             try await DefaultAppReleaseHTTPClient(session: session)
-                .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 1000) { _, _ in }
+                .download(URL(string: "https://example.com/big.zip")!, to: file, as: .updater, maxBytes: 1000) { _, _ in }
         }
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
@@ -37,7 +37,7 @@ struct AppReleaseHTTPTests {
 
         await #expect(throws: AppReleaseHTTPError.tooLarge(limit: 1000)) {
             try await DefaultAppReleaseHTTPClient(session: session)
-                .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 1000) { _, _ in }
+                .download(URL(string: "https://example.com/big.zip")!, to: file, as: .updater, maxBytes: 1000) { _, _ in }
         }
         #expect(ChunkedURLProtocol.sentChunks(key) < script.chunkCount)
         #expect(!FileManager.default.fileExists(atPath: file.path))
@@ -66,7 +66,7 @@ struct AppReleaseHTTPTests {
         let expecteds = OSAllocatedUnfairLock<Set<Int64?>>(initialState: [])
 
         let count = try await DefaultAppReleaseHTTPClient(session: session)
-            .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 10000) { received, expected in
+            .download(URL(string: "https://example.com/big.zip")!, to: file, as: .updater, maxBytes: 10000) { received, expected in
                 reports.withLock { $0.append(received) }
                 _ = expecteds.withLock { $0.insert(expected) }
             }
@@ -100,12 +100,29 @@ struct AppReleaseHTTPTests {
         defer { try? FileManager.default.removeItem(at: file) }
 
         let count = try await DefaultAppReleaseHTTPClient(session: session)
-            .download(URL(string: "https://get.example.org/app.dmg")!, to: file, maxBytes: 1000) { _, _ in }
+            .download(URL(string: "https://get.example.org/app.dmg")!, to: file, as: .updater, maxBytes: 1000) { _, _ in }
 
         let seen = RedirectURLProtocol.seen(key)
         #expect(count == RedirectURLProtocol.body.count)
         #expect(seen.contains("https://mirror.example.net/app.dmg"))
         #expect(!seen.contains { $0.hasPrefix("http:") })
+    }
+
+    @Test("a download goes out as the agent it was given, on every hop of a redirect")
+    func downloadUsesAgent() async throws {
+        let (session, key) = RedirectURLProtocol.makeSession(redirectingTo: "https://mirror.example.net/app.dmg")
+        defer { RedirectURLProtocol.remove(key) }
+        let file = destination()
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        _ = try await DefaultAppReleaseHTTPClient(session: session)
+            .download(URL(string: "https://get.example.org/app.dmg")!, to: file, as: .homebrew, maxBytes: 1000) { _, _ in }
+
+        let homebrew = "Homebrew (compatible; Gargantua-AppUpdater)"
+        #expect(RedirectURLProtocol.agents(key) == [homebrew, homebrew])
+        #expect(AppReleaseDownloadAgent.updater.userAgent == "Gargantua-AppUpdater")
+        #expect(AppReleaseDownloadAgent.browser.userAgent.hasPrefix("Mozilla/5.0 (Macintosh;"))
+        #expect(AppReleaseDownloadAgent.curl.userAgent.hasPrefix("curl/"))
     }
 
     @Test("a redirect to http on another port is still refused")
@@ -117,7 +134,7 @@ struct AppReleaseHTTPTests {
 
         await #expect {
             try await DefaultAppReleaseHTTPClient(session: session)
-                .download(URL(string: "https://get.example.org/app.dmg")!, to: file, maxBytes: 1000) { _, _ in }
+                .download(URL(string: "https://get.example.org/app.dmg")!, to: file, as: .updater, maxBytes: 1000) { _, _ in }
         } throws: { error in
             guard case .insecureURL = error as? AppReleaseHTTPError else { return false }
             return true
@@ -273,12 +290,19 @@ final class ChunkedURLProtocol: URLProtocol, @unchecked Sendable {
 final class RedirectURLProtocol: URLProtocol, @unchecked Sendable {
     static let body = Data(repeating: 0x41, count: 64)
 
+    private struct Record {
+        let target: String
+        var seen: [String] = []
+        /// The User-Agent of each request, in the order of `seen`.
+        var agents: [String?] = []
+    }
+
     private static let keyHeader = "X-Redirect-Key"
-    private static let state = OSAllocatedUnfairLock<[String: (target: String, seen: [String])]>(initialState: [:])
+    private static let state = OSAllocatedUnfairLock<[String: Record]>(initialState: [:])
 
     static func makeSession(redirectingTo target: String) -> (URLSession, String) {
         let key = UUID().uuidString
-        state.withLock { $0[key] = (target, []) }
+        state.withLock { $0[key] = Record(target: target) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RedirectURLProtocol.self]
         configuration.httpAdditionalHeaders = [keyHeader: key]
@@ -286,6 +310,8 @@ final class RedirectURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     static func seen(_ key: String) -> [String] { state.withLock { $0[key]?.seen ?? [] } }
+
+    static func agents(_ key: String) -> [String?] { state.withLock { $0[key]?.agents ?? [] } }
 
     static func remove(_ key: String) { _ = state.withLock { $0.removeValue(forKey: key) } }
 
@@ -299,6 +325,7 @@ final class RedirectURLProtocol: URLProtocol, @unchecked Sendable {
         guard let url = request.url else { return client?.urlProtocol(self, didFailWithError: URLError(.badURL)) ?? () }
         let target = Self.state.withLock { state -> String? in
             state[key]?.seen.append(url.absoluteString)
+            state[key]?.agents.append(request.value(forHTTPHeaderField: "User-Agent"))
             return state[key]?.target
         }
         if url.host == "get.example.org", let target, let targetURL = URL(string: target),

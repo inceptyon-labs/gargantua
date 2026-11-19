@@ -32,6 +32,7 @@ final class StubAppReleaseHTTP: AppReleaseHTTPFetching {
     func download(
         _: URL,
         to _: URL,
+        as _: AppReleaseDownloadAgent,
         maxBytes _: Int64,
         progress _: @escaping @Sendable (Int64, Int64?) -> Void
     ) async throws -> Int64 { 0 }

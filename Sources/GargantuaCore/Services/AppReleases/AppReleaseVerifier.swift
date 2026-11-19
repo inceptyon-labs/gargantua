@@ -70,8 +70,8 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
         case .feedSignatureMissing:
             "The app's update feed is missing its signature, so the download can't be proven to come from the developer."
         case .publicKeyMissing:
-            "The update is signed, but the installed app has no key to check the signature against."
-        case .malformedPublicKey: "The installed app's update-signing key is not a valid key."
+            "The update is signed, but neither the installed app nor the update has a key to check the signature against."
+        case .malformedPublicKey: "The update-signing key is not a valid key."
         case .malformedSignature: "The update's signature is not in a valid format."
         case .signatureInvalid: "The update's signature doesn't match the developer's signing key."
         case .unrecognizedPayload: "The download isn't a zip, disk image, or tar archive."
@@ -118,6 +118,17 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
     private static func bytes(_ count: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
     }
+}
+
+/// How a payload's EdDSA signature stood before unpacking.
+enum AppReleaseEdSignatureCheck: Equatable {
+    /// Neither the item nor the installed app has anything to check.
+    case unsigned
+    /// Verified against the installed app's key, which can vouch for a new signer.
+    case verifiedByInstalledKey
+    /// Signed, but the installed app has no EdDSA key, so the unpacked app's
+    /// own key must verify it.
+    case awaitingUpdateKey(String)
 }
 
 /// A verified app bundle sitting in the staging directory, ready to swap in.
@@ -197,7 +208,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         try checkSourcePolicy(candidate, strategy: strategy)
         let payloadSize = try Self.checkLength(of: payload, expected: candidate.expectedLength)
         try Self.checkSHA256(of: payload, expected: candidate.sha256)
-        let vouched = try Self.checkEdSignature(of: payload, app: app, candidate: candidate)
+        let edSignature = try Self.checkEdSignature(of: payload, app: app, candidate: candidate)
         let kind = try Self.sniffPayload(payload, declared: candidate.payloadKind)
 
         let extracted = workDirectory.appendingPathComponent("extracted", isDirectory: true)
@@ -216,7 +227,15 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
         let bundle = try Self.locateApp(in: extracted, bundleID: app.bundleID)
         try Self.walkBundleTree(bundle)
-        let signed = try checkSigner(of: bundle, app: app, candidate: candidate, vouchedByUpdateKey: vouched)
+        if case .awaitingUpdateKey(let signature) = edSignature {
+            try Self.checkEdSignature(signature, of: payload, updateKeyOf: bundle)
+        }
+        let signed = try checkSigner(
+            of: bundle,
+            app: app,
+            candidate: candidate,
+            vouchedByUpdateKey: edSignature == .verifiedByInstalledKey
+        )
         try Self.checkTeamCertificate(signed.report)
         try checkGatekeeper(bundle)
         let version = try Self.checkVersion(of: bundle, installed: app, hostOSVersion: hostOSVersion)
@@ -288,20 +307,45 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
 
     /// Required when the item carries a signature, or when it comes from a
     /// Sparkle feed and the installed app publishes a key; skipped only when
-    /// neither side has anything. Returns whether a signature was verified
-    /// against the installed app's key.
+    /// neither side has anything.
+    ///
+    /// A signed item for an installed app without an EdDSA key (one still on
+    /// Sparkle's DSA keys) is Sparkle's DSA-to-EdDSA migration: the new app's
+    /// own key must verify it once unpacked, and the install stands on the
+    /// code signature checks, as an unsigned one does.
     @discardableResult
     static func checkEdSignature(
         of payload: URL,
         app: InstalledApp,
         candidate: AppReleaseCandidate
-    ) throws(AppReleaseVerificationFailure) -> Bool {
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseEdSignatureCheck {
         let key = app.sparklePublicEDKey?.trimmedNonEmpty
         let signature = candidate.edSignature?.trimmedNonEmpty
-        guard signature != nil || (candidate.isSparkleFeed && key != nil) else { return false }
-        guard let key else { throw .publicKeyMissing }
+        guard signature != nil || (candidate.isSparkleFeed && key != nil) else { return .unsigned }
         guard let signature else { throw .feedSignatureMissing }
+        guard let key else { return .awaitingUpdateKey(signature) }
+        try verifyEdSignature(signature, of: payload, key: key)
+        return .verifiedByInstalledKey
+    }
 
+    /// The deferred check of `.awaitingUpdateKey`, against the key in the
+    /// unpacked app's Info.plist. That key vouches for nothing else: it came
+    /// with the download.
+    static func checkEdSignature(
+        _ signature: String,
+        of payload: URL,
+        updateKeyOf bundle: URL
+    ) throws(AppReleaseVerificationFailure) {
+        let plist = AppBundleFiles.infoPlist(ofBundle: bundle)
+        guard let key = (plist?["SUPublicEDKey"] as? String)?.trimmedNonEmpty else { throw .publicKeyMissing }
+        try verifyEdSignature(signature, of: payload, key: key)
+    }
+
+    private static func verifyEdSignature(
+        _ signature: String,
+        of payload: URL,
+        key: String
+    ) throws(AppReleaseVerificationFailure) {
         guard let keyData = Data(base64Encoded: key), keyData.count == 32,
               let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: keyData)
         else { throw .malformedPublicKey }
@@ -316,7 +360,6 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
             throw .unreadablePayload(error.localizedDescription)
         }
         guard publicKey.isValidSignature(signatureData, for: bytes) else { throw .signatureInvalid }
-        return true
     }
 
     // MARK: - Payload sniff

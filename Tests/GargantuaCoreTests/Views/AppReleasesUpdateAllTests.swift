@@ -183,6 +183,21 @@ struct AppReleasesUpdateAllTests {
         #expect(fixture.session.batchSummary == AppReleaseBatchSummary(updated: 2, needAttention: 1))
     }
 
+    @Test("an app updated by something else meanwhile reads as up to date, not as a failure")
+    func updatedMeanwhileIsCurrent() async {
+        let fixture = await makeFixture()
+        fixture.installer.failures[Self.ids[0]] = .updatedMeanwhile(
+            to: AppReleaseVersion(short: "2.1", build: "210"),
+            staged: AppReleaseVersion(short: "2.0", build: "200")
+        )
+
+        await fixture.session.updateAll(fixture.session.updatableRows, quitting: [])
+
+        #expect(fixture.session.rowMessages[Self.ids[0]]
+            == .installed("Already up to date. Alpha was updated to 2.1 (210) while this update was being prepared."))
+        #expect(fixture.session.batchSummary == AppReleaseBatchSummary(updated: 2, needAttention: 0))
+    }
+
     @Test("a license block ends the run without installing or stranding rows")
     func licenseBlockStops() async {
         let attempts = OSAllocatedUnfairLock(initialState: 0)

@@ -150,6 +150,29 @@ extension AppReleasesSessionTests {
         }
     }
 
+    @Test("An app that updated itself to the offered version records the release; a later version doesn't")
+    func updatedMeanwhileConfirmsOnlyTheSameVersion() async throws {
+        let id = Self.app.bundleID
+        let staged = Self.candidate.version
+        let same = Self.makeFixture()
+        same.installer.failure = .updatedMeanwhile(to: staged, staged: staged)
+        await same.session.check()
+        await same.session.install(try #require(same.session.rows.first), quitIfRunning: false)
+        #expect(AppReleasePreferences.stored(in: same.defaults).confirmedReleases[id]
+            == AppReleaseConfirmedRelease(offered: staged.description, installed: staged.description, source: Self.candidate.source))
+        #expect(same.session.recentlyInstalled.contains(id))
+
+        let later = Self.makeFixture()
+        later.installer.failure = .updatedMeanwhile(to: AppReleaseVersion(short: "9.9", build: nil), staged: staged)
+        await later.session.check()
+        await later.session.install(try #require(later.session.rows.first), quitIfRunning: false)
+        #expect(AppReleasePreferences.stored(in: later.defaults).confirmedReleases.isEmpty)
+        guard case .installed = later.session.rowMessages[id] else {
+            Issue.record("expected an up-to-date message, got \(String(describing: later.session.rowMessages[id]))")
+            return
+        }
+    }
+
     @Test("A change of signer waits on the row; approving stores it and installs")
     func signerChangeIsApproved() async throws {
         let id = Self.app.bundleID

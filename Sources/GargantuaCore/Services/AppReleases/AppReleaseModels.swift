@@ -163,6 +163,8 @@ public struct AppReleaseCandidate: Sendable, Equatable {
     /// The release came from a Sparkle appcast (the app's own or a catalog
     /// feed), so an installed `SUPublicEDKey` requires an EdDSA signature.
     public internal(set) var isSparkleFeed: Bool
+    /// How the download is requested; set from the cask for Homebrew releases.
+    public let downloadAgent: AppReleaseDownloadAgent
 
     public var isPrerelease: Bool { version.isPrerelease }
 
@@ -181,7 +183,8 @@ public struct AppReleaseCandidate: Sendable, Equatable {
         caskToken: String? = nil,
         pinnedTeamID: String? = nil,
         allowsInPlaceInstall: Bool = true,
-        isSparkleFeed: Bool? = nil
+        isSparkleFeed: Bool? = nil,
+        downloadAgent: AppReleaseDownloadAgent = .updater
     ) {
         self.source = source
         self.version = version
@@ -198,6 +201,7 @@ public struct AppReleaseCandidate: Sendable, Equatable {
         self.pinnedTeamID = pinnedTeamID
         self.allowsInPlaceInstall = allowsInPlaceInstall
         self.isSparkleFeed = isSparkleFeed ?? (source == .sparkle)
+        self.downloadAgent = downloadAgent
     }
 
     /// Whether `skipped`, a stored `displayVersion`, names this release.

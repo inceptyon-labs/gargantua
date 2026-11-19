@@ -398,7 +398,7 @@ extension HomebrewCaskIndexTests {
         }
     }
 
-    @Test("a cache written before referenced names were kept is refetched")
+    @Test("a cache written before referenced names or download agents were kept is refetched")
     func cacheWithoutReferencedNamesIsRefetched() async throws {
         func requests(entryExtras: String) async throws -> Int {
             let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
@@ -413,8 +413,35 @@ extension HomebrewCaskIndexTests {
             _ = try await HomebrewCaskIndex(http: http, cacheDirectory: dir, freshFor: 600).entries()
             return http.requests.count
         }
-        #expect(try await requests(entryExtras: #","referencedNames":[]"#) == 0)
-        #expect(try await requests(entryExtras: "") == 1)
+        #expect(try await requests(entryExtras: #","referencedNames":[],"downloadAgent":"curl""#) == 0)
+        #expect(try await requests(entryExtras: #","downloadAgent":"curl""#) == 1)
+        #expect(try await requests(entryExtras: #","referencedNames":[]"#) == 1)
+    }
+
+    @Test("a cask's url_specs user agent reaches its release; any other cask downloads as Homebrew")
+    func downloadAgentFromURLSpecs() async throws {
+        let json = #"""
+        [{"token":"c","version":"2.0","url":"https://x.test/c.dmg","url_specs":{"user_agent":":curl"},
+          "artifacts":[{"app":["C.app"]},{"zap":[{"trash":"~/Library/Caches/com.test.c"}]}]},
+         {"token":"f","version":"1","url_specs":{"user_agent":":fake"}},
+         {"token":"b","version":"1","url_specs":{"user_agent":":browser","referer":"https://x.test"}},
+         {"token":"o","version":"1","url_specs":{"user_agent":"Custom/1.0"}},
+         {"token":"n","version":"1"}]
+        """#
+        let all = try HomebrewCaskEntry.decodeAll(from: Data(json.utf8))
+        #expect(all.map(\.downloadAgent) == [.curl, .browser, .browser, .homebrew, .homebrew])
+
+        let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(json.utf8)) }
+        let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir))
+        let app = InstalledApp(
+            bundleID: "com.test.c", name: "C", url: URL(fileURLWithPath: "/Applications/C.app"), shortVersion: "1.0"
+        )
+        guard case .found(let found) = await source.lookUp([app]).outcomes[app.bundleID] else {
+            Issue.record("no candidate")
+            return
+        }
+        #expect(found.downloadAgent == .curl)
     }
 
     @Test("a cask version with the installed build written into it is not an update")

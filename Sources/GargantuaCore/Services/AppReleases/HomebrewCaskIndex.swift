@@ -25,6 +25,8 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
     public let variations: [String: HomebrewCaskVariation]
     /// Non-optional for the same reason as `variations`.
     public let dependsOn: HomebrewCaskRequirements
+    /// From `url_specs.user_agent`. Non-optional so an older cache is refetched.
+    public let downloadAgent: AppReleaseDownloadAgent
 
     public init(
         token: String,
@@ -38,7 +40,8 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         hasPkg: Bool = false,
         disabled: Bool = false,
         variations: [String: HomebrewCaskVariation] = [:],
-        dependsOn: HomebrewCaskRequirements = HomebrewCaskRequirements()
+        dependsOn: HomebrewCaskRequirements = HomebrewCaskRequirements(),
+        downloadAgent: AppReleaseDownloadAgent = .homebrew
     ) {
         self.token = token
         self.version = version
@@ -52,6 +55,7 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         self.disabled = disabled
         self.variations = variations
         self.dependsOn = dependsOn
+        self.downloadAgent = downloadAgent
     }
 
     /// Decodes `cask.json`, skipping entries that are malformed.
@@ -83,7 +87,8 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
             variations: (json["variations"] as? [String: Any] ?? [:]).compactMapValues { value in
                 (value as? [String: Any]).map(HomebrewCaskVariation.init(json:))
             },
-            dependsOn: (json["depends_on"] as? [String: Any]).map(HomebrewCaskRequirements.init(json:)) ?? HomebrewCaskRequirements()
+            dependsOn: (json["depends_on"] as? [String: Any]).map(HomebrewCaskRequirements.init(json:)) ?? HomebrewCaskRequirements(),
+            downloadAgent: AppReleaseDownloadAgent(caskUserAgent: (json["url_specs"] as? [String: Any])?["user_agent"])
         )
     }
 
@@ -406,7 +411,8 @@ public struct HomebrewCaskSource: Sendable {
             sha256: release.sha256,
             payloadKind: entry.hasPkg ? .pkg : .infer(url: downloadURL),
             vendorURL: entry.homepage.flatMap(URL.init(string:)),
-            caskToken: entry.token
+            caskToken: entry.token,
+            downloadAgent: entry.downloadAgent
         ))
     }
 }

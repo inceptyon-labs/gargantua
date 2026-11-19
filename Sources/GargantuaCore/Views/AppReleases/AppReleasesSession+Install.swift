@@ -98,6 +98,19 @@ extension AppReleasesSession {
                 rowMessages[id] = .signerChanged(change)
                 return .failed
             }
+            if case .updatedMeanwhile(let version, let staged) = error {
+                rowMessages[id] = .installed(
+                    "Already up to date. \(row.app.name) was updated to \(version.description) "
+                        + "while this update was being prepared."
+                )
+                // Same version as the download, so this release holds it.
+                if version == staged {
+                    updatePreferences { $0.confirm(candidate, holds: version.description, for: id) }
+                }
+                recentlyInstalled.insert(id)
+                await refresh(row.app)
+                return .alreadyCurrent
+            }
             guard let current = error.versionAlreadyInstalled else {
                 rowMessages[id] = .failed(error.localizedDescription)
                 guard error == .appManagementDenied else { return .failed }

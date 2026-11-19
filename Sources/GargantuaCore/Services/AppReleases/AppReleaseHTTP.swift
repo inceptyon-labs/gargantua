@@ -35,20 +35,54 @@ public enum AppReleaseHTTPError: Error, Equatable, LocalizedError {
     }
 }
 
+/// The User-Agent an update is downloaded with. A Homebrew cask's URL is
+/// fetched the way `brew` fetches it, since some vendors answer only that:
+/// Warp's cask URL is a 404 unless the agent starts with `Homebrew`, and a
+/// cask's `url_specs.user_agent` names the one its server expects.
+public enum AppReleaseDownloadAgent: String, Sendable, Codable, Equatable {
+    case updater
+    case homebrew
+    /// A cask's `:fake` or `:browser`, for which Homebrew sends Safari's.
+    case browser
+    /// A cask's `:curl`.
+    case curl
+
+    public var userAgent: String {
+        switch self {
+        case .updater: DefaultAppReleaseHTTPClient.userAgent
+        case .homebrew: "Homebrew (compatible; \(DefaultAppReleaseHTTPClient.userAgent))"
+        case .browser:
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                + "Version/17.10 Safari/605.1.15"
+        case .curl: "curl/8.7.1"
+        }
+    }
+
+    /// From a cask's `url_specs.user_agent`; any other value, or none, gets Homebrew's own.
+    init(caskUserAgent: Any?) {
+        switch caskUserAgent as? String {
+        case ":fake", ":browser": self = .browser
+        case ":curl": self = .curl
+        default: self = .homebrew
+        }
+    }
+}
+
 /// Network seam for the App Updater. Every request is https-only; a redirect
 /// to plain http on the default port is followed over https instead, and any
 /// other non-https hop is refused.
 public protocol AppReleaseHTTPFetching: Sendable {
     func get(_ url: URL, etag: String?) async throws -> AppReleaseHTTPResponse
 
-    /// Downloads `url` to `destination` (which must not exist) and returns the
-    /// byte count. Throws `.tooLarge` once the body passes `maxBytes`.
-    /// `progress` gets the bytes received and the expected total (nil when the
-    /// server didn't declare one), throttled, off the main actor, with a last
-    /// call at completion.
+    /// Downloads `url` to `destination` (which must not exist) as `agent`,
+    /// and returns the byte count. Throws `.tooLarge` once the body passes
+    /// `maxBytes`. `progress` gets the bytes received and the expected total
+    /// (nil when the server didn't declare one), throttled, off the main
+    /// actor, with a last call at completion.
     func download(
         _ url: URL,
         to destination: URL,
+        as agent: AppReleaseDownloadAgent,
         maxBytes: Int64,
         progress: @escaping @Sendable (Int64, Int64?) -> Void
     ) async throws -> Int64
@@ -129,10 +163,11 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
     public func download(
         _ url: URL,
         to destination: URL,
+        as agent: AppReleaseDownloadAgent,
         maxBytes: Int64,
         progress: @escaping @Sendable (Int64, Int64?) -> Void
     ) async throws -> Int64 {
-        let request = try Self.request(url, timeout: 60)
+        let request = try Self.request(url, timeout: 60, userAgent: agent.userAgent)
         let descriptor = open(destination.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0o600)
         guard descriptor >= 0 else {
             throw AppReleaseHTTPError.network("Couldn't create the download file: \(String(cString: strerror(errno)))")
@@ -149,7 +184,11 @@ public struct DefaultAppReleaseHTTPClient: AppReleaseHTTPFetching {
         }
     }
 
-    private static func request(_ url: URL, timeout: TimeInterval) throws(AppReleaseHTTPError) -> URLRequest {
+    private static func request(
+        _ url: URL,
+        timeout: TimeInterval,
+        userAgent: String = userAgent
+    ) throws(AppReleaseHTTPError) -> URLRequest {
         guard url.isHTTPS else { throw .insecureURL(url.absoluteString) }
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")

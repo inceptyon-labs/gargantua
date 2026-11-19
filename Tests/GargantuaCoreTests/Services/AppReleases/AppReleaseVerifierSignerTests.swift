@@ -36,12 +36,14 @@ struct AppReleaseVerifierSignerTests {
         policy: AppReleaseSignerPolicy = AppReleaseSignerPolicy(),
         gatekeeper: any AppReleaseGatekeeperAssessing = AcceptingGatekeeper(),
         candidate: (Data) throws -> AppReleaseCandidate = { _ in Fixtures.candidate() },
-        updateKey: String? = nil
+        updateKey: String? = nil,
+        newAppKey: String? = nil
     ) throws -> AppReleaseStagedBundle {
         let directory = try Fixtures.makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = directory.appendingPathComponent("source/Foo.app")
-        try Fixtures.writeBundle(at: source, short: "2.0", build: "200")
+        let extra: [String: Any] = newAppKey.map { ["SUPublicEDKey": $0] } ?? [:]
+        try Fixtures.writeBundle(at: source, short: "2.0", build: "200", extra: extra)
         let payload = directory.appendingPathComponent("payload")
         let output = try DefaultProcessRunner().run(
             executable: URL(fileURLWithPath: "/usr/bin/ditto"),
@@ -109,6 +111,43 @@ struct AppReleaseVerifierSignerTests {
         // No key on the installed copy means no signature was checked.
         #expect(throws: Failure.signerChanged(Self.change)) {
             try verify(signer: newSigner(), candidate: { _ in Fixtures.candidate(isSparkleFeed: false) })
+        }
+    }
+
+    // MARK: - DSA-to-EdDSA migration
+
+    /// A candidate whose download is signed with `key`.
+    private func signed(by key: Curve25519.Signing.PrivateKey) -> (Data) throws -> AppReleaseCandidate {
+        { Fixtures.candidate(edSignature: try key.signature(for: $0).base64EncodedString()) }
+    }
+
+    @Test("a signed update for an app without an EdDSA key passes when the new app's own key verifies it")
+    func newAppKeyVerifiesMigration() throws {
+        let key = Curve25519.Signing.PrivateKey()
+        let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
+        let staged = try verify(signer: StubCodeSigner(), candidate: signed(by: key), newAppKey: publicKey)
+        #expect(staged.version == AppReleaseVersion(short: "2.0", build: "200"))
+        #expect(staged.signerChange == nil)
+    }
+
+    @Test("that update is refused when the new app has no key, or its key didn't sign the download")
+    func migrationNeedsTheNewAppsKey() throws {
+        let key = Curve25519.Signing.PrivateKey()
+        #expect(throws: Failure.publicKeyMissing) {
+            try verify(signer: StubCodeSigner(), candidate: signed(by: key))
+        }
+        let otherKey = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
+        #expect(throws: Failure.signatureInvalid) {
+            try verify(signer: StubCodeSigner(), candidate: signed(by: key), newAppKey: otherKey)
+        }
+    }
+
+    @Test("the new app's own key doesn't vouch for a new signer")
+    func newAppKeyDoesNotVouch() throws {
+        let key = Curve25519.Signing.PrivateKey()
+        let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
+        #expect(throws: Failure.signerChanged(Self.change)) {
+            try verify(signer: newSigner(), candidate: signed(by: key), newAppKey: publicKey)
         }
     }
 

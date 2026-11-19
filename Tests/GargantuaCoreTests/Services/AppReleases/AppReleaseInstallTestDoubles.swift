@@ -63,7 +63,8 @@ enum AppReleaseInstallFixtures {
         pinnedTeamID: String? = nil,
         isSparkleFeed: Bool? = nil,
         caskToken: String? = nil,
-        downloadURL: String = "https://example.com/Foo.zip"
+        downloadURL: String = "https://example.com/Foo.zip",
+        downloadAgent: AppReleaseDownloadAgent = .updater
     ) -> AppReleaseCandidate {
         AppReleaseCandidate(
             source: source,
@@ -74,7 +75,8 @@ enum AppReleaseInstallFixtures {
             sha256: sha256,
             caskToken: caskToken,
             pinnedTeamID: pinnedTeamID,
-            isSparkleFeed: isSparkleFeed
+            isSparkleFeed: isSparkleFeed,
+            downloadAgent: downloadAgent
         )
     }
 }
@@ -82,6 +84,7 @@ enum AppReleaseInstallFixtures {
 /// Writes a fixed payload and counts downloads.
 final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
     private let downloads = OSAllocatedUnfairLock(initialState: 0)
+    private let recordedAgents = OSAllocatedUnfairLock<[AppReleaseDownloadAgent]>(initialState: [])
     /// (received, expected) pairs reported to the progress callback.
     let reports: [(Int64, Int64?)]
 
@@ -94,6 +97,7 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
     }
 
     var downloadCount: Int { downloads.withLock { $0 } }
+    var agents: [AppReleaseDownloadAgent] { recordedAgents.withLock { $0 } }
 
     func get(_ url: URL, etag _: String?) async throws -> AppReleaseHTTPResponse {
         throw AppReleaseHTTPError.network("get is not stubbed: \(url)")
@@ -102,10 +106,12 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
     func download(
         _: URL,
         to destination: URL,
+        as agent: AppReleaseDownloadAgent,
         maxBytes _: Int64,
         progress: @escaping @Sendable (Int64, Int64?) -> Void
     ) async throws -> Int64 {
         downloads.withLock { $0 += 1 }
+        recordedAgents.withLock { $0.append(agent) }
         for (received, expected) in reports { progress(received, expected) }
         if let failure { throw failure }
         let data = Data("payload".utf8)
