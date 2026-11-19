@@ -200,6 +200,8 @@ extension MainContentView {
             devToolsSession.scanRequestedOnOpen = true
         case "diskExplorer" where diskExplorerState.phase == .idle:
             diskExplorerState.startScan()
+        case "appUpdates" where appReleasesSession.phase == .idle:
+            appReleasesSession.startCheck()
         default:
             break
         }

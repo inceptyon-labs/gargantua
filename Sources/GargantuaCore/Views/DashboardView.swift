@@ -31,6 +31,10 @@ public struct DashboardView: View {
     /// context (`freshReader()`) to avoid showing stale data until relaunch.
     /// Tests inject a factory instead.
     private let makeFreshPersistence: (@MainActor () throws -> PersistenceController)?
+    /// Apps with an update available, as the App Updates sidebar badge counts
+    /// them, and their names when known.
+    private let appUpdateCount: Int
+    private let appUpdateNames: [String]
 
     @State private var diskUsedGB: Int = 0
     @State private var diskTotalGB: Int = 0
@@ -60,7 +64,9 @@ public struct DashboardView: View {
         persistence: PersistenceController? = nil,
         openPane: ((String) -> Void)? = nil,
         makeFreshPersistence: (@MainActor () throws -> PersistenceController)? = nil,
-        homebrewReclaimableProvider: @escaping HomebrewReclaimableProvider = { HomebrewReclaimableProbe.probe() }
+        homebrewReclaimableProvider: @escaping HomebrewReclaimableProvider = { HomebrewReclaimableProbe.probe() },
+        appUpdateCount: Int = 0,
+        appUpdateNames: [String] = []
     ) {
         self._sidebarSelection = sidebarSelection
         self.session = session
@@ -68,6 +74,8 @@ public struct DashboardView: View {
         self.openPane = openPane
         self.makeFreshPersistence = makeFreshPersistence
         self.homebrewReclaimableProvider = homebrewReclaimableProvider
+        self.appUpdateCount = appUpdateCount
+        self.appUpdateNames = appUpdateNames
     }
 
     public var body: some View {
@@ -88,6 +96,7 @@ public struct DashboardView: View {
                         triageOverviewSection
                         roadmapSection
                         homebrewSignpostSection
+                        appUpdatesSignpostSection
                         scheduledScanSection
                         triageEvidenceSection
                     }
@@ -192,6 +201,17 @@ public struct DashboardView: View {
             DashboardHomebrewSignpost(
                 reclaimableBytes: bytes,
                 onOpen: { open("devTools") }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var appUpdatesSignpostSection: some View {
+        if appUpdateCount > 0 {
+            DashboardAppUpdatesSignpost(
+                count: appUpdateCount,
+                appNames: appUpdateNames,
+                onOpen: { open("appUpdates") }
             )
         }
     }

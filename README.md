@@ -154,6 +154,8 @@ Gargantua quits the app only with your consent and never force-quits it. It move
 
 **Update All** runs every install Gargantua can do itself, one app at a time, with the same checks. If any of those apps are open, it asks once whether to quit them or update only the closed ones. App Store apps and download links aren't included.
 
+The number of apps with an update shows as a badge on App Updates in the sidebar and on a Dashboard card that names them. The card's Open link starts a check if this window hasn't run one.
+
 ## Configuration
 
 Everything below is configurable from **Settings**. Five tabs: AI · Automation · Network · Storage · About.

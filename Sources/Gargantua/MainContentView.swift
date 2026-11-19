@@ -15,6 +15,7 @@ struct MainContentView: View {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding = false
     // Observed so a count the scheduler writes while the app is open updates the badge.
     @AppStorage(AppReleaseBackgroundState.availableCountKey) private var storedAvailableCount: Int = 0
+    @AppStorage(AppReleaseBackgroundState.availableAppNamesKey) private var storedAvailableAppNames: Data?
     @AppStorage(AppReleasePreferences.userDefaultsKey) private var appReleasePreferencesData: Data?
     @State var sidebarSelection: String? = "dashboard"
     /// Toggled by ⌘/ (via the Help-menu command) to show the shortcut cheat sheet.
@@ -51,6 +52,14 @@ struct MainContentView: View {
             sessionHasChecked: appReleasesSession.lastChecked != nil,
             backgroundCheckEnabled: preferences?.backgroundCheckEnabled ?? false,
             storedCount: storedAvailableCount
+        )
+    }
+
+    private var appUpdateNames: [String] {
+        AppReleaseBadge.appNames(
+            count: appUpdatesBadgeCount,
+            sessionNames: appReleasesSession.hasResults ? appReleasesSession.availableAppNames : nil,
+            storedNames: AppReleaseBackgroundState.availableAppNames(from: storedAvailableAppNames)
         )
     }
 
@@ -92,7 +101,9 @@ struct MainContentView: View {
                                     sidebarSelection: $sidebarSelection,
                                     session: dashboardSession,
                                     persistence: persistence,
-                                    openPane: { openFromDashboard($0) }
+                                    openPane: { openFromDashboard($0) },
+                                    appUpdateCount: appUpdatesBadgeCount,
+                                    appUpdateNames: appUpdateNames
                                 )
                             case "profiles":
                                 if let persistence {

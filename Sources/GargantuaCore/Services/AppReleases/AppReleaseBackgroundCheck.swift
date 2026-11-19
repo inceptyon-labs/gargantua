@@ -13,6 +13,8 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
     /// Updates available after ignore/skip, from the latest check by either
     /// process. Its own key so the app never rewrites the scheduler's state blob.
     public static let availableCountKey = "appReleases.availableUpdateCount"
+    /// The names of the apps `availableCountKey` counts, sorted, as JSON.
+    public static let availableAppNamesKey = "appReleases.availableUpdateNames"
 
     public var lastCheck: Date?
     /// Bundle ID to the highest version already announced for that app.
@@ -93,8 +95,20 @@ public struct AppReleaseBackgroundState: Codable, Sendable, Equatable {
         defaults.integer(forKey: availableCountKey)
     }
 
-    public static func storeAvailableCount(_ count: Int, in defaults: UserDefaults = .standard) {
-        defaults.set(count, forKey: availableCountKey)
+    /// Stores the apps with an update available: their count, and their names
+    /// for the dashboard card.
+    public static func storeAvailable(appNames: [String], in defaults: UserDefaults = .standard) {
+        defaults.set(appNames.count, forKey: availableCountKey)
+        defaults.set(try? JSONEncoder().encode(appNames), forKey: availableAppNamesKey)
+    }
+
+    public static func storedAvailableAppNames(in defaults: UserDefaults = .standard) -> [String] {
+        availableAppNames(from: defaults.data(forKey: availableAppNamesKey))
+    }
+
+    /// The names stored under `availableAppNamesKey`; empty when none are.
+    public static func availableAppNames(from data: Data?) -> [String] {
+        data.flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
     }
 }
 
@@ -124,10 +138,7 @@ public extension AppReleaseUpdateNotifying {
         }
 
         public static func content(count: Int, appNames: [String]) -> (title: String, body: String) {
-            let title = count == 1 ? "1 app update available" : "\(count) app updates available"
-            var body = appNames.prefix(3).joined(separator: ", ")
-            if appNames.count > 3 { body += " and \(appNames.count - 3) more" }
-            return (title, body)
+            (AppReleaseUpdatesText.title(count: count), AppReleaseUpdatesText.appList(appNames))
         }
 
         public func deliver(count: Int, appNames: [String]) async -> Bool {
@@ -227,9 +238,10 @@ public struct AppReleaseBackgroundCheck: Sendable {
             guard let prior = announced[entry.app.bundleID] else { return true }
             return entry.version.isNewer(than: prior)
         }
+        let names = available.map(\.app.name).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         var delivered = false
         if hasNew {
-            delivered = await notifier.deliver(count: available.count, appNames: available.map(\.app.name).sorted())
+            delivered = await notifier.deliver(count: available.count, appNames: names)
         }
         // An undelivered notification leaves its updates unannounced so a later
         // run announces them. Not when the app reported notifications turned
@@ -243,7 +255,7 @@ public struct AppReleaseBackgroundCheck: Sendable {
         Self.enrich(&announced, from: available)
         AppReleaseBackgroundState(lastCheck: now(), announcedVersions: announced, unconfirmedVersions: unconfirmed)
             .store(in: defaults)
-        AppReleaseBackgroundState.storeAvailableCount(available.count, in: defaults)
+        AppReleaseBackgroundState.storeAvailable(appNames: names, in: defaults)
         return .checked(availableCount: available.count, notified: delivered)
     }
 

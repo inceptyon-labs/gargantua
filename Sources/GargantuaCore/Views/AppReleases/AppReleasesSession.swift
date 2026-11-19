@@ -94,6 +94,12 @@ public final class AppReleasesSession {
         rows.filter { $0.actionableCandidate != nil }.count
     }
 
+    /// The apps `availableCount` counts, sorted.
+    public var availableAppNames: [String] {
+        rows.filter { $0.actionableCandidate != nil }.map(\.app.name)
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     /// Updates that apps' own updaters install, which `availableCount` leaves out.
     public var selfUpdatingCount: Int {
         rows.filter { if case .available(_, .updatesItself) = $0.status { true } else { false } }.count
@@ -309,10 +315,11 @@ public final class AppReleasesSession {
         if isPaneVisible, lastChecked != nil { updateSeen(clock: false) }
     }
 
-    /// Keeps the count the sidebar badge and the background check read current.
+    /// Keeps the count the sidebar badge and the background check read, and
+    /// the names the dashboard card shows, current.
     private func storeAvailableCount() {
         guard lastChecked != nil else { return }
-        AppReleaseBackgroundState.storeAvailableCount(availableCount, in: defaults)
+        AppReleaseBackgroundState.storeAvailable(appNames: availableAppNames, in: defaults)
     }
 
     // MARK: - Ignore and skip

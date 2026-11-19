@@ -200,6 +200,7 @@ struct AppReleasesSessionTests {
 
         await fixture.session.check()
         #expect(AppReleaseBackgroundState.storedAvailableCount(in: fixture.defaults) == 1)
+        #expect(AppReleaseBackgroundState.storedAvailableAppNames(in: fixture.defaults) == [Self.app.name])
 
         fixture.session.ignore(Self.app.bundleID)
         #expect(AppReleaseBackgroundState.storedAvailableCount(in: fixture.defaults) == 0)

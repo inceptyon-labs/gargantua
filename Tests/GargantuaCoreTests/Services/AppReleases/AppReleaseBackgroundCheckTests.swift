@@ -168,6 +168,7 @@ struct AppReleaseBackgroundCheckTests {
         #expect(deliveries.first?.names == ["Alpha", "Bravo"])
         let state = AppReleaseBackgroundState.stored(in: harness.defaults)
         #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 2)
+        #expect(AppReleaseBackgroundState.storedAvailableAppNames(in: harness.defaults) == ["Alpha", "Bravo"])
         #expect(state.lastCheck == harness.clock.current)
         #expect(state.announcedVersions.mapValues(\.description) == ["com.a": "2.0", "com.b": "3.0"])
     }

@@ -29,4 +29,14 @@ struct AppReleaseBadgeTests {
             sessionCount: nil, sessionHasChecked: false, backgroundCheckEnabled: true, storedCount: 3
         ) == 3)
     }
+
+    @Test("The dashboard card names the apps counted, and none when the names aren't the counted ones")
+    func appNames() {
+        let stored = ["Firefox", "Slack"]
+        #expect(AppReleaseBadge.appNames(count: 1, sessionNames: ["Zoom"], storedNames: stored) == ["Zoom"])
+        #expect(AppReleaseBadge.appNames(count: 2, sessionNames: nil, storedNames: stored) == stored)
+        // A count stored before names were, or a stored count the badge doesn't show.
+        #expect(AppReleaseBadge.appNames(count: 2, sessionNames: nil, storedNames: []).isEmpty)
+        #expect(AppReleaseBadge.appNames(count: 0, sessionNames: nil, storedNames: stored).isEmpty)
+    }
 }
