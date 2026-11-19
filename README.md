@@ -137,7 +137,7 @@ App Updates lists installed third-party apps with a newer release and installs t
 
 - the app's own Sparkle feed (`SUFeedURL` in its Info.plist);
 - Homebrew's public cask metadata (`formulae.brew.sh`), matched by app name and confirmed by the app's bundle ID in the cask, or by the cask being installed on your Mac;
-- the Mac App Store lookup API, for App Store apps, which open in the App Store to update. The lookup sends Apple the bundle IDs of your App Store apps;
+- the Mac App Store lookup API, for App Store apps, which open in the App Store to update. The lookup sends Apple the bundle IDs of your App Store apps. For an app sold for iPhone, iPad and Mac as one purchase, the API reports the iOS version, so the Mac version is read from the app's Mac App Store page;
 - a curated catalog for apps the others miss (Sparkle feeds set in code, GitHub Releases), maintained in [`gargantua-rules/rules/updates`](https://github.com/inceptyon-labs/gargantua-rules/tree/main/rules/updates) and bundled like the cleanup rules. Every catalog entry pins the developer Team ID.
 
 No Inceptyon server is involved. Apart from the App Store lookup, a check sends no list of your apps anywhere: each feed or release page is fetched for its own app, and Homebrew's metadata is downloaded whole and matched on your Mac.
