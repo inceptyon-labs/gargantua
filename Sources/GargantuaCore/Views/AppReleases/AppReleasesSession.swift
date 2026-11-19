@@ -12,12 +12,17 @@ public final class AppReleasesSession {
     public private(set) var phase: AppReleasesPhase = .idle
     public private(set) var lastChecked: Date?
     /// Bundle IDs with an install running, and where each one is.
-    public private(set) var installPhases: [String: AppReleaseInstallPhase] = [:]
-    public private(set) var rowMessages: [String: AppReleaseRowMessage] = [:]
+    public internal(set) var installPhases: [String: AppReleaseInstallPhase] = [:]
+    public internal(set) var rowMessages: [String: AppReleaseRowMessage] = [:]
     /// Rows updated this visit. They stay in the Updates filter, with their
     /// message, until the next check or until the user leaves the pane.
-    public private(set) var recentlyInstalled: Set<String> = []
+    public internal(set) var recentlyInstalled: Set<String> = []
     public private(set) var preferences: AppReleasePreferences
+    /// The Update All run in progress.
+    public internal(set) var batch: AppReleaseBatchProgress?
+    /// How the last Update All run went, until the next check or the user
+    /// leaves the pane.
+    public internal(set) var batchSummary: AppReleaseBatchSummary?
     public var filter: AppReleasesFilter = .updates
     public var query = ""
     /// Drives the shared Unlock sheet when the license gate refuses an install.
@@ -28,19 +33,21 @@ public final class AppReleasesSession {
     @ObservationIgnored private var isPaneVisible = false
     @ObservationIgnored private let inventory: any AppReleaseInventoryProviding
     @ObservationIgnored private let checker: any AppReleaseChecking
-    @ObservationIgnored private let installer: any AppReleaseInstalling
-    @ObservationIgnored private let authorize: @Sendable (DestructiveSurface) async -> DestructiveAuthorizationResult
-    @ObservationIgnored private let quitter: any AppReleaseAppQuitting
+    @ObservationIgnored let installer: any AppReleaseInstalling
+    @ObservationIgnored let authorize: @Sendable (DestructiveSurface) async -> DestructiveAuthorizationResult
+    @ObservationIgnored let quitter: any AppReleaseAppQuitting
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var activeTask: Task<Void, Never>?
     /// Bumped by every check and by Cancel, so a superseded run drops its result.
     @ObservationIgnored private var checkGeneration = 0
     @ObservationIgnored private var phaseBeforeCheck: AppReleasesPhase = .idle
     /// Apps with an install that began or was running since the current check
     /// started. That check may have read their old version, so its rows for
     /// them are discarded.
-    @ObservationIgnored private var installedDuringCheck: Set<String> = []
+    @ObservationIgnored var installedDuringCheck: Set<String> = []
+    /// Bundle IDs still waiting in the Update All run, next one first.
+    @ObservationIgnored var batchQueue: [String] = []
     /// Numbers each app's single-app re-checks, so an older one can't land
     /// after a newer one.
     @ObservationIgnored private var refreshGenerations: [String: Int] = [:]
@@ -131,9 +138,10 @@ public final class AppReleasesSession {
     // MARK: - Checking
 
     /// Starts a check. One already running is joined, not replaced: the call
-    /// is ignored, and Cancel is what stops it.
+    /// is ignored, and Cancel is what stops it. An Update All run has to end
+    /// first, so a check can't replace the rows it is working through.
     public func startCheck(isAutomatic: Bool = false) {
-        guard activeTask == nil else { return }
+        guard activeTask == nil, batch == nil else { return }
         activeTask = Task { [weak self] in
             await self?.check(isAutomatic: isAutomatic)
             if let self, !Task.isCancelled { activeTask = nil }
@@ -155,6 +163,7 @@ public final class AppReleasesSession {
         let generation = checkGeneration
         phaseBeforeCheck = isChecking ? phaseBeforeCheck : phase
         phase = .checking
+        batchSummary = nil
         installedDuringCheck = Set(installPhases.keys)
 
         let apps = await inventory.installedApps()
@@ -256,65 +265,10 @@ public final class AppReleasesSession {
         if phase == .ready { phase = .idle }
     }
 
-    // MARK: - Installing
-
-    /// Whether updating this row first needs the user's consent to quit the app.
-    public func requiresQuitConsent(_ row: AppReleaseRow) -> Bool {
-        // Asked live: the row's `isRunning` is from the last check, and the
-        // app may have quit since.
-        quitter.isRunning(bundleID: row.app.bundleID)
-    }
-
-    /// Installs the row's update. The license gate runs first. A running app
-    /// is never touched without `quitIfRunning`.
-    public func install(_ row: AppReleaseRow, quitIfRunning: Bool) async {
-        guard case .available(let candidate, let strategy) = row.status, strategy.isDestructive else { return }
-        let id = row.app.bundleID
-        guard installPhases[id] == nil else { return }
-
-        // Claimed before the first await so a second tap can't start another.
-        if case .brewUpgrade = strategy {
-            installPhases[id] = .upgradingWithHomebrew
-        } else {
-            installPhases[id] = .downloading(received: 0, expected: nil)
-        }
-        installedDuringCheck.insert(id)
-        defer { installPhases[id] = nil }
-
-        let authorization: DestructiveActionAuthorization
-        switch await authorize(.appUpdater) {
-        case .failure(let reason):
-            blockedReason = reason
-            return
-        case .success(let token):
-            authorization = token
-        }
-
-        if !quitIfRunning, requiresQuitConsent(row) {
-            rowMessages[id] = .failed("\(row.app.name) is open. Quit it, then try again.")
-            return
-        }
-
-        rowMessages[id] = nil
-        let result = await installer.install(
-            app: row.app,
-            candidate: candidate,
-            strategy: strategy,
-            quitIfRunning: quitIfRunning,
-            authorization: authorization,
-            progress: { [weak self] phase in
-                guard self?.installPhases[id] != nil else { return }
-                self?.installPhases[id] = phase
-            }
-        )
-
-        await finish(result, of: candidate, for: row)
-    }
-
     /// Re-reads one app from disk and checks just that app again. Drops its
     /// result when a newer re-check of the app started, the results were
     /// released or replaced, or the check it belongs to was superseded.
-    private func refresh(_ app: InstalledApp, checkGeneration: Int? = nil) async {
+    func refresh(_ app: InstalledApp, checkGeneration: Int? = nil) async {
         let id = app.bundleID
         let number = (refreshGenerations[id] ?? 0) + 1
         refreshGenerations[id] = number
@@ -380,13 +334,14 @@ public final class AppReleasesSession {
     }
 
     private func setStatus(_ status: AppReleaseStatus, for bundleID: String) {
+        removeFromBatchQueue(bundleID)
         guard let row = rows.first(where: { $0.id == bundleID }) else { return }
         replace(AppReleaseRow(app: row.app, status: status, sources: row.sources))
     }
 
     /// Applies a change to the stored preferences rather than this session's
     /// copy, so a toggle flipped in Settings is not overwritten.
-    private func updatePreferences(_ change: (inout AppReleasePreferences) -> Void) {
+    func updatePreferences(_ change: (inout AppReleasePreferences) -> Void) {
         var fresh = AppReleasePreferences.stored(in: defaults)
         change(&fresh)
         fresh.store(in: defaults)
@@ -411,6 +366,7 @@ extension AppReleasesSession {
     public func paneDidDisappear() {
         isPaneVisible = false
         recentlyInstalled = []
+        batchSummary = nil
         rowMessages = rowMessages.filter { if case .installed = $0.value { false } else { true } }
     }
 
@@ -444,48 +400,5 @@ extension AppReleasesSession {
             AppReleaseBackgroundCheck.raise(&seen.announcedVersions, to: found)
         }
         seen.store(in: defaults, key: key)
-    }
-}
-
-public extension AppReleasesSession {
-    /// Stores the user's approval of `change` for the app, then installs the
-    /// update its row offers now.
-    func approveSigner(_ change: AppReleaseSignerChange, for bundleID: String, quitIfRunning: Bool) async {
-        updatePreferences { $0.approve(change, for: bundleID) }
-        guard let row = rows.first(where: { $0.id == bundleID }) else { return }
-        await install(row, quitIfRunning: quitIfRunning)
-    }
-}
-
-private extension AppReleasesSession {
-    /// Shows what an install attempt left behind and re-checks the app.
-    func finish(
-        _ result: Result<AppReleaseInstallResult, AppReleaseInstallError>,
-        of candidate: AppReleaseCandidate,
-        for row: AppReleaseRow
-    ) async {
-        let id = row.app.bundleID
-        switch result {
-        case .success(let installed):
-            let updated = "Updated to \(installed.installedVersion.description)."
-            // A warning stays on screen, in the failure style, until the next attempt.
-            rowMessages[id] = installed.warning.map { .installedWithWarning("\(updated) \($0)") } ?? .installed(updated)
-            updatePreferences { $0.confirm(candidate, holds: installed.installedVersion.description, for: id) }
-        case .failure(let error):
-            if case .signerChanged(let change) = error {
-                rowMessages[id] = .signerChanged(change)
-                return
-            }
-            guard let current = error.versionAlreadyInstalled else {
-                rowMessages[id] = .failed(error.localizedDescription)
-                if error == .appManagementDenied { showsAppManagementHelp = true }
-                return
-            }
-            // The download holds the installed version; its source only names it differently.
-            rowMessages[id] = .installed("Already up to date. This release is the version that's installed.")
-            updatePreferences { $0.confirm(candidate, holds: current, for: id) }
-        }
-        recentlyInstalled.insert(id)
-        await refresh(row.app)
     }
 }

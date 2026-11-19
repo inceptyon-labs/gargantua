@@ -36,7 +36,7 @@ struct HomebrewCaskIndexTests {
 
     @Test func matcherFilenameAndQuitRules() {
         let matcher = HomebrewCaskMatcher(entries: [
-            HomebrewCaskEntry(token: "plain", version: "1", appNames: ["Plain.app"]),
+            HomebrewCaskEntry(token: "plain", version: "1", appNames: ["Plain.app"], referencedNames: ["any.id.plist"]),
             HomebrewCaskEntry(token: "q", version: "1", appNames: ["Q.app"], quitBundleIDs: ["com.q"]),
             HomebrewCaskEntry(token: "w", version: "1", appNames: ["W.app"], quitBundleIDs: ["com.w.*"]),
         ])
@@ -49,10 +49,10 @@ struct HomebrewCaskIndexTests {
 
     @Test func ambiguousMatchIsNil() {
         let matcher = HomebrewCaskMatcher(entries: [
-            HomebrewCaskEntry(token: "a", version: "1", appNames: ["Dup.app"]),
-            HomebrewCaskEntry(token: "b", version: "1", appNames: ["Dup.app"]),
+            HomebrewCaskEntry(token: "a", version: "1", appNames: ["Dup.app"], referencedNames: ["com.x.dup"]),
+            HomebrewCaskEntry(token: "b", version: "1", appNames: ["Dup.app"], referencedNames: ["com.x.dup.plist"]),
         ])
-        #expect(matcher.match(app("Dup.app", "x")) == nil)
+        #expect(matcher.match(app("Dup.app", "com.x.dup")) == nil)
     }
 
     // MARK: - Caskroom
@@ -225,7 +225,7 @@ struct HomebrewCaskIndexTests {
     @Test func sourceResolvesHostVariation() async throws {
         let json = """
         [{"token":"v","version":"2.0","url":"https://x.test/new.dmg","sha256":"top","variations":\(Self.variationsJSON),
-          "artifacts":[{"app":["V.app"]}]}]
+          "artifacts":[{"app":["V.app"]},{"zap":[{"trash":"~/Library/Caches/com.test.v"}]}]}]
         """
         let app = InstalledApp(
             bundleID: "com.test.v", name: "V", url: URL(fileURLWithPath: "/Applications/V.app"),
@@ -340,11 +340,89 @@ struct HomebrewCaskIndexTests {
 }
 
 extension HomebrewCaskIndexTests {
+    @Test("a shared app filename alone doesn't match a cask from another vendor")
+    func filenameAloneIsNoMatch() {
+        let matcher = HomebrewCaskMatcher(entries: [
+            HomebrewCaskEntry(token: "motion", version: "1", appNames: ["Motion.app"], referencedNames: ["com.electron.motion.plist"]),
+        ])
+        #expect(matcher.match(app("Motion.app", "com.apple.motionapp")) == nil)
+    }
+
+    @Test("a cask with no quit IDs matches when it names the bundle ID or is installed")
+    func caskEvidence() {
+        let entry = HomebrewCaskEntry(
+            token: "tool", version: "1", appNames: ["Tool.app"],
+            referencedNames: ["com.acme.tool.savedstate", "team1234.com.acme.helper", "com.acme.wild*", "notcom.acme.other"]
+        )
+        let matcher = HomebrewCaskMatcher(entries: [entry])
+        #expect(matcher.match(app("Tool.app", "com.Acme.Tool"))?.token == "tool")
+        #expect(matcher.match(app("Tool.app", "com.acme.helper"))?.token == "tool")
+        #expect(matcher.match(app("Tool.app", "com.acme.wild"))?.token == "tool")
+        #expect(matcher.match(app("Tool.app", "com.acme.too")) == nil)
+        #expect(matcher.match(app("Tool.app", "com.acme.other")) == nil)
+        #expect(matcher.match(app("Tool.app", "tool")) == nil)
+        #expect(matcher.match(app("Tool.app", "org.other.tool"), installedTokens: ["tool"])?.token == "tool")
+        #expect(matcher.match(app("Tool.app", "org.other.tool"), installedTokens: ["else"]) == nil)
+    }
+
+    @Test("zap and uninstall names are kept only for casks with apps and no quit IDs")
+    func referencedNamesDecoded() throws {
+        let json = #"""
+        [{"token":"a","version":"1","artifacts":[{"app":["A.app"]},
+          {"uninstall":[{"launchctl":"com.a.agent"}]},
+          {"zap":[{"trash":["~/Library/Application Support/com.A.App","~/Library/Preferences/com.a.app.plist","~/.config"]}]}]},
+         {"token":"b","version":"1","artifacts":[{"app":["B.app"]},{"uninstall":[{"quit":"com.b"}]},{"zap":[{"trash":"~/Library/com.b.x"}]}]},
+         {"token":"c","version":"1","artifacts":[{"binary":["c"]},{"zap":[{"trash":"~/Library/com.c.x"}]}]}]
+        """#
+        let all = try HomebrewCaskEntry.decodeAll(from: Data(json.utf8))
+        #expect(all[0].referencedNames == ["com.a.agent", "com.a.app", "com.a.app.plist"])
+        #expect(all[1].referencedNames.isEmpty)
+        #expect(all[2].referencedNames.isEmpty)
+    }
+
+    @Test("an installed cask settles a tie between sibling casks")
+    func installedCaskBreaksTie() {
+        let quitting = HomebrewCaskMatcher(entries: [
+            HomebrewCaskEntry(token: "tool", version: "1", appNames: ["Tool.app"], quitBundleIDs: ["com.acme.tool"]),
+            HomebrewCaskEntry(token: "tool@tip", version: "2", appNames: ["Tool.app"], quitBundleIDs: ["com.acme.tool"]),
+        ])
+        let naming = HomebrewCaskMatcher(entries: [
+            HomebrewCaskEntry(token: "tool", version: "1", appNames: ["Tool.app"], referencedNames: ["com.acme.tool.plist"]),
+            HomebrewCaskEntry(token: "tool@tip", version: "2", appNames: ["Tool.app"], referencedNames: ["com.acme.tool.plist"]),
+        ])
+        for matcher in [quitting, naming] {
+            let tool = app("Tool.app", "com.acme.tool")
+            #expect(matcher.match(tool, installedTokens: ["tool@tip"])?.token == "tool@tip")
+            #expect(matcher.match(tool) == nil)
+            #expect(matcher.match(tool, installedTokens: ["tool", "tool@tip"]) == nil)
+        }
+    }
+
+    @Test("a cache written before referenced names were kept is refetched")
+    func cacheWithoutReferencedNamesIsRefetched() async throws {
+        func requests(entryExtras: String) async throws -> Int {
+            let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let fetchedAt = ISO8601DateFormatter().string(from: Date())
+            let cache = """
+            {"etag":"\\"old\\"","fetchedAt":"\(fetchedAt)","entries":[{"token":"plain","version":"1.0","appNames":["Plain.app"],\
+            "quitBundleIDs":[],"hasPkg":false,"disabled":false,"variations":{},"dependsOn":{"macOS":{},"arch":[]}\(entryExtras)}]}
+            """
+            try Data(cache.utf8).write(to: dir.appendingPathComponent("homebrew-casks.json"))
+            let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(Self.sample.utf8)) }
+            _ = try await HomebrewCaskIndex(http: http, cacheDirectory: dir, freshFor: 600).entries()
+            return http.requests.count
+        }
+        #expect(try await requests(entryExtras: #","referencedNames":[]"#) == 0)
+        #expect(try await requests(entryExtras: "") == 1)
+    }
+
     @Test("a cask version with the installed build written into it is not an update")
     func foldedBuildIsInstalledRelease() async throws {
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         let json = """
-        [{"token":"folded","version":"3.5.2.1","url":"https://x.test/f.dmg","sha256":"abc","artifacts":[{"app":["Folded.app"]}],"variations":{}}]
+        [{"token":"folded","version":"3.5.2.1","url":"https://x.test/f.dmg","sha256":"abc",
+          "artifacts":[{"app":["Folded.app"]},{"zap":[{"trash":"~/Library/Caches/com.test.folded"}]}],"variations":{}}]
         """
         let http = StubAppReleaseHTTP { _, _ in AppReleaseHTTPResponse(statusCode: 200, data: Data(json.utf8)) }
         let source = HomebrewCaskSource(index: HomebrewCaskIndex(http: http, cacheDirectory: dir), host: HomebrewCaskHost(isArm64: true, macOSMajorVersion: 27))

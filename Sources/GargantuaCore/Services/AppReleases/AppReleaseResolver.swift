@@ -15,15 +15,20 @@ public enum AppReleaseResolver {
         preferences: AppReleasePreferences,
         osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
     ) -> AppReleaseRow {
-        let sources = AppReleaseSourceKind.allCases.filter { outcomes[$0] != nil }
-        func row(_ status: AppReleaseStatus) -> AppReleaseRow {
-            AppReleaseRow(app: app, status: status, sources: sources)
+        // App Store apps update through the App Store only.
+        let considered = app.isMAS ? outcomes.filter { $0.key == .appStore } : outcomes.filter { $0.key != .appStore }
+
+        func row(_ status: AppReleaseStatus, naming release: AppReleaseCandidate? = nil) -> AppReleaseRow {
+            let named: AppReleaseCandidate? = switch status {
+            case .available(let candidate, _): candidate
+            case .upToDate(let latest): latest
+            default: release
+            }
+            let sources = named.map { [$0.source] } ?? AppReleaseSourceKind.allCases.filter { considered[$0] != nil }
+            return AppReleaseRow(app: app, status: status, sources: sources)
         }
 
         if preferences.ignoredBundleIDs.contains(app.bundleID) { return row(.ignored) }
-
-        // App Store apps update through the App Store only.
-        let considered = app.isMAS ? outcomes.filter { $0.key == .appStore } : outcomes.filter { $0.key != .appStore }
 
         let found = considered.values.compactMap { outcome -> AppReleaseCandidate? in
             if case .found(let candidate) = outcome { return candidate }
@@ -59,7 +64,7 @@ public enum AppReleaseResolver {
         // app is the cask's and not `chosen`: that is the one the user skipped.
         if case .available(let offered, _) = status, let skipped = preferences.skippedVersions[app.bundleID],
            offered.matchesSkipped(skipped) {
-            return row(.skippedVersion(skipped))
+            return row(.skippedVersion(skipped), naming: offered)
         }
         return row(status)
     }

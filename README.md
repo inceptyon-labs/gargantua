@@ -136,7 +136,7 @@ A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_po
 App Updates lists installed third-party apps with a newer release and installs them. Release information comes from four places, all fetched over HTTPS, redirects included:
 
 - the app's own Sparkle feed (`SUFeedURL` in its Info.plist);
-- Homebrew's public cask metadata (`formulae.brew.sh`), matched by app name and confirmed by bundle ID where the cask lists one;
+- Homebrew's public cask metadata (`formulae.brew.sh`), matched by app name and confirmed by the app's bundle ID in the cask, or by the cask being installed on your Mac;
 - the Mac App Store lookup API, for App Store apps, which open in the App Store to update. The lookup sends Apple the bundle IDs of your App Store apps;
 - a curated catalog for apps the others miss (Sparkle feeds set in code, GitHub Releases), maintained in [`gargantua-rules/rules/updates`](https://github.com/inceptyon-labs/gargantua-rules/tree/main/rules/updates) and bundled like the cleanup rules. Every catalog entry pins the developer Team ID.
 
@@ -151,6 +151,8 @@ Checks run only when you open the pane or click Check, or daily if you turn that
 - be newer than the installed version.
 
 Gargantua quits the app only with your consent and never force-quits it. It moves the old copy to the Trash (put it back to undo), moves the new one into place, and writes an audit entry. Apps that Homebrew manages update through `brew upgrade --cask` so brew's records stay correct. Installer packages, apps owned by an administrator and unsigned apps get a download link instead of an install.
+
+**Update All** runs every install Gargantua can do itself, one app at a time, with the same checks. If any of those apps are open, it asks once whether to quit them or update only the closed ones. App Store apps and download links aren't included.
 
 ## Configuration
 

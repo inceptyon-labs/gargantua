@@ -7,6 +7,10 @@ public struct AppReleasesView: View {
     @Bindable var session: AppReleasesSession
     @State var pendingQuit: AppReleaseRow?
     @State var pendingSigner: AppReleasePendingSigner?
+    @State var pendingUpdateAll: AppReleaseUpdateAllRequest?
+
+    /// With one app, its row's own Update button does the same job.
+    private static let minimumForUpdateAll = 2
 
     public init(session: AppReleasesSession) {
         self.session = session
@@ -46,6 +50,28 @@ public struct AppReleasesView: View {
             Button("Cancel", role: .cancel) { pendingQuit = nil }
         } message: { row in
             Text("Quit \(row.app.name) to update? Unsaved work in it may be lost.")
+        }
+        .alert(
+            pendingUpdateAll?.title ?? "Apps are open",
+            isPresented: Binding(
+                get: { pendingUpdateAll != nil },
+                set: { if !$0 { pendingUpdateAll = nil } }
+            ),
+            presenting: pendingUpdateAll
+        ) { request in
+            Button("Quit and Update All") {
+                pendingUpdateAll = nil
+                startUpdateAll(request.rows, quitting: Set(request.openRows.map(\.id)))
+            }
+            if !request.closedRows.isEmpty {
+                Button("Update Only Closed Apps") {
+                    pendingUpdateAll = nil
+                    startUpdateAll(request.closedRows, quitting: [])
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingUpdateAll = nil }
+        } message: { request in
+            Text(request.message)
         }
         .alert(
             pendingSigner?.title ?? "New signer",
@@ -91,7 +117,7 @@ public struct AppReleasesView: View {
                 if session.isChecking, !session.rows.isEmpty {
                     GargantuaButton("Cancel") { session.cancelCheck() }
                 }
-                GargantuaButton("Check", icon: "arrow.clockwise", isDisabled: session.isChecking) {
+                GargantuaButton("Check", icon: "arrow.clockwise", isDisabled: session.isChecking || session.isUpdatingAll) {
                     session.startCheck()
                 }
                 .keyboardShortcut("r", modifiers: .command)
@@ -200,7 +226,9 @@ public struct AppReleasesView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
+extension AppReleasesView {
     // MARK: - List
 
     private var listState: some View {
@@ -226,7 +254,7 @@ public struct AppReleasesView: View {
                             AppReleaseRowView(
                                 row: row,
                                 installPhase: session.installPhases[row.id],
-                                isChecking: session.isChecking,
+                                updatesPaused: session.isChecking || session.isUpdatingAll,
                                 message: session.rowMessages[row.id],
                                 onUpdate: { requestUpdate(row) },
                                 onTrustSigner: { change in
@@ -251,7 +279,8 @@ public struct AppReleasesView: View {
     }
 
     private var controlBar: some View {
-        HStack(spacing: GargantuaSpacing.space3) {
+        let updatable = session.updatableRows
+        return HStack(spacing: GargantuaSpacing.space3) {
             Picker("Filter", selection: $session.filter) {
                 ForEach(AppReleasesFilter.allCases, id: \.self) { option in
                     Text("\(option.label) \(session.count(for: option))").tag(option)
@@ -263,15 +292,44 @@ public struct AppReleasesView: View {
 
             Spacer()
 
-            if session.isChecking {
-                AccretionDiskView(activityRate: 18, size: 16, color: GargantuaColors.accretion)
-                Text("Checking…")
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
+            if let batch = session.batch {
+                activity("Updating \(batch.current) of \(batch.total)…")
+                if batch.waiting > 0 {
+                    GargantuaButton("Stop") { session.stopUpdateAll() }
+                        .help("Finish the app being updated and leave the rest")
+                }
+            } else {
+                if session.isChecking {
+                    activity("Checking…")
+                } else if let summary = session.batchSummary {
+                    Text(summary.text)
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+                if updatable.count >= Self.minimumForUpdateAll {
+                    GargantuaButton("Update All (\(updatable.count))", tone: .primary, isDisabled: session.isChecking) {
+                        requestUpdateAll(updatable)
+                    }
+                    .help("Updates these apps one at a time. App Store apps and download links aren't included.")
+                    .accessibilityLabel("Update all \(updatable.count) apps")
+                }
             }
         }
+        .frame(minHeight: Self.controlBarHeight)
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space2)
+    }
+
+    /// Tall enough for a button, so the bar keeps its height when one goes away.
+    private static let controlBarHeight: CGFloat = 32
+
+    private func activity(_ text: String) -> some View {
+        HStack(spacing: GargantuaSpacing.space3) {
+            AccretionDiskView(activityRate: 18, size: 16, color: GargantuaColors.accretion)
+            Text(text)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+        }
     }
 
     private var emptyState: some View {
@@ -309,6 +367,19 @@ public struct AppReleasesView: View {
     }
 
     // MARK: - Actions
+
+    private func requestUpdateAll(_ rows: [AppReleaseRow]) {
+        let open = rows.filter(session.requiresQuitConsent)
+        if open.isEmpty {
+            startUpdateAll(rows, quitting: [])
+        } else {
+            pendingUpdateAll = AppReleaseUpdateAllRequest(rows: rows, openRows: open)
+        }
+    }
+
+    private func startUpdateAll(_ rows: [AppReleaseRow], quitting: Set<String>) {
+        Task { await session.updateAll(rows, quitting: quitting) }
+    }
 
     private func requestUpdate(_ row: AppReleaseRow) {
         if session.requiresQuitConsent(row) {

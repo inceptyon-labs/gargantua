@@ -5,8 +5,9 @@ import SwiftUI
 struct AppReleaseRowView: View {
     let row: AppReleaseRow
     let installPhase: AppReleaseInstallPhase?
-    /// A check is running; updating waits so the two can't overwrite each other.
-    let isChecking: Bool
+    /// A check or Update All is running; updating waits so they can't
+    /// overwrite each other.
+    let updatesPaused: Bool
     let message: AppReleaseRowMessage?
     let onUpdate: () -> Void
     let onTrustSigner: (AppReleaseSignerChange) -> Void
@@ -82,7 +83,7 @@ struct AppReleaseRowView: View {
     /// other phase puts the label beside the spinner.
     @ViewBuilder
     private func installTopLine(_ phase: AppReleaseInstallPhase) -> some View {
-        if phase.downloadFraction != nil {
+        if phase.downloadFraction != nil || phase == .queued {
             installLabel(phase.label, width: Self.actionWidth)
         } else {
             HStack(spacing: GargantuaSpacing.space2) {
@@ -160,7 +161,7 @@ struct AppReleaseRowView: View {
                     .opacity(installPhase.downloadFraction == nil ? 0 : 1)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Installing \(row.app.name)")
+            .accessibilityLabel(installPhase == .queued ? "Waiting to update \(row.app.name)" : "Installing \(row.app.name)")
             .accessibilityValue(installPhase.accessibilityValue)
         } else {
             switch row.status {
@@ -187,7 +188,7 @@ struct AppReleaseRowView: View {
     private func availableAction(_ strategy: AppReleaseInstallStrategy) -> some View {
         switch strategy {
         case .inPlace, .brewUpgrade:
-            GargantuaButton("Update", tone: .ghost(GargantuaColors.accent), isDisabled: isChecking, action: onUpdate)
+            GargantuaButton("Update", tone: .ghost(GargantuaColors.accent), isDisabled: updatesPaused, action: onUpdate)
                 .accessibilityLabel("Update \(row.app.name)")
         case .openAppStore(let url):
             GargantuaButton("App Store") { NSWorkspace.shared.open(url) }
@@ -237,7 +238,7 @@ struct AppReleaseRowView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if case .signerChanged(let change) = message {
                 Spacer(minLength: 0)
-                GargantuaButton("Trust new signer…", isDisabled: isChecking || installPhase != nil) {
+                GargantuaButton("Trust new signer…", isDisabled: updatesPaused || installPhase != nil) {
                     onTrustSigner(change)
                 }
             }
@@ -291,6 +292,7 @@ struct AppReleaseRowView: View {
 extension AppReleaseInstallPhase {
     var label: String {
         switch self {
+        case .queued: "Waiting…"
         case .downloading(let received, let expected): Self.downloadLabel(received: received, expected: expected)
         case .verifying: "Verifying…"
         case .quitting: "Quitting…"

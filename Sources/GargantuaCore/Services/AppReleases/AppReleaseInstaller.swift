@@ -8,6 +8,8 @@ let appReleaseInstallLogger = Logger(subsystem: "com.gargantua.core", category: 
 
 /// Where an install is, for the row's progress label.
 public enum AppReleaseInstallPhase: Sendable, Equatable {
+    /// Waiting for its turn in an Update All run.
+    case queued
     /// `expected` is nil when the server didn't declare a length.
     case downloading(received: Int64, expected: Int64?)
     case verifying

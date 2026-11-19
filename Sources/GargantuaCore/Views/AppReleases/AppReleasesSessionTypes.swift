@@ -35,6 +35,55 @@ public enum AppReleaseRowMessage: Equatable, Sendable {
     case signerChanged(AppReleaseSignerChange)
 }
 
+/// How far an Update All run has got.
+public struct AppReleaseBatchProgress: Equatable, Sendable {
+    public internal(set) var finished = 0
+    public internal(set) var total: Int
+
+    /// The position of the app being updated now.
+    public var current: Int { min(finished + 1, total) }
+
+    /// Apps still waiting behind the current one.
+    public var waiting: Int { max(total - finished - 1, 0) }
+}
+
+/// How a finished Update All run went.
+public struct AppReleaseBatchSummary: Equatable, Sendable {
+    public internal(set) var updated = 0
+    /// Apps left as they were; each row says why.
+    public internal(set) var needAttention = 0
+
+    var isEmpty: Bool { updated == 0 && needAttention == 0 }
+
+    var text: String {
+        var parts: [String] = []
+        if updated > 0 { parts.append("Updated \(updated) app\(updated == 1 ? "" : "s")") }
+        if needAttention > 0 { parts.append("\(needAttention) need\(needAttention == 1 ? "s" : "") attention") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// An Update All that has to ask first, because some of its apps are open.
+struct AppReleaseUpdateAllRequest: Equatable {
+    let rows: [AppReleaseRow]
+    let openRows: [AppReleaseRow]
+
+    var closedRows: [AppReleaseRow] {
+        let open = Set(openRows.map(\.id))
+        return rows.filter { !open.contains($0.id) }
+    }
+
+    var title: String {
+        openRows.count == 1 ? "\(openRows[0].app.name) is open" : "\(openRows.count) apps are open"
+    }
+
+    var message: String {
+        // Every app is named: agreeing here is consent to quit each one.
+        let listed = ListFormatter.localizedString(byJoining: openRows.map(\.app.name))
+        return "Updating quits \(listed). Unsaved work in \(openRows.count == 1 ? "it" : "them") may be lost."
+    }
+}
+
 /// A change of signer waiting for the user's answer.
 struct AppReleasePendingSigner: Equatable {
     let row: AppReleaseRow

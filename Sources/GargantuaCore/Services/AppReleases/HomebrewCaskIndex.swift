@@ -15,6 +15,10 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
     public let appNames: [String]
     /// Bundle IDs from `uninstall: quit:`; a trailing `.*` is a prefix wildcard.
     public let quitBundleIDs: [String]
+    /// Dotted names from `zap` and `uninstall`, lowercased, kept only for a
+    /// cask with apps and no quit IDs: they are its evidence of which app it
+    /// installs. Non-optional so an older cache is refetched.
+    public let referencedNames: [String]
     public let hasPkg: Bool
     public let disabled: Bool
     /// Non-optional so a cache written before variations existed fails to decode and is refetched.
@@ -30,6 +34,7 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         homepage: String? = nil,
         appNames: [String] = [],
         quitBundleIDs: [String] = [],
+        referencedNames: [String] = [],
         hasPkg: Bool = false,
         disabled: Bool = false,
         variations: [String: HomebrewCaskVariation] = [:],
@@ -42,6 +47,7 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
         self.homepage = homepage
         self.appNames = appNames
         self.quitBundleIDs = quitBundleIDs
+        self.referencedNames = referencedNames
         self.hasPkg = hasPkg
         self.disabled = disabled
         self.variations = variations
@@ -70,6 +76,8 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
             homepage: json["homepage"] as? String,
             appNames: artifacts.appNames,
             quitBundleIDs: artifacts.quitBundleIDs,
+            referencedNames: artifacts.quitBundleIDs.isEmpty && !artifacts.appNames.isEmpty
+                ? artifacts.referencedNames.sorted() : [],
             hasPkg: artifacts.hasPkg,
             disabled: json["disabled"] as? Bool ?? false,
             variations: (json["variations"] as? [String: Any] ?? [:]).compactMapValues { value in
@@ -104,6 +112,9 @@ public struct HomebrewCaskEntry: Sendable, Equatable, Codable {
 struct HomebrewCaskArtifacts {
     var appNames: [String] = []
     var quitBundleIDs: [String] = []
+    /// Dotted path components and identifiers from `zap` and `uninstall`,
+    /// lowercased, such as `com.example.app.plist`.
+    var referencedNames: Set<String> = []
     var hasPkg = false
 
     init(_ value: Any?) {
@@ -113,6 +124,8 @@ struct HomebrewCaskArtifacts {
             }
             if artifact["pkg"] != nil { hasPkg = true }
             let uninstall = artifact["uninstall"]
+            referencedNames.formUnion(Self.dottedNames(in: uninstall))
+            referencedNames.formUnion(Self.dottedNames(in: artifact["zap"]))
             let directives = (uninstall as? [Any]) ?? (uninstall as? [String: Any]).map { [$0] } ?? []
             for case let directive as [String: Any] in directives {
                 if let quit = directive["quit"] as? String {
@@ -121,6 +134,20 @@ struct HomebrewCaskArtifacts {
                     quitBundleIDs.append(contentsOf: quit.compactMap { $0 as? String })
                 }
             }
+        }
+    }
+
+    private static func dottedNames(in value: Any?) -> Set<String> {
+        switch value {
+        case let text as String:
+            let parts = text.lowercased().split { $0 == "/" || $0.isWhitespace }
+            return Set(parts.filter { $0.dropFirst().contains(".") }.map(String.init))
+        case let list as [Any]:
+            return list.reduce(into: []) { $0.formUnion(dottedNames(in: $1)) }
+        case let directives as [String: Any]:
+            return directives.values.reduce(into: []) { $0.formUnion(dottedNames(in: $1)) }
+        default:
+            return []
         }
     }
 
@@ -244,7 +271,9 @@ public actor HomebrewCaskIndex {
 }
 
 /// Maps installed apps to casks. Fails closed: an ambiguous match is no match,
-/// because the wrong cask would offer another product's download.
+/// because the wrong cask would offer another product's download. A shared
+/// `.app` filename alone is not a match either: apps from different vendors
+/// can have the same name.
 public struct HomebrewCaskMatcher: Sendable {
     private let byAppName: [String: [HomebrewCaskEntry]]
 
@@ -258,13 +287,45 @@ public struct HomebrewCaskMatcher: Sendable {
         byAppName = index
     }
 
-    public func match(_ app: InstalledApp) -> HomebrewCaskEntry? {
+    /// - Parameter installedTokens: Casks Homebrew has installed on this Mac.
+    ///   One with the app's filename and no quit IDs is taken to be its cask,
+    ///   and an installed cask settles a tie between casks that both qualify.
+    public func match(_ app: InstalledApp, installedTokens: Set<String> = []) -> HomebrewCaskEntry? {
         let candidates = byAppName[app.url.lastPathComponent.lowercased()] ?? []
         let confirmed = candidates.filter { !$0.quitBundleIDs.isEmpty && Self.quits($0, bundleID: app.bundleID) }
-        if confirmed.count == 1 { return confirmed[0] }
-        if !confirmed.isEmpty { return nil }
-        let unconfirmed = candidates.filter(\.quitBundleIDs.isEmpty)
-        return unconfirmed.count == 1 ? unconfirmed[0] : nil
+        if !confirmed.isEmpty { return Self.single(confirmed, installedTokens: installedTokens) }
+        let supported = candidates.filter { entry in
+            entry.quitBundleIDs.isEmpty && (
+                installedTokens.contains(entry.token) || Self.references(entry.referencedNames, bundleID: app.bundleID)
+            )
+        }
+        return Self.single(supported, installedTokens: installedTokens)
+    }
+
+    /// The one candidate, or, among siblings such as `foo` and `foo@beta`,
+    /// the only one Homebrew has installed.
+    private static func single(_ candidates: [HomebrewCaskEntry], installedTokens: Set<String>) -> HomebrewCaskEntry? {
+        if candidates.count == 1 { return candidates[0] }
+        let installed = candidates.filter { installedTokens.contains($0.token) }
+        return installed.count == 1 ? installed[0] : nil
+    }
+
+    /// Whether a name contains the bundle ID as whole dot-separated parts, so
+    /// `com.foo.bar.plist` and `TEAM.com.foo.bar` name `com.foo.bar` but
+    /// `com.foo.barista` doesn't. A trailing `*` is a wildcard in cask paths.
+    static func references(_ names: [String], bundleID: String) -> Bool {
+        let id = bundleID.lowercased()
+        guard id.contains(".") else { return false }
+        return names.contains { name in
+            var searchStart = name.startIndex
+            while let found = name.range(of: id, range: searchStart ..< name.endIndex) {
+                let startsPart = found.lowerBound == name.startIndex || name[name.index(before: found.lowerBound)] == "."
+                let endsPart = found.upperBound == name.endIndex || ".*".contains(name[found.upperBound])
+                if startsPart, endsPart { return true }
+                searchStart = name.index(after: found.lowerBound)
+            }
+            return false
+        }
     }
 
     private static func quits(_ entry: HomebrewCaskEntry, bundleID: String) -> Bool {
@@ -310,7 +371,7 @@ public struct HomebrewCaskSource: Sendable {
         self.host = host
     }
 
-    public func lookUp(_ apps: [InstalledApp]) async -> HomebrewCaskLookup {
+    public func lookUp(_ apps: [InstalledApp], installedTokens: Set<String> = []) async -> HomebrewCaskLookup {
         let entries: [HomebrewCaskEntry]
         do {
             entries = try await index.entries()
@@ -321,7 +382,7 @@ public struct HomebrewCaskSource: Sendable {
         let matcher = HomebrewCaskMatcher(entries: entries)
         var lookup = HomebrewCaskLookup()
         for app in apps {
-            guard let entry = matcher.match(app) else { continue }
+            guard let entry = matcher.match(app, installedTokens: installedTokens) else { continue }
             lookup.outcomes[app.bundleID] = outcome(for: entry, installed: app.version)
             lookup.tokens[app.bundleID] = entry.token
         }
@@ -347,154 +408,5 @@ public struct HomebrewCaskSource: Sendable {
             vendorURL: entry.homepage.flatMap(URL.init(string:)),
             caskToken: entry.token
         ))
-    }
-}
-
-/// A cask Homebrew has installed, read from its Caskroom folder.
-public struct HomebrewInstalledCask: Sendable, Equatable {
-    public let token: String
-    /// Installed `.app` names, after any `target` rename. Nil when the cask's
-    /// metadata couldn't be read, so which app it installed is unknown.
-    public let appNames: [String]?
-    /// Bundle IDs from `uninstall: quit:`; a trailing `.*` is a prefix wildcard.
-    public let quitBundleIDs: [String]
-    /// The tap from the install receipt's `source`; nil on older receipts.
-    public let tap: String?
-
-    public init(token: String, appNames: [String]? = nil, quitBundleIDs: [String] = [], tap: String? = nil) {
-        self.token = token
-        self.tap = tap
-        self.appNames = appNames
-        self.quitBundleIDs = quitBundleIDs
-    }
-}
-
-/// Casks Homebrew has installed, from the local Caskroom. This covers casks
-/// from any tap, and works when the public index is unreachable.
-public struct HomebrewCaskroomProbe: Sendable {
-    static let maxMetadataBytes = 4 * 1_048_576
-    private let prefixes: [String]
-
-    public init(prefixes: [String] = ["/opt/homebrew", "/usr/local"]) {
-        self.prefixes = prefixes
-    }
-
-    public func installedCasks() -> [HomebrewInstalledCask] {
-        prefixes.flatMap { prefix in
-            Self.subdirectories(of: URL(fileURLWithPath: prefix).appendingPathComponent("Caskroom", isDirectory: true))
-                .map(Self.readCask(at:))
-        }
-    }
-
-    /// Current Homebrew keeps the cask's artifacts in the install receipt's
-    /// `uninstall_artifacts` and leaves `Casks/<token>.json` nearly empty;
-    /// older versions wrote the whole cask there. Both are read and merged.
-    /// A `.rb` cask isn't parseable here and is skipped.
-    static func readCask(at directory: URL) -> HomebrewInstalledCask {
-        let token = directory.lastPathComponent
-        let metadata = directory.appendingPathComponent(".metadata", isDirectory: true)
-        var found: [HomebrewCaskArtifacts] = []
-        let receipt = readJSON(metadata.appendingPathComponent("INSTALL_RECEIPT.json"))
-        if let list = receipt?["uninstall_artifacts"] as? [Any] {
-            found.append(HomebrewCaskArtifacts(list))
-        }
-        if let newest = newestMetadataDirectory(in: metadata),
-           let list = readJSON(newest.appendingPathComponent("Casks/\(token).json"))?["artifacts"] as? [Any] {
-            found.append(HomebrewCaskArtifacts(list))
-        }
-        return HomebrewInstalledCask(
-            token: token,
-            appNames: found.isEmpty ? nil : found.flatMap(\.appNames),
-            quitBundleIDs: found.flatMap(\.quitBundleIDs),
-            tap: (receipt?["source"] as? [String: Any])?["tap"] as? String
-        )
-    }
-
-    /// `.metadata/<version>/<timestamp>` with the latest timestamp. Homebrew
-    /// writes timestamps as fixed-width `YYYYMMDDhhmmss.sss`, so they sort as text.
-    static func newestMetadataDirectory(in metadata: URL) -> URL? {
-        subdirectories(of: metadata)
-            .flatMap(subdirectories(of:))
-            .max { $0.lastPathComponent < $1.lastPathComponent }
-    }
-
-    private static func subdirectories(of directory: URL) -> [URL] {
-        let entries = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-        return entries.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
-    }
-
-    private static func readJSON(_ url: URL) -> [String: Any]? {
-        guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= maxMetadataBytes,
-              let data = try? Data(contentsOf: url)
-        else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    }
-}
-
-/// Which installed cask owns an app, so its updates go through brew.
-///
-/// Errs toward brew: calling an app brew-managed only limits it to a link or
-/// `brew upgrade`, while missing one would replace it behind brew's back.
-public struct HomebrewCaskOwnership: Sendable {
-    private let casks: [HomebrewInstalledCask]
-
-    public init(casks: [HomebrewInstalledCask]) {
-        self.casks = casks
-    }
-
-    /// - Parameter indexToken: The cask the public index matched to the app.
-    ///   It owns the app when that cask is installed, and wins over the
-    ///   Caskroom's own matches.
-    /// - Returns: The owning cask's token, or nil when brew didn't install
-    ///   the app.
-    public func owner(of app: InstalledApp, indexToken: String?) -> String? {
-        if let indexToken, casks.contains(where: { $0.token == indexToken }) { return indexToken }
-        let filename = app.url.lastPathComponent.lowercased()
-        return casks.filter { cask in
-            guard let appNames = cask.appNames else {
-                // Unknown contents: a token that reads as the app's name counts.
-                return cask.token.lowercased() == Self.tokenGuess(forAppNamed: filename)
-            }
-            return appNames.contains { $0.lowercased() == filename }
-                && (cask.quitBundleIDs.isEmpty || Self.quitListAdmits(cask.quitBundleIDs, bundleID: app.bundleID))
-        }
-        .map(\.token)
-        .min()
-    }
-
-    /// Whether the public index's entry describes the owning cask: it must be
-    /// the index's match and installed from the public tap (or an unknown one) in every copy.
-    public func publicIndexDescribes(owner: String, indexToken: String?) -> Bool {
-        guard owner == indexToken else { return false }
-        return casks.filter { $0.token == owner }.allSatisfy { cask in
-            let tap = cask.tap?.lowercased()
-            return tap == nil || tap == "homebrew/cask"
-        }
-    }
-
-    /// A quit list naming only same-vendor helpers doesn't contradict the app
-    /// being the cask's; only a list made entirely of other vendors' IDs does.
-    static func quitListAdmits(_ quitIDs: [String], bundleID: String) -> Bool {
-        if HomebrewCaskMatcher.quits(quitIDs, bundleID: bundleID) { return true }
-        guard let vendor = vendorPrefix(of: bundleID) else { return false }
-        return quitIDs.contains { vendorPrefix(of: $0) == vendor }
-    }
-
-    /// The first two components of a bundle ID, lowercased (`org.pqrs`); nil
-    /// below three components, where the vendor can't be told from the app.
-    static func vendorPrefix(of bundleID: String) -> String? {
-        let parts = bundleID.lowercased().split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count >= 3, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
-        return "\(parts[0]).\(parts[1])"
-    }
-
-    /// `foo bar.app` → `foo-bar`, Homebrew's usual token for an app.
-    static func tokenGuess(forAppNamed filename: String) -> String {
-        let base = filename.lowercased().hasSuffix(".app") ? String(filename.dropLast(4)) : filename
-        return base.lowercased().replacingOccurrences(of: " ", with: "-")
     }
 }

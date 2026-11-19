@@ -279,7 +279,8 @@ public struct AppReleaseRow: Sendable, Equatable, Identifiable {
     public var id: String { app.bundleID }
     public let app: InstalledApp
     public let status: AppReleaseStatus
-    /// Which sources knew the app, for the Source column and diagnostics.
+    /// What the Source column names: the source of the release the row
+    /// offers or reports, or, with no release to name, the sources consulted.
     public let sources: [AppReleaseSourceKind]
 
     public init(app: InstalledApp, status: AppReleaseStatus, sources: [AppReleaseSourceKind] = []) {

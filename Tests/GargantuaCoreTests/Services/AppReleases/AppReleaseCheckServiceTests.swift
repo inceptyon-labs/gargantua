@@ -6,7 +6,8 @@ import Testing
 struct AppReleaseCheckServiceTests {
     private static let casks = """
     [{"token":"latest-app","version":"latest","url":"https://example.com/Latest.dmg","sha256":"no_check",
-      "homepage":"https://example.com","artifacts":[{"app":["Latest.app"]}]}]
+      "homepage":"https://example.com",
+      "artifacts":[{"app":["Latest.app"]},{"zap":[{"trash":"~/Library/Preferences/com.example.Latest.plist"}]}]}]
     """
     private static let appcast = """
     <?xml version="1.0"?><rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel>
@@ -65,6 +66,32 @@ struct AppReleaseCheckServiceTests {
             return
         }
         #expect(strategy == .inPlace)
+    }
+
+    @Test("a same-named cask with no link to the app isn't offered as its update")
+    func unrelatedCaskIgnored() async throws {
+        let unrelated = """
+        [{"token":"latest","version":"9.0","url":"https://other.example/Latest.dmg","sha256":"no_check",
+          "homepage":"https://other.example","artifacts":[{"app":["Latest.app"]}]}]
+        """
+        #expect(try await status(caskroom: [], index: unrelated, sparkleFeed: false) == .untracked)
+    }
+
+    @Test("an installed cask with no bundle IDs still updates through brew")
+    func installedCaskIsEvidence() async throws {
+        let index = """
+        [{"token":"latest-brew","version":"3.0","url":"https://example.com/Latest.dmg","sha256":"no_check",
+          "homepage":"https://example.com","artifacts":[{"app":["Latest.app"]}]}]
+        """
+        guard case .available(_, let strategy) = try await status(
+            caskroom: [HomebrewInstalledCask(token: "latest-brew", appNames: ["Latest.app"])],
+            index: index,
+            sparkleFeed: false
+        ) else {
+            Issue.record("expected an available update")
+            return
+        }
+        #expect(strategy == .brewUpgrade(token: "latest-brew"))
     }
 
     @Test("a cask from a tap the index doesn't know marks the app brew-managed from the Caskroom alone")

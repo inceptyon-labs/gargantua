@@ -18,6 +18,7 @@ public struct AppReleaseCheckService: AppReleaseChecking {
     ///     Sparkle source, so one feed is never fetched twice.
     ///   - homebrew: Supplies cask releases and, for every app it matches, a
     ///     cask token that marks the app brew-managed when that cask is installed.
+    ///     An installed cask also counts as evidence for the match itself.
     ///   - sources: The other automatic sources (Sparkle, App Store).
     ///   - installedCasks: The local Caskroom, which decides brew ownership
     ///     for casks the public index doesn't know or can't be reached for.
@@ -51,7 +52,8 @@ public struct AppReleaseCheckService: AppReleaseChecking {
         let catalog = self.catalog
         let sources = self.sources
 
-        async let brew = homebrew.lookUp(candidates)
+        let installed = installedCasks()
+        async let brew = homebrew.lookUp(candidates, installedTokens: Set(installed.map(\.token)))
         var byKind = await withTaskGroup(of: (AppReleaseSourceKind, [String: AppReleaseSourceOutcome]).self) { group in
             group.addTask { (.catalog, await catalog.lookUp(candidates)) }
             for source in sources {
@@ -67,7 +69,7 @@ public struct AppReleaseCheckService: AppReleaseChecking {
         let casks = await brew
         byKind[.homebrewCask] = casks.outcomes
 
-        let ownership = HomebrewCaskOwnership(casks: installedCasks())
+        let ownership = HomebrewCaskOwnership(casks: installed)
         return apps.map { app in
             var outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [:]
             for (kind, results) in byKind {

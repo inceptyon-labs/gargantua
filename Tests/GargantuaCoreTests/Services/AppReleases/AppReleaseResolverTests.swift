@@ -89,6 +89,34 @@ struct AppReleaseResolverTests {
             == .available(brewCask, .brewUpgrade(token: "example")))
     }
 
+    @Test("a row names only the source of what it offers")
+    func rowNamesOfferedSource() {
+        func sources(
+            _ app: InstalledApp,
+            _ outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome],
+            brewToken: String? = nil,
+            preferences: AppReleasePreferences = AppReleasePreferences()
+        ) -> [AppReleaseSourceKind] {
+            AppReleaseResolver.resolve(
+                app: app, outcomes: outcomes, brewManagedToken: brewToken, preferences: preferences, osVersion: os
+            ).sources
+        }
+        let cask = candidate(.homebrewCask, "1.1", token: "example")
+        let store = AppReleaseSourceOutcome.found(candidate(.appStore, "3.0", download: nil))
+        #expect(sources(app(isMAS: true), [.appStore: store, .homebrewCask: .found(cask)]) == [.appStore])
+        #expect(sources(app(), [.sparkle: .found(candidate(.sparkle, "1.2")), .homebrewCask: .found(cask)]) == [.sparkle])
+        // Sparkle wins the tie, but the row offers the cask brew will install.
+        let tied = [AppReleaseSourceKind.sparkle: AppReleaseSourceOutcome.found(candidate(.sparkle, "1.1")), .homebrewCask: .found(cask)]
+        #expect(sources(app(), tied, brewToken: "example") == [.homebrewCask])
+        #expect(sources(app("1.2"), [.sparkle: .found(candidate(.sparkle, "1.2"))]) == [.sparkle])
+        #expect(sources(app(), [.sparkle: .failed("x"), .homebrewCask: .failed("y")]) == [.sparkle, .homebrewCask])
+
+        var skipping = AppReleasePreferences()
+        skipping.skippedVersions["com.example.App"] = "1.2"
+        let skipped = [AppReleaseSourceKind.sparkle: AppReleaseSourceOutcome.found(candidate(.sparkle, "1.2")), .homebrewCask: .found(cask)]
+        #expect(sources(app(), skipped, preferences: skipping) == [.sparkle])
+    }
+
     @Test("App Store apps consult only the App Store and open the store page")
     func appStoreOnly() {
         let store = candidate(.appStore, "3.0", download: nil)
