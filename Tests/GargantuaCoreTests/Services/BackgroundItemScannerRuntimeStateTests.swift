@@ -78,7 +78,7 @@ struct BackgroundItemScannerRuntimeStateTests {
     // MARK: - Tests
 
     @Test("User agent item's runtime carries pid/lastExitStatus/disabledOverride from the runtime provider")
-    func runtimeMergedFromProvider() {
+    func runtimeMergedFromProvider() throws {
         let plist = LaunchdPlist(label: "com.example.agent", program: "/usr/local/bin/agent")
         let launchd = [
             LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/agent.plist", plist: plist),
@@ -90,8 +90,8 @@ struct BackgroundItemScannerRuntimeStateTests {
             existingFiles: ["/usr/local/bin/agent"],
             runtimeProvider: StubRuntimeProvider(snapshotToReturn: .empty, stateToReturn: expectedState)
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.runtime == expectedState)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.runtime == expectedState)
     }
 
     @Test("snapshot() is called exactly once per scan even with multiple launchd items")
@@ -110,7 +110,7 @@ struct BackgroundItemScannerRuntimeStateTests {
     }
 
     @Test("Login items always get nil runtime even when the runtime provider would return state")
-    func loginItemsRuntimeAlwaysNil() {
+    func loginItemsRuntimeAlwaysNil() throws {
         let url = URL(fileURLWithPath: "/Applications/LoginThing.app")
         let record = LoginItemRecord(name: "Login Thing", bundleIdentifier: "com.example.loginthing", url: url)
         let richState = LaunchdRuntimeState(isLoaded: true, pid: 99, lastExitStatus: 0, disabledOverride: false)
@@ -120,12 +120,12 @@ struct BackgroundItemScannerRuntimeStateTests {
             existingFiles: [url.path],
             runtimeProvider: StubRuntimeProvider(snapshotToReturn: .empty, stateToReturn: richState)
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.runtime == nil)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.runtime == nil)
     }
 
     @Test("Runtime provider returning nil state still produces items, with nil runtime")
-    func nilRuntimeStateStillProducesItems() {
+    func nilRuntimeStateStillProducesItems() throws {
         let plist = LaunchdPlist(label: "com.example.noruntime", program: "/usr/local/bin/noruntime")
         let launchd = [
             LaunchdItem(
@@ -140,13 +140,12 @@ struct BackgroundItemScannerRuntimeStateTests {
             existingFiles: ["/usr/local/bin/noruntime"],
             runtimeProvider: StubRuntimeProvider(snapshotToReturn: .empty, stateToReturn: nil)
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item != nil)
-        #expect(item?.runtime == nil)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.runtime == nil)
     }
 
     @Test("Runtime state never affects classification: safety/reasons identical with rich or nil runtime")
-    func runtimeDoesNotAffectClassification() {
+    func runtimeDoesNotAffectClassification() throws {
         let plist = LaunchdPlist(
             label: "com.example.classify",
             program: "/Applications/Classify.app/Contents/MacOS/classify"
@@ -174,12 +173,12 @@ struct BackgroundItemScannerRuntimeStateTests {
             runtimeProvider: StubRuntimeProvider(snapshotToReturn: .empty, stateToReturn: nil)
         ).scan()
 
-        let withRuntime = try? #require(scanWithRuntime.items.first)
-        let withoutRuntime = try? #require(scanWithoutRuntime.items.first)
-        #expect(withRuntime?.safety == withoutRuntime?.safety)
-        #expect(withRuntime?.reasons == withoutRuntime?.reasons)
-        #expect(withRuntime?.runtime == richState)
-        #expect(withoutRuntime?.runtime == nil)
+        let withRuntime = try #require(scanWithRuntime.items.first)
+        let withoutRuntime = try #require(scanWithoutRuntime.items.first)
+        #expect(withRuntime.safety == withoutRuntime.safety)
+        #expect(withRuntime.reasons == withoutRuntime.reasons)
+        #expect(withRuntime.runtime == richState)
+        #expect(withoutRuntime.runtime == nil)
     }
 
     // MARK: - Helpers

@@ -89,15 +89,15 @@ struct ProcessInventoryScannerTests {
     // MARK: - Tests
 
     @Test("CPU delta is computed across the two snapshots")
-    func cpuDelta() async {
+    func cpuDelta() async throws {
         // Process used 0.5s of CPU over a 1s wall-clock window → 50% of one core.
         let first = sample(pid: 100, command: "worker", path: "/usr/local/bin/worker", cpuTime: 0, at: 0)
         let second = sample(pid: 100, command: "worker", path: "/usr/local/bin/worker", cpuTime: 500_000_000, at: 1)
         let scanner = makeScanner(first: [first], second: [second])
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let item = try? #require(scan.items.first)
-        #expect(abs((item?.cpuFraction ?? 0) - 0.5) < 0.001)
+        let item = try #require(scan.items.first)
+        #expect(abs(item.cpuFraction - 0.5) < 0.001)
     }
 
     @Test("CPU is zero when the prior sample is missing (newly-spawned process)")
@@ -110,7 +110,7 @@ struct ProcessInventoryScannerTests {
     }
 
     @Test("Recycled PID with different exec path drops the prior baseline")
-    func recycledPIDDoesNotInheritCPU() async {
+    func recycledPIDDoesNotInheritCPU() async throws {
         // Prior sample at pid 300 was a different binary; second snapshot's
         // CPU time would be artificially huge if we naively diffed. Verify we
         // detect the path mismatch and report 0% rather than a wild number.
@@ -119,9 +119,9 @@ struct ProcessInventoryScannerTests {
         let scanner = makeScanner(first: [first], second: [second])
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let item = try? #require(scan.items.first)
-        #expect(item?.cpuFraction == 0)
-        #expect(item?.executablePath == "/new/path")
+        let item = try #require(scan.items.first)
+        #expect(item.cpuFraction == 0)
+        #expect(item.executablePath == "/new/path")
     }
 
     @Test("Sort by CPU descending puts highest CPU first")
@@ -234,7 +234,7 @@ struct ProcessInventoryScannerTests {
     }
 
     @Test("Launchd-matched process surfaces its plist path through launchSource")
-    func launchSourcePropagated() async {
+    func launchSourcePropagated() async throws {
         let plist = LaunchdPlist(label: "com.acme.helper", program: "/Applications/Acme.app/Contents/MacOS/helper")
         let item = LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/acme.plist", plist: plist)
         let s = sample(pid: 42, parent: 1, command: "helper", path: "/Applications/Acme.app/Contents/MacOS/helper", cpuTime: 0, at: 1)
@@ -246,13 +246,13 @@ struct ProcessInventoryScannerTests {
         )
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let process = try? #require(scan.items.first)
-        #expect(process?.launchConfidence == .exact)
-        #expect(process?.launchSource.plistPath == "/Users/me/Library/LaunchAgents/acme.plist")
+        let process = try #require(scan.items.first)
+        #expect(process.launchConfidence == .exact)
+        #expect(process.launchSource.plistPath == "/Users/me/Library/LaunchAgents/acme.plist")
     }
 
     @Test("Orphaned launchd source is detected when plist's binary is missing")
-    func orphanedDetection() async {
+    func orphanedDetection() async throws {
         let plist = LaunchdPlist(label: "com.zombie.helper", program: "/Applications/Gone.app/Contents/MacOS/helper")
         let item = LaunchdItem(domain: .userAgent, plistPath: "/p.plist", plist: plist)
         let s = sample(pid: 77, command: "helper", path: "/Applications/Gone.app/Contents/MacOS/helper", cpuTime: 0, at: 1)
@@ -264,9 +264,9 @@ struct ProcessInventoryScannerTests {
         )
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let process = try? #require(scan.items.first)
-        #expect(process?.safety == .safe)
-        #expect(process?.reasons.contains(.orphaned) == true)
+        let process = try #require(scan.items.first)
+        #expect(process.safety == .safe)
+        #expect(process.reasons.contains(.orphaned) == true)
     }
 
     @Test("ID is stable across rescans for the same pid + binary")
@@ -316,7 +316,7 @@ struct ProcessInventoryScannerTests {
     }
 
     @Test("Heuristic launchd match does NOT trigger orphaned reason")
-    func heuristicMatchSuppressesOrphan() async {
+    func heuristicMatchSuppressesOrphan() async throws {
         // Process command shares a name with an unrelated stale plist whose
         // executable is missing. Without the confidence guard the scanner
         // would falsely tag this as orphaned/safe.
@@ -331,15 +331,15 @@ struct ProcessInventoryScannerTests {
         )
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let item = try? #require(scan.items.first)
+        let item = try #require(scan.items.first)
         // Heuristic match is fine, but the orphan signal must not fire.
-        #expect(item?.launchConfidence == .heuristic)
-        #expect(item?.reasons.contains(.orphaned) == false)
-        #expect(item?.safety != .safe)
+        #expect(item.launchConfidence == .heuristic)
+        #expect(item.reasons.contains(.orphaned) == false)
+        #expect(item.safety != .safe)
     }
 
     @Test("Heuristic launchd match with known vendor stays at review (not safe)")
-    func heuristicKnownVendorStaysReview() async {
+    func heuristicKnownVendorStaysReview() async throws {
         // Known vendor + label-only heuristic match should NOT promote to
         // safe; only exact/path matches earn that.
         let stalePlist = LaunchdPlist(label: "com.acme.tool")
@@ -360,13 +360,13 @@ struct ProcessInventoryScannerTests {
         )
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let item = try? #require(scan.items.first)
-        #expect(item?.launchConfidence == .heuristic)
-        #expect(item?.safety == .review)
+        let item = try #require(scan.items.first)
+        #expect(item.launchConfidence == .heuristic)
+        #expect(item.safety == .review)
     }
 
     @Test("Foreground PIDs are promoted from userSession to foregroundApp")
-    func foregroundPromotion() async {
+    func foregroundPromotion() async throws {
         let current = sample(pid: 999, parent: 1, command: "Safari", path: "/Applications/Safari.app/Contents/MacOS/Safari", cpuTime: 0, at: 1)
         let scanner = makeScanner(
             first: [],
@@ -375,13 +375,13 @@ struct ProcessInventoryScannerTests {
         )
 
         let scan = await scanner.scan(metric: .cpu, topN: nil)
-        let item = try? #require(scan.items.first)
-        #expect(item?.launchSource == .foregroundApp)
-        #expect(item?.reasons.contains(.foregroundApp) == true)
+        let item = try #require(scan.items.first)
+        #expect(item.launchSource == .foregroundApp)
+        #expect(item.reasons.contains(.foregroundApp) == true)
     }
 
     @Test("Parent name resolves to the spawner even when the parent is ranked out of the list")
-    func parentNameResolvesAcrossCap() async {
+    func parentNameResolvesAcrossCap() async throws {
         // zsh (tiny) spawns perl5.34 (large). With topN=1 only the child
         // survives the cap, but its parentName still resolves from the full
         // snapshot — answering "what spawned this?" without the parent on screen.
@@ -390,9 +390,9 @@ struct ProcessInventoryScannerTests {
         let scanner = makeScanner(first: [], second: [parent, child])
 
         let scan = await scanner.scan(metric: .rss, topN: 1)
-        let item = try? #require(scan.items.first)
-        #expect(item?.command == "perl5.34")
-        #expect(item?.parentName == "zsh")
+        let item = try #require(scan.items.first)
+        #expect(item.command == "perl5.34")
+        #expect(item.parentName == "zsh")
     }
 
     @Test("A process parented by launchd resolves its parent name to launchd")

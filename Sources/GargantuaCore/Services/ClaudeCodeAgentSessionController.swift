@@ -148,18 +148,18 @@ public final class ClaudeCodeAgentSessionController: ObservableObject {
                     prompt: prompt,
                     sessionID: sessionID,
                     workingDirectory: workingDirectory,
-                    onEvent: { event in
-                        Task { @MainActor [weak self] in
+                    onEvent: { [weak self] event in
+                        Task { @MainActor in
                             self?.appendRawEvent(event)
                         }
                     },
-                    onGate: { gate in
-                        Task { @MainActor [weak self] in
+                    onGate: { [weak self] gate in
+                        Task { @MainActor in
                             self?.upsertGate(gate)
                         }
                     },
-                    onStreamEvent: { event in
-                        Task { @MainActor [weak self] in
+                    onStreamEvent: { [weak self] event in
+                        Task { @MainActor in
                             self?.appendStreamEvent(event)
                         }
                     }

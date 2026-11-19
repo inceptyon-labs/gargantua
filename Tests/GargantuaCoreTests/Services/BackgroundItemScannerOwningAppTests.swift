@@ -15,7 +15,7 @@ struct BackgroundItemScannerOwningAppTests {
     // MARK: - Bundle-id evidence
 
     @Test("Bundle id resolved absent is safe with parentAppMissing")
-    func bundleIDMissingIsSafe() {
+    func bundleIDMissingIsSafe() throws {
         let plist = LaunchdPlist(label: "com.acme.helper", program: "/Applications/Acme.app/Contents/MacOS/helper")
         let launchd = [
             LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.acme.helper.plist", plist: plist),
@@ -35,13 +35,13 @@ struct BackgroundItemScannerOwningAppTests {
             existingFiles: ["/Applications/Acme.app/Contents/MacOS/helper"],
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.safety == .safe)
-        #expect(item?.reasons.contains(.parentAppMissing) == true)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.safety == .safe)
+        #expect(item.reasons.contains(.parentAppMissing) == true)
     }
 
     @Test("A miss with degraded discovery layers stays unknown — never flips to safe")
-    func bundleIDMissUnknownWhenAbsenceUnconfirmable() {
+    func bundleIDMissUnknownWhenAbsenceUnconfirmable() throws {
         let plist = LaunchdPlist(label: "com.acme.helper", program: "/Applications/Acme.app/Contents/MacOS/helper")
         let launchd = [
             LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/com.acme.helper.plist", plist: plist),
@@ -63,9 +63,9 @@ struct BackgroundItemScannerOwningAppTests {
             existingFiles: ["/Applications/Acme.app/Contents/MacOS/helper"],
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.safety == .review)
-        #expect(item?.reasons.contains(.parentAppMissing) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.safety == .review)
+        #expect(item.reasons.contains(.parentAppMissing) == false)
     }
 
     @Test("The absence-confirmability probe runs at most once per scan pass")
@@ -105,7 +105,7 @@ struct BackgroundItemScannerOwningAppTests {
     }
 
     @Test("An embedded helper's bundle id yields no owning-app evidence — nested bundles aren't indexed")
-    func nestedBundleSkipsEvidence() {
+    func nestedBundleSkipsEvidence() throws {
         let exe = "/Applications/Host.app/Contents/PlugIns/Helper.appex/Contents/MacOS/helper"
         let plist = LaunchdPlist(label: "com.host.helper", program: exe)
         let launchd = [
@@ -126,14 +126,14 @@ struct BackgroundItemScannerOwningAppTests {
             existingFiles: [exe],
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
+        let item = try #require(scanner.scan().items.first)
         #expect(resolver.installedCallCount == 0)
-        #expect(item?.reasons.contains(.parentAppMissing) == false)
-        #expect(item?.safety == .review)
+        #expect(item.reasons.contains(.parentAppMissing) == false)
+        #expect(item.safety == .review)
     }
 
     @Test("Vendor-prefix heuristic is suppressed when absence is unconfirmable")
-    func vendorPrefixSuppressedWhenAbsenceUnconfirmable() {
+    func vendorPrefixSuppressedWhenAbsenceUnconfirmable() throws {
         let plist = LaunchdPlist(
             label: "com.valvesoftware.steamclean",
             program: "/usr/local/bin/steamclean"
@@ -151,10 +151,10 @@ struct BackgroundItemScannerOwningAppTests {
             existingFiles: ["/usr/local/bin/steamclean"],
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
+        let item = try #require(scanner.scan().items.first)
         #expect(resolver.prefixCallCount == 0)
-        #expect(item?.reasons.contains(.parentAppLikelyMissing) == false)
-        #expect(item?.safety == .review)
+        #expect(item.reasons.contains(.parentAppLikelyMissing) == false)
+        #expect(item.safety == .review)
     }
 
     @Test("isNestedBundle detects bundle boundaries above the enclosing bundle")
@@ -221,7 +221,7 @@ struct BackgroundItemScannerHeuristicsTests {
     // MARK: - Vendor-prefix heuristic evidence
 
     @Test("Well-known vendor label with no enclosing bundle id and missing prefix is review")
-    func vendorPrefixMissingIsReview() {
+    func vendorPrefixMissingIsReview() throws {
         let plist = LaunchdPlist(
             label: "com.valvesoftware.steamclean",
             program: "/usr/local/bin/steamclean"
@@ -239,9 +239,9 @@ struct BackgroundItemScannerHeuristicsTests {
             existingFiles: ["/usr/local/bin/steamclean"],
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.safety == .review)
-        #expect(item?.reasons.contains(.parentAppLikelyMissing) == true)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.safety == .review)
+        #expect(item.reasons.contains(.parentAppLikelyMissing) == true)
         #expect(resolver.prefixCallCount == 1)
     }
 
@@ -272,7 +272,7 @@ struct BackgroundItemScannerHeuristicsTests {
     // MARK: - Skip guards
 
     @Test("Personal namespace label never triggers the resolver")
-    func personalNamespaceSkipsResolver() {
+    func personalNamespaceSkipsResolver() throws {
         let plist = LaunchdPlist(label: "com.jason.memex.sync", program: "/usr/local/bin/sync")
         let launchd = [
             LaunchdItem(domain: .userAgent, plistPath: "/Users/me/Library/LaunchAgents/sync.plist", plist: plist),
@@ -284,10 +284,10 @@ struct BackgroundItemScannerHeuristicsTests {
             existingFiles: ["/usr/local/bin/sync"],
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.safety == .review)
-        #expect(item?.reasons.contains(.parentAppMissing) == false)
-        #expect(item?.reasons.contains(.parentAppLikelyMissing) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.safety == .review)
+        #expect(item.reasons.contains(.parentAppMissing) == false)
+        #expect(item.reasons.contains(.parentAppLikelyMissing) == false)
         #expect(resolver.installedCallCount == 0)
         #expect(resolver.prefixCallCount == 0)
     }
@@ -311,7 +311,7 @@ struct BackgroundItemScannerHeuristicsTests {
     }
 
     @Test("Missing executable never triggers the resolver but still classifies as orphaned/safe")
-    func missingExecutableSkipsResolver() {
+    func missingExecutableSkipsResolver() throws {
         let plist = LaunchdPlist(
             label: "com.acme.ghost",
             program: "/Applications/Ghost.app/Contents/MacOS/ghost"
@@ -326,9 +326,9 @@ struct BackgroundItemScannerHeuristicsTests {
             existingFiles: [], // binary missing
             appResolver: resolver
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.safety == .safe)
-        #expect(item?.reasons.contains(.orphaned) == true)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.safety == .safe)
+        #expect(item.reasons.contains(.orphaned) == true)
         #expect(resolver.installedCallCount == 0)
         #expect(resolver.prefixCallCount == 0)
     }

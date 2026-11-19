@@ -14,37 +14,37 @@ struct BackgroundItemScannerReEnableTests {
     // MARK: - (a)-(e) badge gating
 
     @Test("Audited disable (exit 0) + override false badges reEnabledByVendor")
-    func disabledThenReEnabledBadges() {
+    func disabledThenReEnabledBadges() throws {
         let scanner = makeScanner(
             auditEntries: [auditEntry(command: "disable", exitCode: 0)],
             disabledOverride: false
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.reasons.contains(.reEnabledByVendor) == true)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.reasons.contains(.reEnabledByVendor) == true)
     }
 
     @Test("Audited disable + override true does not badge")
-    func disabledStillDisabledNoBadge() {
+    func disabledStillDisabledNoBadge() throws {
         let scanner = makeScanner(
             auditEntries: [auditEntry(command: "disable", exitCode: 0)],
             disabledOverride: true
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.reasons.contains(.reEnabledByVendor) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.reasons.contains(.reEnabledByVendor) == false)
     }
 
     @Test("Audited disable + override nil (unknown) does not badge")
-    func disabledOverrideUnknownNoBadge() {
+    func disabledOverrideUnknownNoBadge() throws {
         let scanner = makeScanner(
             auditEntries: [auditEntry(command: "disable", exitCode: 0)],
             disabledOverride: nil
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.reasons.contains(.reEnabledByVendor) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.reasons.contains(.reEnabledByVendor) == false)
     }
 
     @Test("Disable then later enable does not badge")
-    func disableThenEnableNoBadge() {
+    func disableThenEnableNoBadge() throws {
         let scanner = makeScanner(
             auditEntries: [
                 auditEntry(command: "disable", exitCode: 0),
@@ -52,22 +52,22 @@ struct BackgroundItemScannerReEnableTests {
             ],
             disabledOverride: false
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.reasons.contains(.reEnabledByVendor) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.reasons.contains(.reEnabledByVendor) == false)
     }
 
     @Test("Failed disable (exit 1) + override false does not badge")
-    func failedDisableNoBadge() {
+    func failedDisableNoBadge() throws {
         let scanner = makeScanner(
             auditEntries: [auditEntry(command: "disable", exitCode: 1)],
             disabledOverride: false
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.reasons.contains(.reEnabledByVendor) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.reasons.contains(.reEnabledByVendor) == false)
     }
 
     @Test("Enable recorded with tolerated bootstrap exit 37 still clears — no false badge")
-    func enableWithBootstrapAlreadyLoadedClears() {
+    func enableWithBootstrapAlreadyLoadedClears() throws {
         // A successful Gargantua enable can persist the bootstrap step's
         // tolerated exit 37 ("already loaded") as the primary command.
         // Attributing the user's own re-enable to a vendor would be worse
@@ -79,8 +79,8 @@ struct BackgroundItemScannerReEnableTests {
             ],
             disabledOverride: false
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.reasons.contains(.reEnabledByVendor) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.reasons.contains(.reEnabledByVendor) == false)
     }
 
     @Test("ANY enable attempt clears, even a failed one — enable already cleared the override")
@@ -106,19 +106,19 @@ struct BackgroundItemScannerReEnableTests {
     // MARK: - (f) safety untouched
 
     @Test("Safety is identical with and without the audit entry")
-    func safetyUnchangedByBadge() {
+    func safetyUnchangedByBadge() throws {
         let withBadge = makeScanner(
             auditEntries: [auditEntry(command: "disable", exitCode: 0)],
             disabledOverride: false
         )
         let withoutBadge = makeScanner(auditEntries: [], disabledOverride: false)
 
-        let badgedItem = try? #require(withBadge.scan().items.first)
-        let plainItem = try? #require(withoutBadge.scan().items.first)
+        let badgedItem = try #require(withBadge.scan().items.first)
+        let plainItem = try #require(withoutBadge.scan().items.first)
 
-        #expect(badgedItem?.reasons.contains(.reEnabledByVendor) == true)
-        #expect(plainItem?.reasons.contains(.reEnabledByVendor) == false)
-        #expect(badgedItem?.safety == plainItem?.safety)
+        #expect(badgedItem.reasons.contains(.reEnabledByVendor) == true)
+        #expect(plainItem.reasons.contains(.reEnabledByVendor) == false)
+        #expect(badgedItem.safety == plainItem.safety)
     }
 
     // MARK: - (g) lastDisabledByGargantua unit tests

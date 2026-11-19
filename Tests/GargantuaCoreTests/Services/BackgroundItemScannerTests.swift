@@ -139,7 +139,7 @@ struct BackgroundItemScannerTests {
     }
 
     @Test("Login items become BackgroundItem with .loginItem source")
-    func loginItemsBecomeItems() {
+    func loginItemsBecomeItems() throws {
         let url = URL(fileURLWithPath: "/Applications/LoginThing.app")
         let record = LoginItemRecord(
             name: "Login Thing",
@@ -163,14 +163,14 @@ struct BackgroundItemScannerTests {
         )
         let scan = scanner.scan()
         #expect(scan.items.count == 1)
-        let item = try? #require(scan.items.first)
-        #expect(item?.source == .loginItem)
-        #expect(item?.label == "Login Thing")
-        #expect(item?.identity?.vendorDisplayName == "Login Thing Inc")
+        let item = try #require(scan.items.first)
+        #expect(item.source == .loginItem)
+        #expect(item.label == "Login Thing")
+        #expect(item.identity?.vendorDisplayName == "Login Thing Inc")
     }
 
     @Test("Orphaned binaries land as safe with orphaned reason")
-    func orphanedBinary() {
+    func orphanedBinary() throws {
         let plist = LaunchdPlist(
             label: "com.orphan.thing",
             program: "/Applications/Orphan.app/Contents/MacOS/orphan"
@@ -187,14 +187,14 @@ struct BackgroundItemScannerTests {
             existingFiles: [] // binary missing on disk
         )
         let scan = scanner.scan()
-        let item = try? #require(scan.items.first)
-        #expect(item?.safety == .safe)
-        #expect(item?.reasons.contains(.orphaned) == true)
-        #expect(item?.isOrphaned == true)
+        let item = try #require(scan.items.first)
+        #expect(item.safety == .safe)
+        #expect(item.reasons.contains(.orphaned) == true)
+        #expect(item.isOrphaned == true)
     }
 
     @Test("Relative ProgramArguments[0] is treated as exists, not orphaned")
-    func relativeProgramNotOrphaned() {
+    func relativeProgramNotOrphaned() throws {
         // launchd resolves bare program names through _PATH_STDPATH; the
         // scanner must not flag "foo" as orphaned just because it's not on
         // disk relative to the host process's working directory.
@@ -210,9 +210,9 @@ struct BackgroundItemScannerTests {
             login: .empty,
             existingFiles: [] // empty file system — but bare-tool isn't absolute
         )
-        let item = try? #require(scanner.scan().items.first)
-        #expect(item?.isOrphaned == false)
-        #expect(item?.reasons.contains(.orphaned) == false)
+        let item = try #require(scanner.scan().items.first)
+        #expect(item.isOrphaned == false)
+        #expect(item.reasons.contains(.orphaned) == false)
     }
 
     @Test("Login items with same bundle ID but different URLs get distinct IDs")

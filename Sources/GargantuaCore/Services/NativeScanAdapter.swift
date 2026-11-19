@@ -140,9 +140,9 @@ public struct NativeScanAdapter: ScanAdapter {
         // Task is pure churn during a deep `directorySize` walk. Coalesce to at
         // most one hop per runloop tick, always publishing the newest path.
         let sizingLatch = SizingLatch()
-        let onSizing: @Sendable (String) -> Void = { path in
+        let onSizing: @Sendable (String) -> Void = { [weak progress] path in
             if sizingLatch.stage(path) {
-                Task { @MainActor [weak progress] in
+                Task { @MainActor in
                     if let latest = sizingLatch.takeLatest() {
                         progress?.noteSizing(path: latest)
                     }

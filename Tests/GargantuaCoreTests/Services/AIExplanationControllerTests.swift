@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import GargantuaCore
 
@@ -146,15 +147,15 @@ struct AIExplanationControllerTests {
     @Test("canExplainDeeper reflects the injected availability closure")
     func canExplainDeeperReflectsAvailability() {
         let service = StubAIService(result: .success(AIExplanation(text: "x", source: .ai)))
-        var available = false
+        let available = OSAllocatedUnfairLock(initialState: false)
         let controller = AIExplanationController(
             service: service,
             deeperExplain: { _, _ in AIExplanation(text: "deep", source: .cloud) },
-            deeperAvailable: { available }
+            deeperAvailable: { available.withLock { $0 } }
         )
 
         #expect(controller.canExplainDeeper == false)
-        available = true
+        available.withLock { $0 = true }
         #expect(controller.canExplainDeeper == true)
     }
 

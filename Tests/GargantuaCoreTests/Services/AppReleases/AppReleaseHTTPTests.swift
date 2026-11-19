@@ -68,7 +68,7 @@ struct AppReleaseHTTPTests {
         let count = try await DefaultAppReleaseHTTPClient(session: session)
             .download(URL(string: "https://example.com/big.zip")!, to: file, maxBytes: 10000) { received, expected in
                 reports.withLock { $0.append(received) }
-                expecteds.withLock { $0.insert(expected) }
+                _ = expecteds.withLock { $0.insert(expected) }
             }
 
         let received = reports.withLock { $0 }

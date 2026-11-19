@@ -65,7 +65,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     static func removeHandler(for key: String) {
-        lock.withLock { handlers.removeValue(forKey: key) }
+        _ = lock.withLock { handlers.removeValue(forKey: key) }
     }
 
     // swiftlint:disable:next static_over_final_class
