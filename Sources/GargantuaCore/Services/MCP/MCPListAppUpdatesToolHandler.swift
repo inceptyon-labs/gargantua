@@ -72,7 +72,7 @@ public struct MCPListAppUpdatesToolHandler: Sendable {
     // MARK: - Helpers
 
     private static func hasUpdate(_ row: AppReleaseRow) -> Bool {
-        row.availableCandidate != nil
+        row.actionableCandidate != nil
     }
 
     private static func summary(for row: AppReleaseRow) -> MCPAppUpdateSummary {
@@ -85,6 +85,7 @@ public struct MCPListAppUpdatesToolHandler: Sendable {
             status = "available"
             switch strategy {
             case .linkOnly: status = "link_only"
+            case .updatesItself: status = "updates_itself"
             case .brewUpgrade(let token): brewToken = token
             case .inPlace, .openAppStore: break
             }

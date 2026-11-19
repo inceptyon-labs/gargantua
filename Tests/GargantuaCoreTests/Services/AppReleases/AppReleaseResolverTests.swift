@@ -10,7 +10,8 @@ struct AppReleaseResolverTests {
         _ version: String = "1.0",
         teamID: String? = "ABCDE12345",
         isMAS: Bool = false,
-        rootOwned: Bool = false
+        rootOwned: Bool = false,
+        selfUpdater: AppReleaseSelfUpdater? = nil
     ) -> InstalledApp {
         InstalledApp(
             bundleID: "com.example.App",
@@ -19,7 +20,8 @@ struct AppReleaseResolverTests {
             shortVersion: version,
             teamID: teamID,
             isMAS: isMAS,
-            isRootOwned: rootOwned
+            isRootOwned: rootOwned,
+            selfUpdater: selfUpdater
         )
     }
 
@@ -166,6 +168,23 @@ struct AppReleaseResolverTests {
         let cask = candidate(.homebrewCask, "2.0", token: "example")
         #expect(resolve(app(), [.homebrewCask: .found(cask)], brewToken: "example@beta")
             == .available(cask, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
+    }
+
+    @Test("a root-owned app its vendor's updater keeps current updates itself; one the user owns is updated in place")
+    func rootOwnedSelfUpdater() {
+        let chrome = AppReleaseSelfUpdater(productID: "com.google.Chrome")
+        let release = candidate(.homebrewCask, "2.0")
+        let homebrew: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [.homebrewCask: .found(release)]
+        #expect(resolve(app(rootOwned: true, selfUpdater: chrome), homebrew) == .available(release, .updatesItself(chrome)))
+        #expect(resolve(app(selfUpdater: chrome), homebrew) == .available(release, .inPlace))
+        // A catalog entry that says to install by hand still does.
+        let curated = candidate(.catalog, "2.0", linkOnly: true)
+        #expect(resolve(app(rootOwned: true, selfUpdater: chrome), [.catalog: .found(curated)])
+            == .available(curated, .linkOnly(URL(string: "https://example.com"), reason: .catalogLinkOnly)))
+
+        #expect(chrome.updatePage?.absoluteString == "chrome://settings/help")
+        #expect(AppReleaseSelfUpdater(productID: "com.google.Chrome.beta").updatePage == chrome.updatePage)
+        #expect(AppReleaseSelfUpdater(productID: "com.google.drivefs").updatePage == nil)
     }
 
     @Test("unsafe or unsupported installs fall back to a link with the reason")

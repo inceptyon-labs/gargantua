@@ -25,6 +25,7 @@ struct AppReleaseBackgroundCheckTests {
             var failing: Set<String> = []
             var untracked: Set<String> = []
             var skipped: Set<String> = []
+            var selfUpdating: Set<String> = []
             var onCheck: (@Sendable () -> Void)?
         }
         private let state: OSAllocatedUnfairLock<State>
@@ -38,6 +39,8 @@ struct AppReleaseBackgroundCheckTests {
 
         func setSkipped(_ ids: Set<String>) { state.withLock { $0.skipped = ids } }
 
+        func setSelfUpdating(_ ids: Set<String>) { state.withLock { $0.selfUpdating = ids } }
+
         func setBuild(_ id: String, _ build: String?) { state.withLock { $0.builds[id] = build } }
 
         func setVersion(_ id: String, _ version: String) { state.withLock { $0.versions[id] = version } }
@@ -47,9 +50,9 @@ struct AppReleaseBackgroundCheckTests {
         func setOnCheck(_ action: @escaping @Sendable () -> Void) { state.withLock { $0.onCheck = action } }
 
         func check(_ apps: [InstalledApp], preferences: AppReleasePreferences) async -> [AppReleaseRow] {
-            let (versions, builds, failing, untracked, skipped, onCheck) = state.withLock { state in
+            let (versions, builds, failing, untracked, skipped, onCheck, selfUpdating) = state.withLock { state in
                 state.calls += 1
-                return (state.versions, state.builds, state.failing, state.untracked, state.skipped, state.onCheck)
+                return (state.versions, state.builds, state.failing, state.untracked, state.skipped, state.onCheck, state.selfUpdating)
             }
             onCheck?()
             return apps.map { app in
@@ -68,6 +71,9 @@ struct AppReleaseBackgroundCheckTests {
                     version: AppReleaseVersion(short: version, build: builds[app.bundleID]),
                     downloadURL: nil
                 )
+                if selfUpdating.contains(app.bundleID) {
+                    return AppReleaseRow(app: app, status: .available(candidate, .updatesItself(AppReleaseSelfUpdater(productID: "x"))))
+                }
                 return AppReleaseRow(app: app, status: .available(candidate, .linkOnly(nil, reason: .noInstallablePayload)))
             }
         }
@@ -164,6 +170,16 @@ struct AppReleaseBackgroundCheckTests {
         #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 2)
         #expect(state.lastCheck == harness.clock.current)
         #expect(state.announcedVersions.mapValues(\.description) == ["com.a": "2.0", "com.b": "3.0"])
+    }
+
+    @Test("an app that updates itself is neither announced nor counted")
+    func selfUpdatingNotAnnounced() async {
+        let harness = Harness(versions: ["com.a": "2.0", "com.b": "3.0"])
+        defer { harness.cleanUp() }
+        harness.checker.setSelfUpdating(["com.b"])
+        #expect(await harness.check.runIfDue() == .checked(availableCount: 1, notified: true))
+        #expect(await harness.notifier.deliveries.first?.names == ["Alpha"])
+        #expect(AppReleaseBackgroundState.storedAvailableCount(in: harness.defaults) == 1)
     }
 
     @Test("repeat run stays quiet; a new version notifies with the full count")

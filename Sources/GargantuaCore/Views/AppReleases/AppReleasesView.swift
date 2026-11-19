@@ -356,11 +356,15 @@ extension AppReleasesView {
         if !session.query.isEmpty { return "No apps match the search." }
         switch session.filter {
         case .updates:
+            var parts: [String] = []
             let failed = session.failedCount
-            if failed > 0 {
-                return "Nothing to update · " + Self.couldntCheck(failed)
+            if failed > 0 { parts.append(Self.couldntCheck(failed)) }
+            let selfUpdating = session.selfUpdatingCount
+            if selfUpdating > 0 {
+                parts.append((selfUpdating == 1 ? "1 app updates itself" : "\(selfUpdating) apps update themselves") + ", under All")
             }
-            return "Every app Gargantua can check is up to date."
+            if parts.isEmpty { return "Every app Gargantua can check is up to date." }
+            return (["Nothing to update"] + parts).joined(separator: " · ")
         case .all: return "No apps to show."
         case .ignored: return "You haven't ignored any apps or versions."
         }

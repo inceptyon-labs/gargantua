@@ -32,6 +32,8 @@ public struct InstalledApp: Sendable, Equatable, Identifiable {
     /// unprivileged in-place swap cannot work.
     public let isRootOwned: Bool
     public let isRunning: Bool
+    /// The vendor updater the app registers with (`KSProductID`), if any.
+    public let selfUpdater: AppReleaseSelfUpdater?
 
     public var version: AppReleaseVersion {
         AppReleaseVersion(short: shortVersion, build: buildVersion)
@@ -50,7 +52,8 @@ public struct InstalledApp: Sendable, Equatable, Identifiable {
         isMAS: Bool = false,
         isSystem: Bool = false,
         isRootOwned: Bool = false,
-        isRunning: Bool = false
+        isRunning: Bool = false,
+        selfUpdater: AppReleaseSelfUpdater? = nil
     ) {
         self.bundleID = bundleID
         self.name = name
@@ -65,6 +68,45 @@ public struct InstalledApp: Sendable, Equatable, Identifiable {
         self.isSystem = isSystem
         self.isRootOwned = isRootOwned
         self.isRunning = isRunning
+        self.selfUpdater = selfUpdater
+    }
+}
+
+/// Google's updater, which installs an app's new versions itself. Found from
+/// the app's Keystone registration (`KSProductID`) and the updater's
+/// system-wide launch daemon: running as root, it is why such an app is
+/// root's, as Chrome is. Other vendors' Keystone forks aren't recognized,
+/// since where their updater lives isn't known, so their updates stay ones
+/// to act on.
+public struct AppReleaseSelfUpdater: Sendable, Equatable {
+    public let productID: String
+
+    public init(productID: String) {
+        self.productID = productID
+    }
+
+    /// Daemons that run Google's system-wide updater: the current one and
+    /// the older Keystone. Removing the updater removes them.
+    public static let googleSystemDaemons = [
+        "/Library/LaunchDaemons/com.google.GoogleUpdater.wake.system.plist",
+        "/Library/LaunchDaemons/com.google.keystone.daemon.plist",
+    ]
+
+    /// The updater for `productID`, when it is a Google product, root owns
+    /// the bundle, and Google's system-wide updater is installed; otherwise
+    /// nil. A bundle that is only unwritable, as on a standard account, is
+    /// kept current by an updater that runs for whoever installed it.
+    static func google(productID: String?, systemUpdaterInstalled: Bool, ownedByRoot: Bool) -> AppReleaseSelfUpdater? {
+        guard systemUpdaterInstalled, ownedByRoot, let productID, productID.lowercased().hasPrefix("com.google.") else {
+            return nil
+        }
+        return AppReleaseSelfUpdater(productID: productID)
+    }
+
+    /// A page inside the app that checks for an update right away, when one
+    /// is known. Opening it starts that check.
+    public var updatePage: URL? {
+        productID.lowercased().hasPrefix("com.google.chrome") ? URL(string: "chrome://settings/help") : nil
     }
 }
 
@@ -254,12 +296,14 @@ public enum AppReleaseInstallStrategy: Sendable, Equatable {
     case openAppStore(URL)
     /// Show the vendor page; nothing to install from here.
     case linkOnly(URL?, reason: AppReleaseLinkOnlyReason)
+    /// The app's own updater installs it, as root; nothing for the user to do.
+    case updatesItself(AppReleaseSelfUpdater)
 
     /// Whether this strategy changes the disk and so needs the license gate.
     public var isDestructive: Bool {
         switch self {
         case .inPlace, .brewUpgrade: true
-        case .openAppStore, .linkOnly: false
+        case .openAppStore, .linkOnly, .updatesItself: false
         }
     }
 }
@@ -296,6 +340,13 @@ public struct AppReleaseRow: Sendable, Equatable, Identifiable {
     public var availableCandidate: AppReleaseCandidate? {
         if case .available(let candidate, _) = status { return candidate }
         return nil
+    }
+
+    /// The offered update, unless the app's own updater installs it. Those
+    /// need nothing from the user, so counts, the badge and notices skip them.
+    public var actionableCandidate: AppReleaseCandidate? {
+        if case .available(_, .updatesItself) = status { return nil }
+        return availableCandidate
     }
 }
 

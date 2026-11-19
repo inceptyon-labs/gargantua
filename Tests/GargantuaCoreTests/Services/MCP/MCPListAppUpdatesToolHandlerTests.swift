@@ -61,6 +61,15 @@ struct MCPListAppUpdatesToolHandlerTests {
         #expect(summary == "2 app updates available (of 4 apps checked).")
     }
 
+    @Test("an app that updates itself is reported as such and not counted as available")
+    func selfUpdatingRow() throws {
+        let rows = Self.sample + [Self.row("e", .available(Self.candidate(), .updatesItself(AppReleaseSelfUpdater(productID: "x"))))]
+        let (_, output) = try Self.run(rows, ["include_all": .bool(true)])
+        let out = try #require(output)
+        #expect(out.availableCount == 2)
+        #expect(out.items.first { $0.bundleID == "e" }?.status == "updates_itself")
+    }
+
     @Test("include_all returns every row")
     func includeAll() throws {
         let (_, output) = try Self.run(Self.sample, ["include_all": .bool(true)])

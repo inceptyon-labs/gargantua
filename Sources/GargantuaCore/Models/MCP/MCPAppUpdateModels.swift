@@ -24,7 +24,7 @@ public struct MCPAppUpdateSummary: Codable, Sendable {
     public let bundleID: String
     public let name: String
     public let installedVersion: String
-    /// `available | link_only | up_to_date | ignored | skipped | failed | untracked`.
+    /// `available | link_only | updates_itself | up_to_date | ignored | skipped | failed | untracked`.
     public let status: String
     /// Newest version offered; nil unless an update is available.
     public let availableVersion: String?

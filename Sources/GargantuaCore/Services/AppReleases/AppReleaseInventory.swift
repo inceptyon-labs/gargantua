@@ -16,17 +16,27 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     private let teamIDReader: @Sendable (URL) -> String?
     private let excludedBundleIDs: Set<String>
     private let isUpdatableLocation: @Sendable (URL) -> Bool
+    /// Whether Google's system-wide updater is installed.
+    private let googleUpdaterInstalled: @Sendable () -> Bool
+    /// Whether root (uid 0) owns a bundle.
+    private let isOwnedByRoot: @Sendable (URL) -> Bool
 
     public init(
         enumerator: any AppBundleEnumerating = DefaultAppBundleEnumerator(),
         teamIDReader: @escaping @Sendable (URL) -> String? = { StrictAppReleaseCodeSigner.teamIdentifier(ofBundle: $0) },
         excludedBundleIDs: Set<String> = Self.defaultExcludedBundleIDs,
-        isUpdatableLocation: @escaping @Sendable (URL) -> Bool = { DefaultAppReleaseInventory.isUpdatableLocation($0) }
+        isUpdatableLocation: @escaping @Sendable (URL) -> Bool = { DefaultAppReleaseInventory.isUpdatableLocation($0) },
+        googleUpdaterInstalled: @escaping @Sendable () -> Bool = {
+            AppReleaseSelfUpdater.googleSystemDaemons.contains { FileManager.default.fileExists(atPath: $0) }
+        },
+        isOwnedByRoot: @escaping @Sendable (URL) -> Bool = { DefaultAppReleaseInventory.isOwnedByRoot($0) }
     ) {
         self.enumerator = enumerator
         self.teamIDReader = teamIDReader
         self.excludedBundleIDs = excludedBundleIDs
         self.isUpdatableLocation = isUpdatableLocation
+        self.googleUpdaterInstalled = googleUpdaterInstalled
+        self.isOwnedByRoot = isOwnedByRoot
     }
 
     /// Gargantua updates itself through Sparkle.
@@ -41,7 +51,11 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
         let urls = enumerator.enumerateBundles().filter { isUpdatableLocation($0) && !Self.isSystemPath($0) }
         let running = await Self.runningBundleIDs()
         let reader = teamIDReader
-        let read = await boundedMap(urls) { Self.readApp(at: $0, running: running, teamIDReader: reader) }
+        let google = googleUpdaterInstalled()
+        let rootOwner = isOwnedByRoot
+        let read = await boundedMap(urls) {
+            Self.readApp(at: $0, running: running, teamIDReader: reader, googleUpdaterInstalled: google, isOwnedByRoot: rootOwner)
+        }
 
         var seen = Set<String>()
         var apps: [InstalledApp] = []
@@ -54,7 +68,13 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     public func installedApp(at url: URL) async -> InstalledApp? {
         guard isUpdatableLocation(url), !Self.isSystemPath(url) else { return nil }
         let running = await Self.runningBundleIDs()
-        guard let app = Self.readApp(at: url, running: running, teamIDReader: teamIDReader),
+        guard let app = Self.readApp(
+            at: url,
+            running: running,
+            teamIDReader: teamIDReader,
+            googleUpdaterInstalled: googleUpdaterInstalled(),
+            isOwnedByRoot: isOwnedByRoot
+        ),
               isTracked(app)
         else { return nil }
         return app
@@ -98,7 +118,9 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
     static func readApp(
         at url: URL,
         running: Set<String>,
-        teamIDReader: @Sendable (URL) -> String?
+        teamIDReader: @Sendable (URL) -> String?,
+        googleUpdaterInstalled: Bool,
+        isOwnedByRoot: @Sendable (URL) -> Bool
     ) -> InstalledApp? {
         guard let plist = AppBundleFiles.infoPlist(ofBundle: url),
               let bundleID = plist["CFBundleIdentifier"] as? String, !bundleID.isEmpty
@@ -126,8 +148,17 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
             isMAS: fileManager.fileExists(atPath: url.appendingPathComponent("Contents/_MASReceipt/receipt").path),
             isSystem: isSystemPath(url),
             isRootOwned: isRootOwned(url, fileManager: fileManager),
-            isRunning: running.contains(bundleID)
+            isRunning: running.contains(bundleID),
+            selfUpdater: AppReleaseSelfUpdater.google(
+                productID: string("KSProductID"),
+                systemUpdaterInstalled: googleUpdaterInstalled,
+                ownedByRoot: isOwnedByRoot(url)
+            )
         )
+    }
+
+    public static func isOwnedByRoot(_ url: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.ownerAccountID] as? NSNumber)?.intValue == 0
     }
 
     /// Replacing a bundle needs write access to the bundle and its parent.

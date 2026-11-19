@@ -152,6 +152,22 @@ struct AppReleasesUpdateAllTests {
         #expect(fixture.session.updatableRows.map(\.id) == [Self.ids[2]])
     }
 
+    @Test("an app that updates itself isn't counted, listed under Updates, pinned, or updated by Update All")
+    func selfUpdatingRowNeedsNothing() async {
+        let fixture = await makeFixture(statuses: [
+            Self.ids[0]: .available(Stubs.candidate, .updatesItself(AppReleaseSelfUpdater(productID: "com.google.Chrome"))),
+        ])
+        let session = fixture.session
+        #expect(session.availableCount == 2)
+        #expect(session.selfUpdatingCount == 1)
+        #expect(session.count(for: .updates) == 2)
+        #expect(session.visibleRows.map(\.id) == [Self.ids[1], Self.ids[2]])
+        #expect(session.updatableRows.map(\.id) == [Self.ids[1], Self.ids[2]])
+        session.filter = .all
+        // Unpinned, it sorts by name after the updates.
+        #expect(session.visibleRows.map(\.id) == [Self.ids[1], Self.ids[2], Self.ids[0]])
+    }
+
     @Test("a search narrows what Update All covers")
     func searchNarrowsRows() async {
         let fixture = await makeFixture()

@@ -89,8 +89,14 @@ public final class AppReleasesSession {
 
     // MARK: - Derived
 
+    /// Updates the user can act on; an app's own updater's aren't counted.
     public var availableCount: Int {
-        rows.filter { $0.availableCandidate != nil }.count
+        rows.filter { $0.actionableCandidate != nil }.count
+    }
+
+    /// Updates that apps' own updaters install, which `availableCount` leaves out.
+    public var selfUpdatingCount: Int {
+        rows.filter { if case .available(_, .updatesItself) = $0.status { true } else { false } }.count
     }
 
     /// False after `releaseResults()` empties the list.
@@ -121,13 +127,12 @@ public final class AppReleasesSession {
     }
 
     private func isPinned(_ row: AppReleaseRow) -> Bool {
-        row.availableCandidate != nil || recentlyInstalled.contains(row.id)
+        row.actionableCandidate != nil || recentlyInstalled.contains(row.id)
     }
 
     private func matches(_ row: AppReleaseRow, filter: AppReleasesFilter) -> Bool {
         switch (filter, row.status) {
-        case (.updates, .available): true
-        case (.updates, _): recentlyInstalled.contains(row.id)
+        case (.updates, _): row.actionableCandidate != nil || recentlyInstalled.contains(row.id)
         case (.ignored, .ignored), (.ignored, .skippedVersion): true
         case (.ignored, _): false
         case (.all, .ignored), (.all, .skippedVersion): false

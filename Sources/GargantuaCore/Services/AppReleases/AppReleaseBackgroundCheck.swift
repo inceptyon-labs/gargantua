@@ -220,7 +220,7 @@ public struct AppReleaseBackgroundCheck: Sendable {
             return .failed
         }
 
-        let available = rows.compactMap { row in row.availableCandidate.map { (app: row.app, version: $0.version) } }
+        let available = rows.compactMap { row in row.actionableCandidate.map { (app: row.app, version: $0.version) } }
         let installed = Set(apps.map(\.bundleID))
         var announced = Self.announcedSoFar(state, installed: installed, defaults: defaults)
         let hasNew = available.contains { entry in

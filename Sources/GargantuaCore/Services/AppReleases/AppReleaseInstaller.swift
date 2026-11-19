@@ -243,7 +243,7 @@ public final class AppReleaseInstaller: AppReleaseInstalling {
 
         do throws(AppReleaseInstallError) {
             switch strategy {
-            case .openAppStore, .linkOnly:
+            case .openAppStore, .linkOnly, .updatesItself:
                 throw .notInstallable
             case .brewUpgrade(let token):
                 return try await .success(upgradeWithHomebrew(

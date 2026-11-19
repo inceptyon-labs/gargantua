@@ -33,6 +33,7 @@ struct AppReleaseInventoryTests {
             "CFBundleIdentifier": "com.test.foo", "CFBundleName": "Foo Name",
             "CFBundleShortVersionString": "1.2", "CFBundleVersion": "34",
             "SUFeedURL": "https://x.test/feed.xml", "SUPublicEDKey": "KEY", "LSMinimumSystemVersion": "13.0",
+            "KSProductID": "com.google.Chrome",
         ], mas: true)
         let bar = try makeApp(in: root, "Bar", plist: [
             "CFBundleIdentifier": "com.test.bar", "SUFeedURL": "http://x.test/feed.xml",
@@ -42,7 +43,8 @@ struct AppReleaseInventoryTests {
         let apps = await DefaultAppReleaseInventory(
             enumerator: StubEnumerator(urls: [foo, bar, noID, foo]),
             teamIDReader: { _ in "TEAM123456" },
-            excludedBundleIDs: [], isUpdatableLocation: { _ in true }
+            excludedBundleIDs: [], isUpdatableLocation: { _ in true },
+            googleUpdaterInstalled: { true }, isOwnedByRoot: { _ in true }
         ).installedApps()
 
         #expect(apps.map(\.bundleID) == ["com.test.bar", "com.test.foo"])
@@ -57,10 +59,35 @@ struct AppReleaseInventoryTests {
         #expect(!fooApp.isSystem)
         #expect(!fooApp.isRootOwned)
         #expect(fooApp.teamID == "TEAM123456")
+        #expect(fooApp.selfUpdater == AppReleaseSelfUpdater(productID: "com.google.Chrome"))
         let barApp = try #require(apps.first { $0.bundleID == "com.test.bar" })
+        #expect(barApp.selfUpdater == nil)
         #expect(barApp.sparkleFeedURL == nil)
         #expect(barApp.name == "Bar")
         #expect(!barApp.isMAS)
+    }
+
+    @Test("Google's updater keeps an app current only for a Google product root owns, with the updater installed")
+    func googleSelfUpdater() async throws {
+        let root = Self.tempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let chrome = try makeApp(in: root, "Chrome", plist: ["CFBundleIdentifier": "com.google.Chrome", "KSProductID": "com.google.Chrome"])
+        let brave = try makeApp(in: root, "Brave", plist: ["CFBundleIdentifier": "com.brave.Browser", "KSProductID": "com.brave.Browser"])
+        func updaters(daemon: Bool, rootOwned: Bool) async -> [String: AppReleaseSelfUpdater?] {
+            let apps = await DefaultAppReleaseInventory(
+                enumerator: StubEnumerator(urls: [chrome, brave]), teamIDReader: { _ in nil },
+                excludedBundleIDs: [], isUpdatableLocation: { _ in true },
+                googleUpdaterInstalled: { daemon }, isOwnedByRoot: { _ in rootOwned }
+            ).installedApps()
+            return Dictionary(uniqueKeysWithValues: apps.map { ($0.bundleID, $0.selfUpdater) })
+        }
+        let kept = await updaters(daemon: true, rootOwned: true)
+        #expect(kept["com.google.Chrome"] == AppReleaseSelfUpdater(productID: "com.google.Chrome"))
+        #expect(kept["com.brave.Browser"] == .some(nil))
+        #expect(await updaters(daemon: false, rootOwned: true)["com.google.Chrome"] == .some(nil))
+        #expect(await updaters(daemon: true, rootOwned: false)["com.google.Chrome"] == .some(nil))
+        // This test's own bundle isn't root's.
+        #expect(!DefaultAppReleaseInventory.isOwnedByRoot(chrome))
     }
 
     @Test("one bundle is re-read on its own, with the same exclusions as a full scan")

@@ -151,6 +151,8 @@ public enum AppReleaseResolver {
     private static func inPlaceStrategy(for candidate: AppReleaseCandidate, app: InstalledApp) -> AppReleaseInstallStrategy {
         let link = linkURL(for: candidate)
         if !candidate.allowsInPlaceInstall { return .linkOnly(link, reason: .catalogLinkOnly) }
+        // Root owns it because Google's updater, running as root, installs it.
+        if app.isRootOwned, let updater = app.selfUpdater { return .updatesItself(updater) }
         if app.isRootOwned { return .linkOnly(link, reason: .rootOwned) }
         if app.teamID == nil { return .linkOnly(link, reason: .unsigned) }
         if candidate.payloadKind == .pkg { return .linkOnly(link, reason: .packageInstaller) }

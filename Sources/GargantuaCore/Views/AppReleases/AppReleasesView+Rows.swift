@@ -116,7 +116,7 @@ struct AppReleaseRowView: View {
     private var isDimmed: Bool {
         guard message == nil else { return false }
         switch row.status {
-        case .upToDate, .untracked, .ignored, .skippedVersion: return true
+        case .upToDate, .untracked, .ignored, .skippedVersion, .available(_, .updatesItself): return true
         case .available, .failed: return false
         }
     }
@@ -165,8 +165,8 @@ struct AppReleaseRowView: View {
             .accessibilityValue(installPhase.accessibilityValue)
         } else {
             switch row.status {
-            case .available(_, let strategy):
-                availableAction(strategy)
+            case .available(let candidate, let strategy):
+                availableAction(strategy, link: candidate.vendorURL ?? candidate.releaseNotesURL)
             case .upToDate:
                 statusText("Up to date")
             case .ignored:
@@ -185,7 +185,7 @@ struct AppReleaseRowView: View {
     }
 
     @ViewBuilder
-    private func availableAction(_ strategy: AppReleaseInstallStrategy) -> some View {
+    private func availableAction(_ strategy: AppReleaseInstallStrategy, link: URL?) -> some View {
         switch strategy {
         case .inPlace, .brewUpgrade:
             GargantuaButton("Update", tone: .ghost(GargantuaColors.accent), isDisabled: updatesPaused, action: onUpdate)
@@ -201,7 +201,25 @@ struct AppReleaseRowView: View {
             } else {
                 statusText("Manual").help(reason.explanation)
             }
+        case .updatesItself(let updater):
+            if let page = updater.updatePage {
+                GargantuaButton("Check now") { Self.open(page, in: row.app.url) }
+                    .help("Opens \(row.app.name)'s update page, which checks for the new version")
+                    .accessibilityLabel("Check for an update in \(row.app.name)")
+            } else if let link {
+                GargantuaButton("Download") { NSWorkspace.shared.open(link) }
+                    .accessibilityLabel("Download \(row.app.name)")
+            } else {
+                GargantuaButton("Open") { NSWorkspace.shared.open(row.app.url) }
+                    .accessibilityLabel("Open \(row.app.name)")
+            }
         }
+    }
+
+    /// Opens `page` in the app at `appURL`, so a browser's own URL scheme
+    /// (`chrome://settings/help`) reaches that browser.
+    private static func open(_ page: URL, in appURL: URL) {
+        NSWorkspace.shared.open([page], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
     }
 
     @ViewBuilder
@@ -218,6 +236,9 @@ struct AppReleaseRowView: View {
     private var detailText: String? {
         switch row.status {
         case .available(_, .linkOnly(_, let reason)): reason.explanation
+        case .available(_, .updatesItself):
+            "Updates itself. Google's updater installs new versions when Google releases them to this Mac, "
+                + "sometimes days after they come out."
         case .failed(let reason): reason
         case .skippedVersion(let version): "Skipped version \(version)"
         default: nil
@@ -282,6 +303,11 @@ struct AppReleaseRowView: View {
         Divider()
         Button("Show in Finder") {
             NSWorkspace.shared.activateFileViewerSelecting([row.app.url])
+        }
+        // An app's own updater can stop working; its download stays one click away.
+        if case .available(let candidate, .updatesItself) = row.status,
+           let link = candidate.vendorURL ?? candidate.releaseNotesURL {
+            Button("Download from the developer") { NSWorkspace.shared.open(link) }
         }
         if let notes = row.availableCandidate?.releaseNotesURL {
             Button("Open release notes") { NSWorkspace.shared.open(notes) }
