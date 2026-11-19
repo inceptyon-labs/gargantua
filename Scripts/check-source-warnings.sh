@@ -7,14 +7,14 @@ Usage: Scripts/check-source-warnings.sh [swift build args...]
        Scripts/check-source-warnings.sh --check-log FILE
 
 Build the package (including tests) and fail if the compiler emits any
-warning from this repository's own Sources/ tree, or if any `-Werror <group>`
-flag names a group the compiler does not recognise (which would otherwise
-leave that escalation silently inert).
+warning from this repository's own Sources/ or Tests/ trees, or if any
+`-Werror <group>` flag names a group the compiler does not recognise (which
+would otherwise leave that escalation silently inert).
 
 Package-wide -warnings-as-errors is not usable here: the mlx.metallib build
 plugin carries pre-existing PackagePlugin Path -> URL deprecations that are
-their own migration. This gate is scoped to Sources/ instead, so Swift 6
-actor-isolation warnings cannot regress unnoticed while the plugin's
+their own migration. This gate is scoped to Sources/ and Tests/ instead, so
+Swift 6 actor-isolation warnings cannot regress unnoticed while the plugin's
 deprecations stay out of scope.
 
 Extra arguments are forwarded to `swift build`, e.g.
@@ -36,23 +36,32 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# Report warnings under Sources/ found in an existing build log. The repo
-# root prefix is matched as a literal string (via awk's index()), so a clone
-# path containing regex or sed-delimiter metacharacters cannot silently
-# neuter the gate.
+# Print a build log without terminal styling. Run from a terminal session,
+# SwiftPM's swift-build backend colours diagnostics even when its output is
+# piped to a file (CI logs are plain). The escape codes land between `: ` and
+# `warning:` and wrap `[#Group]` names in hyperlinks, so without this neither
+# check below matches and the gate passes everything.
+plain_log() {
+    perl -pe 's/\e\[[0-9;]*m//g; s/\e\]8;;.*?\e\\//g' "$1"
+}
+
+# Report warnings under Sources/ or Tests/ found in an existing build log.
+# The repo root prefix is matched as a literal string (via awk's index()), so
+# a clone path containing regex or sed-delimiter metacharacters cannot
+# silently neuter the gate.
 check_log() {
     local log_file="$1"
     local unknown_groups
     # A `-Werror <group>` escalation is silently inert if the group name is
     # wrong: the compiler reports `unknown warning group` and exits 0. That
-    # diagnostic is emitted at `<unknown>:0`, so the Sources/ prefilter below
-    # drops it and the gate it was meant to arm disappears with CI green. The
-    # toolchain floats (`xcode-version: latest-stable`), so a future compiler
-    # renaming a group would do exactly this. Checked first: an inert gate is
-    # worse than a warning, because it looks like coverage.
+    # diagnostic is emitted at `<unknown>:0`, so the Sources/ and Tests/
+    # prefilter below drops it and the gate it was meant to arm disappears
+    # with CI green. The toolchain floats (`xcode-version: latest-stable`), so
+    # a future compiler renaming a group would do exactly this. Checked first:
+    # an inert gate is worse than a warning, because it looks like coverage.
     # `|| true`: grep exits 1 when it matches nothing, which under this
     # script's `set -e` + pipefail would abort the clean case.
-    unknown_groups="$(grep -F '[#UnknownWarningGroup]' "$log_file" | sort -u || true)"
+    unknown_groups="$(plain_log "$log_file" | grep -F '[#UnknownWarningGroup]' | sort -u || true)"
 
     if [ -n "$unknown_groups" ]; then
         echo ""
@@ -66,15 +75,15 @@ check_log() {
     fi
 
     local offenders
-    offenders="$(awk -v root="$ROOT/" '
+    offenders="$(plain_log "$log_file" | awk -v root="$ROOT/" '
         index($0, root) == 1 {
             line = substr($0, length(root) + 1)
-            if (line ~ /^Sources\/.*: warning: /) { print line }
-        }' "$log_file" | sort -u)"
+            if (line ~ /^(Sources|Tests)\/.*: warning: /) { print line }
+        }' | sort -u)"
 
     if [ -n "$offenders" ]; then
         echo ""
-        echo "Compiler warnings under Sources/ (this gate fails on any):"
+        echo "Compiler warnings under Sources/ or Tests/ (this gate fails on any):"
         echo ""
         printf '%s\n' "$offenders"
         echo ""
@@ -83,7 +92,7 @@ check_log() {
         return 1
     fi
 
-    echo "OK - no compiler warnings under Sources/ in $(basename "$log_file")"
+    echo "OK - no compiler warnings under Sources/ or Tests/ in $(basename "$log_file")"
 }
 
 if [ "${1:-}" = "--check-log" ]; then

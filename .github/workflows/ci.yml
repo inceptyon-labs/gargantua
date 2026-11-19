@@ -70,9 +70,9 @@ jobs:
     #
     # The check-source-warnings.sh gate below cannot cover this, and widening
     # its path filter would not help: it matches warnings whose path is under
-    # Sources/, while the offending call is usually reported against a macro
-    # expansion buffer (`macro expansion #expect:1:51`) rather than any file
-    # path at all, because the call sits inside a swift-testing #expect.
+    # Sources/ or Tests/, while the offending call is usually reported against
+    # a macro expansion buffer (`macro expansion #expect:1:51`) rather than any
+    # file path at all, because the call sits inside a swift-testing #expect.
     # Escalating the diagnostic group is what catches it.
     #
     # Caveat: -Xswiftc applies to every target the build touches, including
@@ -116,13 +116,14 @@ jobs:
       # full suite still green. Package-wide -warnings-as-errors is not
       # usable: the mlx.metallib build plugin carries pre-existing
       # PackagePlugin Path -> URL deprecations that are their own migration.
-      # The gate below is scoped to Sources/ instead. It has to be the job's
-      # first build — the compiler only emits warnings for files it actually
-      # recompiles, so running it after a warm build would pass on anything.
+      # The gate below is scoped to Sources/ and Tests/ instead. It has to be
+      # the job's first build — the compiler only emits warnings for files it
+      # actually recompiles, so running it after a warm build would pass on
+      # anything.
       # --enable-code-coverage and ACTOR_ISOLATION_GATE both match the test
       # step's flags so those build products get reused; any flag added to
       # one of the two steps has to be added to the other.
-      - name: Fail on compiler warnings under Sources/
+      - name: Fail on compiler warnings under Sources/ and Tests/
         run: Scripts/check-source-warnings.sh --enable-code-coverage ${ACTOR_ISOLATION_GATE:?}
 
       - name: Test with coverage
