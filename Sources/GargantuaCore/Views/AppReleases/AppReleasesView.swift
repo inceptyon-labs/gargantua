@@ -229,6 +229,7 @@ public struct AppReleasesView: View {
 }
 
 extension AppReleasesView {
+
     // MARK: - List
 
     private var listState: some View {

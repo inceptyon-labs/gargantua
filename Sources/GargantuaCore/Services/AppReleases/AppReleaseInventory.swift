@@ -69,12 +69,12 @@ public struct DefaultAppReleaseInventory: AppReleaseInventoryProviding {
         guard isUpdatableLocation(url), !Self.isSystemPath(url) else { return nil }
         let running = await Self.runningBundleIDs()
         guard let app = Self.readApp(
-            at: url,
-            running: running,
-            teamIDReader: teamIDReader,
-            googleUpdaterInstalled: googleUpdaterInstalled(),
-            isOwnedByRoot: isOwnedByRoot
-        ),
+                  at: url,
+                  running: running,
+                  teamIDReader: teamIDReader,
+                  googleUpdaterInstalled: googleUpdaterInstalled(),
+                  isOwnedByRoot: isOwnedByRoot
+              ),
               isTracked(app)
         else { return nil }
         return app
