@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-20
+
+### Added
+
+- **App Updater.** A new App Updates pane finds newer releases of your installed third-party apps from each app's Sparkle feed, Homebrew casks, the Mac App Store and a curated catalog, and installs them behind the license gate. Checks run on demand or as an opt-in daily check.
+- **Verified installs.** An update must match its declared length, checksum and signature, unpack safely, keep the installed app's bundle ID and Developer ID team, pass Gatekeeper, and be newer than what is installed. Otherwise it is refused.
+- **Update All.** Installs every app Gargantua can update itself, one at a time. It asks once before quitting running apps, and a failed app doesn't stop the run.
+- **Background checks and notifications.** The scheduler agent can check for app updates daily, show a count badge on the App Updates sidebar item, and post a notification that opens App Updates.
+- **Install progress.** Downloads show a determinate progress indicator with sizes.
+- **`list_app_updates` MCP tool.** A read-only tool returns the same update check as the App Updates page.
+- **OpenCode 1.x leftovers.** AI Sessions surfaces OpenCode 1.x session storage and idle snapshot repositories, and holds snapshots back while an OpenCode database could still refer to them.
+
+
+### Fixed
+
+- **False updates.** Cask build hashes, paid major upgrades, patch-letter releases such as 2.3.1a, and casks that fold the build number into the version no longer produce phantom or downgrade offers. A release already installed under a different version string is no longer re-offered.
+- **Wrong app matches.** A shared filename no longer matches an unrelated cask, and apps whose cask lists only helpers in its quit list are still treated as Homebrew-managed. Helper bundles, tool-private folders and read-only mounted copies are left out.
+- **Transmission, Warp and Muse.** Warp downloads work, Transmission's DSA-to-EdDSA key migration is accepted, and self-updated apps such as Muse are reported as up to date.
+- **Safer installs.** The app bundle is swapped with an atomic exchange so a crash can't leave nothing at the app's path. Extractions that outgrow their size budget are stopped while running. An app that updated itself during the download is no longer replaced by an older build.
+- **Encrypted and licensed disk images.** Encrypted disk images and ones requiring a license agreement fail immediately with a clear message instead of hanging until timeout.
+- **Background agent errors.** Settings now says why the background agent can't register, including on macOS 14.
+- **OpenCode snapshots.** A symlinked OpenCode session folder is treated as a reference rather than as missing sessions.
+
+### Security
+
+- **Uninstaller path traversal.** Every name-derived remnant path token is now sanitized, and expanded paths containing `..` are dropped. Previously a bundle with a name like `../../.ssh` could expand a cache path into `~/.ssh` and delete files there.
+- **Archive and signature hardening.** Archives with a non-directory entry that is also the parent of a later entry are rejected. Staged code must match the expected certificate Team ID, and a Team ID change after `brew upgrade` is flagged.
+- **Bounded downloads and cask tokens.** Downloads stop at the size cap, feed responses are capped, and cask tokens containing `/` are rejected so brew can't be pointed at another tap.
+
 ## [0.4.14] - 2026-11-07
 
 ### Added
