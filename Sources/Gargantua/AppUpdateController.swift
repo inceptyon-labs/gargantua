@@ -122,6 +122,20 @@ private final class AppUpdateDelegate: NSObject, SPUUpdaterDelegate {
         settingsViewModel.setUpdateAvailable(false)
     }
 
+    /// A skipped version stops being offered: Sparkle's scheduled checks pass
+    /// over it, so without this the sidebar row and menu bar dot would offer
+    /// it until the next check, and clicking them would bring it back.
+    func updater(
+        _ updater: SPUUpdater,
+        userDidMake choice: SPUUserUpdateChoice,
+        forUpdate updateItem: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        if choice == .skip {
+            settingsViewModel.setUpdateAvailable(false)
+        }
+    }
+
     func updater(
         _ updater: SPUUpdater,
         didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
