@@ -210,14 +210,17 @@ extension AppReleaseVerifier {
         try Self.makeEmptyDirectory(mountRoot)
         defer { detachVolumes(under: mountRoot) }
 
-        let output = try run(
-            "/usr/bin/hdiutil",
-            [
-                "attach", "-readonly", "-nobrowse", "-noautoopen", "-stdinpass",
-                "-mountrandom", mountRoot.path, "-plist", image.path,
-            ],
-            timeout: 120
-        )
+        let arguments = [
+            "attach", "-readonly", "-nobrowse", "-noautoopen", "-stdinpass",
+            "-mountrandom", mountRoot.path, "-plist", image.path,
+        ]
+        var output = try run("/usr/bin/hdiutil", arguments, timeout: 120)
+        // diskimages-helper sometimes refuses an attach with EAGAIN; a second
+        // try a moment later goes through.
+        for delay in Self.attachRetryDelays where output.exitCode != 0 && Self.isBusyAttachRefusal(output) {
+            Thread.sleep(forTimeInterval: delay)
+            output = try run("/usr/bin/hdiutil", arguments, timeout: 120)
+        }
         guard output.exitCode == 0 else {
             if Self.isLicenseAgreementRefusal(output) { throw .licenseAgreementRequired }
             if (output.stdout + "\n" + output.stderr).lowercased().contains("authentication error") {
@@ -267,6 +270,12 @@ extension AppReleaseVerifier {
               let entities = (plist as? [String: Any])?["system-entities"] as? [[String: Any]]
         else { return [] }
         return entities.compactMap { $0["mount-point"] as? String }
+    }
+
+    static let attachRetryDelays: [TimeInterval] = [1, 3]
+
+    static func isBusyAttachRefusal(_ output: ProcessOutput) -> Bool {
+        (output.stdout + "\n" + output.stderr).lowercased().contains("resource temporarily unavailable")
     }
 
     /// hdiutil reads the agreement prompt from stdin, which a GUI app has

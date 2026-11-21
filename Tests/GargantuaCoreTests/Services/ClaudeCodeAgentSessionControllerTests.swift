@@ -39,9 +39,7 @@ struct ClaudeCodeAgentSessionControllerTests {
     }
 
     func makeDefaults() throws -> UserDefaults {
-        let suite = "gargantua-agent-session-controller-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suite)
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestDefaults.suite("gargantua-agent-session-controller-\(UUID().uuidString)")
         return defaults
     }
 

@@ -19,9 +19,7 @@ private final class SpyAuditHook: ScheduledScanAgentAuditHook, @unchecked Sendab
 struct MaintenanceEngineAuditHookTests {
 
     private static func makeDefaults() -> UserDefaults {
-        let suiteName = "maint-engine-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suiteName)
-        defaults.removePersistentDomain(forName: suiteName)
+        let defaults = TestDefaults.suite("maint-engine-\(UUID().uuidString)")
         return defaults
     }
 

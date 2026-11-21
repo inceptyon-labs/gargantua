@@ -27,7 +27,7 @@ struct AppReleaseAnnouncementTests {
     }
 
     private func makeDefaults() -> (UserDefaults, String) {
-        let suite = "announce-\(UUID().uuidString)"
+        let suite = TestDefaults.domain("announce-\(UUID().uuidString)")
         return (UserDefaults(suiteName: suite)!, suite)
     }
 

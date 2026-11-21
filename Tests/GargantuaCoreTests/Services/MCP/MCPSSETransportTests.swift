@@ -46,8 +46,7 @@ struct MCPSSETransportTests {
 
     @Test("configuration store normalizes out-of-range ports")
     func configurationStoreNormalizesPort() throws {
-        let (defaults, suiteName) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let defaults = try makeDefaults()
         let store = MCPSSEConfigurationStore(defaults: defaults)
 
         store.save(MCPSSEServerConfiguration(isEnabled: true, port: 99_999, bindScope: .lan))
@@ -266,9 +265,7 @@ struct MCPSSETransportTests {
         )
     }
 
-    private func makeDefaults() throws -> (UserDefaults, String) {
-        let suiteName = "GargantuaCoreTests.MCPSSETransport.\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suiteName)
-        return (defaults, suiteName)
+    private func makeDefaults() throws -> UserDefaults {
+        TestDefaults.suite("GargantuaCoreTests.MCPSSETransport.\(UUID().uuidString)")
     }
 }

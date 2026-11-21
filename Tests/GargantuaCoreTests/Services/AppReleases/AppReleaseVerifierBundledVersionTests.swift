@@ -71,4 +71,27 @@ struct AppReleaseVerifierBundledVersionTests {
         #expect(AppReleaseVerifier.mountedVolumes(under: mounts).isEmpty)
         #expect(!FileManager.default.fileExists(atPath: work.appendingPathComponent("extracted").path))
     }
+
+    @Test("an attach refused as busy is retried; other attach failures are not")
+    func busyAttachRetried() throws {
+        let directory = try Fixtures.makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var bytes = [UInt8](repeating: 0, count: 1024)
+        bytes.replaceSubrange(512 ..< 516, with: Array("koly".utf8))
+        let dmg = directory.appendingPathComponent("Foo.dmg")
+        try Data(bytes).write(to: dmg)
+
+        let cases = [("hdiutil: attach failed - Resource temporarily unavailable", 3), ("hdiutil: attach failed - image not recognized", 1)]
+        for (message, attempts) in cases {
+            let runner = ScriptedBrewRunner { _ in ProcessOutput(stdout: "", stderr: message, exitCode: 1) }
+            let verifier = AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper(), runner: runner)
+            let work = directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+
+            #expect(throws: AppReleaseVerificationFailure.self) {
+                try verifier.bundledVersion(of: Fixtures.bundleID, in: dmg, workDirectory: work)
+            }
+            #expect(runner.recordedArguments.filter { $0.first == "attach" }.count == attempts)
+        }
+    }
 }

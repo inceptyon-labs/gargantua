@@ -8,9 +8,7 @@ import Testing
 @Suite("Claude Code Agent Tier 3")
 struct ClaudeCodeAgentTests {
     func makeDefaults() throws -> UserDefaults {
-        let suite = "gargantua-claude-code-agent-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suite)
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestDefaults.suite("gargantua-claude-code-agent-\(UUID().uuidString)")
         return defaults
     }
 

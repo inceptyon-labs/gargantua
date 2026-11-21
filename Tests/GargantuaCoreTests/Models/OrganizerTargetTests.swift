@@ -46,9 +46,7 @@ struct OrganizerTargetTests {
 @Suite("OrganizerCustomFolderStore")
 struct OrganizerCustomFolderStoreTests {
     private static func makeStore() -> (OrganizerCustomFolderStore, UserDefaults) {
-        let suiteName = "organizer-custom-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suiteName)
-        defaults.removePersistentDomain(forName: suiteName)
+        let defaults = TestDefaults.suite("organizer-custom-\(UUID().uuidString)")
         return (OrganizerCustomFolderStore(defaults: defaults), defaults)
     }
 

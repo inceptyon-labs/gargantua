@@ -321,8 +321,7 @@ struct CloudAITests {
     /// consumer mints its own handle so nothing is sent to an actor while the
     /// test still holds it.
     private func makeSuite() -> String {
-        let suite = "gargantua-cloud-ai-\(UUID().uuidString)"
-        TestDefaults.register(suite)
+        let suite = TestDefaults.domain("gargantua-cloud-ai-\(UUID().uuidString)")
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return suite
     }

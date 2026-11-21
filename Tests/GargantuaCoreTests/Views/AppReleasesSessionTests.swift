@@ -105,7 +105,7 @@ struct AppReleasesSessionTests {
     )
 
     static func makeDefaults() -> UserDefaults {
-        let name = "AppReleasesSessionTests-\(UUID().uuidString)"
+        let name = TestDefaults.domain("AppReleasesSessionTests-\(UUID().uuidString)")
         let defaults = UserDefaults(suiteName: name)!
         defaults.removePersistentDomain(forName: name)
         return defaults

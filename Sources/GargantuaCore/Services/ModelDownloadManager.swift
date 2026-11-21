@@ -34,21 +34,31 @@ public final class ModelDownloadManager: NSObject, ObservableObject, URLSessionD
     /// touching state, so it can't join the next run at the same file index.
     var downloadGeneration = 0
 
+    /// Where this manager stages models: `modelsDirectory`, or a test's own folder.
+    nonisolated let modelsRoot: URL
+
     /// Staged directory for this model.
     public nonisolated var modelDirectory: URL {
-        Self.modelsDirectory.appendingPathComponent(modelInfo.id, isDirectory: true)
+        modelsRoot.appendingPathComponent(modelInfo.id, isDirectory: true)
     }
 
     /// Constructs a manager. Traps on a manifest that can't be safely staged
     /// (path-traversal in `id`/`name`, duplicate filenames). The default model
     /// is vetted, so production callers can rely on the default argument.
-    public init(modelInfo: ModelInfo = ModelDownloadManager.defaultModel) {
+    public convenience init(modelInfo: ModelInfo = ModelDownloadManager.defaultModel) {
+        self.init(modelInfo: modelInfo, modelsRoot: Self.modelsDirectory)
+    }
+
+    /// Stages under `modelsRoot` instead of the user's models folder, so a
+    /// test never touches a model the user downloaded.
+    init(modelInfo: ModelInfo, modelsRoot: URL) {
         do {
             try Self.validateManifest(modelInfo)
         } catch {
             preconditionFailure("Invalid ModelInfo: \(error.localizedDescription)")
         }
         self.modelInfo = modelInfo
+        self.modelsRoot = modelsRoot
         super.init()
         checkExistingModel()
     }
