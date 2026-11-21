@@ -3,25 +3,25 @@
 Audit date: 2026-04-24 UTC (refreshed 2026-05-09; upstream re-checked 2026-05-30)
 Bean: `gargantua-81zc` (refresh: `gargantua-ds8g` under epic `gargantua-wpl6`)
 Mole source ported: `tw93/Mole@fd209bf1c8e7f1c07a3d5cb3f2c5c38ab730ad8e` (2026-04-24)
-Upstream HEAD at re-check: `tw93/Mole@4f931b8` — v1.40.0, 2026-05-31
+Upstream HEAD at re-check: `tw93/Mole@4f931b8` (v1.40.0, 2026-05-31)
 
 ## Summary
 
 Gargantua does not pursue Mole-shell line parity. Mole's cleanup is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count, and ~50% of Mole's `safe_*` call sites are not path-based and cannot be reached by static path rules at all. The Trust Layer boundary is *evidence-shape* parity: a finding stays in scope if it is explainable, bounded, reversible, and audited, regardless of whether the evidence comes from a path, a command, or a `pkgutil` receipt.
 
-After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closing" epic (CommandActionRule + starter set, pkgutil receipt expansion, and app-specific uninstall packs), the bundled snapshot ships five evidence shapes:
+After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closing" epic (CommandActionRule + starter set, pkgutil receipt expansion, and app-specific uninstall packs), the bundled snapshot ships five evidence shapes (counts refreshed 2026-11-21):
 
 | Evidence shape | Files | Rules / commands |
 | --- | ---: | ---: |
-| Path-based app cleanup | 9 | 58 |
+| Path-based app cleanup | 9 | 60 |
 | Path-based browser cleanup | 15 | 54 |
-| Path-based developer cleanup | 19 | 132 |
-| Path-based system cleanup | 8 | 43 |
+| Path-based developer cleanup | 19 | 161 |
+| Path-based system cleanup | 8 | 44 |
 | Path-based generic uninstall/remnant | 2 | 28 |
 | Path-based app-specific uninstall packs | 7 | 63 |
-| Command-action rules (developer + advanced) | 4 | 4 |
+| Command-action rules (developer + advanced) | 5 | 5 |
 | Code-native stale-version discovery | n/a: discovered at scan time | Xcode DeviceSupport + JetBrains Toolbox version sets |
-| **Total static rules** | **64** | **382** |
+| **Total static rules** | **65** | **415** |
 | Dynamic `pkgutil` receipt evidence | n/a: discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
 
 The pkgutil channel is intentionally not file-counted: receipts are inspected per uninstall (`PackageReceiptExpander` → `ReceiptRemnantBuilder`) and surface as `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, install date, and ownership provenance. Receipts are *evidence*, not permission: shared system paths (`/Library/LaunchDaemons`, `/Library/PrivilegedHelperTools`, `/Library/Frameworks`, etc.) upgrade to `.protected_`, and protected-root entries drop on the floor.
@@ -39,7 +39,7 @@ For the legacy proxy: Mole at the audit commit has 524 cleanup-operation call si
 
 The current Gargantua snapshot is enough for the initial native scanner, but parity work remains substantial. Porting should be batched by risk and product value rather than by blindly translating every Mole shell line.
 
-## Upstream Delta — Mole v1.40.0 (re-checked 2026-05-30)
+## Upstream Delta: Mole v1.40.0 (re-checked 2026-05-30)
 
 Since the ported baseline (`fd209bf`, 2026-04-24), Mole shipped v1.40.0. Filtering out chores, refactors, and tests, two new cleanup behaviors have since been ported, and one previously-deferred gap is now obsolete upstream:
 
@@ -193,7 +193,7 @@ Remaining gaps for full Mole parity:
 3. Continue remnant-rule expansion only when new app-specific ownership evidence or receipt/BOM support exists.
 4. Defer command-backed cleanup to dedicated adapters or Developer Tools flows.
 5. Defer privileged cleanup escalation beyond review findings until helper UX and Trust Layer policy are explicit.
-6. ~~Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.~~ Dropped — Mole removed `scan_external_volumes` in the v1.40.0 line (see **Upstream Delta**); no longer a parity target.
+6. ~~Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.~~ Dropped: Mole removed `scan_external_volumes` in the v1.40.0 line (see **Upstream Delta**); no longer a parity target.
 
 ## Command-Action Hold List
 
@@ -211,7 +211,7 @@ A future bean can promote any of these once the UX models the consequence honest
 
 ## Follow-Up Tasks
 
-`gargantua-wpl6` is the closing epic for "Mole-parity gap closing — Trust Layer-aligned." Its three primary threads have all landed:
+`gargantua-wpl6` is the closing epic for "Mole-parity gap closing, Trust Layer-aligned." Its three primary threads have all landed:
 
 - **Command-action rules** (`gargantua-y84i`, `gargantua-2nnq`): `CommandActionRule` schema + simctl/pnpm/go starter set in `command_rules/developer/`, with `go clean -modcache` promoted as an opt-in advanced command carrying consequence and restore copy.
 - **Receipt/BOM uninstall evidence** (`gargantua-rloy`): `PackageReceiptExpander` + `ReceiptRemnantBuilder`. Surfaced in MCP `explain` (`gargantua-4bub`), Smart Uninstaller plan-review row (`gargantua-q05d`), and cross-app shared-receipt behavior + CONTRIBUTING docs (`gargantua-hkbg`).

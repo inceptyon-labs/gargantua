@@ -41,14 +41,28 @@ secretGroup = 2
 entropy = 3.5
 keywords = ["key", "secret", "token", "auth", "password", "passwd"]
 
-[allowlist]
-description = "Known-safe paths and placeholder values"
+# Placeholder values are fine anywhere, for every rule. The regexes are tested
+# against the detected secret, not the line. There is no path allowlist on
+# purpose: README.md, docs/ and .env.example get the same scan as source,
+# because real keys get pasted into all three.
+[[allowlists]]
+description = "Placeholder values"
+regexes = [
+  '''YOUR_[A-Z_]+_KEY''',
+  '''YOUR_[A-Z_]+_API_KEY''',
+  '''AIza[A-Za-z0-9_-]{0,5}EXAMPLE''',
+  '''(?i)^(your|my|some|example|sample|dummy|fake|placeholder|change[-_]?me|replace[-_]?me|insert|todo)[-_a-z0-9]*$''',
+  # a short prefix followed by nothing but filler: sk_test_xxxxxxxxxxxx, ********, ........
+  # Anchored on purpose: a real key that merely contains "xxxxxx" must still be reported.
+  '''(?i)^[a-z0-9_-]{0,12}(x{6,}|\*{4,}|\.{4,})[x*._-]*$''',
+  '''^(<[^>]+>|\$\{[^}]+\}|\{\{[^}]+\}\}|%[A-Z_]+%)$''',
+]
 
+# Project fixtures and untracked local files. Each entry is a single file,
+# a test value, or gitignored build output, never committed docs or source.
+[[allowlists]]
+description = "Project test fixtures and untracked build output"
 paths = [
-  '''(^|/)\.env\.example$''',
-  '''(^|/)\.env\.release\.example$''',
-  '''(^|/)README\.md$''',
-  '''(^|/)docs/''',
   # Build/scan artifacts: filesystem scans (--no-git) don't honor .gitignore,
   # so exclude these explicitly or they flood the scan with false positives.
   '''(^|/)\.build/''',
@@ -61,11 +75,7 @@ paths = [
   # Sparkle PUBLIC EdDSA key (a verification key, public by design — not a secret).
   '''(^|/)\.env\.release$''',
 ]
-
 regexes = [
-  '''YOUR_[A-Z_]+_KEY''',
-  '''YOUR_[A-Z_]+_API_KEY''',
-  '''AIza[A-Za-z0-9_-]{0,5}EXAMPLE''',
   # Test-only fixtures used by Tests/GargantuaCoreTests/Services/MCP/MCPSSETransport*Tests.swift
   '''gtua_test_token_\d+''',
   # Test-only fixture used by Tests/GargantuaCoreTests/Services/CloudAIRedactorTests.swift

@@ -33,7 +33,7 @@ brew install --cask inceptyon-labs/tap/gargantua
 
 The fully-qualified name is required on Homebrew 6.0+, which gates third-party taps behind its new Tap Trust check. Installing by this name auto-trusts the cask, so no separate `brew trust` step is needed.
 
-This pulls the signed, notarized DMG from the latest GitHub Release. Updates after install are delivered through the in-app Sparkle channel, so the cask only tracks `:latest`. Apple Silicon, macOS 14 (Sonoma) or newer.
+This pulls the signed, notarized DMG from the latest GitHub Release. Updates after install are delivered through the in-app Sparkle channel, so the cask is marked `auto_updates` and `brew upgrade` leaves it to Sparkle. Apple Silicon, macOS 14 (Sonoma) or newer.
 
 ## Why Gargantua Exists
 
@@ -51,22 +51,22 @@ Mainstream cleaners are closed black boxes that ask you to trust an inflated num
 
 | | Typical cleaner | Gargantua |
 | --- | --- | --- |
-| **What you delete** | "1,000 junk files found" — opaque | Every item traces to a named rule with a `safe`/`review`/`protected` rating |
+| **What you delete** | An opaque "1,000 junk files found" | Every item traces to a named rule with a `safe`/`review`/`protected` rating |
 | **Why it's safe** | Marketing copy | Per-item explanation from the rule's own metadata; AI can elaborate but **cannot downgrade** the rating |
 | **Who writes the rules** | Vendor, behind closed doors | Public, reviewed PRs in [`gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules); every bundled rule records the upstream commit it came from |
-| **Automation** | A button in a GUI | A local **MCP server** — Claude, Cursor, or Claude Code can scan and run guarded cleanups for you |
+| **Automation** | A button in a GUI | A local **MCP server**: Claude, Cursor, or Claude Code can scan and run guarded cleanups for you |
 | **AI** | Cloud, with your data | On-device by default (template or local MLX); cloud is opt-in, redacted, and spend-capped |
 | **Reversibility** | Permanent delete | Trash-first, with an audit log for every destructive attempt |
-| **Source** | Proprietary | AGPL-3.0 — `swift build` produces a fully unlocked binary, no trial, no CTA |
+| **Source** | Proprietary | AGPL-3.0; `swift build` produces a fully unlocked binary, no trial, no CTA |
 
 The features that don't exist anywhere else in this category:
 
-- **A community rule-contribution model.** Cleanup logic isn't a vendor secret — it's a public, reviewed, versioned ruleset. Each bundled rule carries provenance (the exact `gargantua-rules` commit) surfaced in-app, so you can audit where a path came from and who reviewed it.
+- **A community rule-contribution model.** Cleanup logic isn't a vendor secret. It's a public, reviewed, versioned ruleset. Each bundled rule carries provenance (the exact `gargantua-rules` commit) surfaced in-app, so you can audit where a path came from and who reviewed it.
 - **A three-tier safety classification that AI can't override.** Findings are graded `safe` / `review` / `protected` before any UI sees them. A bundled protected-roots policy hard-blocks cleanup at filesystem roots no matter what a rule (or a model) says.
-- **Explainability as a first-class output.** Every finding answers "why is this here and why is it safe to remove" — from rule metadata directly, or from an optional local/cloud model that can add detail but never lower a rating.
+- **Explainability as a first-class output.** Every finding answers "why is this here and why is it safe to remove", from rule metadata directly or from an optional local/cloud model that can add detail but never lower a rating.
 - **AI-agent automation over MCP.** Gargantua ships a local Model Context Protocol server with segregated read-only and destructive tool registries, bearer-token auth, per-connection rate limits, and a hard `protected` reject. No other cleaner lets an AI agent drive it under guardrails.
 - **Local-first and telemetry-free.** The default explanation engine needs no network and no model. Local MLX inference runs entirely on Apple Silicon. Nothing phones home: there is no telemetry. App Updates checks run only when you start or schedule them, go straight to each app's update feed, Homebrew and the App Store, and upload nothing about your Mac.
-- **Developer-native cleanup.** Tool-aware previews for Docker, Homebrew, Xcode simulators, pnpm, npm, Yarn, Go, and Cargo — run through each tool's own commands, not by blindly deleting directories.
+- **Developer-native cleanup.** Tool-aware previews for Docker, Homebrew, Xcode simulators, pnpm, npm, Yarn, Go, and Cargo, run through each tool's own commands, not by blindly deleting directories.
 - **Open and free at the source.** The paid build only gates the *execution* of destructive actions behind a one-time license; scans always run, and a clean source build is fully unlocked forever.
 
 ## Features
@@ -79,9 +79,9 @@ The features that don't exist anywhere else in this category:
 - **Duplicate Finder**: duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
 - **File Health**: empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
 - **Disk Explorer**: interactive treemap and directory drill-down for understanding where space goes before cleaning.
-- **AI tool cleanup**: agent caches, session transcripts, generated images, and editor local file history left behind by Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Continue, and Aider — regenerating caches classified safe, anything holding conversation or output age-gated and review-only. Orphaned per-project session stores are surfaced separately once their project folder is gone.
+- **AI tool cleanup**: agent caches, session transcripts, generated images, and editor local file history left behind by Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Continue, and Aider. Regenerating caches are classified safe; anything holding conversation or output is age-gated and review-only. Orphaned per-project session stores are surfaced separately once their project folder is gone.
 - **AI Models cleanup**: dedicated profile for downloaded LLM and diffusion model storage, with review-only duplicate/orphan model-file intelligence since re-downloading is expensive.
-- **Cleanup Profiles**: built-in (`Developer`, `Light Cleanup`, `Deep Clean`, `Dev Purge`, `AI Models`) and custom profiles that decide which rule categories run and which safety overrides apply.
+- **Cleanup Profiles**: built-in (`Developer`, `Light Cleanup`, `Deep Clean`, `Dev Purge`, `AI Models`, `Advanced Commands`) and custom profiles that decide which rule categories run and which safety overrides apply.
 - **Explainability**: per-item explanations sourced from rules, metadata, and optional local or cloud model inference.
 - **Scheduled Scans**: launchd-backed background scans with interval presets, custom cron expressions, profile selection, and skip-on-battery.
 - **Menu Bar Widget**: glanceable status from the menu bar, optional launch-at-login.
@@ -102,9 +102,9 @@ Gargantua's trust layer uses three safety levels:
 
 Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships five evidence shapes:
 
-- **Path-based cleanup rules**: 51 files / 310 rules across apps, browsers, developer tools, and system locations.
+- **Path-based cleanup rules**: 51 files / 319 rules across apps, browsers, developer tools, and system locations.
 - **Path-based remnant rules**: 2 generic files / 28 rules plus 7 app-pack files / 63 app-specific rules for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
-- **Command-action rules**: 4 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, `go clean -modcache`) recorded with tool version, exit code, and arguments per run. Advanced commands are isolated in an opt-in profile with explicit consequence copy.
+- **Command-action rules**: 4 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, `go clean -modcache`) and `tmutil deletelocalsnapshots /` for local Time Machine snapshots, recorded with tool version, exit code, and arguments per run. Advanced commands are isolated in an opt-in profile with explicit consequence copy.
 - **Code-native orphaned AI session discovery**: Claude Code project transcripts and VS Code-family `workspaceStorage` entries whose project folder no longer exists, resolved by reading the project path back out of the store (`cwd` in a transcript, the `folder`/`workspace` URI in `workspace.json`) rather than guessing from the directory name. Review-only, and skipped when the project simply lives on an unmounted volume.
 - **Code-native stale-version discovery**: Xcode DeviceSupport and JetBrains Toolbox version directories grouped by product/family/version with keep-latest, current-version, and pinned-path guards.
 - **Dynamic `pkgutil` receipt evidence**: Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.
@@ -113,11 +113,11 @@ Trust Layer parity is *evidence-shape* parity, not Mole-shell line parity. Every
 
 ### Your own rules
 
-You can write your own rules without forking. Open **Rules → Custom Rules** (or drop files directly into `~/Library/Application Support/Gargantua/rules/{cleanup,uninstall,command}/`) and add YAML using the same schema as the bundled set. They load alongside the bundled rules on every scan and **survive app updates** — the bundled snapshot is replaced on update, but this folder is not.
+You can write your own rules without forking. Open **Rules → Custom Rules** (or drop files directly into `~/Library/Application Support/Gargantua/rules/{cleanup,uninstall,command}/`) and add YAML using the same schema as the bundled set. They load alongside the bundled rules on every scan and **survive app updates**: the bundled snapshot is replaced on update, but this folder is not.
 
 User rules run with reduced privilege so an unreviewed rule can't widen the blast radius:
 
-- Safety is **floored to `review`** — a user rule can surface a candidate, but never classify one as one-click `safe`.
+- Safety is **floored to `review`**: a user rule can surface a candidate, but never classify one as one-click `safe`.
 - Profile-scoped safety overrides are dropped.
 - Command rules always run as `review` and are rejected if they touch a protected root.
 - A user rule whose id collides with a bundled rule is ignored; the bundled rule wins.
@@ -127,9 +127,9 @@ Rules you intend to share should still go through a PR to [`gargantua-rules`](ht
 A few things to know about local rules:
 
 - A custom **cleanup** rule only runs when the active profile includes its `category`. Reuse an existing category, or pick a profile that scans it.
-- **Command** rules run the literal `tool` + `arguments` you write under your own user account. The protected-root check covers declared `affected_roots`, not arbitrary argument content, and the file is re-read (and re-clamped to `review`) at execution time — so only add command rules you'd run by hand. This is why command rules are never `safe`: you confirm the exact command before it runs.
+- **Command** rules run the literal `tool` + `arguments` you write under your own user account. The protected-root check covers declared `affected_roots`, not arbitrary argument content, and the file is re-read (and re-clamped to `review`) at execution time, so only add command rules you'd run by hand. This is why command rules are never `safe`: you confirm the exact command before it runs.
 
-A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_policy/protected_roots.yaml`) hard-blocks cleanup at filesystem roots regardless of rule classification. It covers `/`, `/Applications`, `/Library`, `/System`, `/Users`, `~`, `~/Library`, `/private`, `/var`, `/var/folders/*/*/{C,T,X}`, and equivalents under `/System/Volumes/Data`. Users can add their own protected roots in Settings → Storage; bundled entries cannot be removed.
+A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_policy/protected_roots.yaml`) hard-blocks cleanup at filesystem roots regardless of rule classification. It covers `/`, `/Applications`, `/Library`, `/System`, `/Users`, `~`, `~/Library`, `/private`, `/var`, `/var/folders/*/*/{C,T,X}`, and equivalents under `/System/Volumes/Data`. Users can add their own protected roots in Settings → Scope; bundled entries cannot be removed.
 
 ## App Updates
 
@@ -158,35 +158,36 @@ The number of apps with an update shows as a badge on App Updates in the sidebar
 
 ## Configuration
 
-Everything below is configurable from **Settings**. Five tabs: AI · Automation · Network · Storage · About.
+Everything below is configurable from **Settings**. Six tabs: AI · General · Network · Scope · License · About.
 
 ### AI (Settings → AI)
 
 | Engine | Default | Network | Where keys/data live |
 | --- | --- | --- | --- |
 | **Template** | On | Local-only | None (rule-based, instant) |
-| **Local MLX** | Off | Local-only after download | `~/Library/Application Support/Gargantua/Models/` |
-| **Cloud API** | Off | Anthropic, or any OpenAI-compatible endpoint (OpenRouter, Groq, Ollama, LM Studio…) over your configured base URL | API key(s) in macOS Keychain |
+| **Local MLX** | Off | Local-only after download | `~/Library/Application Support/Gargantua/models/` |
+| **Cloud API** | Off | Anthropic, or any OpenAI-compatible endpoint (OpenRouter, Groq, Ollama, LM Studio, ...) over your configured base URL | API key(s) in macOS Keychain |
 | **Claude Code Agent** | Off | Spawns local Claude Code CLI | Configuration in app prefs; CLI manages its own auth |
 | **Codex** | Off | Spawns local `codex exec`, read-only | Configuration in app prefs; CLI manages its own auth |
 
 - **Template engine**: the default. Generates explanations directly from YAML rule metadata. No model required, no network.
 - **Local MLX**: opt-in. Downloads `mlx-community/Llama-3.2-1B-Instruct-4bit` (~700 MB) to local storage. Runs on Apple Silicon via MLX. First explanation per session compiles Metal shaders. Idle engine unloads after 60 s.
-- **Cloud API**: off by default. Talks to either Anthropic's Messages API or any **OpenAI-compatible** Chat Completions endpoint — OpenAI, OpenRouter, Groq, Together, or a local server (Ollama, LM Studio) — selected by a provider toggle and a configurable base URL. Each provider keeps its own user-supplied key in macOS Keychain (never on disk in plaintext); local servers can run keyless. Sends file paths, sizes, classifications, and confidence scores; file-content snippets (4 KB max, redacted for tokens and keys) are sent **only** with the explicit "Allow file-content previews" toggle. The monthly spend cap (default $0, hard ceiling enforced client-side) applies to the metered Anthropic path; OpenAI-compatible usage is billed by your chosen provider. Default Anthropic model: `claude-sonnet-4-6`.
+- **Cloud API**: off by default. Talks to either Anthropic's Messages API or any **OpenAI-compatible** Chat Completions endpoint (OpenAI, OpenRouter, Groq, Together, or a local server such as Ollama or LM Studio), selected by a provider toggle and a configurable base URL. Each provider keeps its own user-supplied key in macOS Keychain (never on disk in plaintext); local servers can run keyless. Sends file paths, sizes, classifications, and confidence scores; file-content snippets (4 KB max, redacted for tokens and keys) are sent **only** with the explicit "Allow file-content previews" toggle. The monthly spend cap (default $0, hard ceiling enforced client-side) applies to the metered Anthropic path; OpenAI-compatible usage is billed by your chosen provider. Default Anthropic model: `claude-sonnet-4-6`.
 - **Claude Code Agent**: opt-in local agent runtime. Spawns the Claude Code CLI for non-interactive maintenance runs through the read-only MCP server. **Tools are read-only by default**; destructive MCP tools must be explicitly granted per session. Configurable model, max turns, and scheduled-audit toggle.
-- **Codex**: opt-in local engine. Runs a one-shot, read-only `codex exec` for explanations and for maintenance (Agent Run + scheduled audits) as an alternative to Claude Code. No MCP — it inspects the filesystem read-only and returns a written report; the read-only sandbox blocks any write. Configurable model and scheduled-audit toggle.
+- **Codex**: opt-in local engine. Runs a one-shot, read-only `codex exec` for explanations and for maintenance (Agent Run + scheduled audits) as an alternative to Claude Code. No MCP: it inspects the filesystem read-only and returns a written report; the read-only sandbox blocks any write. Configurable model and scheduled-audit toggle.
 
 In all engines: **AI can explain a classification but cannot lower it.** A `protected` finding remains `protected` regardless of what any model says.
 
-### Storage (Settings → Storage)
+### Scope (Settings → Scope)
 
 - **Scan Roots**: where Dev Purge looks for build artifacts. Empty list uses sensible defaults; user-added roots must be absolute or `~/`-prefixed and cannot be `/` or `$HOME` directly.
 - **Personal Scope**: folders the Duplicate Finder is allowed to traverse. Same path validation as scan roots. Seeded with sane defaults on first launch.
 - **Exclusions (whitelist)**: paths or glob patterns Gargantua should never propose for cleanup. Persists across scans; entries can be removed individually.
 - **Protected Roots**: bundled hard-protect list plus user-added entries. Bundled entries are read-only; user entries support `~/`, `${HOME}`, and absolute paths.
 
-### Automation (Settings → Automation)
+### General (Settings → General)
 
+- **Appearance**: theme (System, Light or Dark).
 - **Scheduled scans**: launchd agent registered via SMAppService. Interval presets (hourly, daily, weekly) or a custom 5-field cron expression with validation. Selectable profile (default `Light`). Toggle to skip when on battery.
 - **Menu bar widget**: glanceable status, optional.
 - **App updates**: optional daily check while Gargantua is running. There is also an optional background check, about once a day even when Gargantua is closed, that notifies you about new updates. Both are off by default.
@@ -196,10 +197,14 @@ In all engines: **AI can explain a classification but cannot lower it.** A `prot
 
 - **MCP Transport**: toggle SSE transport, change bind (`localhost` or `lan`), set port, and manage the bearer token (generate, rotate, revoke). Token lives in Keychain.
 
+### License (Settings → License)
+
+- **Activation**: paste a license key, or check trial status. A source build is unlocked.
+
 ### About (Settings → About)
 
 - **Updates**: Sparkle feed host, last check, channel (`stable` / `beta`), automatic checks, automatic downloads.
-- **Audit retention**: how long destructive-attempt audit entries are kept in `audit.json` — 30, 90 (default), 180 or 365 days. The purge runs at launch and whenever the window changes.
+- **Audit retention**: how long destructive-attempt audit entries are kept in `audit.json`: 30, 90 (default), 180 or 365 days. The purge runs at launch and whenever the window changes.
 
 ## MCP Server
 
@@ -287,6 +292,8 @@ Read-only:
 - `status`: current system health metrics
 - `explain`: explain a filesystem path or prior scan item
 - `list_profiles`: list built-in and custom cleanup profiles
+- `list_background_items`: list launchd agents, daemons and login items with a safety classification
+- `list_app_updates`: list installed apps with an available update, from the same check as the App Updates page
 
 Destructive:
 
@@ -330,7 +337,7 @@ Requirements:
 - macOS 14 (Sonoma) or newer; **macOS 26.2 + Xcode 26.4 or newer (Swift 6.3+) is required** to resolve `mlx-swift` (pulled in by `mlx-swift-lm`), which declares `swift-tools-version: 6.3`.
 - Apple Silicon is the only supported architecture for development and release builds.
 - Xcode Command Line Tools (`xcode-select --install`): provides `codesign`, `notarytool`, `stapler`, `iconutil`, `swift`.
-- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`): **required to build at all, not just for local AI.** `mlx-swift`'s `BuildMetallibPlugin` runs as a SwiftPM *prebuild command* and shells out to `xcrun metal` to compile the GPU shaders into `mlx.metallib`. On recent Xcode the Metal Toolchain is a separate download; if it's missing, `xcrun metal` is unavailable and the prebuild command fails, which fails the whole `swift build`. (The MLX *model weights* are a separate, on-demand download at runtime — those are never bundled.)
+- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`): **required to build at all, not just for local AI.** `mlx-swift`'s `BuildMetallibPlugin` runs as a SwiftPM *prebuild command* and shells out to `xcrun metal` to compile the GPU shaders into `mlx.metallib`. On recent Xcode the Metal Toolchain is a separate download; if it's missing, `xcrun metal` is unavailable and the prebuild command fails, which fails the whole `swift build`. (The MLX *model weights* are a separate, on-demand download at runtime and are never bundled.)
 
 Clone and build:
 
@@ -372,7 +379,7 @@ Official notarized releases (the DMG on the GitHub Release, the Homebrew cask, t
 
 #### Limitation: removing system-owned files requires a signed build
 
-A `swift build` clone can scan everything and remove any file **you own** (user caches, your Trash, dev artifacts). It cannot remove files owned by `root` or another user. Those go through a privileged helper registered with `SMAppService`, and the helper only accepts XPC connections whose code-signing requirement pins to the official bundle ID and Developer ID team (`Sources/GargantuaCore/Services/XPCPrivilegedUninstallHelper.swift`). An ad-hoc `swift build` binary isn't a signed `.app` bundle and can't register the daemon at all, so on a source build those items fail with an "owned by the system" notice and a pointer to the signed release — by design; an unsigned binary shouldn't be able to spin up a root daemon. A fork can restore the capability by repointing `PrivilegedHelperConfiguration` (bundle ID, `teamID`, and the requirement's leaf OU) to its own identity and signing with its own Developer ID cert.
+A `swift build` clone can scan everything and remove any file **you own** (user caches, your Trash, dev artifacts). It cannot remove files owned by `root` or another user. Those go through a privileged helper registered with `SMAppService`, and the helper only accepts XPC connections whose code-signing requirement pins to the official bundle ID and Developer ID team (`Sources/GargantuaCore/Services/XPCPrivilegedUninstallHelper.swift`). An ad-hoc `swift build` binary isn't a signed `.app` bundle and can't register the daemon at all, so on a source build those items fail with an "owned by the system" notice and a pointer to the signed release. That is by design: an unsigned binary shouldn't be able to spin up a root daemon. A fork can restore the capability by repointing `PrivilegedHelperConfiguration` (bundle ID, `teamID`, and the requirement's leaf OU) to its own identity and signing with its own Developer ID cert.
 
 If you maintain or contribute to Gargantua and want to test the licensed code path locally:
 

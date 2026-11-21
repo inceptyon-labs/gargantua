@@ -1,4 +1,4 @@
-# Gargantua Trademark — First-Use Evidence
+# Gargantua Trademark: First-Use Evidence
 
 This file records priority evidence for the common-law trademark claim asserted
 in [`TRADEMARK.md`](../../TRADEMARK.md). Common-law trademark rights in the US

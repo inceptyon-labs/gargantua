@@ -9,8 +9,8 @@ Thanks for helping improve Gargantua.
 Before your first `swift build`, make sure you have:
 
 - **macOS 26.2 + Xcode 26.4 or newer (Swift 6.3+)** (needed to resolve `mlx-swift`, pulled in by `mlx-swift-lm`, which declares `swift-tools-version: 6.3`), on **Apple Silicon**.
-- **Xcode Command Line Tools** — `xcode-select --install`.
-- **The Metal Toolchain** — `xcodebuild -downloadComponent MetalToolchain`. This is a **hard build requirement, not just for local AI.** The `BuildMetallibPlugin` runs as a SwiftPM prebuild command on every `swift build`/`swift run`, compiling MLX's GPU shaders via `xcrun metal`. On recent Xcode the Metal Toolchain ships as a separate download; without it the prebuild step fails and the whole build fails. Once it's installed, the plugin produces and stages `mlx.metallib` automatically — no manual step.
+- **Xcode Command Line Tools**: `xcode-select --install`.
+- **The Metal Toolchain**: `xcodebuild -downloadComponent MetalToolchain`. This is a **hard build requirement, not just for local AI.** The `BuildMetallibPlugin` runs as a SwiftPM prebuild command on every `swift build`/`swift run`, compiling MLX's GPU shaders via `xcrun metal`. On recent Xcode the Metal Toolchain ships as a separate download; without it the prebuild step fails and the whole build fails. Once it's installed, the plugin produces and stages `mlx.metallib` automatically, with no manual step.
 
 For `swift test`, use `Scripts/test.sh` (not bare `swift test`) so the metallib is staged next to the test binary; the test target has no build plugin attached. See the [README build section](README.md#build-from-source) for the full matrix.
 
@@ -119,7 +119,7 @@ swift run Gargantua          # exercise via the GUI
 swift run GargantuaMCP       # or scan via MCP for a structured dry-run
 ```
 
-If you exercise the Cloud AI key flow from a dev build, macOS will re-prompt for Keychain access on every rebuild — `swift build` ad-hoc-signs the binary with a fresh signature each time, so "Always Allow" never sticks. Sign the debug binary with a stable identity once and the grant persists:
+If you exercise the Cloud AI key flow from a dev build, macOS will re-prompt for Keychain access on every rebuild: `swift build` ad-hoc-signs the binary with a fresh signature each time, so "Always Allow" never sticks. Sign the debug binary with a stable identity once and the grant persists:
 
 ```bash
 swift build && Scripts/dev-sign.sh && .build/debug/Gargantua

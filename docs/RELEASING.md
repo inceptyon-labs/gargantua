@@ -18,7 +18,7 @@ GitHub Actions can do the same thing via `.github/workflows/release.yml`, but lo
 
 | Surface | What it serves | Hosted by |
 | --- | --- | --- |
-| Homebrew Cask `inceptyon-labs/tap/gargantua` | First install (`brew install --cask gargantua`) | GitHub Release DMG, fetched by Cask |
+| Homebrew Cask `inceptyon-labs/tap/gargantua` | First install (`brew install --cask inceptyon-labs/tap/gargantua`) | GitHub Release DMG, fetched by Cask |
 | GitHub Release `vX.Y.Z` | Distributable `Gargantua-<version>.dmg` + `appcast.xml` | `inceptyon-labs/gargantua` |
 | Sparkle appcast at `releases/latest/download/appcast.xml` | In-app updates after install | GitHub Releases redirect |
 | Apple notary | Gatekeeper ticket on app + DMG | Apple |
@@ -163,7 +163,7 @@ If the publish step fails partway through, the local tag is left in place. After
 
    ```sh
    brew update
-   brew upgrade --cask gargantua    # or: brew install --cask gargantua
+   brew upgrade --cask gargantua    # or: brew install --cask inceptyon-labs/tap/gargantua
    open -a Gargantua
    ```
 
