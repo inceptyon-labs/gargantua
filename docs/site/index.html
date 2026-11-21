@@ -18,10 +18,16 @@
     --surface3: hsl(220 10% 17%);
     --ink: hsl(210 20% 94%);
     --ink2: hsl(215 12% 65%);
-    --ink3: hsl(218 10% 45%);
+    /* Lighter than the app's ink-3 so tertiary text meets WCAG AA (4.5:1)
+       on the void and on the hero gradient. */
+    --ink3: hsl(218 10% 55%);
     --border: rgba(255,255,255,0.07);
     --border-em: rgba(255,255,255,0.13);
     --accent: hsl(213 90% 55%);
+    /* Button fill: white text needs 4.5:1, which the accent at 55% misses.
+       This is the app's light-mode accent (#0C6FE9, 4.7:1). */
+    --accent-fill: hsl(213 90% 48%);
+    --accent-fill-hover: hsl(213 90% 44%);
     --accretion: hsl(38 85% 52%);
     --safe: hsl(148 45% 42%);
     --radius: 8px;
@@ -57,8 +63,8 @@
     transition: transform 0.12s ease, background 0.12s ease;
   }
   .btn:hover { transform: translateY(-1px); }
-  .btn-primary { background: var(--accent); color: white; }
-  .btn-primary:hover { background: hsl(213 90% 60%); }
+  .btn-primary { background: var(--accent-fill); color: white; }
+  .btn-primary:hover { background: var(--accent-fill-hover); }
   .btn-ghost { background: var(--surface3); color: var(--ink); border: 1px solid var(--border-em); }
   .btn-ghost:hover { background: hsl(220 10% 20%); }
   .price-note { font-size: 13px; color: var(--ink3); margin-top: 18px; }

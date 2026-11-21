@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Archived 2026-11-21: superseded by BuildMetallibPlugin and MetallibStager,
+# which make plain `swift run Gargantua` stage mlx.metallib.
 # run.sh — `swift run` wrapper that stages mlx.metallib alongside the
 # Gargantua binary so any MLX-touching UI (Explain button, etc.) can
 # actually init Metal without crashing.

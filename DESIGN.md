@@ -18,6 +18,19 @@ colors:
   safe: "#3B9B68"
   review: "#EDA01D"
   protected: "#C62F2F"
+  void-light: "#F3F4F7"
+  surface-1-light: "#F9FAFB"
+  surface-2-light: "#FFFFFF"
+  surface-3-light: "#FCFCFD"
+  surface-4-light: "#FFFFFF"
+  ink-light: "#191E2A"
+  ink-2-light: "#4F5969"
+  ink-3-light: "#717C8E"
+  ink-4-light: "#A6ABB5"
+  accent-light: "#0C6FE9"
+  safe-light: "#248953"
+  review-light: "#CE7F09"
+  protected-light: "#C52626"
 typography:
   display:
     fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif"
@@ -139,7 +152,7 @@ The system explicitly rejects CleanMyMac X marketing polish, generic dashboard t
 
 **Key Characteristics:**
 
-- Dark mode primary, tuned for developers working between coding sessions.
+- Dark mode primary and the default, tuned for developers working between coding sessions. Light and System modes (Settings → General → Appearance) use the same tokens with light values.
 - Restrained color, one interaction accent, warm safety states, no decorative palette.
 - Dense information with strong hierarchy: paths, sizes, confidence, and safety stay visible.
 - System fonts for UI, monospaced type for paths and byte counts.
@@ -174,6 +187,22 @@ The palette is a cold void with warm trust signals. Neutrals carry most of the s
 - **Nebula Ink**: tertiary metadata and inactive icons.
 - **Dormant Ink**: disabled, placeholder, and low-emphasis status text.
 - **Border Field**: white-alpha separators. Borders are structural, not decorative.
+
+### Light appearance
+
+Every color token resolves per appearance (`GargantuaColors` in `Sources/GargantuaCore/Views/DesignTokens.swift`); the frontmatter lists the dark values, with the light values under `-light` names. Light values:
+
+| Token | Light | Token | Light |
+| --- | --- | --- | --- |
+| void | `#F3F4F7` | ink | `#191E2A` |
+| surface-1 | `#F9FAFB` | ink-2 | `#4F5969` |
+| surface-2 | `#FFFFFF` | ink-3 | `#717C8E` |
+| surface-3 | `#FCFCFD` | ink-4 | `#A6ABB5` |
+| surface-4 | `#FFFFFF` | accent | `#0C6FE9` |
+| safe | `#248953` | review | `#CE7F09` |
+| protected | `#C52626` | | |
+
+Borders flip from white alpha to black alpha (`border` 10%, `border-soft` 6%, `border-em` 16%). Safety and accent colors are darkened in light mode to keep their contrast on white surfaces.
 
 ### Named Rules
 

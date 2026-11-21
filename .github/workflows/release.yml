@@ -48,6 +48,7 @@ jobs:
           # Full history is required by _env.sh — `git rev-list --count`
           # produces CFBundleVersion, and `git describe` resolves the tag.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Select latest stable Xcode (Swift 6.3+)
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
@@ -171,7 +172,11 @@ jobs:
           NOTARY_API_ISSUER_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ISSUER_ID }}
           # NOTARY_API_KEY_PATH, SPARKLE_ED_KEY_FILE, SPARKLE_DOWNLOAD_URL_PREFIX, RELEASE_FLAGS
           # are set in earlier steps via $GITHUB_ENV.
-        run: ./Scripts/release.sh ${{ env.RELEASE_FLAGS }}
+        # RELEASE_FLAGS holds several flags, so split it into an array in the
+        # shell rather than expanding it into the script text.
+        run: |
+          read -ra flags <<< "$RELEASE_FLAGS"
+          ./Scripts/release.sh "${flags[@]}"
 
       - name: Compute DMG SHA256 + stage release notes
         if: env.IS_DRY_RUN != 'true'
