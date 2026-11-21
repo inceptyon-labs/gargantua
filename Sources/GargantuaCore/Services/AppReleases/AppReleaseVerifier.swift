@@ -192,6 +192,9 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
     let runner: any ProcessRunner
     private let hostOSVersion: OperatingSystemVersion
     let signerPolicy: AppReleaseSignerPolicy
+    /// Waits between attach attempts the disk-image helper refused as busy.
+    /// Tests shorten them.
+    var attachRetryDelays = Self.defaultAttachRetryDelays
 
     public init(
         signer: any AppReleaseCodeSigning = StrictAppReleaseCodeSigner(),

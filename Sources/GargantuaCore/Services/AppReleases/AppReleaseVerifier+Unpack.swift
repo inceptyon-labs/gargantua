@@ -215,9 +215,9 @@ extension AppReleaseVerifier {
             "-mountrandom", mountRoot.path, "-plist", image.path,
         ]
         var output = try run("/usr/bin/hdiutil", arguments, timeout: 120)
-        // diskimages-helper sometimes refuses an attach with EAGAIN; a second
-        // try a moment later goes through.
-        for delay in Self.attachRetryDelays where output.exitCode != 0 && Self.isBusyAttachRefusal(output) {
+        // diskimages-helper refuses an attach with EAGAIN while it is busy,
+        // and on a loaded Mac it stays busy for several seconds, so back off.
+        for delay in attachRetryDelays where output.exitCode != 0 && Self.isBusyAttachRefusal(output) {
             Thread.sleep(forTimeInterval: delay)
             output = try run("/usr/bin/hdiutil", arguments, timeout: 120)
         }
@@ -272,7 +272,9 @@ extension AppReleaseVerifier {
         return entities.compactMap { $0["mount-point"] as? String }
     }
 
-    static let attachRetryDelays: [TimeInterval] = [1, 3]
+    /// 15 seconds in all. A 4-second window still failed under a full test
+    /// run on CI.
+    static let defaultAttachRetryDelays: [TimeInterval] = [1, 2, 4, 8]
 
     static func isBusyAttachRefusal(_ output: ProcessOutput) -> Bool {
         (output.stdout + "\n" + output.stderr).lowercased().contains("resource temporarily unavailable")
