@@ -101,7 +101,7 @@ struct AppReleaseBackgroundCheckTests {
     }
 
     struct Harness {
-        let suite = "test-\(UUID().uuidString)"
+        let suite = TestDefaults.domain("test-\(UUID().uuidString)")
         let defaults: UserDefaults
         let checker: StubChecker
         let notifier = RecordingNotifier()

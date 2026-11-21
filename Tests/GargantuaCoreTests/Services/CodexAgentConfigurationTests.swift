@@ -6,9 +6,7 @@ import Foundation
 struct CodexAgentConfigurationTests {
 
     private static func makeDefaults() -> UserDefaults {
-        let suiteName = "codex-cfg-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suiteName)
-        defaults.removePersistentDomain(forName: suiteName)
+        let defaults = TestDefaults.suite("codex-cfg-\(UUID().uuidString)")
         return defaults
     }
 

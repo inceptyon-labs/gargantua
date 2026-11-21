@@ -10,12 +10,22 @@ public struct HomebrewInstalledCask: Sendable, Equatable {
     public let quitBundleIDs: [String]
     /// The tap from the install receipt's `source`; nil on older receipts.
     public let tap: String?
+    /// The cask versions brew records as installed: the version folders
+    /// beside `.metadata`, named as the cask writes them (`2026.2.2.10,rabbit2-patch2`).
+    public let versions: [String]
 
-    public init(token: String, appNames: [String]? = nil, quitBundleIDs: [String] = [], tap: String? = nil) {
+    public init(
+        token: String,
+        appNames: [String]? = nil,
+        quitBundleIDs: [String] = [],
+        tap: String? = nil,
+        versions: [String] = []
+    ) {
         self.token = token
         self.tap = tap
         self.appNames = appNames
         self.quitBundleIDs = quitBundleIDs
+        self.versions = versions
     }
 }
 
@@ -56,7 +66,8 @@ public struct HomebrewCaskroomProbe: Sendable {
             token: token,
             appNames: found.isEmpty ? nil : found.flatMap(\.appNames),
             quitBundleIDs: found.flatMap(\.quitBundleIDs),
-            tap: (receipt?["source"] as? [String: Any])?["tap"] as? String
+            tap: (receipt?["source"] as? [String: Any])?["tap"] as? String,
+            versions: subdirectories(of: directory).map(\.lastPathComponent).sorted()
         )
     }
 
@@ -114,6 +125,11 @@ public struct HomebrewCaskOwnership: Sendable {
         }
         .map(\.token)
         .min()
+    }
+
+    /// The cask versions brew records as installed for `token`.
+    public func installedVersions(of token: String) -> Set<String> {
+        Set(casks.filter { $0.token == token }.flatMap(\.versions))
     }
 
     /// Whether the public index's entry describes the owning cask: it must be

@@ -200,9 +200,7 @@ struct MenuBarStatusModelTests {
     }
 
     private func makeDefaults() throws -> UserDefaults {
-        let suiteName = "MenuBarStatusModelTests.\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suiteName)
-        defaults.removePersistentDomain(forName: suiteName)
+        let defaults = TestDefaults.suite("MenuBarStatusModelTests.\(UUID().uuidString)")
         return defaults
     }
 

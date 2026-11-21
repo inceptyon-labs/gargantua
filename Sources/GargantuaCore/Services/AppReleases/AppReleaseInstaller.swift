@@ -41,6 +41,10 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
     case brewUnavailable
     case brewFailed(String)
     case brewNoChange
+    /// Homebrew's download holds a version no newer than the installed one,
+    /// and isn't the release the row offered: brew's cask list differs from
+    /// the index the check used.
+    case brewDownloadNotNewer(staged: AppReleaseVersion, installed: AppReleaseVersion)
     case notInstallable
     case wrongAuthorization
 
@@ -81,6 +85,9 @@ public enum AppReleaseInstallError: Error, Equatable, LocalizedError {
             "Homebrew couldn't upgrade the app: \(message)"
         case .brewNoChange:
             "Homebrew finished, but the app's version didn't change."
+        case .brewDownloadNotNewer(let staged, let installed):
+            "Homebrew's download is version \(staged), which isn't newer than the installed \(installed), "
+                + "so nothing was changed. Homebrew's list of apps may be behind; try again later."
         case .notInstallable:
             "This update can't be installed from Gargantua. Open the developer's page instead."
         case .wrongAuthorization:

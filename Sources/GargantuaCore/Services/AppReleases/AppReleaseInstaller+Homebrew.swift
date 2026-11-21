@@ -14,6 +14,17 @@ extension AppReleaseInstaller {
         guard Self.isPlausibleCaskToken(token) else { throw .notInstallable }
         guard let brew = brewLocator() else { throw .brewUnavailable }
         let before = AppBundleFiles.bundleVersion(at: app.url) ?? app.version
+        // Checked again before brew runs; this one only saves a download
+        // that couldn't be installed.
+        if !quitIfRunning, quitter.isRunning(bundleID: app.bundleID) { throw .stillRunning }
+        switch try await brewPreflight(brew, token: token, app: app, candidate: candidate, before: before, progress: progress) {
+        case .proceed:
+            break
+        case .notNewer(let staged, isOfferedRelease: true):
+            throw .verification(.notNewer(staged: staged, installed: before))
+        case .notNewer(let staged, isOfferedRelease: false):
+            throw .brewDownloadNotNewer(staged: staged, installed: before)
+        }
         let arguments = ["upgrade", "--cask", "--greedy", token]
         let summary = "brew upgrade \(app.bundleID) \(before) → \(candidate.displayVersion)"
         let plan = AppReleaseAuditPlan(
@@ -57,21 +68,9 @@ extension AppReleaseInstaller {
             )
         }
 
-        let runner = runner
-        let outcome = await Task.detached(priority: .userInitiated) {
-            Result {
-                try runner.run(
-                    executable: brew,
-                    arguments: arguments,
-                    timeout: Self.brewTimeout,
-                    maxCapturedBytes: Self.brewCaptureBytes
-                )
-            }
-        }.value
-
         let output: ProcessOutput
         do {
-            output = try outcome.get()
+            output = try await runDetached(brew, arguments).get()
         } catch {
             throw failure(.brewFailed(error.localizedDescription), "failed to run", exitCode: nil)
         }

@@ -5,9 +5,7 @@ import Testing
 @Suite("AIEngineAssignments")
 struct AIEngineAssignmentsTests {
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "ai-assignments-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suite)
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestDefaults.suite("ai-assignments-\(UUID().uuidString)")
         return defaults
     }
 

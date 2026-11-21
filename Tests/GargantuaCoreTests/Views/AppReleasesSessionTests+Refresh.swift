@@ -116,7 +116,7 @@ extension AppReleasesSessionTests {
         #expect(AppReleasePreferences.stored(in: defaults).lastAutoCheck == start)
     }
 
-    @Test("An install records which bundle version the release held, also when that version was already installed")
+    @Test("An install records which bundle version the release held, also when that version or a newer one was installed")
     func installConfirmsRelease() async throws {
         let id = Self.app.bundleID
         let fixture = Self.makeFixture()
@@ -128,7 +128,8 @@ extension AppReleasesSessionTests {
 
         // The download turns out to hold the installed version: current, not a failure.
         let same = Self.makeFixture()
-        same.installer.failure = .verification(.notNewer(staged: "1.0", installed: "1.0"))
+        let installed = AppReleaseVersion(short: "1.0", build: nil)
+        same.installer.failure = .verification(.notNewer(staged: installed, installed: installed))
         await same.session.check()
         await same.session.install(try #require(same.session.rows.first), quitIfRunning: false)
         #expect(AppReleasePreferences.stored(in: same.defaults).confirmedReleases[id]
@@ -138,13 +139,25 @@ extension AppReleasesSessionTests {
             return
         }
 
-        // An older download is still a failure.
+        // An older download: the app updated itself past this release.
         let older = Self.makeFixture()
-        older.installer.failure = .verification(.notNewer(staged: "0.9", installed: "1.0"))
+        older.installer.failure = .verification(.notNewer(staged: AppReleaseVersion(short: "0.9", build: nil), installed: installed))
         await older.session.check()
         await older.session.install(try #require(older.session.rows.first), quitIfRunning: false)
-        #expect(AppReleasePreferences.stored(in: older.defaults).confirmedReleases.isEmpty)
-        guard case .failed = older.session.rowMessages[id] else {
+        #expect(AppReleasePreferences.stored(in: older.defaults).confirmedReleases[id]
+            == AppReleaseConfirmedRelease(offered: offered, installed: "1.0", source: Self.candidate.source))
+        #expect(older.session.rowMessages[id] == .installed("Already up to date. The installed version is newer than this release."))
+
+        // A download that can't be ordered against the installed copy is still a failure.
+        let unordered = Self.makeFixture()
+        unordered.installer.failure = .verification(.notNewer(
+            staged: AppReleaseVersion(short: "1.0", build: "abc"),
+            installed: AppReleaseVersion(short: "1.0", build: "def")
+        ))
+        await unordered.session.check()
+        await unordered.session.install(try #require(unordered.session.rows.first), quitIfRunning: false)
+        #expect(AppReleasePreferences.stored(in: unordered.defaults).confirmedReleases.isEmpty)
+        guard case .failed = unordered.session.rowMessages[id] else {
             Issue.record("expected a failure message")
             return
         }

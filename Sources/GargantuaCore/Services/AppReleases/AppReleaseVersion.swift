@@ -73,16 +73,30 @@ public struct AppReleaseVersion: Sendable, Equatable, CustomStringConvertible {
         return Self.compareBuilds(build, other.build)
     }
 
-    /// Build numbers are compared only when both are plain dotted numbers.
-    /// Builds like `AI-253.3209` or a git hash share no scheme with anything
-    /// else, and a digit run pulled out of them would invent an ordering.
+    /// Build numbers are compared only when both are plain dotted numbers, or
+    /// both are one vendor's prefixed dotted numbers (`AI-262.10968.63`, as
+    /// JetBrains and Android Studio write them). A git hash, or builds from
+    /// different products, share no scheme, and a digit run pulled out of them
+    /// would invent an ordering.
     private static func compareBuilds(_ lhs: String?, _ rhs: String?) -> ComparisonResult {
-        guard let lhs, let rhs, isPlainNumber(lhs), isPlainNumber(rhs) else { return .orderedSame }
-        return compareComponent(lhs, rhs)
+        guard let lhs, let rhs else { return .orderedSame }
+        if isPlainNumber(lhs), isPlainNumber(rhs) { return compareComponent(lhs, rhs) }
+        if let left = vendorBuild(lhs), let right = vendorBuild(rhs), left.prefix == right.prefix {
+            return compareComponent(left.number, right.number)
+        }
+        return .orderedSame
     }
 
     private static func isPlainNumber(_ value: String) -> Bool {
         value.first?.isNumber == true && value.allSatisfy { $0.isNumber || $0 == "." }
+    }
+
+    /// A build written as letters, a dash and a dotted number: `AI-262.10968.63`.
+    private static func vendorBuild(_ value: String) -> (prefix: String, number: String)? {
+        let parts = value.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, parts[0].allSatisfy(\.isLetter), isPlainNumber(String(parts[1]))
+        else { return nil }
+        return (String(parts[0]), String(parts[1]))
     }
 
     /// Whether `folded` spells this version with the build written into the

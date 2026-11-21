@@ -153,9 +153,7 @@ struct ProtectedRootPolicyTests {
 
     @Test("user store adds and removes custom protected roots")
     func userStoreRoundTrip() throws {
-        let suite = "gargantua-protected-root-store-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suite)
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestDefaults.suite("gargantua-protected-root-store-\(UUID().uuidString)")
         let store = ProtectedRootUserStore(defaults: defaults)
 
         #expect(store.add(path: "~/Important"))

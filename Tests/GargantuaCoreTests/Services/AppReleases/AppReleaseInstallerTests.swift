@@ -223,7 +223,8 @@ struct AppReleaseInstallerTests {
             app: snapshot
         )
 
-        #expect(result == .failure(.verification(.notNewer(staged: "2.1 (210)", installed: "2.2 (220)"))))
+        let staged = AppReleaseVersion(short: "2.1", build: "210")
+        #expect(result == .failure(.verification(.notNewer(staged: staged, installed: AppReleaseVersion(short: "2.2", build: "220")))))
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "2.2", build: "220"))
         #expect(trash.movedItems.isEmpty)
         #expect(audit.entries.isEmpty)
@@ -414,7 +415,7 @@ extension AppReleaseInstallerTests {
             previousCopyInTrash: nil,
             relaunched: false
         )))
-        #expect(runner.recordedArguments == [["upgrade", "--cask", "--greedy", "foo"]])
+        #expect(runner.recordedArguments.last == ["upgrade", "--cask", "--greedy", "foo"])
         #expect(audit.entries.map(\.status) == [.attempted, .completed])
         #expect(audit.entries.last?.kind == .command)
         #expect(audit.entries.last?.cleanupMethod == .toolNative)
@@ -469,8 +470,9 @@ extension AppReleaseInstallerTests {
     func brewUpgradeFails() async throws {
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
-        let runner = ScriptedBrewRunner { _ in
-            ProcessOutput(stdout: "", stderr: "Error: Download failed\n", exitCode: 1)
+        let runner = ScriptedBrewRunner { arguments in
+            let failed = arguments.first == "upgrade"
+            return ProcessOutput(stdout: "", stderr: failed ? "Error: Download failed\n" : "", exitCode: failed ? 1 : 0)
         }
 
         let result = await install(

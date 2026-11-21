@@ -198,6 +198,9 @@ public struct AppReleaseCandidate: Sendable, Equatable {
     public internal(set) var vendorURL: URL?
     /// Homebrew cask token, set when `source == .homebrewCask`.
     public let caskToken: String?
+    /// The cask's whole `version` (`2026.2.2.10,rabbit2-patch2`), which names
+    /// its Caskroom folder once installed. Set when `source == .homebrewCask`.
+    public let caskVersion: String?
     /// Team ID the new bundle must carry, pinned by a catalog entry.
     public internal(set) var pinnedTeamID: String?
     /// False when a catalog entry marks the app link-only.
@@ -223,6 +226,7 @@ public struct AppReleaseCandidate: Sendable, Equatable {
         releaseNotesURL: URL? = nil,
         vendorURL: URL? = nil,
         caskToken: String? = nil,
+        caskVersion: String? = nil,
         pinnedTeamID: String? = nil,
         allowsInPlaceInstall: Bool = true,
         isSparkleFeed: Bool? = nil,
@@ -240,6 +244,7 @@ public struct AppReleaseCandidate: Sendable, Equatable {
         self.releaseNotesURL = releaseNotesURL?.httpsOnly
         self.vendorURL = vendorURL?.httpsOnly
         self.caskToken = caskToken
+        self.caskVersion = caskVersion
         self.pinnedTeamID = pinnedTeamID
         self.allowsInPlaceInstall = allowsInPlaceInstall
         self.isSparkleFeed = isSparkleFeed ?? (source == .sparkle)

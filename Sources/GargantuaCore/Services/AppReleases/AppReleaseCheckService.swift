@@ -84,6 +84,7 @@ public struct AppReleaseCheckService: AppReleaseChecking {
                 app: app,
                 outcomes: outcomes,
                 brewManagedToken: owner,
+                brewInstalledVersions: owner.map(ownership.installedVersions(of:)) ?? [],
                 preferences: preferences,
                 osVersion: osVersion
             )

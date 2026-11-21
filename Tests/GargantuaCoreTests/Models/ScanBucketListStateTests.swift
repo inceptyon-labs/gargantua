@@ -7,7 +7,7 @@ import Testing
 struct ScanBucketListStateTests {
     @Test("The grouping mode is remembered per screen across instances")
     func groupingIsRememberedPerKey() throws {
-        let suite = "ScanBucketListStateTests-\(UUID().uuidString)"
+        let suite = TestDefaults.domain("ScanBucketListStateTests-\(UUID().uuidString)")
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 

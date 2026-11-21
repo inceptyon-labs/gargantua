@@ -53,7 +53,7 @@ public enum AppReleaseVerificationFailure: Error, Equatable, LocalizedError {
     // Gatekeeper
     case gatekeeperRejected(String)
     // Version
-    case notNewer(staged: String, installed: String)
+    case notNewer(staged: AppReleaseVersion, installed: AppReleaseVersion)
     case requiresNewerMacOS(String)
 
     public var errorDescription: String? {
@@ -165,6 +165,15 @@ public protocol AppReleaseVerifying: Sendable {
         strategy: AppReleaseInstallStrategy,
         workDirectory: URL
     ) throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle
+
+    /// The version of the app `bundleID` inside `payload`, read without the
+    /// other checks: what a brew upgrade would install, judged before brew
+    /// installs it. May unpack into `workDirectory`.
+    func bundledVersion(
+        of bundleID: String,
+        in payload: URL,
+        workDirectory: URL
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseVersion
 }
 
 /// Verifies a downloaded update before it may replace an installed app. Every
@@ -440,7 +449,7 @@ public struct AppReleaseVerifier: AppReleaseVerifying {
         guard let plist = AppBundleFiles.infoPlist(ofBundle: bundle) else { throw .missingInfoPlist }
         let staged = AppReleaseVersion(plist: plist)
         guard staged.isNewer(than: installed.version) else {
-            throw .notNewer(staged: staged.description, installed: installed.version.description)
+            throw .notNewer(staged: staged, installed: installed.version)
         }
         if let minimum = plist["LSMinimumSystemVersion"] {
             let text = (minimum as? String) ?? String(describing: minimum)

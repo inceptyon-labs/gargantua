@@ -117,8 +117,13 @@ extension AppReleasesSession {
                 showsAppManagementHelp = true
                 return .denied
             }
-            // The download holds the installed version; its source only names it differently.
-            rowMessages[id] = .installed("Already up to date. This release is the version that's installed.")
+            // The download holds the installed version, which its source only
+            // names differently, or an older one the app updated itself past.
+            rowMessages[id] = .installed(
+                error.downloadIsOlder
+                    ? "Already up to date. The installed version is newer than this release."
+                    : "Already up to date. This release is the version that's installed."
+            )
             updatePreferences { $0.confirm(candidate, holds: current, for: id) }
             attempt = .alreadyCurrent
         }

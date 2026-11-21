@@ -8,10 +8,13 @@ public enum AppReleaseResolver {
     ///     don't know the app are absent.
     ///   - brewManagedToken: The token of the installed cask that owns the
     ///     app, so brew owns the app's updates.
+    ///   - brewInstalledVersions: The cask versions the owning cask's
+    ///     Caskroom records as installed.
     public static func resolve(
         app: InstalledApp,
         outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome],
         brewManagedToken: String?,
+        brewInstalledVersions: Set<String> = [],
         preferences: AppReleasePreferences,
         osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
     ) -> AppReleaseRow {
@@ -39,9 +42,16 @@ public enum AppReleaseResolver {
             eligible = eligible.filter { $0.version.compare(to: ceiling) != .orderedDescending }
         }
         // A release already found installed under another version string
-        // is not an update, however its number compares.
+        // is not an update, however its number compares. Brew's record of
+        // the owning cask's installed version is such a finding.
+        let brewInstalled: (AppReleaseCandidate) -> Bool = { candidate in
+            guard let token = brewManagedToken, candidate.source == .homebrewCask, candidate.caskToken == token,
+                  let version = candidate.caskVersion
+            else { return false }
+            return brewInstalledVersions.contains(version)
+        }
         let isUpdate: (AppReleaseCandidate) -> Bool = {
-            $0.version.isNewer(than: app.version) && !preferences.confirms($0, isInstalledAs: app)
+            $0.version.isNewer(than: app.version) && !preferences.confirms($0, isInstalledAs: app) && !brewInstalled($0)
         }
         let newer = eligible.filter(isUpdate)
 

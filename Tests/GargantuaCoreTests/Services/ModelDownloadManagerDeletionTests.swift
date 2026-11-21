@@ -5,14 +5,25 @@ import Testing
 /// Deleting the local model used to report success unconditionally, so a failed
 /// removal left Settings claiming "Not downloaded" with ~680 MB still on disk —
 /// in a disk-cleaning app.
+///
+/// Each test stages in a temporary folder: the default manager's folder holds
+/// the model the user downloaded.
 @Suite("ModelDownloadManager deletion", .serialized)
 @MainActor
 struct ModelDownloadManagerDeletionTests {
 
+    private func makeManager() throws -> (ModelDownloadManager, root: URL) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("models-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return (ModelDownloadManager(modelInfo: ModelDownloadManager.defaultModel, modelsRoot: root), root)
+    }
+
     @Test("deleting an already-absent model still lands on .notDownloaded")
-    func deletingAbsentModelSucceeds() {
-        let manager = ModelDownloadManager()
-        try? FileManager.default.removeItem(at: manager.modelDirectory)
+    func deletingAbsentModelSucceeds() throws {
+        let (manager, root) = try makeManager()
+        defer { try? FileManager.default.removeItem(at: root) }
+        // Never the user's models folder.
+        #expect(manager.modelDirectory.deletingLastPathComponent() == root)
 
         manager.deleteModel()
 
@@ -21,10 +32,10 @@ struct ModelDownloadManagerDeletionTests {
 
     @Test("a removal that cannot complete surfaces .failed and leaves the files alone")
     func failedRemovalSurfacesFailure() throws {
-        let manager = ModelDownloadManager()
+        let (manager, root) = try makeManager()
         let directory = manager.modelDirectory
         let fileManager = FileManager.default
-        try? fileManager.removeItem(at: directory)
+        defer { try? fileManager.removeItem(at: root) }
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("weights.bin")
         try Data("weights".utf8).write(to: file)

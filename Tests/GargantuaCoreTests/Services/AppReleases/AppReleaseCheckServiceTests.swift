@@ -94,6 +94,28 @@ struct AppReleaseCheckServiceTests {
         #expect(strategy == .brewUpgrade(token: "latest-brew"))
     }
 
+    @Test("a cask release the Caskroom records as installed is current, though the bundle says 2.0")
+    func caskroomVersionIsInstalled() async throws {
+        let index = """
+        [{"token":"latest-brew","version":"2.0.5,r7","url":"https://example.com/Latest.dmg","sha256":"no_check",
+          "homepage":"https://example.com","artifacts":[{"app":["Latest.app"]}]}]
+        """
+        func status(installed version: String) async throws -> AppReleaseStatus {
+            let cask = HomebrewInstalledCask(token: "latest-brew", appNames: ["Latest.app"], versions: [version])
+            return try await self.status(caskroom: [cask], index: index, sparkleFeed: false)
+        }
+        guard case .upToDate = try await status(installed: "2.0.5,r7") else {
+            Issue.record("expected the recorded release to be current")
+            return
+        }
+        for older in ["2.0.4,r6", "2.0.5,r6"] {
+            guard case .available(_, .brewUpgrade) = try await status(installed: older) else {
+                Issue.record("expected \(older) to offer a brew upgrade")
+                return
+            }
+        }
+    }
+
     @Test("a cask from a tap the index doesn't know marks the app brew-managed from the Caskroom alone")
     func caskroomOwnershipWithoutIndex() async throws {
         let prefix = try CaskroomFixture.makePrefix([

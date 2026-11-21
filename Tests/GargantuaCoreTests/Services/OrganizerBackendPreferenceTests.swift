@@ -6,9 +6,7 @@ import Foundation
 struct OrganizerBackendPreferenceTests {
 
     private static func makeDefaults() -> UserDefaults {
-        let suiteName = "organizer-pref-\(UUID().uuidString)"
-        let defaults = TestDefaults.suite(suiteName)
-        defaults.removePersistentDomain(forName: suiteName)
+        let defaults = TestDefaults.suite("organizer-pref-\(UUID().uuidString)")
         return defaults
     }
 
