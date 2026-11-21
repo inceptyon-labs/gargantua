@@ -10,13 +10,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   sync:
     name: Pull upstream rules and open PR
     runs-on: ubuntu-latest
+    # Pushes the sync branch and opens its pull request.
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout
