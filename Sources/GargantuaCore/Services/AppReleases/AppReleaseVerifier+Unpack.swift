@@ -180,9 +180,8 @@ extension AppReleaseVerifier {
         return lines
     }
 
-    /// Mounts the image read-only, copies the one matching app out with
-    /// `ditto`, and always detaches. The mounted volume is never the install
-    /// source.
+    /// Copies the one matching app out of the image with `ditto`. The
+    /// mounted volume is never the install source.
     private func copyApp(
         fromDiskImage image: URL,
         into destination: URL,
@@ -190,6 +189,24 @@ extension AppReleaseVerifier {
         bundleID: String,
         budget: Int64
     ) throws(AppReleaseVerificationFailure) {
+        try withMountedDiskImage(image, mountRoot: mountRoot) { volumes throws(AppReleaseVerificationFailure) in
+            let source = try Self.uniqueMatch(volumes.flatMap {
+                Self.matchingApps(in: URL(fileURLWithPath: $0), bundleID: bundleID)
+            })
+            // Measured on the mounted volume, before anything is copied.
+            try Self.checkExtractedSize(Self.treeSize(of: source, limit: budget), limit: budget)
+            let target = destination.appendingPathComponent(source.lastPathComponent, isDirectory: true)
+            try runChecked("/usr/bin/ditto", [source.path, target.path], timeout: 900)
+        }
+    }
+
+    /// Mounts the image read-only under `mountRoot`, hands `body` the mount
+    /// points, and always detaches.
+    func withMountedDiskImage<Value>(
+        _ image: URL,
+        mountRoot: URL,
+        _ body: ([String]) throws(AppReleaseVerificationFailure) -> Value
+    ) throws(AppReleaseVerificationFailure) -> Value {
         try Self.makeEmptyDirectory(mountRoot)
         defer { detachVolumes(under: mountRoot) }
 
@@ -213,14 +230,7 @@ extension AppReleaseVerifier {
             AppBundleFiles.realPath(mountPoint).map(mounted.contains) ?? false
         }
         guard !volumes.isEmpty else { throw .extractionFailed("hdiutil reported no volume in the staging folder") }
-
-        let source = try Self.uniqueMatch(volumes.flatMap {
-            Self.matchingApps(in: URL(fileURLWithPath: $0), bundleID: bundleID)
-        })
-        // Measured on the mounted volume, before anything is copied.
-        try Self.checkExtractedSize(Self.treeSize(of: source, limit: budget), limit: budget)
-        let target = destination.appendingPathComponent(source.lastPathComponent, isDirectory: true)
-        try runChecked("/usr/bin/ditto", [source.path, target.path], timeout: 900)
+        return try body(volumes)
     }
 
     /// Detaches everything mounted under `mountRoot`, which also covers an

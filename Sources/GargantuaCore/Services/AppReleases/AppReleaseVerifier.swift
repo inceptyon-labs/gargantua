@@ -165,6 +165,15 @@ public protocol AppReleaseVerifying: Sendable {
         strategy: AppReleaseInstallStrategy,
         workDirectory: URL
     ) throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle
+
+    /// The version of the app `bundleID` inside `payload`, read without the
+    /// other checks: what a brew upgrade would install, judged before brew
+    /// installs it. May unpack into `workDirectory`.
+    func bundledVersion(
+        of bundleID: String,
+        in payload: URL,
+        workDirectory: URL
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseVersion
 }
 
 /// Verifies a downloaded update before it may replace an installed app. Every

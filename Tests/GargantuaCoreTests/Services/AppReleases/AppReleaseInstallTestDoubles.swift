@@ -63,6 +63,7 @@ enum AppReleaseInstallFixtures {
         pinnedTeamID: String? = nil,
         isSparkleFeed: Bool? = nil,
         caskToken: String? = nil,
+        caskVersion: String? = nil,
         downloadURL: String = "https://example.com/Foo.zip",
         downloadAgent: AppReleaseDownloadAgent = .updater
     ) -> AppReleaseCandidate {
@@ -74,6 +75,7 @@ enum AppReleaseInstallFixtures {
             edSignature: edSignature,
             sha256: sha256,
             caskToken: caskToken,
+            caskVersion: caskVersion,
             pinnedTeamID: pinnedTeamID,
             isSparkleFeed: isSparkleFeed,
             downloadAgent: downloadAgent
@@ -124,6 +126,8 @@ final class RecordingPayloadHTTP: AppReleaseHTTPFetching {
 /// directory for the app it was handed.
 struct StubAppReleaseVerifier: AppReleaseVerifying {
     let stage: @Sendable (URL, InstalledApp) -> Result<AppReleaseStagedBundle, AppReleaseVerificationFailure>
+    /// What `bundledVersion` reports for a brew download.
+    var bundled: Result<AppReleaseVersion, AppReleaseVerificationFailure> = .failure(.unrecognizedPayload)
 
     func checkSourcePolicy(
         _: AppReleaseCandidate,
@@ -138,6 +142,14 @@ struct StubAppReleaseVerifier: AppReleaseVerifying {
         workDirectory: URL
     ) throws(AppReleaseVerificationFailure) -> AppReleaseStagedBundle {
         try stage(workDirectory, app).get()
+    }
+
+    func bundledVersion(
+        of _: String,
+        in _: URL,
+        workDirectory _: URL
+    ) throws(AppReleaseVerificationFailure) -> AppReleaseVersion {
+        try bundled.get()
     }
 
     /// Stages a real bundle at `<work>/extracted/Foo.app` with the given
