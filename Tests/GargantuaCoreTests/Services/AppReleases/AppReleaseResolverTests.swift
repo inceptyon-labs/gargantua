@@ -31,6 +31,7 @@ struct AppReleaseResolverTests {
         download: String? = "https://example.com/Example.zip",
         minOS: String? = nil,
         token: String? = nil,
+        caskVersion: String? = nil,
         linkOnly: Bool = false
     ) -> AppReleaseCandidate {
         AppReleaseCandidate(
@@ -40,6 +41,7 @@ struct AppReleaseResolverTests {
             minimumSystemVersion: minOS,
             vendorURL: URL(string: "https://example.com"),
             caskToken: token,
+            caskVersion: caskVersion,
             allowsInPlaceInstall: !linkOnly
         )
     }
@@ -48,10 +50,16 @@ struct AppReleaseResolverTests {
         _ app: InstalledApp,
         _ outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome],
         brewToken: String? = nil,
+        brewVersions: Set<String> = [],
         preferences: AppReleasePreferences = AppReleasePreferences()
     ) -> AppReleaseStatus {
         AppReleaseResolver.resolve(
-            app: app, outcomes: outcomes, brewManagedToken: brewToken, preferences: preferences, osVersion: os
+            app: app,
+            outcomes: outcomes,
+            brewManagedToken: brewToken,
+            brewInstalledVersions: brewVersions,
+            preferences: preferences,
+            osVersion: os
         ).status
     }
 
@@ -161,6 +169,24 @@ struct AppReleaseResolverTests {
         let status = resolve(installed, [.sparkle: .found(sparkle), .homebrewCask: .found(cask)], brewToken: "example")
 
         #expect(status == .available(sparkle, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
+    }
+
+    @Test("a cask release brew records as installed is current, however the bundle names it")
+    func brewRecordedReleaseIsCurrent() {
+        // The cask says 2026.2.2.10; the bundle it installed says 2026.2.
+        let installed = "2026.2.2.10,rabbit2-patch2"
+        let cask = candidate(.homebrewCask, "2026.2.2.10", token: "example", caskVersion: installed)
+        let outcomes: [AppReleaseSourceKind: AppReleaseSourceOutcome] = [.homebrewCask: .found(cask)]
+        #expect(resolve(app("2026.2"), outcomes, brewToken: "example", brewVersions: [installed]) == .upToDate(latest: cask))
+        // Brew has another release installed, even one differing only after the comma, or the record is another cask's.
+        #expect(resolve(app("2026.2"), outcomes, brewToken: "example", brewVersions: ["2026.2.2.10,rabbit2-patch1"])
+            == .available(cask, .brewUpgrade(token: "example")))
+        #expect(resolve(app("2026.2"), outcomes, brewToken: "example@beta", brewVersions: [installed])
+            == .available(cask, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
+        // Another source's release of that number isn't the one brew installed.
+        let feed = candidate(.sparkle, "2026.2.2.10", caskVersion: installed)
+        #expect(resolve(app("2026.2"), [.sparkle: .found(feed)], brewToken: "example", brewVersions: [installed])
+            == .available(feed, .linkOnly(URL(string: "https://example.com"), reason: .brewCaskBehind)))
     }
 
     @Test("brew upgrade is offered only when the index's cask is the installed one")

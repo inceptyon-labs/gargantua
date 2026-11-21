@@ -412,6 +412,7 @@ public struct HomebrewCaskSource: Sendable {
             payloadKind: entry.hasPkg ? .pkg : .infer(url: downloadURL),
             vendorURL: entry.homepage.flatMap(URL.init(string:)),
             caskToken: entry.token,
+            caskVersion: release.version,
             downloadAgent: entry.downloadAgent
         ))
     }

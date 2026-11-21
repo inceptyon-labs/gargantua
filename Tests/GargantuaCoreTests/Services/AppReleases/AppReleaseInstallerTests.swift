@@ -223,7 +223,8 @@ struct AppReleaseInstallerTests {
             app: snapshot
         )
 
-        #expect(result == .failure(.verification(.notNewer(staged: "2.1 (210)", installed: "2.2 (220)"))))
+        let staged = AppReleaseVersion(short: "2.1", build: "210")
+        #expect(result == .failure(.verification(.notNewer(staged: staged, installed: AppReleaseVersion(short: "2.2", build: "220")))))
         #expect(sandbox.installedVersion == AppReleaseVersion(short: "2.2", build: "220"))
         #expect(trash.movedItems.isEmpty)
         #expect(audit.entries.isEmpty)

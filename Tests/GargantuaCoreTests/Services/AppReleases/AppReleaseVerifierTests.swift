@@ -221,7 +221,8 @@ struct AppReleaseVerifierTests {
             try Fixtures.writeBundle(at: bundle, short: "1.0", build: "100")
             let app = Fixtures.installedApp(at: URL(fileURLWithPath: "/Applications/Foo.app"), short: "2.0", build: "200")
 
-            #expect(throws: Failure.notNewer(staged: "1.0 (100)", installed: "2.0 (200)")) {
+            let staged = AppReleaseVersion(short: "1.0", build: "100")
+            #expect(throws: Failure.notNewer(staged: staged, installed: AppReleaseVersion(short: "2.0", build: "200"))) {
                 try AppReleaseVerifier.checkVersion(
                     of: bundle,
                     installed: app,

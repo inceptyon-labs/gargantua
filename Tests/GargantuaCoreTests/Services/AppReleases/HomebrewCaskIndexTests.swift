@@ -66,6 +66,7 @@ struct HomebrewCaskIndexTests {
             "Caskroom/bar/.metadata/1.0/20240101000000.000/Casks/bar.json": #"{"artifacts":[{"app":["Old.app"]}]}"#,
             "Caskroom/bar/.metadata/2.0/20250101000000.000/Casks/bar.json":
                 #"{"artifacts":[{"app":["Bar Beta.app",{"target":"Bar.app"}]}]}"#,
+            "Caskroom/bar/2.0,b7/Bar.app/Contents/Info.plist": "",
             "Caskroom/baz/.metadata/1.0/20250101000000.000/Casks/baz.rb": "cask \"baz\" do\nend\n",
         ])
         defer { try? FileManager.default.removeItem(at: prefix) }
@@ -73,7 +74,7 @@ struct HomebrewCaskIndexTests {
         let casks = HomebrewCaskroomProbe(prefixes: [prefix.path]).installedCasks().sorted { $0.token < $1.token }
 
         #expect(casks == [
-            HomebrewInstalledCask(token: "bar", appNames: ["Bar.app"]),
+            HomebrewInstalledCask(token: "bar", appNames: ["Bar.app"], versions: ["2.0,b7"]),
             HomebrewInstalledCask(token: "baz", appNames: nil),
             HomebrewInstalledCask(token: "foo", appNames: ["Foo.app"], quitBundleIDs: ["com.example.Foo"], tap: "acme/tap"),
         ])

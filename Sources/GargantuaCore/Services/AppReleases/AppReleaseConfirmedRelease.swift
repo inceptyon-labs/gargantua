@@ -7,7 +7,8 @@ import Foundation
 public struct AppReleaseConfirmedRelease: Codable, Sendable, Equatable {
     /// The source's version, as `AppReleaseVersion.description`.
     public let offered: String
-    /// The bundle version that release's download held.
+    /// The bundle version installed when that release's download was found
+    /// to hold it, or to hold an older one.
     public let installed: String
     /// The source that named the release. Another source's release of the
     /// same number is a different download, so it isn't covered. Optional so
@@ -31,7 +32,8 @@ public extension AppReleasePreferences {
             && known.installed == app.version.description
     }
 
-    /// Records that `candidate`'s download held bundle version `installed`.
+    /// Records that `candidate`'s download held bundle version `installed`, or
+    /// an older one.
     mutating func confirm(_ candidate: AppReleaseCandidate, holds installed: String, for bundleID: String) {
         confirmedReleases[bundleID] = AppReleaseConfirmedRelease(
             offered: candidate.version.description,
@@ -43,10 +45,20 @@ public extension AppReleasePreferences {
 
 public extension AppReleaseInstallError {
     /// The installed version, when the update was refused because its
-    /// download holds exactly that version: the source only names it
-    /// differently, and the app is current.
+    /// download holds exactly that version, which the source only names
+    /// differently, or a provably older one, which the app updated itself
+    /// past. Either way the app is current.
     var versionAlreadyInstalled: String? {
-        guard case .verification(.notNewer(let staged, let installed)) = self, staged == installed else { return nil }
-        return installed
+        guard case .verification(.notNewer(let staged, let installed)) = self,
+              staged.description == installed.description || downloadIsOlder
+        else { return nil }
+        return installed.description
+    }
+
+    /// Whether the update was refused because its download holds a version
+    /// provably older than the installed one.
+    var downloadIsOlder: Bool {
+        guard case .verification(.notNewer(let staged, let installed)) = self else { return false }
+        return staged.compare(to: installed) == .orderedAscending
     }
 }

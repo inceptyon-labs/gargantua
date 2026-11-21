@@ -42,10 +42,23 @@ struct AppReleaseVersionTests {
         #expect(!version("2.4", "999").isNewer(than: version("2.5", "100")))
     }
 
-    @Test("builds that aren't plain numbers never decide the order")
+    @Test("builds that aren't plain numbers or one vendor's prefixed numbers never decide the order")
     func nonNumericBuilds() {
         #expect(!version("5.11492.5", "1403e2cf44abfb23809c8ae11238d5e9704a41c2").isNewer(than: version("5.11492.5", "5.11492.5")))
-        #expect(!version("2025.3", "AI-253.40000").isNewer(than: version("2025.3", "AI-253.32098")))
+        // Different products, a tail that isn't a dotted number, or a prefix that isn't letters.
+        #expect(!version("2025.3", "IU-253.40000").isNewer(than: version("2025.3", "AI-253.32098")))
+        #expect(!version("2025.3", "AI-253.40000x").isNewer(than: version("2025.3", "AI-253.32098")))
+        #expect(!version("2025.3", "7-253.40000").isNewer(than: version("2025.3", "7-253.32098")))
+    }
+
+    @Test("builds sharing a vendor prefix compare by their dotted numbers, as Android Studio's do")
+    func vendorPrefixedBuilds() {
+        let installed = "AI-262.10968.63.2622.16840690"
+        let patched = "AI-262.10968.63.2622.16975389"
+        #expect(version("2026.2", patched).isNewer(than: version("2026.2", installed)))
+        #expect(!version("2026.2", installed).isNewer(than: version("2026.2", patched)))
+        #expect(!version("2026.2", installed).isNewer(than: version("2026.2", installed)))
+        #expect(version("2025.3", "AI-253.40000").isNewer(than: version("2025.3", "AI-253.32098")))
     }
 
     @Test("build-only feed compares against the installed build, never the marketing version")
