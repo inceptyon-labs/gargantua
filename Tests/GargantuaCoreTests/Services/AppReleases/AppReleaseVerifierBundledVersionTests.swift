@@ -82,10 +82,12 @@ extension RealDiskImageTests {
             let dmg = directory.appendingPathComponent("Foo.dmg")
             try Data(bytes).write(to: dmg)
 
-            let cases = [("hdiutil: attach failed - Resource temporarily unavailable", 3), ("hdiutil: attach failed - image not recognized", 1)]
+            let retries = AppReleaseVerifier.defaultAttachRetryDelays.count
+            let cases = [("hdiutil: attach failed - Resource temporarily unavailable", retries + 1), ("hdiutil: attach failed - image not recognized", 1)]
             for (message, attempts) in cases {
                 let runner = ScriptedBrewRunner { _ in ProcessOutput(stdout: "", stderr: message, exitCode: 1) }
-                let verifier = AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper(), runner: runner)
+                var verifier = AppReleaseVerifier(signer: StubCodeSigner(), gatekeeper: AcceptingGatekeeper(), runner: runner)
+                verifier.attachRetryDelays = Array(repeating: 0, count: retries)
                 let work = directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
                 try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
 
