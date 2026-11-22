@@ -10,8 +10,7 @@ public struct ProcessInventoryScan: Sendable, Equatable {
     /// footer can say "showing top 50 of 432 running" without the UI having
     /// to re-query.
     public let totalProcessCount: Int
-    /// The metric `items` is currently sorted by. Updated by `resort` calls
-    /// in the session so the UI stays in sync.
+    /// The metric `items` is sorted by.
     public let sortedBy: ProcessSortMetric
     /// Preferred display cap used by the scanner.
     public let topN: Int?

@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 #if canImport(AppKit)
     import AppKit

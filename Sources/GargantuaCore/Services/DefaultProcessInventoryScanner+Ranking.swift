@@ -1,9 +1,7 @@
 import Foundation
 
 extension DefaultProcessInventoryScanner {
-    /// Single-source-of-truth ordering used by both the scanner and the
-    /// session's in-place `resort`. Mirrored in `ProcessInventorySession.rank`
-    /// — keep them in sync if the comparators change.
+    /// Single-source-of-truth ordering for scan results.
     func rank(_ items: [ProcessItem], by metric: ProcessSortMetric) -> [ProcessItem] {
         items.sorted(by: { lhs, rhs in
             let lhsPrimary = Self.primary(lhs, metric: metric)

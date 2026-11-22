@@ -1,7 +1,4 @@
 import Foundation
-import OSLog
-
-private let logger = Logger(subsystem: "com.gargantua.core", category: "LoginItemEnumerator")
 
 /// One modern login item / SMAppService record.
 public struct LoginItemRecord: Sendable, Equatable {

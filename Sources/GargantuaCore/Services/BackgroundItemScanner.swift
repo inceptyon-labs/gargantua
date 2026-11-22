@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 /// Result of one Background Items scan pass.
 public struct BackgroundItemScan: Sendable, Equatable {
