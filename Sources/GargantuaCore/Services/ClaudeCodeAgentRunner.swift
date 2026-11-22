@@ -5,9 +5,6 @@ private let runnerLogger = Logger(subsystem: "com.gargantua.core", category: "Cl
 
 /// Builds and runs Claude Code sessions against Gargantua's MCP server.
 public final class ClaudeCodeAgentSessionRunner: @unchecked Sendable {
-    /// Comma-separated read-only tool allowlist used by default.
-    public static let defaultAllowedTools = ClaudeCodeAgentPromptBuilder.readOnlyToolAllowlist.joined(separator: ",")
-
     private let configurationStore: ClaudeCodeAgentConfigurationStore
     private let cliResolver: ClaudeCodeCLIResolver
     private let mcpServerLaunch: ClaudeCodeMCPServerLaunch

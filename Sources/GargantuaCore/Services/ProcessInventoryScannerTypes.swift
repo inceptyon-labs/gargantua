@@ -31,14 +31,6 @@ public struct ProcessInventoryScan: Sendable, Equatable {
         self.topN = topN
         self.scannedAt = scannedAt
     }
-
-    public static let empty = ProcessInventoryScan(
-        items: [],
-        totalProcessCount: 0,
-        sortedBy: .cpu,
-        topN: nil,
-        scannedAt: .distantPast
-    )
 }
 
 /// Orchestrates `ProcessSnapshotProvider` + `LaunchdItemIndex` +

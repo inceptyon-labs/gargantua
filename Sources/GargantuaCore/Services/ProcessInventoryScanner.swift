@@ -5,8 +5,6 @@ import OSLog
     import AppKit
 #endif
 
-private let logger = Logger(subsystem: "com.gargantua.core", category: "ProcessInventoryScanner")
-
 public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     /// Wall-clock interval between the two snapshots used to derive CPU
     /// deltas. 500 ms is short enough that the scan feels instant and long

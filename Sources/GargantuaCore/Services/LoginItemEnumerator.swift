@@ -86,36 +86,6 @@ public struct DefaultLoginItemEnumerator: LoginItemEnumerating {
         let needsPrivs = parsed.isEmpty && (!exitedCleanly || !producedAnyOutput)
         return LoginItemEnumeration(records: parsed, needsPrivileges: needsPrivs)
     }
-
-    /// Production runner. Spawns `/usr/bin/sfltool dumpbtm` and captures
-    /// stdout. Failures collapse to empty output rather than throwing — the
-    /// caller's "best effort" contract treats the absence of records the same
-    /// as the absence of permissions.
-    @Sendable
-    public static func runSfltool() -> (output: String, exitCode: Int32) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sfltool")
-        process.arguments = ["dumpbtm"]
-
-        let stdoutPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        // Discard stderr — we don't surface it, and the default Pipe()'s
-        // 64 KB buffer would deadlock the child if sfltool ever flooded
-        // diagnostics there. /dev/null has unlimited capacity.
-        process.standardError = FileHandle(forWritingAtPath: "/dev/null") ?? FileHandle.standardError
-
-        do {
-            try process.run()
-        } catch {
-            logger.warning("Failed to launch sfltool: \(String(describing: error), privacy: .public)")
-            return ("", -1)
-        }
-
-        let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        return (output, process.terminationStatus)
-    }
 }
 
 /// Permissive parser for `sfltool dumpbtm` text output.

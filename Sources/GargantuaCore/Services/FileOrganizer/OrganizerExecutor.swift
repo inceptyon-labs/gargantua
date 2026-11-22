@@ -221,7 +221,6 @@ public struct OrganizerExecutionResult: Sendable {
     /// Cancel stopped Apply before every move ran.
     public let wasCancelled: Bool
 
-    public var hasFailures: Bool { !failed.isEmpty }
     public var totalMoved: Int { succeeded.count }
 
     public init(
@@ -250,8 +249,6 @@ public struct OrganizerUndoResult: Sendable {
     public let failed: [OrganizerMoveFailure]
     /// Cancel stopped Undo before every move was reversed.
     public let wasCancelled: Bool
-
-    public var hasFailures: Bool { !failed.isEmpty }
 
     public init(
         proposalID: UUID,

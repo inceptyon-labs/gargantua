@@ -2,9 +2,8 @@ import Darwin
 import Foundation
 import os
 
-/// Classification of a single directory child, shared by `streamChildren` and
-/// `scanChildrenSync` so the UF_HIDDEN/dotfile, mount-root, and permission
-/// logic lives in one place.
+/// Classification of a single directory child, used by `streamChildren` so the UF_HIDDEN/dotfile,
+/// mount-root, and permission logic lives in one place.
 enum ChildKind {
     case skip
     case file(size: Int64)

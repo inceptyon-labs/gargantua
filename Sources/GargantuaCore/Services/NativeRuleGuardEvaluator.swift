@@ -1,13 +1,6 @@
 import Foundation
 
 enum NativeRuleGuardEvaluator {
-    static func shouldSkipRule(
-        rule: ScanRule,
-        processChecker: any RunningProcessChecking
-    ) -> Bool {
-        rule.skipIfProcessRunning.contains { processChecker.isRunning(identifier: $0) }
-    }
-
     /// The running app that blocks this rule's items, if any. Instead of hiding
     /// the items, the scan surfaces them locked so the user can quit the app and
     /// reclaim the space. Name comes from the rule's curated source attribution.

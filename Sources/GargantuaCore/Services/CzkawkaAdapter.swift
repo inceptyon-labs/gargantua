@@ -92,17 +92,6 @@ public struct CzkawkaTrustDefaults: Sendable {
 /// categories are orthogonal to rule-driven paths. `SafetyClassifier`
 /// overrides can still be applied by the caller if needed.
 public struct CzkawkaAdapter: ScanAdapter {
-    public enum AdapterError: Error, LocalizedError, Sendable {
-        case subcommandFailed(category: CzkawkaCategory, exitCode: Int32, stderr: String)
-
-        public var errorDescription: String? {
-            switch self {
-            case .subcommandFailed(let category, let code, let stderr):
-                "czkawka_cli \(category.subcommand) failed with exit code \(code): \(stderr)"
-            }
-        }
-    }
-
     /// Byte cap for captured czkawka_cli text output. Each subcommand
     /// enumerates candidate paths; a deep similar-image scan against a
     /// messy Photos library can easily produce megabytes of line-oriented

@@ -5,8 +5,6 @@ import OSLog
     import Darwin
 #endif
 
-private let logger = Logger(subsystem: "com.gargantua.core", category: "ProcessSnapshotProvider")
-
 /// Raw per-process sample read straight from libproc / sysctl. The scanner
 /// pairs two of these to derive CPU deltas before producing `ProcessItem`s.
 public struct RawProcessSample: Sendable, Equatable {

@@ -9,14 +9,6 @@ public protocol ScheduledScanNotificationDelivering: Sendable {
     func deliver(summary: ScheduledScanSummary) async
 }
 
-/// Notification backend that intentionally drops scheduled scan summaries.
-public struct NoopScheduledScanNotifier: ScheduledScanNotificationDelivering {
-    /// Creates a no-op notifier.
-    public init() {}
-    /// Ignores the supplied scheduled scan summary.
-    public func deliver(summary: ScheduledScanSummary) async {}
-}
-
 #if os(macOS)
     /// User notification backend for scheduled scan results.
     public struct UserNotificationScheduledScanNotifier: ScheduledScanNotificationDelivering {

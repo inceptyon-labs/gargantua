@@ -13,16 +13,6 @@ public protocol BinaryIdentityResolving: Sendable {
     /// always return a value — when nothing can be determined, the returned
     /// identity has `vendor == .unsigned` and most fields are `nil`.
     func resolve(binaryPath: String) -> BinaryIdentity
-
-    /// Drop any cached identities. Callers that drive long-lived inventory
-    /// passes (Background Items review pane, scheduled scans) should call this
-    /// at the start of each pass so a replaced binary doesn't keep its prior
-    /// trusted classification. Default no-op for stateless implementations.
-    func clearCache()
-}
-
-extension BinaryIdentityResolving {
-    public func clearCache() {}
 }
 
 /// Default implementation. Caches results per binary path because `codesign`

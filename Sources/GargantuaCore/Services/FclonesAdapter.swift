@@ -43,17 +43,6 @@ public struct FclonesTrustDefaults: Sendable {
 /// to a `ScanResult` with review-by-default safety. Each group gets a stable
 /// `fclones_group_<id>` tag so UI layers can cluster duplicates.
 public struct FclonesAdapter: ScanAdapter {
-    public enum AdapterError: Error, LocalizedError, Sendable {
-        case scanFailed(exitCode: Int32, stderr: String)
-
-        public var errorDescription: String? {
-            switch self {
-            case .scanFailed(let code, let stderr):
-                "fclones group failed with exit code \(code): \(stderr)"
-            }
-        }
-    }
-
     /// Default wall-clock timeout: 10 minutes. Large home directories can take
     /// a while; anything longer than this usually signals a hung process.
     public static let defaultTimeout: TimeInterval = 600

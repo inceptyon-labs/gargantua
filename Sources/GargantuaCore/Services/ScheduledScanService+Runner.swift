@@ -113,9 +113,5 @@ public final class ScheduledScanRunner {
 }
 
 private func defaultScheduledScanNotifier() -> any ScheduledScanNotificationDelivering {
-    #if os(macOS)
-        return UserNotificationScheduledScanNotifier()
-    #else
-        return NoopScheduledScanNotifier()
-    #endif
+    return UserNotificationScheduledScanNotifier()
 }

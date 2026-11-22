@@ -60,12 +60,6 @@ public final class ProtectedRootUserStore: @unchecked Sendable {
         lock.unlock()
     }
 
-    public func clear() {
-        lock.lock()
-        defaults.removeObject(forKey: Self.defaultsKey)
-        lock.unlock()
-    }
-
     private func loadStoredEntriesLocked() -> [StoredProtectedRootEntry] {
         guard let data = defaults.data(forKey: Self.defaultsKey),
               let entries = try? JSONDecoder().decode([StoredProtectedRootEntry].self, from: data) else {

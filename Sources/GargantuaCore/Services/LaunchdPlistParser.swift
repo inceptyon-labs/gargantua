@@ -17,9 +17,6 @@ public protocol LaunchdPlistParsing: Sendable {
     /// Parses the plist file at `plistURL`. Throws on read errors and on
     /// well-formed plists that aren't valid launchd jobs.
     func parse(plistURL: URL) throws -> LaunchdPlist
-
-    /// Parses an already-decoded plist dictionary. Useful for tests.
-    func parse(dictionary: [String: Any]) throws -> LaunchdPlist
 }
 
 /// Default parser using `PropertyListSerialization`.

@@ -146,17 +146,7 @@ public final class ScheduledScanController: @unchecked Sendable {
 }
 
 private func defaultScheduledScanInstaller() -> any ScheduledScanAgentInstalling {
-    #if os(macOS)
-        return SMAppServiceScheduledScanAgentInstaller()
-    #else
-        return UnavailableScheduledScanAgentInstaller()
-    #endif
-}
-
-private struct UnavailableScheduledScanAgentInstaller: ScheduledScanAgentInstalling {
-    func status() -> ScheduledScanAgentStatus { .unavailable }
-    func register() throws -> ScheduledScanAgentStatus { .unavailable }
-    func unregister() throws -> ScheduledScanAgentStatus { .unavailable }
+    return SMAppServiceScheduledScanAgentInstaller()
 }
 
 /// Plain-language reasons the background agent can't register.

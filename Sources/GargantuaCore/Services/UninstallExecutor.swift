@@ -15,11 +15,6 @@ public struct UninstallAuthorization: @unchecked Sendable {
     public let authorizationRef: AuthorizationRef?
     private let testingAuthorized: Bool
 
-    public init(authorizationRef: AuthorizationRef) {
-        self.authorizationRef = authorizationRef
-        self.testingAuthorized = false
-    }
-
     private init(testingAuthorized: Bool) {
         self.authorizationRef = nil
         self.testingAuthorized = testingAuthorized

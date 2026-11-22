@@ -1,8 +1,6 @@
 import Foundation
 import OSLog
 
-private let logger = Logger(subsystem: "com.gargantua.core", category: "BackgroundItemScanner")
-
 /// Result of one Background Items scan pass.
 public struct BackgroundItemScan: Sendable, Equatable {
     /// Resolved items, sorted by safety severity then label.
@@ -28,13 +26,6 @@ public struct BackgroundItemScan: Sendable, Equatable {
         self.unparseableCount = unparseableCount
         self.scannedAt = scannedAt
     }
-
-    public static let empty = BackgroundItemScan(
-        items: [],
-        loginItemsNeedPrivileges: false,
-        unparseableCount: 0,
-        scannedAt: .distantPast
-    )
 }
 
 /// Orchestrates `LaunchdItemIndex` + `LoginItemEnumerator` + `BinaryIdentityResolver`

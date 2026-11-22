@@ -99,15 +99,5 @@ public final class LaunchAtLoginController: @unchecked Sendable {
 }
 
 private func defaultLaunchAtLoginInstaller() -> any LaunchAtLoginInstalling {
-    #if os(macOS)
-        return SMAppServiceLaunchAtLoginInstaller()
-    #else
-        return UnavailableLaunchAtLoginInstaller()
-    #endif
-}
-
-private struct UnavailableLaunchAtLoginInstaller: LaunchAtLoginInstalling {
-    func status() -> LaunchAtLoginStatus { .unavailable }
-    func register() throws -> LaunchAtLoginStatus { .unavailable }
-    func unregister() throws -> LaunchAtLoginStatus { .unavailable }
+    return SMAppServiceLaunchAtLoginInstaller()
 }

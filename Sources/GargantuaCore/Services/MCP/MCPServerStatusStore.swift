@@ -2,9 +2,6 @@ import Foundation
 
 /// Receives runtime events from MCP transport/dispatch code.
 public protocol MCPServerStatusReporting: Sendable {
-    func markRunning(transportMode: MCPServerTransportMode)
-    func markStopped()
-    func recordError(_ message: String)
     func replaceCurrentClient(_ identity: MCPClientIdentity?)
     func recordToolCall(_ toolName: MCPToolName, client: MCPClientIdentity?)
 }
