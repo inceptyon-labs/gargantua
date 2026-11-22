@@ -6,6 +6,10 @@ name: CodeQL
 # swift-tools-version 6.3) plus the Metal Toolchain for mlx-swift's
 # BuildMetallibPlugin. The Objective-C shim (GargantuaAppKitShims) is not
 # analyzed: CodeQL's C/C++ extractor does not support Objective-C.
+#
+# The workflow scan runs on every push and pull request. The Swift scan runs
+# weekly and on demand only: tracing the build, dependencies included, takes
+# about 70 minutes on a macOS runner.
 
 on:
   push:
@@ -13,35 +17,53 @@ on:
       - main
   pull_request:
   schedule:
-    - cron: "23 7 * * 1" # Mondays 07:23 UTC, for new queries against unchanged code
+    - cron: "23 7 * * 1" # Mondays 07:23 UTC
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# The event is part of the group so a push to main never queues behind the
+# weekly Swift scan.
 concurrency:
-  group: codeql-${{ github.ref }}
+  group: codeql-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+  analyze-actions:
+    name: Analyze (actions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: actions
-            build-mode: none
-            runner: ubuntu-latest
-          - language: swift
-            build-mode: manual
-            runner: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          languages: actions
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          category: "/language:actions"
+
+  analyze-swift:
+    name: Analyze (swift)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    # 68 minutes of tracing on a normal runner; a slow one passed 120.
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
@@ -54,13 +76,11 @@ jobs:
       # extractor would stop working, so it stays on the Xcode 26 line (26.4
       # or newer for mlx-swift) until CodeQL supports the next compiler.
       - name: Select Xcode 26
-        if: matrix.language == 'swift'
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: "^26.4"
 
       - name: Install Metal Toolchain
-        if: matrix.language == 'swift'
         run: |
           swift --version
           xcodebuild -downloadComponent MetalToolchain
@@ -68,20 +88,18 @@ jobs:
       # Fetch dependencies before tracing starts, so the traced build is
       # compilation only and not the git clones.
       - name: Resolve packages
-        if: matrix.language == 'swift'
         run: swift package resolve
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          languages: swift
+          build-mode: manual
 
       - name: Build
-        if: matrix.language == 'swift'
         run: swift build
 
       - name: Analyze
         uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:swift"
