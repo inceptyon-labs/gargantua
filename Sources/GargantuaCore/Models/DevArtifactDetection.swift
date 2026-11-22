@@ -59,11 +59,10 @@ public enum DevArtifactDetection {
         }
 
         let fm = FileManager.default
-        let suffixesAll = Set(ecosystemMarkers.flatMap(\.suffixes))
 
         for root in scanRoots {
             // First level: the scan root itself.
-            scanDirectory(root, fm: fm, suffixesAll: suffixesAll, detected: &detected)
+            scanDirectory(root, fm: fm, detected: &detected)
             if detected.count == ecosystemMarkers.count + 2 { return detected }
 
             // Second level: immediate children (most projects live one
@@ -77,7 +76,7 @@ public enum DevArtifactDetection {
             for child in children {
                 let isDir = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 guard isDir else { continue }
-                scanDirectory(child, fm: fm, suffixesAll: suffixesAll, detected: &detected)
+                scanDirectory(child, fm: fm, detected: &detected)
                 if detected.count == ecosystemMarkers.count + 2 { return detected }
             }
         }
@@ -91,7 +90,6 @@ public enum DevArtifactDetection {
     private static func scanDirectory(
         _ directory: URL,
         fm: FileManager,
-        suffixesAll: Set<String>,
         detected: inout Set<String>
     ) {
         guard let entries = try? fm.contentsOfDirectory(atPath: directory.path) else { return }

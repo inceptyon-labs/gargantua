@@ -52,7 +52,7 @@ public struct SafetyClassifier: Sendable {
         // Check rule-level overrides first, then profile-level
         let allOverrides = rule.safetyOverrides + profile.safetyOverrides
         if let matched = allOverrides.first(where: { matches(override: $0, profileID: profile.id, lastAccessed: result.lastAccessed, now: now) }) {
-            let classified = applyOverride(matched, baseSafety: rule.safety, baseConfidence: rule.confidence, baseExplanation: rule.explanation)
+            let classified = applyOverride(matched, baseConfidence: rule.confidence, baseExplanation: rule.explanation)
             return floored(classified, rule: rule)
         }
 
@@ -102,7 +102,6 @@ public struct SafetyClassifier: Sendable {
         }) {
             return applyOverride(
                 matched,
-                baseSafety: result.safety,
                 baseConfidence: result.confidence,
                 baseExplanation: result.explanation
             )
@@ -156,7 +155,6 @@ private extension SafetyClassifier {
 
     func applyOverride(
         _ override: SafetyOverride,
-        baseSafety: SafetyLevel,
         baseConfidence: Int,
         baseExplanation: String
     ) -> ClassifiedResult {

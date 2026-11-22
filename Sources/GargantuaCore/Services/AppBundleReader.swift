@@ -82,7 +82,6 @@ public struct DefaultAppBundleReader: AppBundleReading {
         let attrs = try? fileManager.attributesOfItem(atPath: bundleURL.path)
         let installDate = attrs?[.creationDate] as? Date
         let lastUsedDate = resolveLastUsedDate(
-            bundleURL: bundleURL,
             executablePath: executablePath,
             fallback: attrs?[.modificationDate] as? Date
         )
@@ -134,7 +133,6 @@ public struct DefaultAppBundleReader: AppBundleReading {
     /// `kMDItemLastUsedDate` is the canonical source but requires Spotlight
     /// indexing — but this approximation works on every volume.
     private func resolveLastUsedDate(
-        bundleURL: URL,
         executablePath: String?,
         fallback: Date?
     ) -> Date? {

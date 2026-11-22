@@ -4,8 +4,7 @@ extension AISessionScanAdapter {
     /// The session stores Gargantua knows how to read a project path out of,
     /// filtered to the ones present on this machine.
     public static func defaultStores(
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        fileManager: FileManager = .default
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> [AISessionStore] {
         let applicationSupport = homeDirectory
             .appendingPathComponent("Library/Application Support", isDirectory: true)

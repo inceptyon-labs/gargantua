@@ -116,7 +116,7 @@ public struct DeveloperToolBinaryResolver: Sendable {
             tool: tool,
             isInstalled: true,
             executable: executable,
-            version: version.flatMap { Self.parseVersion(tool: tool, output: $0) }
+            version: version.flatMap { Self.parseVersion(output: $0) }
         )
     }
 
@@ -195,7 +195,7 @@ public struct DeveloperToolBinaryResolver: Sendable {
         }
     }
 
-    private static func parseVersion(tool: DeveloperTool, output: ProcessOutput) -> String? {
+    private static func parseVersion(output: ProcessOutput) -> String? {
         guard output.exitCode == 0 else { return nil }
         let text = [output.stdout, output.stderr]
             .joined(separator: "\n")

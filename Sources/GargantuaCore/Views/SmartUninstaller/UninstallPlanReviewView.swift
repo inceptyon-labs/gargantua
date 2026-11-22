@@ -44,7 +44,7 @@ struct UninstallPlanReviewView: View {
                     .padding(GargantuaSpacing.space5)
                 }
 
-                footer(plan: plan)
+                footer()
             }
         } else {
             EmptyView()
@@ -146,7 +146,7 @@ struct UninstallPlanReviewView: View {
                 }
                 .buttonStyle(.plain)
 
-                categoryBulkAction(items: items, selectedCount: selectedCount)
+                categoryBulkAction(items: items)
             }
 
             if !isCollapsed {
@@ -164,7 +164,7 @@ struct UninstallPlanReviewView: View {
         }
     }
 
-    private func categoryBulkAction(items: [RemnantItem], selectedCount: Int) -> some View {
+    private func categoryBulkAction(items: [RemnantItem]) -> some View {
         let actionable = items.filter { $0.safety.isActionable || ($0.safety == .protected_ && viewModel.includeProtected) }
         let allSelected = !actionable.isEmpty && actionable.allSatisfy { viewModel.selectedIDs.contains($0.id) }
 
@@ -185,7 +185,7 @@ struct UninstallPlanReviewView: View {
 
     // MARK: - Footer
 
-    private func footer(plan: UninstallPlan) -> some View {
+    private func footer() -> some View {
         let selectedCount = viewModel.selectedIDs.count
         return VStack(spacing: 0) {
             Rectangle()
