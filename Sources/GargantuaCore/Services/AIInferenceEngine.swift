@@ -33,7 +33,7 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
 
     /// Generate explanation text for a scan result using the loaded model.
     ///
-    /// Engines that rely on model weights require `isLoaded == true`;
+    /// Engines that rely on model weights must be loaded first;
     /// `LocalAIService` ensures the engine is loaded before calling.
     /// Engines that don't need weights (e.g., deterministic templates)
     /// may generate without being loaded.

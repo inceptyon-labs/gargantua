@@ -57,8 +57,7 @@ public enum AIModelLifecycleState: Sendable, Equatable {
 
 /// Protocol for on-device AI services (Tier 1: local MLX inference).
 ///
-/// Conforming types manage model lifecycle (lazy load, eager unload)
-/// and provide explanation generation for scan results.
+/// Conforming types provide explanation generation for scan results.
 /// AI explanations are advisory only — they never change safety classifications.
 @MainActor
 public protocol AIServiceProtocol: AnyObject, Sendable {

@@ -15,10 +15,8 @@ public struct SettingsView: View {
     /// Observed so the App Updates toggle redraws when its stored preferences change.
     @AppStorage(AppReleasePreferences.userDefaultsKey) var appReleasePreferencesData = Data()
 
-    /// App-shared download manager. When `init(persistence:)` is used without
-    /// an explicit manager, the view owns its own `@StateObject` so standalone
-    /// previews still work; when `MainContentView` injects one, the view
-    /// observes the app-level instance and download state flows through to
+    /// App-shared download manager, injected by `MainContentView`. The view
+    /// observes the app-level instance, so download state flows through to
     /// every other scan view that also observes it.
     @StateObject private var ownedManager: ModelDownloadManager
     @ObservedObject var downloadManager: ModelDownloadManager

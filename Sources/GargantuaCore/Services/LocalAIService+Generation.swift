@@ -1,10 +1,15 @@
 import Foundation
 
 extension LocalAIService {
-    /// Produce a post-cleanup narrative (see `AIServiceProtocol.narrate`).
-    /// Non-throwing: any model-availability, load, or engine failure falls
-    /// back to the deterministic template so the summary view never has to
-    /// render an empty block or an error banner.
+    /// Produce a short post-cleanup narrative (1-2 sentences) for display in
+    /// `CleanupSummaryView`.
+    ///
+    /// Non-throwing: when no model is available on disk, the engine fails to
+    /// load, or the engine throws during generation, falls back to a
+    /// deterministic template narrative derived from the `CleanupResult`'s own
+    /// fields, so the summary view never has to render an empty block or an
+    /// error banner. Display-only: the narrative is not persisted to the audit
+    /// record.
     public func narrate(cleanup result: CleanupResult) async -> CleanupNarrative {
         let fallback = CleanupNarrative(
             text: CleanupNarrativeTemplate.text(for: result),

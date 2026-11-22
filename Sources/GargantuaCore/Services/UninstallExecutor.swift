@@ -8,9 +8,9 @@ private let uninstallLogger = Logger(subsystem: "com.gargantua.core", category: 
 
 /// Authorization token passed to privileged uninstall helpers.
 ///
-/// Production callers should initialize this with an `AuthorizationRef`
-/// obtained from Authorization Services. Tests may use the explicit testing
-/// initializer so admin-path gating can be exercised without prompting.
+/// Created only through `privilegedHelperApproved` (production, once the
+/// privileged helper is approved) and `authorizedForTesting`, so
+/// `authorizationRef` is currently always nil.
 public struct UninstallAuthorization: @unchecked Sendable {
     public let authorizationRef: AuthorizationRef?
     private let testingAuthorized: Bool
