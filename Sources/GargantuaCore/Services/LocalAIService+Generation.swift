@@ -5,11 +5,11 @@ extension LocalAIService {
     /// `CleanupSummaryView`.
     ///
     /// Non-throwing: when no model is available on disk, the engine fails to
-    /// load, or the engine throws during generation, falls back to a
-    /// deterministic template narrative derived from the `CleanupResult`'s own
-    /// fields, so the summary view never has to render an empty block or an
-    /// error banner. Display-only: the narrative is not persisted to the audit
-    /// record.
+    /// load or isn't ready after loading, the engine throws during generation,
+    /// or it returns empty output, falls back to a deterministic template
+    /// narrative derived from the `CleanupResult`'s own fields, so the summary
+    /// view never has to render an empty block or an error banner.
+    /// Display-only: the narrative is not persisted to the audit record.
     public func narrate(cleanup result: CleanupResult) async -> CleanupNarrative {
         let fallback = CleanupNarrative(
             text: CleanupNarrativeTemplate.text(for: result),

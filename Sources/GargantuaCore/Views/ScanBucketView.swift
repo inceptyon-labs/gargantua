@@ -14,7 +14,6 @@ import SwiftUI
 /// - Space: toggle selection of focused item
 /// - Cmd+A: select all safe items
 /// - Enter: trigger clean flow
-/// - Tab: jump to next group
 /// - Escape: clear focus
 public struct ScanBucketListView: View {
     public let results: [ScanResult]

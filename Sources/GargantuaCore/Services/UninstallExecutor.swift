@@ -8,8 +8,8 @@ private let uninstallLogger = Logger(subsystem: "com.gargantua.core", category: 
 
 /// Authorization token passed to privileged uninstall helpers.
 ///
-/// Created only through `privilegedHelperApproved` (production, once the
-/// privileged helper is approved) and `authorizedForTesting`, so
+/// Created only through `privilegedHelperApproved` (production; the helper
+/// checks its own approval when called) and `authorizedForTesting`, so
 /// `authorizationRef` is currently always nil.
 public struct UninstallAuthorization: @unchecked Sendable {
     public let authorizationRef: AuthorizationRef?

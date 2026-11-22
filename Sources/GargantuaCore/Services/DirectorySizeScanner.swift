@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import os
 
-/// Classification of a single directory child, used by `streamChildren` so the UF_HIDDEN/dotfile,
+/// Classification of a single directory child, used by `streamChildren` and `looseFiles(in:)` so the UF_HIDDEN/dotfile,
 /// mount-root, and permission logic lives in one place.
 enum ChildKind {
     case skip

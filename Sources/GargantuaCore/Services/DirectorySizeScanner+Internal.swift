@@ -4,7 +4,7 @@ import Foundation
 // MARK: - Internal
 
 //
-// Synchronous scanning and the core recursive sizer, split out of DirectorySizeScanner.swift
+// Streaming child sizing and the core recursive sizer, split out of DirectorySizeScanner.swift
 // to stay under SwiftLint's file/type length budgets.
 
 extension DirectorySizeScanner {
