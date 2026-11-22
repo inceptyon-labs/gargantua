@@ -40,23 +40,6 @@ extension ScanBucketListView {
         focusedItemID = nil
     }
 
-    func jumpToNextGroup() {
-        let expandedList = groups.filter { isGroupExpanded($0.id) && !$0.items.isEmpty }
-        guard !expandedList.isEmpty else { return }
-
-        if let currentID = focusedItemID {
-            let currentIdx = expandedList.firstIndex { $0.items.contains { $0.id == currentID } }
-            if let idx = currentIdx {
-                let nextIdx = (idx + 1) % expandedList.count
-                focusedItemID = expandedList[nextIdx].items.first?.id
-            } else {
-                focusedItemID = expandedList.first?.items.first?.id
-            }
-        } else {
-            focusedItemID = expandedList.first?.items.first?.id
-        }
-    }
-
     func deselectAll() {
         selectedIDs = []
     }

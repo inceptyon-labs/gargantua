@@ -49,23 +49,6 @@ public struct AIModelsView: View {
         self.onResolveFilter = onResolveFilter
     }
 
-    @MainActor
-    public init(
-        profile: CleanupProfile = .aiModels,
-        adapter: (any ScanAdapter)? = nil
-    ) {
-        self.init(
-            profile: profile,
-            scanRoots: nil,
-            adapter: adapter,
-            aiModelExcludedPaths: [],
-            session: AIModelsState(),
-            onExplain: nil,
-            onAdvisory: nil,
-            onResolveFilter: nil
-        )
-    }
-
     public var body: some View {
         ZStack {
             GargantuaColors.void_

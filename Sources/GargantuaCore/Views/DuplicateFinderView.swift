@@ -102,8 +102,6 @@ public struct DuplicateFinderView: View {
         }
     }
 
-    private var visibleResults: [ScanResult] { derivation.visibleResults }
-
     private var hiddenSummary: DuplicateFinderHiddenSummary { derivation.hidden }
 
     var groups: [DuplicateGroup] { derivation.groups }

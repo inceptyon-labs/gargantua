@@ -13,14 +13,6 @@ struct DuplicateFinderDerivation {
     let totalReclaimableCeiling: Int64
     let selectableByID: [String: ScanResult]
 
-    static let empty = DuplicateFinderDerivation(
-        visibleResults: [],
-        groups: [],
-        hidden: DuplicateFinderHiddenSummary(groups: 0, files: 0, reclaimableBytes: 0),
-        totalReclaimableCeiling: 0,
-        selectableByID: [:]
-    )
-
     static func compute(
         results: [ScanResult],
         showEverything: Bool,

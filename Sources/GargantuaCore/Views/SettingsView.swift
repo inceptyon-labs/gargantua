@@ -43,16 +43,6 @@ public struct SettingsView: View {
         UserDefaults.standard.set(SettingsTab.license.rawValue, forKey: SettingsTab.selectedTabKey)
     }
 
-    public init(persistence: PersistenceController) {
-        let manager = ModelDownloadManager()
-        let updateSettingsViewModel = AppUpdateSettingsViewModel()
-        self.persistence = persistence
-        self._ownedManager = StateObject(wrappedValue: manager)
-        self._downloadManager = ObservedObject(wrappedValue: manager)
-        self._ownedUpdateSettingsViewModel = StateObject(wrappedValue: updateSettingsViewModel)
-        self._updateSettingsViewModel = ObservedObject(wrappedValue: updateSettingsViewModel)
-    }
-
     public init(
         persistence: PersistenceController,
         downloadManager: ModelDownloadManager,

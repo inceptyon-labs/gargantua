@@ -161,38 +161,6 @@ public final class ProcessInventorySession {
         }
         return outcome
     }
-
-    /// Re-rank the captured snapshot in place. Avoids the 500 ms sample
-    /// window when the user just wants to toggle between CPU and Memory.
-    /// If the original scan was top-N capped, this re-sorts that same slice.
-    public func resort(by metric: ProcessSortMetric) {
-        guard let current = scan else { return }
-        if current.sortedBy == metric { return }
-        let resorted = Self.rank(current.items, by: metric)
-        self.scan = ProcessInventoryScan(
-            items: resorted,
-            totalProcessCount: current.totalProcessCount,
-            sortedBy: metric,
-            topN: current.topN,
-            scannedAt: current.scannedAt
-        )
-    }
-
-    /// Mirrors `DefaultProcessInventoryScanner.rank` so the in-place re-sort
-    /// agrees with the scanner's tie-break ordering. Keep these aligned.
-    private static func rank(_ items: [ProcessItem], by metric: ProcessSortMetric) -> [ProcessItem] {
-        items.sorted { lhs, rhs in
-            let lhsP = DefaultProcessInventoryScanner.primary(lhs, metric: metric)
-            let rhsP = DefaultProcessInventoryScanner.primary(rhs, metric: metric)
-            if lhsP != rhsP { return lhsP > rhsP }
-            let lhsS = DefaultProcessInventoryScanner.secondary(lhs, metric: metric)
-            let rhsS = DefaultProcessInventoryScanner.secondary(rhs, metric: metric)
-            if lhsS != rhsS { return lhsS > rhsS }
-            let nameCmp = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
-            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
-            return lhs.id < rhs.id
-        }
-    }
 }
 
 // MARK: - Synthetic ScanResult bridge

@@ -28,17 +28,6 @@ public struct SidebarView: View {
     @MainActor
     public init(
         selection: Binding<String?>,
-        sections: [SidebarSection] = SidebarSection.defaultSections
-    ) {
-        self._selection = selection
-        self.sections = sections
-        self.mcpStatusModel = MCPServerStatusViewModel()
-        self.updateModel = nil
-    }
-
-    @MainActor
-    public init(
-        selection: Binding<String?>,
         sections: [SidebarSection] = SidebarSection.defaultSections,
         mcpStatusModel: MCPServerStatusViewModel,
         updateModel: AppUpdateSettingsViewModel? = nil,

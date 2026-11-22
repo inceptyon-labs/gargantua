@@ -22,13 +22,6 @@ public struct DuplicateGroup: Identifiable, Sendable {
 
     public var fileCount: Int { files.count }
 
-    public var totalSize: Int64 {
-        files.reduce(Int64(0)) { sum, result in
-            let (next, overflow) = sum.addingReportingOverflow(result.size)
-            return overflow ? Int64.max : next
-        }
-    }
-
     /// Maximum reclaimable bytes when keeping exactly one copy — equals
     /// `(fileCount - 1) * perFileSize`. Returns 0 for degenerate single-file
     /// groups. Overflow-clamped at `Int64.max`.

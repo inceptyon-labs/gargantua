@@ -43,11 +43,6 @@ public struct DeepCleanView: View {
         self.onCleanupCompleted = onCleanupCompleted
     }
 
-    @MainActor
-    public init(profile: CleanupProfile = .deep, adapter: (any ScanAdapter)? = nil) {
-        self.init(profile: profile, adapter: adapter, session: DeepCleanSessionState(), onExplain: nil, onAdvisory: nil)
-    }
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var blockedReason: BlockReason?
 

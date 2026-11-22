@@ -149,18 +149,6 @@ public struct ScanBucketListView: View {
         ScanResultOverlapReconciler.distinctBytes(subset, containers: groupMemo.containers(results: results))
     }
 
-    private var hasReviewItems: Bool {
-        displayedResults.contains(where: { $0.safety == .review })
-    }
-
-    private var reviewItemCount: Int {
-        displayedResults.filter { $0.safety == .review }.count
-    }
-
-    private var reviewReclaimableBytes: Int64 {
-        distinctBytes(displayedResults.filter { $0.safety == .review })
-    }
-
     var hasRefinementTools: Bool {
         onResolveNaturalLanguageFilter != nil
     }

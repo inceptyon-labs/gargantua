@@ -7,14 +7,6 @@ public enum UninstallAppSort: String, CaseIterable, Sendable {
     case size
     case lastUsed
 
-    public var label: String {
-        switch self {
-        case .name: "Name"
-        case .size: "Size"
-        case .lastUsed: "Last used"
-        }
-    }
-
     /// The direction users expect by default when first selecting this field.
     /// Names read alphabetically, but for size and recency the interesting
     /// rows are at the top in descending order.
@@ -153,11 +145,6 @@ public final class SmartUninstallerViewModel {
             sort = field
             sortAscending = field.defaultAscending
         }
-    }
-
-    /// Flip the current sort direction without changing the field.
-    public func toggleSortDirection() {
-        sortAscending.toggle()
     }
 
     // MARK: - Task tracking

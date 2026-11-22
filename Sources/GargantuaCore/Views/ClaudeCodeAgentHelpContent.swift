@@ -21,7 +21,6 @@ public enum ClaudeCodeAgentHelpContent {
         + "version cleanup, criterion filtering (\u{2018}haven\u{2019}t used in 6 months\u{2019})."
 
     public static let disclaimerFallback = "For routine cleanup, run Deep Scan instead"
-    public static let disclaimerFallbackDetail = "it\u{2019}s faster and produces the same result for the common case."
 
     // MARK: When to use Agent Run — example prompts
 

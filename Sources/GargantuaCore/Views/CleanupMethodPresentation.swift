@@ -33,14 +33,6 @@ extension CleanupMethod {
         }
     }
 
-    var progressTitle: String {
-        switch self {
-        case .trash: "Moving items to Trash..."
-        case .delete: "Deleting items permanently..."
-        case .toolNative: "Running tool cleanup..."
-        }
-    }
-
     var summaryActionText: String {
         switch self {
         case .trash: "moved to Trash"
