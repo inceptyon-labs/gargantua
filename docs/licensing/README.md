@@ -7,7 +7,7 @@ Gargantua is sold through **Polar.sh** (Merchant of Record). Source stays AGPL-3
 1. Customer buys at the Polar checkout link (`LicensePolarConfig.checkoutURL`).
 2. Polar issues a license key (prefix `GARG`) shown on the confirmation page + emailed.
 3. Customer pastes the key into **Settings → License → Activate** (or the unlock sheet when a gated action is blocked).
-4. The app calls Polar's **public** customer-portal API to activate (binds the key to this Mac, max 3) and stores a local receipt at `~/Library/Application Support/Gargantua/license.json`.
+4. The app calls Polar's **public** customer-portal API to activate (binds the key to this Mac, max 3) and stores the receipt in the Keychain (`KeychainLicenseReceiptStorage`, service `com.gargantua.licensing`). A pre-Keychain `~/Library/Application Support/Gargantua/license.json` is migrated once on first launch and not trusted after that.
 5. On launch the app revalidates in the background; the cached `granted` state is trusted for a 14-day offline grace window.
 
 ## Why Polar (not FastSpring)

@@ -76,7 +76,7 @@ public struct WorkspaceInstalledAppResolver: OwningAppResolving {
     nonisolated(unsafe) private let fileManager: FileManager
     private let processRunner: any ProcessRunner
     private let workspaceLookup: @Sendable (String) -> Bool
-    /// Helper bundle ids (`…​.helper`/`.daemon`/`.agent`/`.xpc`) often belong to
+    /// Helper bundle ids (`….helper`/`.daemon`/`.agent`/`.xpc`) often belong to
     /// a parent app; if the parent is installed, the helper is not orphaned.
     private static let helperSuffixes = [".helper", ".daemon", ".agent", ".xpc"]
 

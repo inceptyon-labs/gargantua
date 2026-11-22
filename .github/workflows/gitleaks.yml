@@ -36,7 +36,7 @@ jobs:
 
       # gitleaks' built-in config never opens lockfiles, *.svg, go.mod, vendored
       # directories and a few more. Scan the tracked ones again under neutral names.
-      # The list mirrors secret-gate.sh in the repo-ready skill.
+      # The list mirrors secret-gate.sh in the repo-tidy skill.
       - name: Scan files gitleaks skips by default
         env:
           SKIPPED: 'gitleaks\.toml|\.(bmp|gif|jpe?g|png|svg|tiff?|eot|[ot]tf|woff2?|docx?|xlsx?|pdf|bin|socket|vsidx|v2|suo|wsuo|dll|pdb|exe|gltf|gem)$|go\.(mod|sum|work(\.sum)?)$|(^|/)(node_modules|bower_components|vendor)/|(^|/)(deno\.lock|npm-shrinkwrap\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|pipfile\.lock|poetry\.lock|gradle\.lockfile|gradlew(\.bat)?|mvnw(\.cmd)?|javascript\.json)$|(^|/)\.mvn/wrapper/|(^|/)(angular|bootstrap|jquery(-?ui)?|plotly|swagger-?ui)[a-z0-9.-]*\.js(\.map)?$|verification-metadata\.xml|database\.refactorlog|(^|/)(v?env|virtualenv)/lib|(^|/)(lib(64)?/python[23]|python/[23])|\.dist-info(/|$)|\.min\.js(\.map)?$'

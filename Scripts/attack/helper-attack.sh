@@ -35,8 +35,6 @@ pass() { printf '  PASS  %s\n' "$1"; PASS=$((PASS + 1)); }
 fail() { printf '  FAIL  %s\n        %s\n' "$1" "$2"; FAIL=$((FAIL + 1)); }
 section() { printf '\n== %s\n' "$1"; }
 
-# ---------------------------------------------------------------- setup
-
 command -v swiftc >/dev/null || die "swiftc not found (install Xcode command-line tools)"
 [ -d "$APP" ] || die "app not found at $APP"
 
@@ -74,8 +72,6 @@ cp "$WORK/probe" "$GOOD"; cp "$WORK/probe" "$ADHOC"; cp "$WORK/probe" "$WRONGID"
 codesign -f -s "$IDENTITY" -i "$APP_ID" "$GOOD" 2>/dev/null || die "codesign failed for $IDENTITY"
 codesign -f -s - -i "$APP_ID" "$ADHOC" 2>/dev/null || die "ad-hoc codesign failed"
 codesign -f -s "$IDENTITY" -i "$APP_ID.attack-probe" "$WRONGID" 2>/dev/null || die "codesign failed"
-
-# ---------------------------------------------------------------- helpers
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
@@ -122,8 +118,6 @@ expect_refused() {
         pass "$name"
     fi
 }
-
-# ---------------------------------------------------------------- run
 
 echo "App:      $APP ($(defaults read "$APP/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo '?'))"
 echo "Signer:   $IDENTITY"
@@ -261,8 +255,6 @@ else
     code="$(status -H 'Host:' "http://127.0.0.1:$PORT/sse")"
     if [[ "$code" == 4* ]]; then pass "Missing Host header is rejected (HTTP $code)"; else fail "Missing Host header is rejected" "HTTP $code"; fi
 fi
-
-# ---------------------------------------------------------------- summary
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
