@@ -421,12 +421,6 @@ private actor FakeCloudAITransport: CloudAITransport {
         #expect(apiKey.hasPrefix("sk-ant-"))
         return response
     }
-
-    nonisolated func stream(_ request: CloudAIRequest, apiKey: String) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            continuation.finish()
-        }
-    }
 }
 
 /// Like `FakeCloudAITransport` but accepts any key (incl. empty), for the
@@ -444,11 +438,5 @@ private actor PermissiveFakeCloudAITransport: CloudAITransport {
         callCount += 1
         lastKey = apiKey
         return response
-    }
-
-    nonisolated func stream(_ request: CloudAIRequest, apiKey: String) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            continuation.finish()
-        }
     }
 }

@@ -45,7 +45,6 @@ struct SidebarUpdateRow: View {
             .focusEffectDisabled()
             .nativeToolTip(title, isEnabled: isCollapsed)
             .onHover { isHovered = $0 }
-            .animation(.easeOut(duration: 0.12), value: isHovered)
             .padding(.bottom, GargantuaSpacing.space2)
             .accessibilityLabel(model.updateVersion.map { "Install update, version \($0)" } ?? "Install update")
         }

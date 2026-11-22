@@ -70,7 +70,6 @@ private struct CollapseToggle: View {
         .focusEffectDisabled()
         .nativeToolTip(isCollapsed ? "Expand sidebar (⌥⌘S)" : "Collapse sidebar (⌥⌘S)")
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
         .accessibilityLabel(isCollapsed ? "Expand sidebar" : "Collapse sidebar")
     }
 }

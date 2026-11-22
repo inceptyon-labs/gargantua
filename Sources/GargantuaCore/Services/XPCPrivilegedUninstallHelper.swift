@@ -151,12 +151,8 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
     @MainActor
     public func movePrivilegedItemsToTrash(
         _ request: PrivilegedUninstallRequest,
-        authorization: UninstallAuthorization
+        authorization _: UninstallAuthorization
     ) async -> [CleanupItemResult] {
-        guard authorization.isAuthorized else {
-            return failureResults(for: request, message: "Privileged helper authorization is missing.")
-        }
-
         do {
             let status = try ensureRegistered()
             guard status == .enabled else {

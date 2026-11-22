@@ -197,7 +197,6 @@ private enum NarrateFakeError: Error { case boom }
 @MainActor
 private final class NarrateFakeEngine: AIInferenceEngine {
     let kind: AIEnginePreference = .mlx
-    private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
     private let output: String
@@ -216,12 +215,10 @@ private final class NarrateFakeEngine: AIInferenceEngine {
 
     func load(modelPath: String, modelSize: Int64) async throws {
         if let loadError { throw loadError }
-        isLoaded = true
         memoryUsage = modelSize
     }
 
     func unload() {
-        isLoaded = false
         memoryUsage = 0
     }
 

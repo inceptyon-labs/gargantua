@@ -59,6 +59,11 @@ public enum CleanupFailureClassifier {
         let raw = (error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         switch kind(of: error) {
         case .ownership:
+            // The helper already tried and refused: its allow-list covers system
+            // cache and log folders only, so "needs the helper" would be wrong.
+            if false {
+                return "Permission denied, and it’s outside the system folders Gargantua’s privileged helper may clean."
+            }
             return "Owned by macOS or another user — needs Gargantua’s privileged helper."
         case .permission:
             return "Permission denied for this item."

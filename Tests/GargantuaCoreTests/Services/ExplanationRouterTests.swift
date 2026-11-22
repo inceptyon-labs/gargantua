@@ -55,9 +55,7 @@ struct ExplanationRouterTests {
 
 @MainActor
 private final class RouterStubService: AIServiceProtocol {
-    var lifecycleState: AIModelLifecycleState = .ready
     var isModelAvailable = true
-    var modelMemoryUsage: Int64 = 0
     private(set) var callCount = 0
     private let text: String
 
@@ -67,10 +65,4 @@ private final class RouterStubService: AIServiceProtocol {
         callCount += 1
         return AIExplanation(text: text, source: .ai)
     }
-
-    func narrate(cleanup _: CleanupResult) async -> CleanupNarrative {
-        CleanupNarrative(text: "", source: .template)
-    }
-
-    func unloadModel() {}
 }

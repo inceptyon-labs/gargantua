@@ -37,16 +37,13 @@ struct AIInferenceEngineNarrateDefaultTests {
 @MainActor
 private final class NarrateFakeEngineNoOverride: AIInferenceEngine {
     let kind: AIEnginePreference = .mlx
-    private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
     func load(modelPath: String, modelSize: Int64) async throws {
-        isLoaded = true
         memoryUsage = modelSize
     }
 
     func unload() {
-        isLoaded = false
         memoryUsage = 0
     }
 

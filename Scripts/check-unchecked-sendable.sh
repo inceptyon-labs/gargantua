@@ -28,7 +28,7 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
 fi
 
 # Raise only with a reviewed justification; lower whenever an opt-out goes away.
-BASELINE=63
+BASELINE=62
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"

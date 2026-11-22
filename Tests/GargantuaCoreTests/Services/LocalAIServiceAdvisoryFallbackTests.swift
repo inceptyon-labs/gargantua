@@ -157,7 +157,6 @@ private enum FakeAdvisoryError: Error { case boom }
 @MainActor
 private final class FakeAdvisoryEngine: AIInferenceEngine {
     let kind: AIEnginePreference
-    private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
     private(set) var advisoryCallCount = 0
@@ -182,12 +181,10 @@ private final class FakeAdvisoryEngine: AIInferenceEngine {
     }
 
     func load(modelPath: String, modelSize: Int64) async throws {
-        isLoaded = true
         memoryUsage = modelSize
     }
 
     func unload() {
-        isLoaded = false
         memoryUsage = 0
     }
 

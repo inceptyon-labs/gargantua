@@ -67,7 +67,6 @@ private enum FakeScanFilterError: Error { case boom }
 @MainActor
 private final class FakeScanFilterEngine: AIInferenceEngine {
     let kind: AIEnginePreference = .mlx
-    private(set) var isLoaded: Bool = false
     private(set) var memoryUsage: Int64 = 0
 
     private(set) var loadCallCount = 0
@@ -83,12 +82,10 @@ private final class FakeScanFilterEngine: AIInferenceEngine {
 
     func load(modelPath: String, modelSize: Int64) async throws {
         loadCallCount += 1
-        isLoaded = true
         memoryUsage = modelSize
     }
 
     func unload() {
-        isLoaded = false
         memoryUsage = 0
     }
 

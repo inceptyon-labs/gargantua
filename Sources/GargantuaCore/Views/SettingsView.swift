@@ -15,12 +15,11 @@ public struct SettingsView: View {
     /// Observed so the App Updates toggle redraws when its stored preferences change.
     @AppStorage(AppReleasePreferences.userDefaultsKey) var appReleasePreferencesData = Data()
 
-    /// App-shared download manager, injected by `MainContentView`. The view
-    /// observes the app-level instance, so download state flows through to
-    /// every other scan view that also observes it.
-    @StateObject private var ownedManager: ModelDownloadManager
+    /// App-shared download manager and update settings, injected and owned by
+    /// `MainContentView`. The view observes the app-level instances, so
+    /// download state flows through to every other scan view that also
+    /// observes it.
     @ObservedObject var downloadManager: ModelDownloadManager
-    @StateObject private var ownedUpdateSettingsViewModel: AppUpdateSettingsViewModel
     @ObservedObject var updateSettingsViewModel: AppUpdateSettingsViewModel
     @State var settings: PersistedSettings?
     @State var availableProfiles: [CleanupProfile] = CleanupProfile.builtIn
@@ -47,11 +46,7 @@ public struct SettingsView: View {
         updateSettingsViewModel: AppUpdateSettingsViewModel
     ) {
         self.persistence = persistence
-        // `@StateObject` still needs a default; unused when the caller injects,
-        // but it has to exist for the property wrapper to initialize cleanly.
-        self._ownedManager = StateObject(wrappedValue: downloadManager)
         self._downloadManager = ObservedObject(wrappedValue: downloadManager)
-        self._ownedUpdateSettingsViewModel = StateObject(wrappedValue: updateSettingsViewModel)
         self._updateSettingsViewModel = ObservedObject(wrappedValue: updateSettingsViewModel)
     }
 

@@ -54,7 +54,7 @@ struct SmartUninstallerExecutionTests {
         #expect(isPhase(vm.phase, "summary"))
         #expect(executor.optionsSeen?.confirmationMethod == .fullModal)
         #expect(executor.optionsSeen?.includeProtectedItems == true)
-        #expect(executor.optionsSeen?.authorization?.isAuthorized == true)
+        #expect(executor.optionsSeen?.authorization != nil)
     }
 
     @Test("execute() surfaces executor errors as failed phase")

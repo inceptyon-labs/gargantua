@@ -107,7 +107,6 @@ private struct SidebarItemRow: View {
             isHovered = hovering
         }
         .animation(.easeOut(duration: Self.transitionDuration), value: isSelected)
-        .animation(.easeOut(duration: Self.transitionDuration), value: isHovered)
         .accessibilityLabel(accessibilityText)
     }
 

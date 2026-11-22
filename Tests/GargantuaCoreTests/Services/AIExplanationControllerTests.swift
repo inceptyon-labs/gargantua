@@ -292,9 +292,7 @@ private enum StubError: Error, LocalizedError {
 
 @MainActor
 private final class StubAIService: AIServiceProtocol {
-    var lifecycleState: AIModelLifecycleState = .unloaded
     var isModelAvailable: Bool = true
-    var modelMemoryUsage: Int64 = 0
 
     private let result: Result<AIExplanation, Error>
     private var gate: CheckedContinuation<Void, Never>?
@@ -330,13 +328,4 @@ private final class StubAIService: AIServiceProtocol {
         case .failure(let error): throw error
         }
     }
-
-    func narrate(cleanup result: CleanupResult) async -> CleanupNarrative {
-        CleanupNarrative(
-            text: CleanupNarrativeTemplate.text(for: result),
-            source: .rule
-        )
-    }
-
-    func unloadModel() {}
 }

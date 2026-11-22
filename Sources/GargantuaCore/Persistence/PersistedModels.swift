@@ -134,42 +134,6 @@ public final class PersistedSettings {
     }
 }
 
-// MARK: - Persisted Scan History
-
-/// SwiftData model tracking scan results over time.
-@Model
-public final class PersistedScanHistory {
-    /// Date when the scan history row was recorded.
-    public var scanDate: Date
-    /// Category represented by this history row.
-    public var category: String
-    /// Number of items found for the category.
-    public var itemCount: Int
-    /// Total bytes found for the category.
-    public var totalBytes: Int64
-    /// Bytes freed from this scan category.
-    public var bytesFreed: Int64
-    /// Cleanup profile used for the scan.
-    public var profileID: String
-
-    /// Creates a persisted scan history row.
-    public init(
-        scanDate: Date = Date(),
-        category: String,
-        itemCount: Int,
-        totalBytes: Int64,
-        bytesFreed: Int64 = 0,
-        profileID: String
-    ) {
-        self.scanDate = scanDate
-        self.category = category
-        self.itemCount = itemCount
-        self.totalBytes = totalBytes
-        self.bytesFreed = bytesFreed
-        self.profileID = profileID
-    }
-}
-
 // MARK: - Persisted Path Exclusion Entry
 
 /// SwiftData model for persisting path exclusion entries.

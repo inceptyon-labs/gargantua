@@ -166,7 +166,6 @@ struct ProcessInventoryScannerTests {
                 resolved.append(binaryPath)
                 return BinaryIdentity(binaryPath: binaryPath, vendor: .unsigned)
             }
-            func clearCache() {}
         }
 
         let samples = (1 ... 100).map { i in
@@ -199,38 +198,6 @@ struct ProcessInventoryScannerTests {
         #expect(scan.items.count == 10)
         #expect(scan.totalProcessCount == 100)
         #expect(resolver.resolved.count == 10)
-    }
-
-    @Test("Scanner keeps the resolver cache warm across passes (no per-pass clear)")
-    func resolverCacheNotClearedPerPass() async {
-        // The resolver now self-invalidates by path + mtime, so the scanner must
-        // NOT wipe it each pass — keeping it warm is what makes per-keystroke
-        // search cheap. A replaced binary re-resolves on its own via mtime.
-        final class CountingResolver: BinaryIdentityResolving, @unchecked Sendable {
-            var clearCount = 0
-            func resolve(binaryPath: String) -> BinaryIdentity {
-                BinaryIdentity(binaryPath: binaryPath, vendor: .unsigned)
-            }
-            func clearCache() { clearCount += 1 }
-        }
-        let counting = CountingResolver()
-        let scanner = DefaultProcessInventoryScanner(
-            snapshotProvider: TwoShotProvider(first: [], second: []),
-            launchdIndex: StubLaunchdIndex(items: []),
-            resolver: counting,
-            matcher: ProcessLaunchSourceMatcher(),
-            classifier: ProcessSafetyClassifier(),
-            fileExists: { _ in true },
-            userNameForUID: { _ in nil },
-            foregroundPIDs: { [] },
-            sampleIntervalNanoseconds: 0,
-            now: { Date() },
-            sleep: { _ in }
-        )
-
-        _ = await scanner.scan(metric: .cpu, topN: nil)
-        _ = await scanner.scan(metric: .cpu, topN: nil)
-        #expect(counting.clearCount == 0)
     }
 
     @Test("Launchd-matched process surfaces its plist path through launchSource")

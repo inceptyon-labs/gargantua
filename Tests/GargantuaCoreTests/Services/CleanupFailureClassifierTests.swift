@@ -12,6 +12,15 @@ struct CleanupFailureReasonTests {
             .contains("privileged helper"))
     }
 
+    @Test("A path the helper already rejected doesn't claim the helper is needed")
+    func helperRejectedPath() {
+        let raw = "“mod” couldn’t be removed because you don’t have permission to access it. "
+            + "(privileged removal also failed: Privileged helper rejected path: /Users/me/go/pkg/mod)"
+        let reason = CleanupFailureClassifier.friendlyReason(for: raw)
+        #expect(!reason.contains("needs"))
+        #expect(reason.contains("outside the system folders"))
+    }
+
     @Test("nil, empty, and bare \"unknown error\" never leak to the user")
     func noRawFallthrough() {
         let expected = "Couldn’t be removed — macOS gave no further detail."

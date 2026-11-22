@@ -4,8 +4,8 @@ import SwiftData
 /// Manages SwiftData persistence for Gargantua.
 ///
 /// Provides the ModelContainer, and CRUD operations for profiles, settings,
-/// audit entries, and scan history. Call `bootstrap()` on first launch to
-/// seed built-in profiles and default settings.
+/// path exclusions and personal-scope roots. Call `bootstrap()` on first
+/// launch to seed built-in profiles and default settings.
 @MainActor
 public final class PersistenceController {
     public let container: ModelContainer
@@ -15,23 +15,17 @@ public final class PersistenceController {
     public static let modelTypes: [any PersistentModel.Type] = [
         PersistedProfile.self,
         PersistedSettings.self,
-        PersistedScanHistory.self,
         PersistedWhitelistEntry.self,
         PersistedPersonalScopeRoot.self,
     ]
 
-    /// Create a persistence controller with an on-disk store.
-    public init() throws {
+    /// Create a persistence controller with the on-disk store, or an
+    /// in-memory store when `inMemory` is true (for testing).
+    public init(inMemory: Bool = false) throws {
         let schema = Schema(Self.modelTypes)
-        let config = ModelConfiguration("Gargantua", schema: schema)
-        self.container = try ModelContainer(for: schema, configurations: [config])
-        self.context = container.mainContext
-    }
-
-    /// Create a persistence controller with an in-memory store (for testing).
-    public init(inMemory: Bool) throws {
-        let schema = Schema(Self.modelTypes)
-        let config = ModelConfiguration("GargantuaTest", schema: schema, isStoredInMemoryOnly: true)
+        let config = inMemory
+            ? ModelConfiguration("GargantuaTest", schema: schema, isStoredInMemoryOnly: true)
+            : ModelConfiguration("Gargantua", schema: schema)
         self.container = try ModelContainer(for: schema, configurations: [config])
         self.context = container.mainContext
     }

@@ -1,31 +1,20 @@
 import AppKit
 import Foundation
 import GargantuaLicensing
-import Security
 import os
 
 private let uninstallLogger = Logger(subsystem: "com.gargantua.core", category: "UninstallExecutor")
 
-/// Authorization token passed to privileged uninstall helpers.
+/// Capability token passed to privileged uninstall helpers.
 ///
-/// Created only through `privilegedHelperApproved` (production; the helper
-/// checks its own approval when called) and `authorizedForTesting`, so
-/// `authorizationRef` is currently always nil.
-public struct UninstallAuthorization: @unchecked Sendable {
-    public let authorizationRef: AuthorizationRef?
-    private let testingAuthorized: Bool
+/// Holding one is the authorization: the initializer is private, so a value
+/// exists only through `privilegedHelperApproved` (production; the helper
+/// checks its own approval when called) and `authorizedForTesting`.
+public struct UninstallAuthorization: Sendable {
+    private init() {}
 
-    private init(testingAuthorized: Bool) {
-        self.authorizationRef = nil
-        self.testingAuthorized = testingAuthorized
-    }
-
-    var isAuthorized: Bool {
-        authorizationRef != nil || testingAuthorized
-    }
-
-    public static let privilegedHelperApproved = UninstallAuthorization(testingAuthorized: true)
-    static let authorizedForTesting = UninstallAuthorization(testingAuthorized: true)
+    public static let privilegedHelperApproved = UninstallAuthorization()
+    static let authorizedForTesting = UninstallAuthorization()
 }
 
 /// Execution options for an uninstall plan.
@@ -298,7 +287,7 @@ public final class UninstallExecutor: UninstallExecuting, Sendable {
         options: UninstallExecutionOptions
     ) throws -> (helper: any PrivilegedUninstallHelping, authorization: UninstallAuthorization)? {
         guard !items.isEmpty else { return nil }
-        guard let authorization = options.authorization, authorization.isAuthorized else {
+        guard let authorization = options.authorization else {
             throw UninstallExecutionError.authorizationRequired
         }
         guard let privilegedHelper else {
