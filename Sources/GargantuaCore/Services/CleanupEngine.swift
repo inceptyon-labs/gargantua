@@ -480,7 +480,7 @@ public final class CleanupEngine: Sendable {
         for attempt in 1 ... Self.maxRemovalAttempts {
             do {
                 try await Task.detached(priority: .userInitiated) {
-                    try FileManager.default.removeItem(at: pathToRemove)
+                    try CleanupEngine.removeItemRestoringOwnerAccess(at: pathToRemove)
                 }.value
                 return CleanupItemResult(item: item, succeeded: true)
             } catch {

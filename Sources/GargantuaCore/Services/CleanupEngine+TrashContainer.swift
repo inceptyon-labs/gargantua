@@ -69,7 +69,7 @@ extension CleanupEngine {
             var failures: [(url: URL, message: String)] = []
             for child in children {
                 do {
-                    try FileManager.default.removeItem(at: child)
+                    try CleanupEngine.removeItemRestoringOwnerAccess(at: child)
                 } catch {
                     failures.append((child, error.localizedDescription))
                 }
