@@ -65,11 +65,18 @@ jobs:
           swift --version
           xcodebuild -downloadComponent MetalToolchain
 
-      # Fetch dependencies before tracing starts, so the traced build is
-      # compilation only and not the git clones.
-      - name: Resolve packages
+      # Compile the dependencies before tracing starts, so the traced build
+      # compiles only this package's targets: traced, the dependencies took 49
+      # of the build's 68 minutes. These are targets, not products: building a
+      # dependency's product also compiled this package's own targets, which
+      # left the traced build nothing to analyze. A dependency missing from
+      # the list still works, it just gets traced. Sparkle ships prebuilt.
+      - name: Build dependencies
         if: matrix.language == 'swift'
-        run: swift package resolve
+        run: |
+          for target in MLXLLM MLXLMCommon Tokenizers Yams; do
+            swift build --target "$target"
+          done
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
