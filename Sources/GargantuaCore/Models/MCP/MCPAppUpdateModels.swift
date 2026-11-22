@@ -8,11 +8,6 @@ public struct MCPListAppUpdatesInput: Codable, Sendable {
     /// Exact bundle identifier of one app to inspect.
     public let bundleID: String?
 
-    public init(includeAll: Bool? = nil, bundleID: String? = nil) {
-        self.includeAll = includeAll
-        self.bundleID = bundleID
-    }
-
     private enum CodingKeys: String, CodingKey {
         case includeAll = "include_all"
         case bundleID = "bundle_id"

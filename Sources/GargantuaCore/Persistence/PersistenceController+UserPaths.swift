@@ -37,25 +37,6 @@ extension PersistenceController {
         }
     }
 
-    @available(*, deprecated, renamed: "fetchExclusionEntries")
-    // swiftlint:disable:next inclusive_language
-    public func fetchWhitelistEntries() throws -> [PersistedWhitelistEntry] {
-        try fetchExclusionEntries()
-    }
-
-    @available(*, deprecated, renamed: "addExclusionEntry")
-    @discardableResult
-    // swiftlint:disable:next inclusive_language
-    public func addWhitelistEntry(pattern: String, note: String = "") throws -> PersistedWhitelistEntry? {
-        try addExclusionEntry(pattern: pattern, note: note)
-    }
-
-    @available(*, deprecated, renamed: "removeExclusionEntry")
-    // swiftlint:disable:next inclusive_language
-    public func removeWhitelistEntry(pattern: String) throws {
-        try removeExclusionEntry(pattern: pattern)
-    }
-
     // MARK: - Personal Scope Roots
 
     /// Built-in defaults used by `seedDefaultPersonalScopeRootsIfEmpty`.

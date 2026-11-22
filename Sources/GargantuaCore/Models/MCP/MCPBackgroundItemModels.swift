@@ -7,11 +7,6 @@ public struct MCPListBackgroundItemsInput: Codable, Sendable {
     /// handler returns every match instead of the full scan — the same label
     /// can also exist in both the user and system domains.
     public let label: String?
-
-    /// Creates a list-background-items input.
-    public init(label: String? = nil) {
-        self.label = label
-    }
 }
 
 /// Best-effort launchd runtime facts for one background item, mirroring

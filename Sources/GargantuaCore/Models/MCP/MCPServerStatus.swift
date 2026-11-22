@@ -159,8 +159,6 @@ public struct MCPServerStatusSnapshot: Codable, Sendable, Equatable {
         )
     }
 
-    public var connectedClientCount: Int { clients.count }
-
     public var isRunning: Bool { state == .running }
 
     /// Equality that ignores `updatedAt`.
