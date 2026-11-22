@@ -45,25 +45,6 @@ public final class CloudAIService: ObservableObject {
         transportOverride ?? CloudAITransportFactory.make(for: configuration)
     }
 
-    /// Stores an API key for the active provider in the keychain.
-    public func saveAPIKey(_ apiKey: String) throws {
-        try keyStore(for: configurationStore.load()).save(apiKey)
-    }
-
-    /// Removes the stored API key for the active provider from the keychain.
-    public func revokeAPIKey() throws {
-        try keyStore(for: configurationStore.load()).delete()
-    }
-
-    /// Returns the combined Cloud AI readiness and usage status.
-    public func status() async -> CloudAIStatus {
-        await CloudAIStatusProvider.snapshot(
-            configurationStore: configurationStore,
-            keyStore: keyStore(for: configurationStore.load()),
-            usageLedger: usageLedger
-        )
-    }
-
     func perform(
         feature: CloudAIFeature,
         prompt: String,

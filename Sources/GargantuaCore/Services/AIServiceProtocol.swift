@@ -62,14 +62,8 @@ public enum AIModelLifecycleState: Sendable, Equatable {
 /// AI explanations are advisory only — they never change safety classifications.
 @MainActor
 public protocol AIServiceProtocol: AnyObject, Sendable {
-    /// Current lifecycle state of the model.
-    var lifecycleState: AIModelLifecycleState { get }
-
     /// Whether a downloaded model file exists on disk.
     var isModelAvailable: Bool { get }
-
-    /// Approximate memory used by the loaded model, in bytes.
-    var modelMemoryUsage: Int64 { get }
 
     /// Generate an explanation for a scan result.
     ///
@@ -82,17 +76,4 @@ public protocol AIServiceProtocol: AnyObject, Sendable {
     ///   - rule: The YAML rule that matched this result.
     /// - Returns: An explanation with source metadata.
     func explain(result: ScanResult, rule: ScanRule) async throws -> AIExplanation
-
-    /// Produce a short post-cleanup narrative (1–2 sentences) for display in
-    /// `CleanupSummaryView`.
-    ///
-    /// Non-throwing: always returns a usable `CleanupNarrative`. When no model
-    /// is available on disk, the engine fails to load, or the engine throws
-    /// during generation, falls back to a deterministic template narrative
-    /// derived from the `CleanupResult`'s own fields. Display-only — the
-    /// narrative is not persisted to the audit record.
-    func narrate(cleanup result: CleanupResult) async -> CleanupNarrative
-
-    /// Explicitly unload the model from memory.
-    func unloadModel()
 }

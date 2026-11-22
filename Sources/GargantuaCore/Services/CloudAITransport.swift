@@ -2,7 +2,6 @@ import Foundation
 
 public protocol CloudAITransport: Sendable {
     func complete(_ request: CloudAIRequest, apiKey: String) async throws -> CloudAIResponse
-    func stream(_ request: CloudAIRequest, apiKey: String) -> AsyncThrowingStream<String, Error>
 }
 
 public struct AnthropicMessagesTransport: CloudAITransport {

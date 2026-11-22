@@ -18,9 +18,6 @@ public protocol AIInferenceEngine: AnyObject, Sendable {
     /// presentation labels.
     var kind: AIEnginePreference { get }
 
-    /// Whether the engine is currently holding model state in memory.
-    var isLoaded: Bool { get }
-
     /// Approximate memory held by the engine, in bytes. Zero when unloaded.
     var memoryUsage: Int64 { get }
 

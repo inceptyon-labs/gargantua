@@ -177,11 +177,6 @@ public struct FailingCloudAITransport: CloudAITransport {
     public func complete(_ request: CloudAIRequest, apiKey: String) async throws -> CloudAIResponse {
         throw error
     }
-
-    public func stream(_ request: CloudAIRequest, apiKey: String) -> AsyncThrowingStream<String, Error> {
-        let error = error
-        return AsyncThrowingStream { continuation in continuation.finish(throwing: error) }
-    }
 }
 
 private struct OpenAIRequestBody: Encodable {

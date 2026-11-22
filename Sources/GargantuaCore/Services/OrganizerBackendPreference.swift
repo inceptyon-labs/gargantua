@@ -43,16 +43,6 @@ public enum OrganizerBackendPreference: String, CaseIterable, Codable, Identifia
         }
     }
 
-    public var systemImage: String {
-        switch self {
-        case .local: "cpu"
-        case .mlx: "brain"
-        case .cloud: "cloud"
-        case .claudeCode: "terminal"
-        case .codex: "terminal"
-        }
-    }
-
     public static func stored(in defaults: UserDefaults = .standard) -> OrganizerBackendPreference {
         guard let raw = defaults.string(forKey: userDefaultsKey),
               let value = OrganizerBackendPreference(rawValue: raw)

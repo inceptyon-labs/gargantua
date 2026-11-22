@@ -11,27 +11,6 @@ public enum AIEnginePreference: String, CaseIterable, Codable, Identifiable, Sen
 
     public var id: String { rawValue }
 
-    public var label: String {
-        switch self {
-        case .template: "Template"
-        case .mlx: "MLX"
-        }
-    }
-
-    public var settingsDescription: String {
-        switch self {
-        case .template: "Deterministic rule-backed explanations"
-        case .mlx: "Local model inference when the model is ready"
-        }
-    }
-
-    public var systemImage: String {
-        switch self {
-        case .template: "doc.text"
-        case .mlx: "cpu"
-        }
-    }
-
     public static func stored(in defaults: UserDefaults = .standard) -> AIEnginePreference {
         guard let rawValue = defaults.string(forKey: userDefaultsKey),
               let preference = AIEnginePreference(rawValue: rawValue)

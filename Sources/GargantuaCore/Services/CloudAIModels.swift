@@ -14,18 +14,6 @@ public enum CloudAIFeature: String, Codable, Sendable, CaseIterable {
     case fileOrganization = "file_organization"
     /// Deeper, on-demand explanation of a single scan result.
     case explanation = "explanation"
-
-    /// User-facing feature name.
-    public var displayName: String {
-        switch self {
-        case .deepAnalysis: "Deep analysis"
-        case .targetCleanup: "Target cleanup"
-        case .duplicateResolution: "Duplicate resolution"
-        case .scanRuleSuggestion: "Scan-rule suggestions"
-        case .fileOrganization: "File organization"
-        case .explanation: "Explanation"
-        }
-    }
 }
 
 /// Which API the Cloud engine talks to. Anthropic uses the native Messages
@@ -220,11 +208,6 @@ public struct CloudAIUsageSnapshot: Codable, Sendable, Equatable {
         self.requestCount = max(0, requestCount)
         self.lastRun = lastRun
     }
-
-    /// Returns remaining cents available under the supplied cap.
-    public func remainingCents(capCents: Int) -> Int {
-        max(0, capCents - spentCents)
-    }
 }
 
 /// Actor that maintains monthly Cloud AI usage in user defaults.
@@ -255,12 +238,6 @@ public actor CloudAIUsageLedger {
         return decoded
     }
 
-    /// Returns whether an estimated request cost fits within the monthly cap.
-    public func canSpend(_ estimatedCents: Int, capCents: Int, now: Date = Date()) -> Bool {
-        let current = snapshot(now: now)
-        return current.spentCents + max(0, estimatedCents) <= capCents
-    }
-
     @discardableResult
     /// Records a completed request cost and returns the updated monthly snapshot.
     public func record(costCents: Int, now: Date = Date()) -> CloudAIUsageSnapshot {
@@ -273,11 +250,6 @@ public actor CloudAIUsageLedger {
         )
         save(updated)
         return updated
-    }
-
-    /// Resets usage counters for the current month.
-    public func reset(now: Date = Date()) {
-        save(CloudAIUsageSnapshot(monthIdentifier: Self.monthIdentifier(for: now, calendar: calendar)))
     }
 
     /// Formats a date as the ledger month identifier.
@@ -332,16 +304,6 @@ public struct CloudAIStatus: Sendable, Equatable {
         self.requestCount = requestCount
         self.lastRun = lastRun
         self.model = model
-    }
-
-    /// Whether Cloud AI can currently make requests.
-    public var isReady: Bool {
-        isEnabled && hasAPIKey
-    }
-
-    /// Spend remaining before reaching the monthly cap, in cents.
-    public var remainingCents: Int {
-        max(0, monthlySpendCapCents - spentCents)
     }
 }
 
