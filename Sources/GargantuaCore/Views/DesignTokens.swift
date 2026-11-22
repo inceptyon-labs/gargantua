@@ -92,6 +92,13 @@ public enum GargantuaColors {
     /// lighter black in light so it doesn't punch a hole in paper surfaces.
     public static let scrim = adaptive(light: NSColor(white: 0, alpha: 0.06), dark: NSColor(white: 0, alpha: 0.18))
 
+    /// Hover tint for transparent rows on Void. Darkens in light and lightens
+    /// in dark; the light surface steps are 2% apart, too close to read as hover.
+    public static let hoverFill = adaptive(
+        light: NSColor(white: 0, alpha: 0.06),
+        dark: NSColor(white: 1, alpha: 0.04)
+    )
+
     // MARK: Safety Classification
 
     /// Safe — terminal green. Darkened a touch in light for contrast on paper.

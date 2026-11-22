@@ -119,7 +119,7 @@ private struct SidebarItemRow: View {
         if isSelected {
             return GargantuaColors.surface2
         } else if isHovered {
-            return GargantuaColors.surface1
+            return GargantuaColors.hoverFill
         }
         return .clear
     }

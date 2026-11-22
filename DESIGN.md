@@ -14,6 +14,7 @@ colors:
   border: "#FFFFFF12"
   border-soft: "#FFFFFF0A"
   border-em: "#FFFFFF21"
+  hover: "#FFFFFF0A"
   accent: "#2582F4"
   safe: "#3B9B68"
   review: "#EDA01D"
@@ -23,6 +24,7 @@ colors:
   surface-2-light: "#FFFFFF"
   surface-3-light: "#FCFCFD"
   surface-4-light: "#FFFFFF"
+  hover-light: "#0000000F"
   ink-light: "#191E2A"
   ink-2-light: "#4F5969"
   ink-3-light: "#717C8E"
@@ -283,7 +285,7 @@ Components are dense, squared-off, and native. Every control should be legible i
 
 - **Style:** 200px dark sidebar, section labels in uppercase 10px type, SF Symbols at 16px.
 - **Default:** transparent row, inactive icon in Nebula Ink, label in Dim Star Ink.
-- **Hover:** Surface 1 background.
+- **Hover:** Hover tint (6% black in light, 4% white in dark). Surface 1 sits only 2% above Void in light and doesn't read as hover.
 - **Active:** Surface 2 background, Border Em outline, and a 3px Hawking Blue capsule indicator at the leading edge.
 
 ### Scan Rows

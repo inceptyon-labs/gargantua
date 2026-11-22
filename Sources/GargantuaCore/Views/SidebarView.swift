@@ -12,7 +12,7 @@ import SwiftUI
 /// - Section labels: `ink4`, 10px, 600 weight, uppercase, 0.08em tracking.
 /// - Active item: `surface2` background, `borderEm` outline, and a 3pt `accent`
 ///   capsule anchored to the leading rail.
-/// - Hover: `surface1` background.
+/// - Hover: `hoverFill` tint.
 public struct SidebarView: View {
     @Binding public var selection: String?
     public var sections: [SidebarSection]
