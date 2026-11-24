@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-11-24
+
+### Added
+
+- **Light-mode landing images.** The landing page now uses light-mode images rendered on a transparent white background.
+
+### Changed
+
+- **Tighter App Updater disk-image handling.** The updater waits up to 15 seconds for a busy disk-image helper before giving up, so installs on a loaded Mac no longer fail with "Resource temporarily unavailable".
+
+### Fixed
+
+- **No more false update offers.** The App Updater stops offering releases that are already installed or older than the app. It recognizes a patched build that shares a vendor prefix (such as Android Studio's `AI-262…`), and it treats a Homebrew cask as installed when the Caskroom records its exact version.
+- **Homebrew upgrades can't downgrade.** The updater reads the app version inside brew's cached download before upgrading and stops if it isn't newer, so an app that updated itself past its cask is no longer replaced by an older build.
+- **Read-only trees now delete.** Cleanup and Trash emptying handle directories the user owns but that are marked read-only, such as Go's module cache (`~/go/pkg/mod`), by restoring owner access and retrying once. A path the privileged helper rejected no longer reports that it needs the helper.
+- **Visible sidebar hover in light mode.** Sidebar rows now use a tint that shows on hover in light mode (6% black in light, 4% white in dark).
+
 ## [0.5.0] - 2026-11-20
 
 ### Added
