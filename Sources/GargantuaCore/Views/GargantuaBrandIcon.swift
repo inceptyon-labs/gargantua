@@ -10,6 +10,7 @@ struct GargantuaBrandIcon: View {
     var fallbackColor: Color = GargantuaColors.ink3
 
     @State private var image: NSImage?
+    @Environment(\.colorScheme) private var colorScheme
 
     @MainActor private static var imageCache: [String: NSImage] = [:]
 
@@ -28,24 +29,32 @@ struct GargantuaBrandIcon: View {
                     .accessibilityHidden(true)
             }
         }
-        .task(id: resourceName) {
+        .task(id: "\(resourceName)|\(colorScheme == .light)") {
             await loadImage()
         }
     }
 
+    /// The base renders are dark metal lit for the void background and read
+    /// as heavy blobs on light paper, so light mode loads the `-light` render
+    /// (white ceramic, same composition) when one is bundled.
     @MainActor
     private func loadImage() async {
-        if let cached = Self.imageCache[resourceName] {
-            image = cached
-            return
+        if colorScheme == .light, let light = await Self.cachedImage(named: "\(resourceName)-light") {
+            image = light
+        } else if let dark = await Self.cachedImage(named: resourceName) {
+            image = dark
         }
+    }
 
-        guard let data = await Self.loadImageData(resourceName: resourceName),
+    @MainActor
+    private static func cachedImage(named name: String) async -> NSImage? {
+        if let cached = imageCache[name] { return cached }
+        guard let data = await loadImageData(resourceName: name),
               let loaded = NSImage(data: data) else {
-            return
+            return nil
         }
-        Self.imageCache[resourceName] = loaded
-        image = loaded
+        imageCache[name] = loaded
+        return loaded
     }
 
     private static func loadImageData(resourceName: String) async -> Data? {
