@@ -1,0 +1,6 @@
+# Scripts/osv-spm-scan.sh passes this file to osv-scanner with --config.
+
+[[IgnoredVulns]]
+id = "CVE-2026-86983"
+ignoreUntil = 2027-02-26
+reason = "swift-crypto 4.5.2 is pulled in by swift-transformers 1.4.0 and swift-huggingface 1.0.1, which both cap it below 5.0.0, so the 5.0.3 fix can't resolve. The vulnerable P-384 VOPRF API is in CryptoExtras; both dependents import only Crypto, so the code isn't linked. Remove once they allow swift-crypto 5.x."

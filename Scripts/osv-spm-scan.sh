@@ -85,4 +85,10 @@ def normalizedRepository:
 }
 ' "$LOCKFILE" > "$CUSTOM_LOCKFILE"
 
-exec osv-scanner scan source --lockfile "osv-scanner:$CUSTOM_LOCKFILE" "$@"
+CONFIG_ARGS=()
+CONFIG="$(dirname "$0")/../osv-scanner.toml"
+if [ -f "$CONFIG" ]; then
+    CONFIG_ARGS=(--config "$CONFIG")
+fi
+
+exec osv-scanner scan source ${CONFIG_ARGS[@]+"${CONFIG_ARGS[@]}"} --lockfile "osv-scanner:$CUSTOM_LOCKFILE" "$@"
